@@ -1,0 +1,840 @@
+/* ═══════════════════════════════════════════════════════
+   BREVITY — Luxury Design System  v2
+   Jenkins · Seay Family Office
+═══════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Palette ── */
+  --black:     #000000;
+  --charcoal:  #080808;
+  --graphite:  #0f0f0f;
+  --slate:     #181818;
+  --slate-2:   #222222;
+
+  --white:     #F7F6F2;
+  --soft-white:#D8D5CE;
+  --muted:     #7A7A76;
+  --dim:       rgba(247,246,242,0.28);
+
+  --gold:      #C5A46D;
+  --gold-light:#D9BD8B;
+  --gold-dark: #9A7B49;
+  --gold-glow: rgba(197,164,109,0.16);
+  --gold-dim:  rgba(197,164,109,0.08);
+
+  --income-color: #C5A46D;
+  --income-dim:   rgba(197,164,109,0.10);
+  --expense-color:#C4785A;
+  --expense-dim:  rgba(196,120,90,0.10);
+
+  /* ── Luxury Glass System ── */
+  --glass-bg:       rgba(255,255,255,0.04);
+  --glass-hover:    rgba(255,255,255,0.07);
+  --glass-border:   rgba(255,255,255,0.09);
+  --glass-blur:     blur(32px) saturate(180%);
+  --glass-r:        28px;
+  --glass-r-sm:     14px;
+  --glass-shadow:
+    0 30px 80px rgba(0,0,0,0.60),
+    0 10px 30px rgba(0,0,0,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+  --glass-shadow-hover:
+    0 38px 100px rgba(0,0,0,0.70),
+    0 18px 40px rgba(0,0,0,0.50),
+    inset 0 1px 0 rgba(255,255,255,0.14);
+
+  /* ── Typography ── */
+  --font:        'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif:  'Cormorant Garamond', Georgia, serif;
+
+  /* ── Shell ── */
+  --shell-h: 56px;
+}
+
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  background: #000000;
+  color: var(--white);
+}
+
+#root { height: 100%; display: flex; flex-direction: column; }
+
+/* ── App Shell ──────────────────────────────────────── */
+.app-shell {
+  flex-direction: row;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--black);
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.app-sidebar {
+  width: 210px;
+  min-width: 210px;
+  background: #000000;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.sidebar-brand-logo {
+  width: 100%;
+  max-width: 160px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.sidebar-nav {
+  padding: 16px 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white);
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  padding: 14px 14px 7px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--white);
+  cursor: pointer;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  font-family: var(--font);
+  transition: all 0.18s;
+  text-align: left;
+  width: 100%;
+  letter-spacing: 0.01em;
+}
+.sidebar-nav-item:hover {
+  color: var(--white);
+  background: rgba(255,255,255,0.06);
+  border-left-color: rgba(255,255,255,0.12);
+}
+.sidebar-nav-item.active {
+  color: var(--gold);
+  background: rgba(197,164,109,0.07);
+  border-left-color: var(--gold);
+  font-weight: 500;
+  box-shadow: inset 0 0 24px rgba(197,164,109,0.04);
+}
+.sidebar-nav-item i { font-size: 21px; opacity: 0.9; }
+.sidebar-nav-item.active i { opacity: 1; }
+
+.sidebar-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.05);
+  margin: 8px 14px;
+}
+
+/* ── Sidebar photo ───────────────────────────────────── */
+.sidebar-photo {
+  margin: 0 10px 10px;
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+  height: 250px;
+  flex-shrink: 0;
+  border: 1px solid rgba(197,164,109,0.16);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.sidebar-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: brightness(0.60) saturate(0.85) contrast(1.08);
+}
+.sidebar-photo-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8,8,8,0.90) 0%, rgba(8,8,8,0.25) 55%, transparent 100%);
+}
+.sidebar-photo-caption {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-photo-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(197,164,109,0.75);
+}
+.sidebar-photo-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: -0.02em;
+}
+
+.sidebar-footer {
+  padding: 10px 10px 18px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--white);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: var(--font);
+  transition: all 0.18s;
+  text-align: left;
+  width: 100%;
+}
+.sidebar-footer-item:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+.sidebar-footer-item i { font-size: 21px; }
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.sidebar-user:hover { background: rgba(255,255,255,0.06); }
+
+.sidebar-user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold-light));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+  color: var(--black);
+  flex-shrink: 0;
+}
+.sidebar-user-name { font-size: 15px; font-weight: 600; color: var(--white); }
+.sidebar-user-role { font-size: 13px; color: var(--white); letter-spacing: 0.06em; }
+
+/* ── App Logo ────────────────────────────────────────── */
+.app-logo-mark {
+  width: 34px; height: 34px;
+  background: linear-gradient(145deg, rgba(197,164,109,0.20), rgba(154,123,73,0.12));
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(197,164,109,0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 16px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+.app-logo-mark-letter {
+  font-family: var(--font-serif);
+  font-size: 25px;
+  font-weight: 500;
+  color: var(--gold);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.app-logo-text {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--white);
+  letter-spacing: 0.30em;
+  text-transform: uppercase;
+}
+.app-logo-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--white);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* ── Main content area ───────────────────────────────── */
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #000000;
+}
+
+/* ── No background image — pure black ── */
+.app-main::before,
+.app-main::after {
+  display: none;
+}
+
+
+/* ── Finance Root ────────────────────────────────────── */
+.finance-root {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Dashboard body ──────────────────────────────────── */
+.dash-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ── Dashboard header ────────────────────────────────── */
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 28px 32px 0;
+  margin-bottom: 22px;
+  position: relative;
+  z-index: 2;
+}
+
+.dash-greeting {
+  font-family: var(--font-serif);
+  font-size: 50px;
+  font-weight: 600;
+  color: var(--white);
+  letter-spacing: -0.02em;
+  line-height: 1.10;
+}
+
+.dash-date {
+  font-size: 13px;
+  color: var(--gold);
+  margin-top: 6px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dash-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.dash-search { position: relative; }
+.dash-search i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+.dash-search input {
+  padding: 8px 12px 8px 34px;
+  width: 210px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px;
+  font-size: 12px;
+  color: var(--white);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.dash-icon-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.05);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 15px;
+  transition: all 0.20s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.dash-icon-btn:hover { background: rgba(255,255,255,0.09); color: var(--soft-white); }
+.dash-icon-btn.gold {
+  border-color: rgba(197,164,109,0.28);
+  background: rgba(197,164,109,0.08);
+  color: var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════
+   LUXURY GLASS CARD FOUNDATION
+   Every card inherits these rules.
+═══════════════════════════════════════════════════════ */
+
+/* Shared glass mixin — applied to all card types */
+.kpi-card,
+.dash-card,
+.dash-footer,
+.finance-card {
+  position: relative;
+  overflow: hidden;
+
+  /* True floating glass — almost no fill, world shows through */
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(24px) saturate(140%) brightness(1.05);
+  -webkit-backdrop-filter: blur(24px) saturate(140%) brightness(1.05);
+
+  /* Thin illuminated border — like light catching the edge of glass */
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    0 24px 64px rgba(0,0,0,0.70),
+    0 6px 20px rgba(0,0,0,0.50),
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 0 0 0.5px rgba(255,255,255,0.04);
+
+  border-radius: var(--glass-r);
+  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1),
+              box-shadow 0.28s cubic-bezier(0.22,1,0.36,1),
+              border-color 0.20s;
+}
+
+/* Layer 4 — Glass reflection streak (top-left diagonal) */
+.kpi-card::before,
+.dash-card::before,
+.dash-footer::before,
+.finance-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    128deg,
+    rgba(255,255,255,0.10) 0%,
+    rgba(255,255,255,0.03) 25%,
+    transparent 50%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Layer 5 — Champagne gold breath (corner glow) */
+.kpi-card::after,
+.dash-card::after,
+.dash-footer::after,
+.finance-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 60% 45% at 98% 2%,
+    rgba(197,164,109,0.08) 0%,
+    transparent 55%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Hover — float upward with deeper shadow */
+.kpi-card:hover,
+.dash-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  box-shadow:
+    0 36px 90px rgba(0,0,0,0.80),
+    0 14px 40px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+}
+
+/* Ensure card content sits above pseudo-layers */
+.kpi-card > *,
+.dash-card > *,
+.dash-footer > *,
+.finance-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── KPI Grid ─────────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+.kpi-card {
+  padding: 20px 20px 0;
+  min-height: 155px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* KPI — internal soft glow from icon corner */
+.kpi-card::after {
+  background: radial-gradient(
+    ellipse 65% 55% at 95% 5%,
+    rgba(197,164,109,0.11) 0%,
+    transparent 55%
+  );
+}
+
+.kpi-icon {
+  position: absolute;
+  top: 16px; right: 16px;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: rgba(197,164,109,0.09);
+  border: 1px solid rgba(197,164,109,0.24);
+  box-shadow: 0 0 20px rgba(197,164,109,0.10);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: var(--gold);
+  z-index: 3;
+}
+
+.kpi-label {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(140,135,125,0.80);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  margin-bottom: 8px;
+  padding-right: 44px; /* don't overlap icon */
+}
+
+.kpi-value {
+  font-size: 38px;
+  font-weight: 300;
+  color: var(--white);
+  letter-spacing: -0.03em;
+  line-height: 1.0;
+}
+
+/* Full-width sparkline container — flush to card bottom */
+.kpi-sparkline {
+  margin-top: auto;
+  margin-left: -20px;
+  margin-right: -20px;
+  border-radius: 0 0 28px 28px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ── Dashboard 3-col grid ────────────────────────────── */
+.dash-main-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.55fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+  padding: 0 32px;
+  margin-bottom: 14px;
+  min-height: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.dash-card {
+  padding: 18px 20px;
+  min-height: 0;
+}
+
+/* Cards in the stretch grid fill their cell */
+.dash-main-grid > .dash-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Calendar card — largest glass panel, extra depth */
+.dash-main-grid > .dash-card:last-child {
+  grid-row: 1 / -1;
+  border-color: rgba(255,255,255,0.10);
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.65),
+    0 16px 40px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    /* subtle gold rim at bottom */
+    inset 0 -1px 0 rgba(197,164,109,0.06);
+}
+.dash-main-grid > .dash-card:last-child::after {
+  background:
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(197,164,109,0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 60% at 0% 100%, rgba(197,164,109,0.05) 0%, transparent 50%);
+}
+
+.dash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.dash-card-title {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(122,122,118,0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.dash-card-link {
+  font-size: 10px;
+  color: var(--gold);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  letter-spacing: 0.06em;
+  padding: 0;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.dash-card-link:hover { opacity: 1; }
+
+/* ── Footer bar ──────────────────────────────────────── */
+.dash-footer {
+  margin: 0 32px 24px;
+  padding: 14px 22px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-radius: 22px;
+}
+
+/* ── Finance card (used in non-dashboard views) ───────── */
+.finance-card {
+  padding: 22px 24px;
+}
+
+/* ── Sub-nav ────────────────────────────────────────── */
+.finance-subnav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 28px;
+}
+
+.finance-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 10px; font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font);
+  transition: all 0.18s;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  margin-bottom: -1px;
+}
+.finance-tab:hover { color: var(--soft-white); }
+.finance-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.finance-tab i { font-size: 13px; }
+
+/* ── Metric Cards (legacy/non-dash views) ───────────── */
+.metric-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(12,10,8,0.40);
+  backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--glass-r);
+  padding: 20px 22px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.10);
+  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s;
+}
+.metric-card:hover { transform: translateY(-2px); }
+
+.metric-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 8px;
+}
+.metric-value {
+  font-size: 24px; font-weight: 600;
+  color: var(--gold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.metric-sub { font-size: 11px; margin-top: 5px; }
+.metric-sub.up   { color: var(--gold-dark); }
+.metric-sub.down { color: var(--expense-color); }
+
+/* ── Calendar cell overrides ─────────────────────────── */
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+
+.cal-cell {
+  min-height: 110px;
+  padding: 10px 9px;
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.012);
+  transition: all 0.18s;
+}
+.cal-cell:hover      { background: rgba(255,255,255,0.035); border-color: rgba(255,255,255,0.08); }
+.cal-cell.is-today   { border-color: rgba(197,164,109,0.40); background: rgba(197,164,109,0.06); }
+.cal-cell.is-selected{ border: 1.5px solid var(--gold); background: rgba(197,164,109,0.08); }
+.cal-cell.is-past    { opacity: 0.30; }
+
+/* ── Form Fields ────────────────────────────────────── */
+.field-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 6px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+input, select, textarea {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--white);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 11px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+input::placeholder { color: var(--muted); }
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(197,164,109,0.45);
+  box-shadow: 0 0 0 3px rgba(197,164,109,0.08);
+}
+select option { background: var(--graphite); color: var(--white); }
+
+/* ── Plaid Pill ─────────────────────────────────────── */
+.plaid-connected-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 10px; font-weight: 600;
+  background: rgba(197,164,109,0.08);
+  color: var(--gold);
+  border: 1px solid rgba(197,164,109,0.22);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.plaid-connected-pill .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px var(--gold);
+}
+
+/* ── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar         { width: 4px; height: 4px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+/* ── Animations ─────────────────────────────────────── */
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@keyframes spin   { to { transform:rotate(360deg); } }
+.fade-in { animation: fadeIn 0.28s ease; }
+
+/* ── Toast ──────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 28px; right: 28px;
+  background: rgba(18,15,12,0.92);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: var(--white);
+  padding: 12px 22px;
+  border-radius: 14px;
+  font-size: 11px; font-weight: 500;
+  z-index: 500;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.10);
+  animation: fadeIn 0.22s ease;
+  letter-spacing: 0.06em;
+}
+
+/* ── Non-dashboard views ─────────────────────────────── */
+.finance-inner { padding: 28px 32px; }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.65fr;
+  gap: 14px;
+  padding: 0 32px;
+  margin-bottom: 14px;
+}
+.dash-left-col { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Responsive ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .app-sidebar { width: 60px; min-width: 60px; }
+  .sidebar-nav-item span, .sidebar-footer-item span,
+  .sidebar-logo .app-logo-text, .sidebar-logo .app-logo-sub,
+  .sidebar-user-name, .sidebar-user-role,
+  .sidebar-section-label { display: none; }
+  .sidebar-nav-item { padding: 10px; justify-content: center; }
+  .kpi-grid { grid-template-columns: repeat(3,1fr); }
+  .dash-grid { grid-template-columns: 1fr; }
+  .app-main::before { left: 60px; }
+}
+@media (max-width: 640px) {
+  .metric-value { font-size: 20px; }
+}
