@@ -962,14 +962,8 @@ function App(){
           {lightbox.type==="video"&&(
             <video src={lightbox.data} controls style={{maxWidth:"90vw",maxHeight:"80vh",borderRadius:8,marginTop:52}} onClick={e=>e.stopPropagation()}/>
           )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default App
-pace:"pre-wrap",color:"rgba(247,243,234,0.90)"}} onClick={e=>e.stopPropagation()}>
+          {lightbox.type==="text"&&(
+            <div style={{whiteSpace:"pre-wrap",color:"rgba(247,243,234,0.90)"}} onClick={e=>e.stopPropagation()}>
               {lightbox.textContent}
             </div>
           )}
