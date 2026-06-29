@@ -15,6 +15,59 @@ const EMPTY_FORM = {
   notes:"", photos:[], files:[]
 };
 
+// ── Glass card styles ────────────────────────────────────────────────────────
+const HQ_STYLES = `
+  .hq-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.035));
+    border: 1.5px solid rgba(197,164,109,0.18);
+    border-radius: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.32);
+    transition: border-color .2s, transform .2s, box-shadow .2s;
+    position: relative;
+  }
+  .hq-card::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(197,164,109,0.55), transparent);
+    pointer-events: none;
+  }
+  .hq-card:hover {
+    border-color: rgba(197,164,109,0.46);
+    transform: translateY(-4px);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.46), 0 0 30px rgba(197,164,109,0.08);
+  }
+  .hq-card.hq-card--expanded {
+    border-color: rgba(197,164,109,0.5);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    transform: none;
+  }
+  .hq-stat-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
+    border: 1px solid rgba(197,164,109,0.16);
+    border-radius: 14px;
+    padding: 16px 20px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.24);
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .hq-stat-card::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, rgba(197,164,109,0.45), transparent);
+    pointer-events: none;
+  }
+`
+
 // ── Design tokens ───────────────────────────────────────────────────────────
 const G = '#C5A46D';      // champagne gold
 const W = 'rgba(247,243,234,0.90)';
@@ -35,7 +88,7 @@ const PRIO_BG    = { High: 'rgba(248,113,113,0.14)', Medium: 'rgba(197,164,109,0
 
 // Architectural room images — moody, neutral, luxury
 const ROOM_IMG = {
-  'Kitchen':     'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&h=800&fit=crop&auto=format&q=100',
+  'Kitchen':     '/kitchen.jpg',
   'Bathroom':    'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1200&h=800&fit=crop&auto=format&q=100',
   'Living Room': 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=1200&h=800&fit=crop&auto=format&q=100',
   'Bedroom':     'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=1200&h=800&fit=crop&auto=format&q=100',
@@ -548,6 +601,7 @@ function App(){
 
   return(
     <div style={{background:"#000",minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:W}}>
+      <style>{HQ_STYLES}</style>
 
       {/* HEADER */}
       <div style={{background:"rgba(0,0,0,0.92)",borderBottom:`1px solid ${BORDER}`,padding:"18px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(20px)"}}>
@@ -576,7 +630,7 @@ function App(){
         {showFilters&&(
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
             {[["Total Items",items.length,W],["In Progress",items.filter(i=>i.status==="In Progress").length,G],["Completed",items.filter(i=>i.status==="Done").length,GREEN],["Total Budget",displayCost(totalBudget),G]].map(([l,v,c])=>(
-              <div key={l} style={{background:GLASS,border:`1px solid ${BORDER}`,borderRadius:14,padding:"16px 20px",backdropFilter:"blur(20px)"}}>
+              <div key={l} className="hq-stat-card">
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:W3,marginBottom:6}}>{l}</div>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontWeight:600,color:c,fontSize:typeof v==="string"&&v.length>7?20:28}}>{v}</div>
               </div>
@@ -606,13 +660,13 @@ function App(){
                 <div style={{fontSize:14}}>Click "+ Add Item" to get started.</div>
               </div>
             )}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
+            <div className="hq-proj-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
               {filtered.map(item=>{
                 const isExp=expanded===item.id;
                 const isOverdue=item.due&&new Date(item.due)<new Date()&&item.status!=="Done";
                 const heroImg=getRoomImg(item);
                 return(
-                  <div key={item.id} style={{background:GLASS,border:`1.5px solid ${isExp?'rgba(197,164,109,0.5)':BORDER}`,borderRadius:20,overflow:"hidden",backdropFilter:"blur(24px) saturate(140%)",transition:"border-color .2s, transform .2s, box-shadow .2s",boxShadow:isExp?"0 8px 40px rgba(0,0,0,0.5)":"0 2px 16px rgba(0,0,0,0.3)"}}>
+                  <div key={item.id} className={`hq-card${isExp?' hq-card--expanded':''}`}>
 
                     {/* Card hero image */}
                     <div style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
@@ -905,8 +959,17 @@ function App(){
               <iframe src={lightbox.data} style={{width:"100%",height:"100%",border:"none"}} title={lightbox.name}/>
             </div>
           )}
-          {lightbox.type==="text"&&(
-            <div style={{width:"min(860px,90vw)",maxHeight:"80vh",marginTop:52,borderRadius:8,overflow:"auto",background:"rgba(12,12,12,0.98)",border:`1px solid rgba(255,255,255,0.08)`,padding:24,fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap",color:"rgba(247,243,234,0.90)"}} onClick={e=>e.stopPropagation()}>
+          {lightbox.type==="video"&&(
+            <video src={lightbox.data} controls style={{maxWidth:"90vw",maxHeight:"80vh",borderRadius:8,marginTop:52}} onClick={e=>e.stopPropagation()}/>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App
+pace:"pre-wrap",color:"rgba(247,243,234,0.90)"}} onClick={e=>e.stopPropagation()}>
               {lightbox.textContent}
             </div>
           )}

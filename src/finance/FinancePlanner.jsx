@@ -770,6 +770,20 @@ const LUXURY_CSS = `
   .dash-main-grid > * { grid-column: 1 !important; grid-row: auto !important; }
   .dash-card[style*="span 2"] { min-height: 520px !important; }
 }
+@media (max-width: 768px) {
+  .dash-body { padding: 16px !important; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+  .kpi-card { height: auto !important; min-height: 140px !important; padding: 16px !important; }
+  .kpi-sparkline { display: none !important; }
+  .dash-search { width: 100% !important; }
+  .hq-proj-grid { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 480px) {
+  .kpi-grid { grid-template-columns: 1fr !important; }
+  .kpi-value { font-size: 32px !important; }
+  .dash-header { gap: 10px !important; }
+  .hq-proj-grid { grid-template-columns: 1fr !important; }
+}
 `
 
 
@@ -1252,7 +1266,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
   // ── HomeHQ → Projects card ─────────────────────────────────────────────
   const ROOM_IMGS = {
-    Kitchen:      'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&h=800&fit=crop&q=100&auto=format',
+    Kitchen:      '/kitchen.jpg',
     Bathroom:     'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1200&h=800&fit=crop&q=100&auto=format',
     'Living Room':'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=1200&h=800&fit=crop&q=100&auto=format',
     Bedroom:      'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=1200&h=800&fit=crop&q=100&auto=format',
