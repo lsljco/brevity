@@ -42,11 +42,19 @@ exports.handler = async (event) => {
       body: JSON.stringify({ link_token: response.data.link_token }),
     }
   } catch (err) {
-    console.error('Plaid link token error:', err.response?.data || err.message)
+    const plaidError = err.response?.data || null
+    console.error('Plaid link token error:', plaidError || err.message)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to create link token', detail: err.message }),
+      body: JSON.stringify({
+        error: 'Failed to create link token',
+        detail: err.message,
+        plaid_error: plaidError,
+        env: process.env.PLAID_ENV || '(not set)',
+        has_client_id: !!process.env.PLAID_CLIENT_ID,
+        has_secret: !!process.env.PLAID_SECRET,
+      }),
     }
   }
 }
