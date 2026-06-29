@@ -5,4 +5,5 @@ dist/
 *.local
 .DS_Store
 Thumbs.db
-.plaid-tokens.json 
+.plaid-tokens.json
+vite.config.js.timestamp-*
