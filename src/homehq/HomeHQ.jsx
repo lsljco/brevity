@@ -595,7 +595,7 @@ function App(){
 
   const totalBudget=items.reduce((s,i)=>s+(parseFloat(i.actcost)||parseFloat(i.estcost)||0),0);
   const showFilters=!noFilter.includes(tab);
-  const TABS=[["all","All"],["renovation","Renovation"],["maintenance","Maintenance"],["repair","Repairs"],["gantt","Timeline"],["calendar","Calendar"],["budget","Budget"],["contractors","Contractors"]];
+  const TABS=[["all","All"],["renovation","Renovation"],["maintenance","Maintenance"],["repair","Repairs"],["gantt","Timeline"],["calendar","Calendar"],["budget","Project Budget"],["contractors","Contractors"]];
 
   const selectStyle={...FI,width:"auto",flex:1,minWidth:120};
 

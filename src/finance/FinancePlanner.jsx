@@ -1766,6 +1766,13 @@ function loadBudget() {
 function saveBudget(b) {
   try { localStorage.setItem(BUDGET_LS_KEY, JSON.stringify(b)) } catch {}
 }
+const ACTUALS_LS_KEY = 'lslj_actuals_v1'
+function loadActuals() {
+  try { return JSON.parse(localStorage.getItem(ACTUALS_LS_KEY)) || {} } catch { return {} }
+}
+function saveActuals(a) {
+  try { localStorage.setItem(ACTUALS_LS_KEY, JSON.stringify(a)) } catch {}
+}
 
 function BudgetView({ data }) {
   const [budget, setBudget] = useState(loadBudget)
@@ -1773,8 +1780,188 @@ function BudgetView({ data }) {
   const [expanded, setExpanded] = useState({ Income: true })
   const [editCell, setEditCell] = useState(null) // { cat, item, month }
   const [saved, setSaved] = useState(false)
+  const [mode, setMode] = useState('monthly-view') // 'monthly-view' | 'plan'
+  const [selMonth, setSelMonth] = useState(new Date().getMonth())
+  const [selYear, setSelYear] = useState(new Date().getFullYear())
+  const [monthActuals, setMonthActuals] = useState(loadActuals)
+  const [editActual, setEditActual] = useState(null)
 
   const year = new Date().getFullYear()
+
+  const monthKey = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`
+
+  const getActual = (item) => monthActuals[monthKey]?.[item] ?? ''
+  const setActual = (item, val) => {
+    const num = parseFloat(val) || 0
+    const next = { ...monthActuals, [monthKey]: { ...(monthActuals[monthKey] || {}), [item]: num } }
+    setMonthActuals(next)
+    saveActuals(next)
+  }
+
+  // Get budgeted amount for an item in selected month
+  // First check the plan grid, then fall back to recurring transaction amount
+  const getBudgeted = (item) => {
+    const planVal = budget[item]?.[selMonth]
+    if (planVal) return planVal
+    const tx = data.transactions.find(t => t.name === item)
+    if (!tx) return 0
+    switch (tx.freq) {
+      case 'weekly':      return tx.amount * 4.33
+      case 'biweekly':    return tx.amount * 2.167
+      case 'semimonthly': return tx.amount * 2
+      case 'monthly':     return tx.amount
+      case 'quarterly':   return tx.amount / 3
+      case 'yearly':      return tx.amount / 12
+      default:            return tx.amount
+    }
+  }
+
+  const catBudgeted = (cat) => (BUDGET_CATS[cat] || []).reduce((s, item) => s + (getBudgeted(item) || 0), 0)
+  const catActual   = (cat) => (BUDGET_CATS[cat] || []).reduce((s, item) => s + (parseFloat(getActual(item)) || 0), 0)
+
+  const totalBudget  = Object.keys(BUDGET_CATS).filter(c => c !== 'Income').reduce((s, c) => s + catBudgeted(c), 0)
+  const totalActual  = Object.keys(BUDGET_CATS).filter(c => c !== 'Income').reduce((s, c) => s + catActual(c), 0)
+  const totalIncomeBudget = catBudgeted('Income')
+  const totalIncomeActual = catActual('Income')
+
+  if (mode === 'monthly-view') {
+    const expenseCats = Object.entries(BUDGET_CATS).filter(([c]) => c !== 'Income')
+    return (
+      <div>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Monthly Budget</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Track budgeted vs actual spending · click any actual to edit</p>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Month nav */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '4px 12px' }}>
+              <button onClick={() => { const d = new Date(selYear, selMonth - 1); setSelMonth(d.getMonth()); setSelYear(d.getFullYear()) }}
+                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>‹</button>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--white)', minWidth: 100, textAlign: 'center' }}>
+                {MONTHS[selMonth]} {selYear}
+              </span>
+              <button onClick={() => { const d = new Date(selYear, selMonth + 1); setSelMonth(d.getMonth()); setSelYear(d.getFullYear()) }}
+                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>›</button>
+            </div>
+            <button onClick={() => setMode('plan')}
+              style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.10)', background: 'transparent', color: 'var(--muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+              Plan Grid →
+            </button>
+          </div>
+        </div>
+
+        {/* Summary cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+          {[
+            { label: 'Income Budgeted',  val: totalIncomeBudget, color: 'var(--gold)' },
+            { label: 'Income Actual',    val: totalIncomeActual, color: 'var(--income-color)' },
+            { label: 'Expenses Budgeted', val: totalBudget,      color: 'var(--muted)' },
+            { label: 'Expenses Actual',   val: totalActual,      color: totalActual > totalBudget ? 'var(--expense-color)' : 'var(--income-color)' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
+              <div style={{ fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-serif)', color }}>{fmtMoney(val)}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Overall expense progress */}
+        {totalBudget > 0 && (
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Total Expense Budget Used</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: totalActual > totalBudget ? 'var(--expense-color)' : 'var(--income-color)' }}>
+                {totalBudget > 0 ? Math.round((totalActual / totalBudget) * 100) : 0}%
+              </span>
+            </div>
+            <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.min((totalActual / totalBudget) * 100, 100)}%`, background: totalActual > totalBudget ? 'var(--expense-color)' : 'var(--gold)', borderRadius: 99, transition: 'width 0.4s' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+              <span>{fmtMoney(totalActual)} spent</span>
+              <span>{fmtMoney(Math.max(totalBudget - totalActual, 0))} remaining</span>
+            </div>
+          </div>
+        )}
+
+        {/* Category rows */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {expenseCats.map(([cat, items]) => {
+            const budgeted = catBudgeted(cat)
+            const actual   = catActual(cat)
+            const pct      = budgeted > 0 ? Math.min((actual / budgeted) * 100, 100) : 0
+            const over     = actual > budgeted && budgeted > 0
+            const isOpen   = expanded[cat] !== false
+            return (
+              <div key={cat} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${over ? 'rgba(248,113,113,0.25)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 14, overflow: 'hidden' }}>
+                {/* Category header */}
+                <div onClick={() => setExpanded(p => ({ ...p, [cat]: !isOpen }))}
+                  style={{ padding: '14px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <i className={`ti ${isOpen ? 'ti-chevron-down' : 'ti-chevron-right'}`} style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--white)', flex: 1 }}>{cat}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ width: 120, height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: over ? 'var(--expense-color)' : pct > 80 ? '#fbbf24' : 'var(--gold)', borderRadius: 99, transition: 'width 0.4s' }} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: over ? 'var(--expense-color)' : 'var(--muted)', minWidth: 36, textAlign: 'right' }}>{Math.round(pct)}%</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 80, textAlign: 'right' }}>{fmtMoney(actual)} / {fmtMoney(budgeted)}</span>
+                  </div>
+                </div>
+                {/* Line items */}
+                {isOpen && (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    {items.map(item => {
+                      const b = getBudgeted(item)
+                      const a = parseFloat(getActual(item)) || 0
+                      const p = b > 0 ? Math.min((a / b) * 100, 100) : 0
+                      const ov = a > b && b > 0
+                      return (
+                        <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px 10px 40px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+                          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{item}</span>
+                          <div style={{ width: 80, height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                            <div style={{ height: '100%', width: `${p}%`, background: ov ? 'var(--expense-color)' : p > 80 ? '#fbbf24' : 'var(--gold)', borderRadius: 99 }} />
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 32, textAlign: 'right' }}>{Math.round(p)}%</span>
+                          {/* Actual — editable */}
+                          {editActual === item ? (
+                            <input type="number" autoFocus
+                              defaultValue={getActual(item)}
+                              onBlur={e => { setActual(item, e.target.value); setEditActual(null) }}
+                              onKeyDown={e => { if (e.key === 'Enter') { setActual(item, e.target.value); setEditActual(null) }}}
+                              style={{ width: 80, textAlign: 'right', fontSize: 12, background: 'rgba(197,164,109,0.08)', border: '1px solid rgba(197,164,109,0.4)', borderRadius: 6, padding: '3px 8px', color: 'var(--white)', outline: 'none' }} />
+                          ) : (
+                            <div onClick={() => setEditActual(item)}
+                              style={{ width: 80, textAlign: 'right', fontSize: 12, cursor: 'text', padding: '3px 8px', borderRadius: 6,
+                                color: a ? (ov ? 'var(--expense-color)' : 'var(--white)') : 'rgba(255,255,255,0.2)',
+                                border: '1px solid transparent' }}
+                              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
+                              onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
+                              {a ? fmtMoney(a) : '—'}
+                            </div>
+                          )}
+                          <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 80, textAlign: 'right' }}>{b ? fmtMoney(b) : '—'}</span>
+                        </div>
+                      )
+                    })}
+                    <div style={{ display: 'flex', padding: '8px 20px 10px 40px', borderTop: '1px solid rgba(255,255,255,0.05)', gap: 12 }}>
+                      <span style={{ flex: 1, fontSize: 11, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Category Total</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: over ? 'var(--expense-color)' : 'var(--income-color)', minWidth: 80, textAlign: 'right' }}>{fmtMoney(actual)}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', minWidth: 80, textAlign: 'right' }}>{fmtMoney(budgeted)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <p style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)' }}>Click any Actual amount to enter spending · budgeted amounts auto-fill from your recurring transactions · use Plan Grid to set custom targets</p>
+      </div>
+    )
+  }
+
+  // ── PLAN MODE (existing grid) ──
 
   // Compute actuals from transactions (monthly)
   const actuals = useMemo(() => {
@@ -1849,10 +2036,14 @@ function BudgetView({ data }) {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Budget · {year}</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Plan monthly and annual targets by category</p>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Budget Plan · {year}</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Set monthly and annual targets by category · changes auto-fill the Monthly view</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button onClick={() => setMode('monthly-view')}
+            style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(197,164,109,0.3)', background: 'rgba(197,164,109,0.08)', color: 'var(--gold)', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+            ← Monthly View
+          </button>
           <div style={{ display: 'flex', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
             {['monthly','annual'].map(p => (
               <button key={p} onClick={() => setPeriod(p)}
