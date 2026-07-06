@@ -180,8 +180,6 @@ const LUXURY_CSS = `
   z-index: 1 !important;
   padding: 32px 34px 26px !important;
   width: 100% !important;
-  max-width: 1820px !important;
-  margin: 0 auto !important;
 }
 
 .dash-header {
