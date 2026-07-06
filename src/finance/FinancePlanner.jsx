@@ -136,6 +136,12 @@ const LUXURY_CSS = `
   background: transparent !important;
 }
 
+/* Non-dashboard views: grow to content height so .app-main can scroll */
+.finance-root.finance-scroll {
+  flex: 0 0 auto !important;
+  height: auto !important;
+}
+
 .finance-root::before {
   content: "";
   position: absolute;
@@ -1338,7 +1344,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const isForm = ['tx-form', 'acct-form'].includes(view)
 
   return (
-    <div className="finance-root fade-in">
+    <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
 
       {/* ══════════ DASHBOARD ══════════ */}
