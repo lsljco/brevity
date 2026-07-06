@@ -468,8 +468,8 @@ const LUXURY_CSS = `
 .finance-inner {
   position: relative !important;
   z-index: 1 !important;
-  width: min(1180px, calc(100% - 48px)) !important;
-  margin: 28px auto !important;
+  width: calc(100% - 48px) !important;
+  margin: 28px 24px !important;
   padding: 28px !important;
 }
 .finance-card {
@@ -1617,18 +1617,18 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           </div>
 
           {/* ── Monthly totals summary ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-            <div style={{ padding: '12px 14px', background: '#E1F5EE', borderRadius: 12, border: '1px solid rgba(15,110,86,0.15)' }}>
-              <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 600, color: '#0F6E56', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Income</p>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0F6E56' }}>{fmtMoney(monthlyIncome)}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
+            <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--income-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Monthly Income</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(monthlyIncome)}</p>
             </div>
-            <div style={{ padding: '12px 14px', background: '#FDE8E8', borderRadius: 12, border: '1px solid rgba(163,45,45,0.15)' }}>
-              <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 600, color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Expenses</p>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#A32D2D' }}>{fmtMoney(monthlyExpense)}</p>
+            <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Monthly Expenses</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(monthlyExpense)}</p>
             </div>
-            <div style={{ padding: '12px 14px', background: monthlyCashFlow >= 0 ? '#E1F5EE' : '#FDE8E8', borderRadius: 12, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(15,110,86,0.15)' : 'rgba(163,45,45,0.15)'}` }}>
-              <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 600, color: monthlyCashFlow >= 0 ? '#0F6E56' : '#A32D2D', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Cash Flow</p>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: monthlyCashFlow >= 0 ? '#0F6E56' : '#A32D2D' }}>{monthlyCashFlow >= 0 ? '+' : ''}{fmtMoney(monthlyCashFlow)}</p>
+            <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}` }}>
+              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: monthlyCashFlow >= 0 ? 'var(--income-color)' : 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Net Cash Flow</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{monthlyCashFlow >= 0 ? '+' : ''}{fmtMoney(monthlyCashFlow)}</p>
             </div>
           </div>
 
@@ -1638,23 +1638,23 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               .map(tx => {
                 const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
                 return (
-                  <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'white', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? '#E1F5EE' : '#FDE8E8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? '#0F6E56' : '#A32D2D' }} aria-hidden="true" />
+                  <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, transition: 'background 0.15s' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.12)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }} aria-hidden="true" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{tx.name}</p>
-                      <p style={{ margin: 0, fontSize: 11, color: '#D8D5CE' }}>{tx.cat} · {freqLabel}</p>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}</p>
                     </div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? '#0F6E56' : '#A32D2D' }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
                       {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
                     </p>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => { setEditTx({ ...tx }); setView('tx-form') }}
-                        style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(0,0,0,0.1)', background: 'white' }}
+                        style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
                         title="Edit"><i className="ti ti-edit" style={{ fontSize: 13 }} aria-hidden="true" /></button>
                       <button onClick={() => deleteTx(tx.id)}
-                        style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(0,0,0,0.1)', background: 'white', color: '#D8D5CE' }}
+                        style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
                         title="Delete"><i className="ti ti-trash" style={{ fontSize: 13 }} aria-hidden="true" /></button>
                     </div>
                   </div>
