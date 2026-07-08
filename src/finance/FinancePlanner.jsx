@@ -423,6 +423,8 @@ const LUXURY_CSS = `
   align-items: stretch !important;
   flex: 1 !important;
   min-height: 0 !important;
+  width: 100% !important;
+  align-self: stretch !important;
 }
 .dash-card {
   min-height: 292px !important;
