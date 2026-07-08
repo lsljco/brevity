@@ -419,6 +419,7 @@ const LUXURY_CSS = `
   grid-template-columns: 1fr 1fr 1fr !important;
   grid-template-rows: 1fr 1fr auto !important;
   gap: 18px !important;
+  padding: 0 !important;
   margin-bottom: 18px !important;
   align-items: stretch !important;
   flex: 1 !important;
