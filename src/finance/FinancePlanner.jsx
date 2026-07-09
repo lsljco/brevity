@@ -1039,6 +1039,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [formView, setFormView] = useState(null) // 'tx-form' | 'acct-form' | null
   const [selectedAccts, setSelectedAccts] = useState(null) // null = all selected
   const [acctFilterOpen, setAcctFilterOpen] = useState(false)
+  const [showActuals, setShowActuals] = useState(false)
+  const [plaidActuals, setPlaidActuals] = useState(() => {
+    try { const v = localStorage.getItem('plaid_actuals_cache'); return v ? JSON.parse(v) : null } catch { return null }
+  })
+  const [actualsLoading, setActualsLoading] = useState(false)
 
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
@@ -1157,6 +1162,50 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   const proj = useMemo(() => buildProjection(fd.accounts, fd.transactions, 365), [fd])
+
+  // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
+  const fetchActuals = useCallback(async () => {
+    setActualsLoading(true)
+    try {
+      const res = await fetch('/.netlify/functions/plaid-transactions?days=90')
+      const json = await res.json()
+      const txns = json.transactions || []
+      setPlaidActuals(txns)
+      try { localStorage.setItem('plaid_actuals_cache', JSON.stringify(txns)) } catch {}
+    } catch { /* no Plaid connected */ }
+    finally { setActualsLoading(false) }
+  }, [])
+
+  const toggleActuals = () => {
+    if (!showActuals && !plaidActuals) fetchActuals()
+    setShowActuals(v => !v)
+  }
+
+  // Map plaid accountId → our local account id for filtering
+  const plaidIdToLocal = useMemo(() => {
+    const m = {}
+    data.accounts.forEach(a => { if (a.plaidAccountId) m[a.plaidAccountId] = a.id })
+    return m
+  }, [data.accounts])
+
+  // Actuals filtered by selected accounts
+  const filteredActuals = useMemo(() => {
+    if (!plaidActuals) return []
+    return plaidActuals.filter(tx => {
+      const localId = plaidIdToLocal[tx.accountId]
+      return localId ? activeAcctIds.has(localId) : true // if no mapping, include
+    })
+  }, [plaidActuals, plaidIdToLocal, activeAcctIds])
+
+  // Group actuals by date string (YYYY-MM-DD) for calendar lookup
+  const actualsByDate = useMemo(() => {
+    const map = {}
+    filteredActuals.forEach(tx => {
+      if (!map[tx.date]) map[tx.date] = []
+      map[tx.date].push(tx)
+    })
+    return map
+  }, [filteredActuals])
 
   // ── Historical monthly sparkline data (last 12 months) ──────────────────
   const monthlyHistory = useMemo(() => {
@@ -1457,6 +1506,27 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         )
       })}
 
+      {/* Divider */}
+      <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 6px', flexShrink: 0 }} />
+
+      {/* Actuals toggle */}
+      <button
+        onClick={toggleActuals}
+        disabled={actualsLoading}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+          cursor: actualsLoading ? 'default' : 'pointer',
+          border: showActuals ? '1px solid rgba(197,164,109,0.55)' : '1px solid rgba(255,255,255,0.10)',
+          background: showActuals ? 'rgba(197,164,109,0.18)' : 'rgba(255,255,255,0.04)',
+          color: showActuals ? 'var(--brevity-gold)' : 'var(--brevity-muted)',
+          transition: 'all 0.15s',
+        }}>
+        <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
+           style={{ fontSize: 12, animation: actualsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
+        {actualsLoading ? 'Loading…' : 'Actuals'}
+      </button>
+
       {/* Balance label when filtered */}
       {!allSelected && (
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--brevity-gold)', fontWeight: 600 }}>
@@ -1548,28 +1618,40 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                   if (!d) return <div key={`e${i}`} />
                   const mm = String(mcMonth + 1).padStart(2, '0'), dd = String(d).padStart(2, '0')
                   const key = `${mcYear}-${mm}-${dd}`
-                  const pt = proj.get(key)
                   const isToday = mcIsCurrentMonth && d === mcTodayN
                   const isPast = new Date(mcYear, mcMonth, d) < new Date(nowDt.getFullYear(), nowDt.getMonth(), nowDt.getDate())
-                  const hasTx = pt?.txns?.length > 0
-                  const dayInc = hasTx ? pt.txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0) : 0
-                  const dayExp = hasTx ? pt.txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0) : 0
+
+                  // Actuals mode: use real posted/pending Plaid transactions
+                  const dayActuals = showActuals ? (actualsByDate[key] || []) : null
+                  const pt = showActuals ? null : proj.get(key)
+
+                  const hasTx = showActuals ? dayActuals.length > 0 : pt?.txns?.length > 0
+                  const hasPending = showActuals && dayActuals.some(t => t.pending)
+                  // In Plaid: positive amount = expense (money out), negative = income (money in)
+                  const dayInc = showActuals
+                    ? dayActuals.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
+                    : (pt?.txns?.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0) || 0)
+                  const dayExp = showActuals
+                    ? dayActuals.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)
+                    : (pt?.txns?.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0) || 0)
+
                   return (
                     <div key={key} onClick={() => { setView('calendar'); setSelDay(key) }}
                       style={{ borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
-                        background: isToday ? 'rgba(197,164,109,0.18)' : hasTx ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.015)',
-                        border: isToday ? '1px solid rgba(197,164,109,0.55)' : '1px solid rgba(255,255,255,0.05)',
-                        opacity: isPast && !isToday ? 0.4 : 1,
+                        background: isToday ? 'rgba(197,164,109,0.18)' : hasTx ? (showActuals && hasPending ? 'rgba(197,164,109,0.07)' : 'rgba(255,255,255,0.04)') : 'rgba(255,255,255,0.015)',
+                        border: isToday ? '1px solid rgba(197,164,109,0.55)' : hasPending ? '1px solid rgba(197,164,109,0.30)' : '1px solid rgba(255,255,255,0.05)',
+                        opacity: showActuals ? (isPast || isToday ? 1 : 0.3) : (isPast && !isToday ? 0.4 : 1),
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
                         transition: 'background 0.15s', minHeight: 0 }}>
                       <div style={{ fontSize: 20, fontWeight: isToday ? 700 : 500, color: isToday ? 'var(--gold)' : 'var(--soft-white)', lineHeight: 1, marginBottom: 3 }}>{d}</div>
                       {hasTx && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                          {dayInc > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(247,243,234,0.90)', lineHeight: 1 }}>+{fmtK(dayInc)}</div>}
+                          {dayInc > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(197,164,109,0.90)', lineHeight: 1 }}>+{fmtK(dayInc)}</div>}
                           {dayExp > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(247,243,234,0.90)', lineHeight: 1 }}>-{fmtK(dayExp)}</div>}
+                          {showActuals && hasPending && <div style={{ fontSize: 9, color: 'rgba(197,164,109,0.65)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pending</div>}
                         </div>
                       )}
-                      {pt && <div style={{ fontSize: 14, fontWeight: 600, color: isToday ? 'var(--gold)' : 'rgba(197,164,109,0.75)', lineHeight: 1, marginTop: 3 }}>{fmtK(pt.bal)}</div>}
+                      {!showActuals && pt && <div style={{ fontSize: 14, fontWeight: 600, color: isToday ? 'var(--gold)' : 'rgba(197,164,109,0.75)', lineHeight: 1, marginTop: 3 }}>{fmtK(pt.bal)}</div>}
                     </div>
                   )
                 })}
@@ -1584,28 +1666,57 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               </div>
             </div>
 
-            {/* ── UPCOMING 7 DAYS — col 3, row 1 ── */}
+            {/* ── UPCOMING 7 DAYS / RECENT ACTUALS — col 3, row 1 ── */}
             <div className="dash-card" style={{ gridColumn: '3', gridRow: '1' }}>
               <div className="dash-card-header">
-                <span className="dash-card-title">Upcoming · 7 Days</span>
+                <span className="dash-card-title">{showActuals ? 'Recent · Actuals' : 'Upcoming · 7 Days'}</span>
                 <button className="dash-card-link" onClick={() => setView('calendar')}>Calendar →</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
-                {upcoming.length === 0 && <p style={{ fontSize: 14, color: 'var(--muted)' }}>Nothing due this week.</p>}
-                {upcoming.map((tx, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.14)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.name}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>{tx.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
-                    </div>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)', flexShrink: 0 }}>
-                      {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
-                    </span>
-                  </div>
-                ))}
+                {showActuals ? (
+                  // Actuals: last 14 days of real posted/pending transactions
+                  filteredActuals.length === 0
+                    ? <p style={{ fontSize: 14, color: 'var(--muted)' }}>{plaidActuals ? 'No recent transactions found.' : 'Connect a bank to see actuals.'}</p>
+                    : filteredActuals.slice(0, 14).map((tx, i) => {
+                        const isIncome = tx.amount < 0 // Plaid: negative = money in
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: isIncome ? 'rgba(197,164,109,0.14)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                              <i className={`ti ti-${isIncome ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: isIncome ? 'var(--gold)' : 'var(--expense-color)' }} />
+                              {tx.pending && <div style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: '50%', background: 'rgba(197,164,109,0.9)', border: '1px solid rgba(10,9,8,0.6)' }} />}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.name}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
+                                {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                {tx.pending && <span style={{ marginLeft: 6, color: 'rgba(197,164,109,0.75)', fontSize: 10 }}>Pending</span>}
+                              </p>
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: isIncome ? 'var(--gold)' : 'var(--expense-color)', flexShrink: 0 }}>
+                              {isIncome ? '+' : '-'}{fmtMoney(Math.abs(tx.amount))}
+                            </span>
+                          </div>
+                        )
+                      })
+                ) : (
+                  // Projected: next 7 days
+                  upcoming.length === 0
+                    ? <p style={{ fontSize: 14, color: 'var(--muted)' }}>Nothing due this week.</p>
+                    : upcoming.map((tx, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.14)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.name}</p>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>{tx.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)', flexShrink: 0 }}>
+                            {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
+                          </span>
+                        </div>
+                      ))
+                )}
               </div>
             </div>
 
@@ -1744,7 +1855,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {view === 'transactions' && (
         <div className="finance-inner">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>{fd.transactions.length} scheduled transaction{fd.transactions.length !== 1 ? 's' : ''}</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>
+              {showActuals
+                ? `${filteredActuals.length} posted/pending transaction${filteredActuals.length !== 1 ? 's' : ''}`
+                : `${fd.transactions.length} scheduled transaction${fd.transactions.length !== 1 ? 's' : ''}`}
+            </p>
             <button onClick={() => { setEditTx(null); setView('tx-form') }}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
               <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" /> Add transaction
@@ -1768,33 +1883,61 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {[...fd.transactions]
-              .sort((a, b) => a.type !== b.type ? (a.type === 'income' ? -1 : 1) : a.name.localeCompare(b.name))
-              .map(tx => {
-                const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
-                return (
-                  <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, transition: 'background 0.15s' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.12)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }} aria-hidden="true" />
+            {showActuals ? (
+              // ── Actuals mode: Plaid posted/pending ──
+              filteredActuals.length === 0
+                ? <p style={{ fontSize: 14, color: 'var(--muted)', padding: '20px 0' }}>{plaidActuals ? 'No transactions found for selected accounts.' : 'Connect a bank account to see posted transactions.'}</p>
+                : filteredActuals.map((tx, i) => {
+                    const isIncome = tx.amount < 0
+                    return (
+                      <div key={tx.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)', border: tx.pending ? '1px solid rgba(197,164,109,0.18)' : '1px solid rgba(255,255,255,0.07)', borderRadius: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: isIncome ? 'rgba(197,164,109,0.12)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <i className={`ti ti-${isIncome ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: isIncome ? 'var(--income-color)' : 'var(--expense-color)' }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
+                            {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {' · '}{tx.category}
+                            {tx.pending && <span style={{ marginLeft: 6, color: 'rgba(197,164,109,0.75)', fontWeight: 600 }}>Pending</span>}
+                          </p>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: isIncome ? 'var(--income-color)' : 'var(--expense-color)' }}>
+                          {isIncome ? '+' : '-'}{fmtMoney(Math.abs(tx.amount))}
+                        </p>
+                      </div>
+                    )
+                  })
+            ) : (
+              // ── Projected mode: scheduled recurring transactions ──
+              [...fd.transactions]
+                .sort((a, b) => a.type !== b.type ? (a.type === 'income' ? -1 : 1) : a.name.localeCompare(b.name))
+                .map(tx => {
+                  const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
+                  return (
+                    <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, transition: 'background 0.15s' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.12)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }} aria-hidden="true" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}</p>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
+                        {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
+                      </p>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button onClick={() => { setEditTx({ ...tx }); setView('tx-form') }}
+                          style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
+                          title="Edit"><i className="ti ti-edit" style={{ fontSize: 13 }} aria-hidden="true" /></button>
+                        <button onClick={() => deleteTx(tx.id)}
+                          style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
+                          title="Delete"><i className="ti ti-trash" style={{ fontSize: 13 }} aria-hidden="true" /></button>
+                      </div>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
-                      <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}</p>
-                    </div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
-                      {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
-                    </p>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button onClick={() => { setEditTx({ ...tx }); setView('tx-form') }}
-                        style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
-                        title="Edit"><i className="ti ti-edit" style={{ fontSize: 13 }} aria-hidden="true" /></button>
-                      <button onClick={() => deleteTx(tx.id)}
-                        style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
-                        title="Delete"><i className="ti ti-trash" style={{ fontSize: 13 }} aria-hidden="true" /></button>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })
+            )}
           </div>
         </div>
       )}
@@ -1855,14 +1998,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {/* ══════════ BUDGET ══════════ */}
       {view === 'budget' && (
         <div className="finance-inner">
-          <BudgetView data={data} />
+          <BudgetView data={fd} />
         </div>
       )}
 
       {/* ══════════ REPORTING ══════════ */}
       {view === 'reporting' && (
         <div className="finance-inner">
-          <ReportingView data={data} proj={proj} />
+          <ReportingView data={fd} proj={proj} />
         </div>
       )}
 
@@ -1936,7 +2079,7 @@ function BudgetView({ data }) {
   const getBudgeted = (item) => {
     const planVal = budget[item]?.[selMonth]
     if (planVal) return planVal
-    const tx = fd.transactions.find(t => t.name === item)
+    const tx = data.transactions.find(t => t.name === item)
     if (!tx) return 0
     switch (tx.freq) {
       case 'weekly':      return tx.amount * 4.33
@@ -2099,7 +2242,7 @@ function BudgetView({ data }) {
   // Compute actuals from transactions (monthly)
   const actuals = useMemo(() => {
     const map = {}
-    fd.transactions.forEach(tx => {
+    data.transactions.forEach(tx => {
       const key = tx.name
       if (!map[key]) map[key] = Array(12).fill(0)
       const monthlyAmt = (() => {
@@ -2116,7 +2259,7 @@ function BudgetView({ data }) {
       map[key] = Array(12).fill(monthlyAmt)
     })
     return map
-  }, [fd.transactions])
+  }, [data.transactions])
 
   const getCellVal = (item, month) => budget[item]?.[month] ?? ''
 
@@ -2339,18 +2482,18 @@ function ReportingView({ data, proj }) {
   const yr = now.getFullYear()
   const mo = now.getMonth()
 
-  const totalIncome   = fd.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
-  const totalExpenses = fd.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
+  const totalIncome   = data.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
+  const totalExpenses = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
   const netIncome     = totalIncome - totalExpenses
 
   const expByCategory = useMemo(() => {
     const map = {}
-    fd.transactions.filter(t => t.type === 'expense').forEach(t => {
+    data.transactions.filter(t => t.type === 'expense').forEach(t => {
       const cat = t.cat || 'Other'
       map[cat] = (map[cat] || 0) + monthlyAmt(t)
     })
     return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [fd.transactions])
+  }, [data.transactions])
 
   const monthlyData = useMemo(() => MONTHS.map((_, mi) => ({
     month: MONTHS[mi],
@@ -2410,7 +2553,7 @@ function ReportingView({ data, proj }) {
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
             {sectionTitle('Revenue')}
-            {fd.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(monthlyAmt(t)), 'var(--gold)', true))}
+            {data.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(monthlyAmt(t)), 'var(--gold)', true))}
             {statRow('Total Revenue', fmtMoney(totalIncome), 'var(--gold)', false, true)}
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
@@ -2554,7 +2697,7 @@ function ReportingView({ data, proj }) {
                   const budgeted = budgetMonthly[cat] || 0
                   const actual = cat === 'Income'
                     ? totalIncome
-                    : fd.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
+                    : data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
                         const matchesCat = t.cat === cat || items.some(i => t.name.toLowerCase().includes(i.toLowerCase().split(' ')[0]))
                         return matchesCat ? s + monthlyAmt(t) : s
                       }, 0)
