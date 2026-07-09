@@ -105,6 +105,74 @@ function PillarPlaceholder({ pillar }) {
   )
 }
 
+// ── Settings page ─────────────────────────────────────────────────────────────
+function SettingsPage() {
+  const section = { marginBottom: 36 }
+  const label   = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 14, display: 'block', fontWeight: 600 }
+  const card    = { background: 'var(--glass)', border: '1px solid var(--glass-border)', borderRadius: 16, padding: '24px 28px', marginBottom: 12 }
+  const row     = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }
+  const rowLast = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0' }
+  const title   = { fontSize: 14, fontWeight: 600, color: 'var(--white)', margin: 0 }
+  const sub     = { fontSize: 12, color: 'var(--muted)', margin: '2px 0 0' }
+  const badge   = { fontSize: 11, padding: '3px 10px', borderRadius: 10, background: 'rgba(197,164,109,0.12)', border: '1px solid rgba(197,164,109,0.22)', color: 'var(--gold)' }
+
+  const handleExport = () => {
+    const keys = ['fp_accounts','fp_transactions','fp_budgets','fp_goals','homehq_items_v1']
+    const data = {}
+    keys.forEach(k => { try { data[k] = JSON.parse(localStorage.getItem(k) || 'null') } catch {} })
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = `brevity-backup-${new Date().toISOString().slice(0,10)}.json`; a.click()
+  }
+
+  return (
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '48px 32px' }}>
+      <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 36, fontWeight: 400, color: 'var(--white)', margin: '0 0 8px', letterSpacing: '-0.01em' }}>Settings</h1>
+      <p style={{ color: 'var(--muted)', fontSize: 14, margin: '0 0 40px' }}>Manage your family office preferences and data.</p>
+
+      <div style={section}>
+        <span style={label}>Profile</span>
+        <div style={card}>
+          <div style={row}>
+            <div><p style={title}>Larry Jenkins</p><p style={sub}>Family Office Administrator</p></div>
+            <span style={badge}>Admin</span>
+          </div>
+          <div style={rowLast}>
+            <div><p style={title}>Family Members</p><p style={sub}>Lorenzo, Terica, Nyla, Javin, Isaiah</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div style={section}>
+        <span style={label}>Data</span>
+        <div style={card}>
+          <div style={row}>
+            <div><p style={title}>Export Data</p><p style={sub}>Download a full backup of your accounts, transactions, and projects.</p></div>
+            <button onClick={handleExport} style={{ padding: '8px 18px', borderRadius: 10, background: 'rgba(197,164,109,0.1)', border: '1px solid rgba(197,164,109,0.25)', color: 'var(--gold)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>Export JSON</button>
+          </div>
+          <div style={rowLast}>
+            <div><p style={title}>Storage</p><p style={sub}>All data is stored locally in your browser.</p></div>
+            <span style={badge}>Local</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={section}>
+        <span style={label}>About</span>
+        <div style={card}>
+          <div style={row}>
+            <div><p style={title}>Brevity</p><p style={sub}>LSLJ Family Office Platform</p></div>
+            <span style={badge}>v1.0</span>
+          </div>
+          <div style={rowLast}>
+            <div><p style={title}>Environment</p><p style={sub}>lslj-family-hub.netlify.app</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [expandedPillar, setExpandedPillar] = useState('finance')
@@ -127,6 +195,9 @@ export default function App() {
   }
 
   const renderContent = () => {
+    if (activeView === 'settings') {
+      return <SettingsPage />
+    }
     if (activeView === 'property') {
       return <HomeHQ />
     }
@@ -193,7 +264,7 @@ export default function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="sidebar-footer-item">
+          <button className="sidebar-footer-item" onClick={() => { setActiveView('settings'); setActivePillar('') }}>
             <i className="ti ti-settings" />
             <span>Settings</span>
           </button>
