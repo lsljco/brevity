@@ -176,12 +176,12 @@ const LUXURY_CSS = `
   font-family: var(--font-display) !important;
 }
 
-/* Main dashboard canvas — fills the viewport, no scroll */
+/* Main dashboard canvas — scrollable column */
 .dash-body {
   flex: 1 !important;
   display: flex !important;
   flex-direction: column !important;
-  min-height: 0 !important;
+  overflow-y: auto !important;
   position: relative !important;
   z-index: 1 !important;
   padding: 32px 34px 26px !important;
@@ -417,15 +417,12 @@ const LUXURY_CSS = `
 .dash-main-grid {
   display: grid !important;
   grid-template-columns: 1fr 1fr 1fr !important;
-  grid-template-rows: 1fr 1fr auto !important;
+  grid-template-rows: auto !important;
   gap: 18px !important;
   padding: 0 !important;
   margin-bottom: 18px !important;
   align-items: stretch !important;
-  flex: 1 !important;
-  min-height: 0 !important;
   width: 100% !important;
-  align-self: stretch !important;
 }
 .dash-card {
   min-height: 292px !important;
@@ -1040,6 +1037,8 @@ function AcctForm({ acct, onSave, onCancel }) {
 export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [data, setData]         = useState(loadData)
   const [formView, setFormView] = useState(null) // 'tx-form' | 'acct-form' | null
+  const [selectedAccts, setSelectedAccts] = useState(null) // null = all selected
+  const [acctFilterOpen, setAcctFilterOpen] = useState(false)
 
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
@@ -1134,7 +1133,78 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
   useEffect(() => { saveData(data) }, [data])
 
-  const proj = useMemo(() => buildProjection(data.accounts, data.transactions, 365), [data])
+  // ── Account filter ───────────────────────────────────────────────────────
+  // selectedAccts = null → all; otherwise a Set of account IDs
+  const activeAcctIds = useMemo(() => {
+    if (!selectedAccts) return new Set(data.accounts.map(a => a.id))
+    return selectedAccts
+  }, [selectedAccts, data.accounts])
+
+  const fd = useMemo(() => ({
+    accounts:     data.accounts.filter(a => activeAcctIds.has(a.id)),
+    transactions: data.transactions.filter(tx => activeAcctIds.has(tx.acct)),
+  }), [data, activeAcctIds])
+
+  const toggleAcct = (id) => {
+    setSelectedAccts(prev => {
+      const current = prev ?? new Set(data.accounts.map(a => a.id))
+      const next = new Set(current)
+      if (next.has(id)) { next.delete(id); if (next.size === 0) return null }
+      else next.add(id)
+      if (next.size === data.accounts.length) return null
+      return next
+    })
+  }
+
+  const proj = useMemo(() => buildProjection(fd.accounts, fd.transactions, 365), [fd])
+
+  // ── Historical monthly sparkline data (last 12 months) ──────────────────
+  const monthlyHistory = useMemo(() => {
+    const now = new Date()
+    const months = []
+    for (let i = 11; i >= 0; i--) {
+      const year  = now.getMonth() - i < 0
+        ? now.getFullYear() - 1 + Math.floor((now.getMonth() - i + 12) / 12)
+        : now.getFullYear()
+      const month = ((now.getMonth() - i) % 12 + 12) % 12
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      let income = 0, expense = 0
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dt = new Date(year, month, day, 0, 0, 0, 0)
+        fd.transactions.forEach(tx => {
+          if (txOccursOnDate(tx, dt)) {
+            const amt = parseFloat(tx.amount || 0)
+            if (tx.type === 'income') income  += amt
+            else                      expense += amt
+          }
+        })
+      }
+      months.push({ income, expense, net: income - expense })
+    }
+    return months
+  }, [fd.transactions])
+
+  // Reconstruct historical running balance by walking backward from today
+  const sparkBalance = useMemo(() => {
+    const bals = []
+    let bal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+    for (let i = monthlyHistory.length - 1; i >= 0; i--) {
+      bals.unshift(parseFloat(bal.toFixed(2)))
+      bal -= monthlyHistory[i].net
+    }
+    return bals
+  }, [monthlyHistory, fd.accounts])
+
+  const sparkIncome  = monthlyHistory.map(m => m.income)
+  const sparkExpense = monthlyHistory.map(m => m.expense)
+  const sparkNet     = monthlyHistory.map(m => m.net)
+
+  // Future 90-day balance sampled at ~8-day intervals for the floor card
+  const sparkFloor = []
+  for (let i = 0; i <= 90; i += 12) {
+    const pt = proj.get(toISO(addDays(today0(), i)))
+    if (pt) sparkFloor.push(pt.bal)
+  }
 
   const showToast = (msg) => {
     setToast(msg)
@@ -1210,9 +1280,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     setDataAndPersist(d => ({ ...d, accounts: d.accounts.filter(a => a.id !== id) }))
   }
 
-  // ── Derived values ──────────────────────────────────────────────────────────
+  // ── Derived values (all use fd = filtered accounts + transactions) ─────────
   const t = today0()
-  const totBal = data.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+  const totBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
   const pt30  = proj.get(toISO(addDays(t, 30)))
   const pt90  = proj.get(toISO(addDays(t, 90)))
 
@@ -1261,11 +1331,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   // Monthly income & expense summary
-  const monthlyIncome  = data.transactions.filter(t => t.type === 'income').reduce((s, t) => {
+  const monthlyIncome  = fd.transactions.filter(t => t.type === 'income').reduce((s, t) => {
     const m = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
     return s + t.amount * (m[t.freq] ?? 1)
   }, 0)
-  const monthlyExpense = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
+  const monthlyExpense = fd.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
     const m = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
     return s + t.amount * (m[t.freq] ?? 1)
   }, 0)
@@ -1298,13 +1368,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
   // ── Dashboard extras ──────────────────────────────────────────────────────
   const freqMult = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
-  const incomeSources = data.transactions
+  const incomeSources = fd.transactions
     .filter(tx => tx.type === 'income')
     .map(tx => ({ ...tx, monthly: tx.amount * (freqMult[tx.freq] ?? 1) }))
     .sort((a, b) => b.monthly - a.monthly)
 
   const expByCat = {}
-  data.transactions.filter(tx => tx.type === 'expense').forEach(tx => {
+  fd.transactions.filter(tx => tx.type === 'expense').forEach(tx => {
     expByCat[tx.cat] = (expByCat[tx.cat] || 0) + tx.amount * (freqMult[tx.freq] ?? 1)
   })
   const topCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 6)
@@ -1339,13 +1409,67 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   const todayLabel = nowDt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-  const sparkLine30 = chartData.slice(0, 11)
 
   const isForm = ['tx-form', 'acct-form'].includes(view)
+
+  // ── Account filter bar ──────────────────────────────────────────────────
+  const allSelected = !selectedAccts || selectedAccts.size === data.accounts.length
+  const AccountFilterBar = !isForm && (
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 20,
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '8px 24px 8px',
+      background: 'rgba(10,9,8,0.72)',
+      backdropFilter: 'blur(16px)',
+      borderBottom: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts</span>
+
+      {/* All pill */}
+      <button
+        onClick={() => setSelectedAccts(null)}
+        style={{
+          padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
+          background: allSelected ? 'var(--brevity-gold)' : 'rgba(255,255,255,0.07)',
+          color: allSelected ? '#0A0908' : 'var(--brevity-muted)',
+          transition: 'all 0.15s',
+        }}>
+        All
+      </button>
+
+      {/* Per-account pills */}
+      {data.accounts.map(acct => {
+        const isOn = activeAcctIds.has(acct.id)
+        return (
+          <button
+            key={acct.id}
+            onClick={() => toggleAcct(acct.id)}
+            style={{
+              padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              border: isOn && !allSelected ? '1px solid rgba(197,164,109,0.45)' : '1px solid rgba(255,255,255,0.10)',
+              background: isOn && !allSelected ? 'rgba(197,164,109,0.14)' : 'rgba(255,255,255,0.04)',
+              color: isOn ? 'var(--brevity-white)' : 'var(--brevity-muted)',
+              transition: 'all 0.15s',
+            }}>
+            {acct.name}
+          </button>
+        )
+      })}
+
+      {/* Balance label when filtered */}
+      {!allSelected && (
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--brevity-gold)', fontWeight: 600 }}>
+          {fmtMoney(totBal)}
+        </span>
+      )}
+    </div>
+  )
 
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
+      {AccountFilterBar}
 
       {/* ══════════ DASHBOARD ══════════ */}
       {view === 'dashboard' && (
@@ -1372,11 +1496,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           {/* ── 5 KPI Cards ── */}
           <div className="kpi-grid">
             {[
-              { label: 'Total Balance',    value: fmtMoney(totBal),                                                        sub: `${data.accounts.length} accounts`,                                                      trend: `vs last month`, icon: 'ti-wallet',          spark: sparkLine30,                     good: true  },
-              { label: 'Monthly Income',   value: fmtMoney(monthlyIncome),                                                 sub: `${incomeSources.length} streams`,                                                       trend: 'vs last month',  icon: 'ti-trending-up',     spark: sparkLine30.map(v=>v*0.58),     good: true  },
-              { label: 'Monthly Expenses', value: fmtMoney(monthlyExpense),                                                sub: `${data.transactions.filter(t=>t.type==='expense').length} items`,                       trend: 'vs last month',  icon: 'ti-trending-down',   spark: sparkLine30.map(v=>v*0.42),     good: false },
-              { label: 'Net Cash Flow',    value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),           sub: monthlyCashFlow >= 0 ? 'Monthly surplus' : 'Monthly deficit',                           trend: 'monthly',        icon: 'ti-arrows-exchange', spark: sparkLine30,                     good: monthlyCashFlow >= 0 },
-              { label: '90-Day Floor',     value: minDay ? fmtMoney(minBal) : '—',                                         sub: minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—',        trend: 'lowest point',   icon: 'ti-chart-bar',       spark: sparkLine30,                     good: minBal >= 1000 },
+              { label: 'Total Balance',    value: fmtMoney(totBal),                                                        sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`,                trend: `vs last month`, icon: 'ti-wallet',          spark: sparkBalance,   good: true  },
+              { label: 'Monthly Income',   value: fmtMoney(monthlyIncome),                                                 sub: `${incomeSources.length} streams`,                                                       trend: 'vs last month',  icon: 'ti-trending-up',     spark: sparkIncome,    good: true  },
+              { label: 'Monthly Expenses', value: fmtMoney(monthlyExpense),                                                sub: `${fd.transactions.filter(t=>t.type==='expense').length} items`,                          trend: 'vs last month',  icon: 'ti-trending-down',   spark: sparkExpense,   good: false },
+              { label: 'Net Cash Flow',    value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),           sub: monthlyCashFlow >= 0 ? 'Monthly surplus' : 'Monthly deficit',                           trend: 'monthly',        icon: 'ti-arrows-exchange', spark: sparkNet,       good: monthlyCashFlow >= 0 },
+              { label: '90-Day Floor',     value: minDay ? fmtMoney(minBal) : '—',                                         sub: minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—',        trend: 'lowest point',   icon: 'ti-chart-bar',       spark: sparkFloor,     good: minBal >= 1000 },
             ].map((kpi, i) => {
               const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
               return (
@@ -1620,7 +1744,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {view === 'transactions' && (
         <div className="finance-inner">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>{data.transactions.length} scheduled transaction{data.transactions.length !== 1 ? 's' : ''}</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>{fd.transactions.length} scheduled transaction{fd.transactions.length !== 1 ? 's' : ''}</p>
             <button onClick={() => { setEditTx(null); setView('tx-form') }}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
               <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" /> Add transaction
@@ -1644,7 +1768,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {[...data.transactions]
+            {[...fd.transactions]
               .sort((a, b) => a.type !== b.type ? (a.type === 'income' ? -1 : 1) : a.name.localeCompare(b.name))
               .map(tx => {
                 const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
@@ -1812,7 +1936,7 @@ function BudgetView({ data }) {
   const getBudgeted = (item) => {
     const planVal = budget[item]?.[selMonth]
     if (planVal) return planVal
-    const tx = data.transactions.find(t => t.name === item)
+    const tx = fd.transactions.find(t => t.name === item)
     if (!tx) return 0
     switch (tx.freq) {
       case 'weekly':      return tx.amount * 4.33
@@ -1975,7 +2099,7 @@ function BudgetView({ data }) {
   // Compute actuals from transactions (monthly)
   const actuals = useMemo(() => {
     const map = {}
-    data.transactions.forEach(tx => {
+    fd.transactions.forEach(tx => {
       const key = tx.name
       if (!map[key]) map[key] = Array(12).fill(0)
       const monthlyAmt = (() => {
@@ -1992,7 +2116,7 @@ function BudgetView({ data }) {
       map[key] = Array(12).fill(monthlyAmt)
     })
     return map
-  }, [data.transactions])
+  }, [fd.transactions])
 
   const getCellVal = (item, month) => budget[item]?.[month] ?? ''
 
@@ -2215,18 +2339,18 @@ function ReportingView({ data, proj }) {
   const yr = now.getFullYear()
   const mo = now.getMonth()
 
-  const totalIncome   = data.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
-  const totalExpenses = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
+  const totalIncome   = fd.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
+  const totalExpenses = fd.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
   const netIncome     = totalIncome - totalExpenses
 
   const expByCategory = useMemo(() => {
     const map = {}
-    data.transactions.filter(t => t.type === 'expense').forEach(t => {
+    fd.transactions.filter(t => t.type === 'expense').forEach(t => {
       const cat = t.cat || 'Other'
       map[cat] = (map[cat] || 0) + monthlyAmt(t)
     })
     return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [data.transactions])
+  }, [fd.transactions])
 
   const monthlyData = useMemo(() => MONTHS.map((_, mi) => ({
     month: MONTHS[mi],
@@ -2286,7 +2410,7 @@ function ReportingView({ data, proj }) {
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
             {sectionTitle('Revenue')}
-            {data.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(monthlyAmt(t)), 'var(--gold)', true))}
+            {fd.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(monthlyAmt(t)), 'var(--gold)', true))}
             {statRow('Total Revenue', fmtMoney(totalIncome), 'var(--gold)', false, true)}
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
@@ -2430,7 +2554,7 @@ function ReportingView({ data, proj }) {
                   const budgeted = budgetMonthly[cat] || 0
                   const actual = cat === 'Income'
                     ? totalIncome
-                    : data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
+                    : fd.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
                         const matchesCat = t.cat === cat || items.some(i => t.name.toLowerCase().includes(i.toLowerCase().split(' ')[0]))
                         return matchesCat ? s + monthlyAmt(t) : s
                       }, 0)
