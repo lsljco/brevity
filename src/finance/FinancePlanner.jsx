@@ -526,8 +526,8 @@ const LUXURY_CSS = `
   gap: 6px !important;
 }
 .cal-cell {
-  min-height: 92px !important;
-  padding: 10px !important;
+  min-height: 110px !important;
+  padding: 8px !important;
   cursor: pointer;
   border-radius: 14px !important;
   background: rgba(255,255,255,.028) !important;
@@ -1843,7 +1843,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         <div className="finance-inner">
           <CalendarView proj={proj} calYear={calYear} calMonth={calMonth}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
-            selDay={selDay} setSelDay={setSelDay} />
+            selDay={selDay} setSelDay={setSelDay}
+            accounts={data.accounts} onSave={updateTx} onDelete={deleteTx} />
         </div>
       )}
 
@@ -2737,7 +2738,8 @@ function ReportingView({ data, proj }) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay }) {
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, onSave, onDelete }) {
+  const [selTx, setSelTx] = useState(null)
   const t = today0()
   const todayStr = toISO(t)
   const firstDow = new Date(calYear, calMonth, 1).getDay()
@@ -2752,6 +2754,30 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
 
   const selPt = selDay ? proj.get(selDay) : null
 
+  const handleSave = (tx) => { onSave(tx); setSelTx(null) }
+  const handleDelete = (id) => { onDelete(id); setSelTx(null) }
+
+  // ── Edit panel ──────────────────────────────────────────────────────────
+  if (selTx) {
+    return (
+      <div>
+        <button onClick={() => setSelTx(null)}
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', fontSize: 12, color: 'var(--muted)' }}>
+          <i className="ti ti-arrow-left" /> Back to Calendar
+        </button>
+        <p style={{ margin: '0 0 4px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+          Editing recurring transaction · changes apply to all occurrences
+        </p>
+        <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
+        <button onClick={() => { if (window.confirm('Delete this transaction entirely?')) handleDelete(selTx.id) }}
+          style={{ marginTop: 10, padding: '8px 18px', borderRadius: 8, border: 'none', background: 'rgba(196,120,90,0.15)', color: 'var(--expense-color)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+          Delete Transaction
+        </button>
+      </div>
+    )
+  }
+
+  // ── Calendar grid ───────────────────────────────────────────────────────
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -2776,7 +2802,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
 
       <div className="cal-grid">
         {cells.map((d, i) => {
-          if (!d) return <div key={`e${i}`} style={{ minHeight: 72 }} />
+          if (!d) return <div key={`e${i}`} style={{ minHeight: 92 }} />
           const m = String(calMonth + 1).padStart(2, '0'), dd = String(d).padStart(2, '0')
           const key = `${calYear}-${m}-${dd}`
           const pt = proj.get(key)
@@ -2785,19 +2811,29 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
           const isPast = key < todayStr
           const hasTxns = pt?.txns?.length > 0
           const isNeg = pt && pt.bal < 0
-          const isLow = pt && pt.bal >= 0 && pt.bal < 500
-          const balColor = isNeg ? '#D9BD8B' : isLow ? '#C5A46D' : '#C5A46D'
           return (
             <div key={key}
               className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''}`}
               onClick={() => setSelDay(isSel ? null : key)}>
-              <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: isToday ? 600 : 400, color: isToday ? 'var(--gold)' : 'var(--muted)' }}>{d}</p>
-              {pt && <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: balColor, lineHeight: 1.2 }}>{fmtK(pt.bal)}</p>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+                <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : 'var(--muted)' }}>{d}</span>
+                {pt && <span style={{ fontSize: 9, fontWeight: 600, color: isNeg ? 'var(--expense-color)' : 'rgba(197,164,109,0.7)', lineHeight: 1 }}>{fmtK(pt.bal)}</span>}
+              </div>
               {hasTxns && (
-                <div style={{ display: 'flex', gap: 2, marginTop: 4, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {pt.txns.slice(0, 5).map((tx, j) => (
-                    <div key={j} style={{ width: 5, height: 5, borderRadius: '50%', background: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }} />
+                    <div key={j} style={{
+                      fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
+                      background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : 'rgba(196,120,90,0.22)',
+                      color: tx.type === 'income' ? '#C5A46D' : '#E8967A',
+                      overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                    }}>
+                      {tx.name}
+                    </div>
                   ))}
+                  {pt.txns.length > 5 && (
+                    <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{pt.txns.length - 5} more</div>
+                  )}
                 </div>
               )}
             </div>
@@ -2805,15 +2841,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-        {[['var(--gold)','Income'],['var(--expense-color)','Expense'],['var(--gold-dark)','Healthy (>$500)'],['rgba(197,164,109,0.4)','Low (<$500)'],['rgba(196,120,90,0.6)','Negative']].map(([c, l]) => (
-          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: c, flexShrink: 0 }} />
-            {l}
-          </div>
-        ))}
-      </div>
-
+      {/* ── Day detail panel ── */}
       {selDay && selPt && (
         <div className="finance-card" style={{ marginTop: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -2822,7 +2850,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 {new Date(selDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                {selPt.delta !== 0 ? `Net: ${selPt.delta > 0 ? '+' : '-'}${fmtMoney(Math.abs(selPt.delta))}` : 'No transactions'}
+                {selPt.delta !== 0 ? `Net: ${selPt.delta > 0 ? '+' : ''}${fmtMoney(selPt.delta)}` : 'No transactions'}{selPt.txns.length > 0 ? ' · click a row to edit' : ''}
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -2832,15 +2860,26 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
               </p>
             </div>
           </div>
+
           {selPt.txns.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {selPt.txns.map((tx, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: 9 }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{tx.name}</p>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {FREQ_OPTS.find(f => f.v === tx.freq)?.l}</p>
+                <div key={i}
+                  onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                    background: 'rgba(255,255,255,0.04)', borderRadius: 10, cursor: 'pointer',
+                    border: '1px solid transparent', transition: 'all .15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(197,164,109,0.22)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'transparent' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
+                      {tx.cat} · {FREQ_OPTS.find(f => f.v === tx.freq)?.l}
+                      <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>
+                    </p>
                   </div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }}>
+                  <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
+                    color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }}>
                     {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
                   </p>
                 </div>
