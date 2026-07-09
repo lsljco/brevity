@@ -799,83 +799,79 @@ function LuxuryStyles() {
 
 const DEFAULT_DATA = {
   accounts: [
-    { id: 'a1', name: 'Checking',    balance: 4250,  type: 'checking',    plaidAccountId: null },
-    { id: 'a2', name: 'Savings',     balance: 12800, type: 'savings',     plaidAccountId: null },
-    { id: 'a3', name: 'Investment',  balance: 285000,type: 'investment',  plaidAccountId: null },
+    { id: 'a1', name: 'Pinnacle Operating',       balance: 3847,  type: 'checking', plaidAccountId: null },
+    { id: 'a2', name: 'Renovation Consolidated',  balance: 55000, type: 'checking', plaidAccountId: null },
+    { id: 'a3', name: 'Pinnacle Savings',         balance: 12000, type: 'savings',  plaidAccountId: null },
   ],
   transactions: [
-    // ── INCOME ──────────────────────────────────────────────────────────
-    { id: 't_i1', name: 'W3 LLC / Larry Consulting', amount: 4627,   type: 'income', freq: 'biweekly', start: '2026-06-18', end: '', cat: 'Income', acct: 'a1' },
-    { id: 't_i2', name: 'Genesco / Larry Part-time',  amount: 717.65, type: 'income', freq: 'weekly',   start: '2026-06-05', end: '', cat: 'Income', acct: 'a1' },
-    { id: 't_i3', name: 'Globe Life / Terica',        amount: 2720,   type: 'income', freq: 'biweekly', start: '2026-06-12', end: '', cat: 'Income', acct: 'a1' },
-    { id: 't_i4', name: 'Robert Half / Terica',       amount: 1500,   type: 'income', freq: 'weekly',   start: '2026-06-04', end: '', cat: 'Income', acct: 'a1' },
-    { id: 't_i5', name: 'Genesco / Lorenzo',          amount: 8449,   type: 'income', freq: 'biweekly', start: '2026-06-18', end: '', cat: 'Income', acct: 'a1' },
-    { id: 't_i6', name: 'Scapa-Mativ / Javin',        amount: 1698,   type: 'income', freq: 'biweekly', start: '2026-06-05', end: '', cat: 'Income', acct: 'a1' },
+    // ── INCOME ──────────────────────────────────────────────────────────────
+    { id: 't_i1',    name: 'LJ - Shriner Hospital',          amount:  4506.99, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i2',    name: 'LS Income',                      amount:  8871.32, type: 'income',  freq: 'monthly', start: '2026-07-19', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i3',    name: 'TS - Globe Life Income',         amount:  2791.38, type: 'income',  freq: 'weekly',  start: '2026-07-09', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i4',    name: 'TS TransAmerica Income',         amount:  1611.00, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i5',    name: 'JS - Mativ Income',              amount:  1698.18, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i6',    name: 'LJ - Ameripro Income',           amount:  4344.03, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i7',    name: 'LJ Genesco AP Payroll',          amount:   685.14, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i8',    name: 'LJ GA Tax Refund',               amount:  5063.00, type: 'income',  freq: 'once',    start: '2026-07-09', end: '', cat: 'Income',         acct: 'a2' },
+    { id: 't_i9',    name: 'HOA Reimbursement',              amount:  9618.63, type: 'income',  freq: 'once',    start: '2026-07-14', end: '', cat: 'Income',         acct: 'a2' },
 
-    // ── HOUSING ─────────────────────────────────────────────────────────
-    { id: 't_h1',  name: 'Mortgage Payment',          amount: 11355.71, type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Housing',    acct: 'a1' },
-    { id: 't_h2',  name: 'HELOC Payment',             amount: 2830.57,  type: 'expense', freq: 'monthly', start: '2026-07-15', end: '', cat: 'Housing',    acct: 'a1' },
-    { id: 't_h3',  name: 'Home Owner\'s Association', amount: 458.33,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Housing',    acct: 'a1' },
-    { id: 't_h4',  name: 'Lawncare',                  amount: 320.00,   type: 'expense', freq: 'monthly', start: '2026-07-15', end: '', cat: 'Housing',    acct: 'a1' },
+    // ── HOUSING ─────────────────────────────────────────────────────────────
+    { id: 't_h1',    name: 'Mortgage',                       amount: 11355.71, type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Housing',        acct: 'a1' },
+    { id: 't_h2',    name: "Homeowner's Insurance",          amount:  1348.42, type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Housing',        acct: 'a1' },
+    { id: 't_h3',    name: 'HOA Dues',                       amount:  1375.00, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Housing',        acct: 'a1' },
+    { id: 't_h4',    name: 'Tower Heloc Payment',            amount:  2735.02, type: 'expense', freq: 'monthly', start: '2026-07-19', end: '', cat: 'Housing',        acct: 'a1' },
+    { id: 't_h5',    name: 'Lawncare',                       amount:   320.00, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Housing',        acct: 'a1' },
+    { id: 't_h6',    name: 'Property Taxes',                 amount: 30337.59, type: 'expense', freq: 'monthly', start: '2026-07-14', end: '', cat: 'Housing',        acct: 'a2' },
 
-    // ── INSURANCE ───────────────────────────────────────────────────────
-    { id: 't_ins1',name: 'Insurance – Homeowner\'s',  amount: 967.33,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Insurance',  acct: 'a1' },
-    { id: 't_ins2',name: 'Auto Insurance',            amount: 918.33,   type: 'expense', freq: 'monthly', start: '2026-07-15', end: '', cat: 'Insurance',  acct: 'a1' },
-    { id: 't_ins3',name: 'Traveler\'s Umbrella',      amount: 94.22,    type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Insurance',  acct: 'a1' },
-    { id: 't_ins4',name: 'Life Insurance',            amount: 179.69,   type: 'expense', freq: 'monthly', start: '2026-07-24', end: '', cat: 'Insurance',  acct: 'a1' },
+    // ── UTILITIES ───────────────────────────────────────────────────────────
+    { id: 't_u1',    name: 'Sawnee EMC - Electric',          amount:   550.00, type: 'expense', freq: 'monthly', start: '2026-07-26', end: '', cat: 'Utilities',      acct: 'a1' },
+    { id: 't_u2',    name: 'Constellation Natural Gas',      amount:   387.54, type: 'expense', freq: 'monthly', start: '2026-07-02', end: '', cat: 'Utilities',      acct: 'a1' },
+    { id: 't_u3',    name: 'Metro Metering Service (Water)', amount:   260.28, type: 'expense', freq: 'monthly', start: '2026-07-02', end: '', cat: 'Utilities',      acct: 'a1' },
+    { id: 't_u4',    name: 'Cable / Internet / Landline',    amount:   336.36, type: 'expense', freq: 'monthly', start: '2026-07-24', end: '', cat: 'Utilities',      acct: 'a1' },
+    { id: 't_u5',    name: 'Waste Management (Breezeway)',   amount:   100.00, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Utilities',      acct: 'a1' },
 
-    // ── UTILITIES ───────────────────────────────────────────────────────
-    { id: 't_u1',  name: 'Electric (Sawnee EMC)',     amount: 550.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Utilities',  acct: 'a1' },
-    { id: 't_u2',  name: 'AT&T Cellular',             amount: 643.76,   type: 'expense', freq: 'monthly', start: '2026-07-25', end: '', cat: 'Utilities',  acct: 'a1' },
-    { id: 't_u3',  name: 'Natural Gas/Constellation', amount: 380.00,   type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Utilities',  acct: 'a1' },
-    { id: 't_u4',  name: 'Cable, Internet & Phone',   amount: 336.36,   type: 'expense', freq: 'monthly', start: '2026-07-26', end: '', cat: 'Utilities',  acct: 'a1' },
-    { id: 't_u5',  name: 'Waste Management',          amount: 60.00,    type: 'expense', freq: 'monthly', start: '2026-07-16', end: '', cat: 'Utilities',  acct: 'a1' },
-    { id: 't_u6',  name: 'Water – Metro Metering',    amount: 136.83,   type: 'expense', freq: 'monthly', start: '2026-07-10', end: '', cat: 'Utilities',  acct: 'a1' },
+    // ── TRANSPORTATION ───────────────────────────────────────────────────────
+    { id: 't_t1',    name: 'Gasoline / Fuel',                amount:   150.00, type: 'expense', freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Transportation', acct: 'a1' },
+    { id: 't_t2',    name: "Traveler's Auto Insurance",      amount:   688.36, type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Transportation', acct: 'a1' },
+    { id: 't_t3',    name: "Traveler's Umbrella Policy",     amount:    90.41, type: 'expense', freq: 'monthly', start: '2026-07-16', end: '', cat: 'Insurance',      acct: 'a1' },
+    { id: 't_t4',    name: 'National Car Rental',            amount:  1240.00, type: 'expense', freq: 'monthly', start: '2026-07-24', end: '', cat: 'Transportation', acct: 'a1' },
 
-    // ── DEBT / LOANS ────────────────────────────────────────────────────
-    { id: 't_d1',  name: 'Child Support',             amount: 1024.00,  type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_d2',  name: 'LJ Prosper Loan',           amount: 904.33,   type: 'expense', freq: 'monthly', start: '2026-07-03', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_d3',  name: 'LJ Care Credit / Synchrony',amount: 326.00,   type: 'expense', freq: 'monthly', start: '2026-07-11', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_d4',  name: 'LS Student Loan',           amount: 585.33,   type: 'expense', freq: 'monthly', start: '2026-07-09', end: '', cat: 'Education',  acct: 'a1' },
-    { id: 't_d5',  name: 'LJ Student Loan',           amount: 219.00,   type: 'expense', freq: 'monthly', start: '2026-07-09', end: '', cat: 'Education',  acct: 'a1' },
-    { id: 't_d6',  name: 'Car Rental',                amount: 1064.00,  type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Transport',  acct: 'a1' },
-    { id: 't_d7',  name: 'Dividends',                 amount: 800.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
+    // ── INSURANCE ───────────────────────────────────────────────────────────
+    { id: 't_ins1',  name: 'LS - Protective Life Insurance', amount:    51.85, type: 'expense', freq: 'monthly', start: '2026-07-03', end: '', cat: 'Insurance',      acct: 'a1' },
+    { id: 't_ins2',  name: 'TS Protective Life Insurance',   amount:    65.08, type: 'expense', freq: 'monthly', start: '2026-07-22', end: '', cat: 'Insurance',      acct: 'a1' },
+    { id: 't_ins3',  name: 'LJ - AIG Life Insurance',        amount:    62.76, type: 'expense', freq: 'monthly', start: '2026-07-22', end: '', cat: 'Insurance',      acct: 'a1' },
 
-    // ── FOOD & GROCERIES ────────────────────────────────────────────────
-    { id: 't_f1',  name: 'Groceries',                 amount: 1000.00,  type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Food',       acct: 'a1' },
+    // ── HEALTH / FITNESS ────────────────────────────────────────────────────
+    { id: 't_ft1',   name: 'Lifetime Fitness',               amount:   628.00, type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Health',         acct: 'a1' },
 
-    // ── TRANSPORT ───────────────────────────────────────────────────────
-    { id: 't_g1',  name: 'Gasoline',                  amount: 320.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Transport',  acct: 'a1' },
+    // ── DEBT / LOANS ────────────────────────────────────────────────────────
+    { id: 't_d1',    name: 'LJ Prosper Loan Payment',        amount:   904.03, type: 'expense', freq: 'monthly', start: '2026-07-04', end: '', cat: 'Debt',           acct: 'a1' },
+    { id: 't_d2',    name: 'LS Capital One',                 amount:   282.00, type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Debt',           acct: 'a1' },
+    { id: 't_d3',    name: 'LJ - Student Loan (NelNet)',     amount:   229.05, type: 'expense', freq: 'monthly', start: '2026-07-07', end: '', cat: 'Debt',           acct: 'a1' },
+    { id: 't_d4',    name: 'LJ - Care Credit (Synchrony)',   amount:   337.00, type: 'expense', freq: 'monthly', start: '2026-07-09', end: '', cat: 'Debt',           acct: 'a1' },
+    { id: 't_d5',    name: 'LS Student Loan - Aidvantage',   amount:   585.33, type: 'expense', freq: 'monthly', start: '2026-07-21', end: '', cat: 'Debt',           acct: 'a1' },
+    { id: 't_d6',    name: 'LJ - Child Support',             amount:  1024.00, type: 'expense', freq: 'monthly', start: '2026-07-19', end: '', cat: 'Family',         acct: 'a1' },
 
-    // ── FITNESS / HEALTH ────────────────────────────────────────────────
-    { id: 't_ft1', name: 'LSLJ Gym Membership',       amount: 189.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Healthcare', acct: 'a1' },
-    { id: 't_ft2', name: 'TS & Kids Gym Membership',  amount: 359.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Healthcare', acct: 'a1' },
+    // ── FOOD & HOUSEHOLD ────────────────────────────────────────────────────
+    { id: 't_f1',    name: 'Groceries',                      amount:   300.00, type: 'expense', freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Food',           acct: 'a1' },
+    { id: 't_f2',    name: 'Cleaning / Laundry Supplies',    amount:   200.00, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Household',      acct: 'a1' },
 
-    // ── PERSONAL CARE ───────────────────────────────────────────────────
-    { id: 't_p1',  name: 'Cleaning/Laundry Supplies', amount: 200.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_p2',  name: 'Personal Care/Hygiene',     amount: 100.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_p3',  name: 'Petcare',                   amount: 150.00,   type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
+    // ── SUBSCRIPTIONS ───────────────────────────────────────────────────────
+    { id: 't_s1',    name: 'Cell Phones',                    amount:   643.76, type: 'expense', freq: 'monthly', start: '2026-07-24', end: '', cat: 'Subscriptions',  acct: 'a1' },
+    { id: 't_s2',    name: 'Netflix',                        amount:    24.99, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Subscriptions',  acct: 'a1' },
+    { id: 't_s3',    name: 'Peacock (1)',                    amount:     5.99, type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Subscriptions',  acct: 'a1' },
+    { id: 't_s4',    name: 'Peacock (2)',                    amount:     7.99, type: 'expense', freq: 'monthly', start: '2026-07-23', end: '', cat: 'Subscriptions',  acct: 'a1' },
+    { id: 't_s5',    name: 'Youtube Premium Family',         amount:    29.99, type: 'expense', freq: 'monthly', start: '2026-07-23', end: '', cat: 'Subscriptions',  acct: 'a1' },
+    { id: 't_s6',    name: 'SmartSheet',                     amount:    20.85, type: 'expense', freq: 'monthly', start: '2026-07-25', end: '', cat: 'Subscriptions',  acct: 'a1' },
 
-    // ── SUBSCRIPTIONS ───────────────────────────────────────────────────
-    { id: 't_s1',  name: 'Netflix',                   amount: 21.89,    type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s2',  name: 'Disney+',                   amount: 7.65,     type: 'expense', freq: 'monthly', start: '2026-07-28', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s3',  name: 'Peacock',                   amount: 5.99,     type: 'expense', freq: 'monthly', start: '2026-07-02', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s4',  name: 'YouTube Premium',           amount: 29.99,    type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s5',  name: 'Apple One (Family)',        amount: 25.95,    type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s6',  name: 'Amazon Prime',              amount: 15.00,    type: 'expense', freq: 'monthly', start: '2026-07-18', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s7',  name: 'Pandora',                   amount: 16.45,    type: 'expense', freq: 'monthly', start: '2026-07-10', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s8',  name: 'Amazon Music',              amount: 8.75,     type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Entertainment', acct: 'a1' },
-    { id: 't_s9',  name: 'Sonos',                     amount: 9.99,     type: 'expense', freq: 'monthly', start: '2026-07-10', end: '', cat: 'Entertainment', acct: 'a1' },
+    // ── DISCRETIONARY ───────────────────────────────────────────────────────
+    { id: 't_disc1', name: 'LSLJ Dividends',                 amount:   150.00, type: 'expense', freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Discretionary',  acct: 'a1' },
 
-    // ── SOFTWARE & APPS ─────────────────────────────────────────────────
-    { id: 't_sw1', name: 'Adobe',                     amount: 21.94,    type: 'expense', freq: 'monthly', start: '2026-07-08', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw2', name: 'SmartSheet',                amount: 20.85,    type: 'expense', freq: 'monthly', start: '2026-07-25', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw3', name: 'Apple Care',                amount: 33.46,    type: 'expense', freq: 'monthly', start: '2026-07-08', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw4', name: 'Monarch Money',             amount: 14.99,    type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw5', name: 'Arlo',                      amount: 10.96,    type: 'expense', freq: 'monthly', start: '2026-07-10', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw6', name: 'PocketSmith',               amount: 10.03,    type: 'expense', freq: 'monthly', start: '2026-07-01', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw7', name: 'MyMood AI',                 amount: 6.99,     type: 'expense', freq: 'monthly', start: '2026-07-22', end: '', cat: 'Other',      acct: 'a1' },
-    { id: 't_sw8', name: 'Life Bible App',            amount: 5.99,     type: 'expense', freq: 'monthly', start: '2026-07-02', end: '', cat: 'Other',      acct: 'a1' },
+    // ── ANNUAL ──────────────────────────────────────────────────────────────
+    { id: 't_a1',    name: "Nyla's Birthday",                amount:   500.00, type: 'expense', freq: 'yearly',  start: '2026-07-08', end: '', cat: 'Family',         acct: 'a1' },
+    { id: 't_a2',    name: "Javin's Birthday",               amount:   500.00, type: 'expense', freq: 'yearly',  start: '2026-07-28', end: '', cat: 'Family',         acct: 'a1' },
+    { id: 't_a3',    name: 'Thanksgiving',                   amount:  1000.00, type: 'expense', freq: 'yearly',  start: '2026-11-26', end: '', cat: 'Family',         acct: 'a1' },
+    { id: 't_a4',    name: 'Christmas Shopping & Dinner',    amount:  5000.00, type: 'expense', freq: 'yearly',  start: '2026-12-03', end: '', cat: 'Family',         acct: 'a2' },
   ],
 }
 
