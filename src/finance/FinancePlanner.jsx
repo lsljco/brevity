@@ -1285,19 +1285,16 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
   const ROOM_IMG_DEFAULT = 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=1200&h=800&fit=crop&q=100&auto=format'
 
-  // Projects card: pull from HomeHQ "All Items" tab, excluding backlog (To Do).
-  // Falls back to PROJECTS sample data when no active HQ items exist.
+  // Projects card: pull from HomeHQ items (all statuses shown, no fake fallback).
   const hqActiveItems = hqItems.filter(item => item.status !== 'To Do')
-  const projectItems = hqActiveItems.length > 0
-    ? hqActiveItems.map(item => ({
-        id:     item.id,
-        name:   item.title,
-        status: item.status,
-        spent:  parseFloat(item.actcost) || 0,
-        budget: parseFloat(item.estcost) || 0,
-        img:    projectImageOverrides[item.id] || item.dashboardImage || (ROOM_IMGS[item.room] || ROOM_IMG_DEFAULT),
-      }))
-    : PROJECTS
+  const projectItems = hqItems.map(item => ({
+    id:     item.id,
+    name:   item.title,
+    status: item.status,
+    spent:  parseFloat(item.actcost) || 0,
+    budget: parseFloat(item.estcost) || 0,
+    img:    projectImageOverrides[item.id] || item.dashboardImage || (ROOM_IMGS[item.room] || ROOM_IMG_DEFAULT),
+  }))
 
   // ── Dashboard extras ──────────────────────────────────────────────────────
   const freqMult = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
@@ -1495,6 +1492,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                 <button className="dash-card-link" onClick={() => setView('property')}>View All</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflowY: 'auto' }}>
+                {projectItems.length === 0 && (
+                  <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', margin: 'auto 0', padding: '16px 0' }}>
+                    No projects yet. Add one in Property →
+                  </p>
+                )}
                 {projectItems.map(p => {
                   const pct = p.budget > 0 ? Math.min(100, Math.round((p.spent / p.budget) * 100)) : 0
                   return (
