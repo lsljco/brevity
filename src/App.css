@@ -53,31 +53,31 @@
 
 /* ── Light Mode Theme ───────────────────────────────── */
 [data-theme="light"] {
-  --black:       #FAF9F6;
-  --charcoal:    #F3F1EB;
-  --graphite:    #EAE7DF;
-  --slate:       #E0DBCF;
-  --slate-2:     #D3CEC0;
+  --black:       #F5F4F0;
+  --charcoal:    #EDEAE2;
+  --graphite:    #E4E0D6;
+  --slate:       #D8D3C8;
+  --slate-2:     #CCCAB8;
 
-  --white:       #1C1B18;
-  --soft-white:  #3A3836;
-  --muted:       #7A7870;
-  --dim:         rgba(28,27,24,0.28);
+  --white:       #0A0A08;
+  --soft-white:  #1E1D1A;
+  --muted:       #444440;
+  --dim:         rgba(10,10,8,0.35);
 
-  --gold:        #A8832A;
-  --gold-light:  #BF9A40;
-  --gold-dark:   #7A5F1A;
-  --gold-glow:   rgba(168,131,42,0.14);
-  --gold-dim:    rgba(168,131,42,0.07);
+  --gold:        #8A6A1E;
+  --gold-light:  #A07D28;
+  --gold-dark:   #634D12;
+  --gold-glow:   rgba(138,106,30,0.14);
+  --gold-dim:    rgba(138,106,30,0.07);
 
-  --income-color: #A8832A;
-  --income-dim:   rgba(168,131,42,0.12);
-  --expense-color:#C4785A;
-  --expense-dim:  rgba(196,120,90,0.12);
+  --income-color: #8A6A1E;
+  --income-dim:   rgba(138,106,30,0.12);
+  --expense-color:#B05A3A;
+  --expense-dim:  rgba(176,90,58,0.12);
 
   --glass-bg:       rgba(0,0,0,0.03);
   --glass-hover:    rgba(0,0,0,0.055);
-  --glass-border:   rgba(0,0,0,0.08);
+  --glass-border:   rgba(0,0,0,0.09);
   --glass-shadow:
     0 4px 20px rgba(0,0,0,0.07),
     0 1px 6px rgba(0,0,0,0.05),
@@ -108,15 +108,65 @@
 
 /* Light mode — finance cards & brevity variables */
 [data-theme="light"] .finance-root {
-  --brevity-border:       rgba(0,0,0,.07);
-  --brevity-border-strong:rgba(168,131,42,.45);
-  --brevity-glass:        rgba(248,245,238,.85);
-  --brevity-glass-strong: rgba(240,237,230,.92);
-  --brevity-shadow:       0 4px 20px rgba(0,0,0,.07), 0 1px 6px rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.88);
-  --brevity-white:        #1C1B18;
-  --brevity-soft-white:   #3A3836;
-  --brevity-muted:        #7A7870;
-  --brevity-gold:         #A8832A;
+  --brevity-border:       rgba(0,0,0,.09);
+  --brevity-border-strong:rgba(138,106,30,.50);
+  --brevity-glass:        rgba(245,243,237,.90);
+  --brevity-glass-strong: rgba(235,232,225,.95);
+  --brevity-shadow:       0 4px 20px rgba(0,0,0,.08), 0 1px 6px rgba(0,0,0,.05), inset 0 1px 0 rgba(255,255,255,.88);
+  --brevity-white:        #0A0A08;
+  --brevity-soft-white:   #1E1D1A;
+  --brevity-muted:        #444440;
+  --brevity-gold:         #8A6A1E;
+  color: #0A0A08;
+}
+
+/* Catch hardcoded white/light rgba inline text colors in light mode */
+[data-theme="light"] .finance-root span,
+[data-theme="light"] .finance-root p,
+[data-theme="light"] .finance-root div,
+[data-theme="light"] .finance-root label,
+[data-theme="light"] .finance-root button,
+[data-theme="light"] .finance-root h1,
+[data-theme="light"] .finance-root h2,
+[data-theme="light"] .finance-root h3 {
+  color: inherit;
+}
+[data-theme="light"] .finance-root .dash-greeting {
+  color: #0A0A08 !important;
+}
+[data-theme="light"] .finance-root .dash-date,
+[data-theme="light"] .finance-root .dash-card-title,
+[data-theme="light"] .finance-root .dash-card-link {
+  color: #0A0A08 !important;
+}
+/* KPI card text */
+[data-theme="light"] .finance-root .kpi-value   { color: #0A0A08 !important; text-shadow: none !important; }
+[data-theme="light"] .finance-root .kpi-sub     { color: #555550 !important; }
+[data-theme="light"] .finance-root .kpi-trend   { color: #555550 !important; }
+[data-theme="light"] .finance-root .kpi-trend-val { color: #8A6A1E !important; }
+[data-theme="light"] .finance-root .kpi-icon    { background: rgba(138,106,30,0.12) !important; border-color: rgba(138,106,30,0.25) !important; box-shadow: none !important; }
+[data-theme="light"] .finance-root .kpi-icon i  { color: #8A6A1E !important; }
+
+/* Dash card text */
+[data-theme="light"] .finance-root .dash-card-title  { color: #0A0A08 !important; }
+[data-theme="light"] .finance-root .dash-card-link   { color: #8A6A1E !important; }
+[data-theme="light"] .finance-root .dash-card-header { border-bottom-color: rgba(0,0,0,0.08) !important; }
+
+/* Transaction / activity rows — catch white rgba text */
+[data-theme="light"] .finance-root [style*="color: 'rgba(255"] { color: #555550 !important; }
+[data-theme="light"] .finance-root [style*="color: rgba(255"]  { color: #555550 !important; }
+
+/* Upcoming days card */
+[data-theme="light"] .finance-root .cal-upcoming-amount { color: #0A0A08 !important; }
+
+/* Progress bars in dark mode have white track — invert in light */
+[data-theme="light"] .finance-root [style*="background: 'rgba(255,255,255,0.07)'"],
+[data-theme="light"] .finance-root [style*="background: rgba(255,255,255,0.07)"] {
+  background: rgba(0,0,0,0.08) !important;
+}
+[data-theme="light"] .finance-root [style*="background: 'rgba(255,255,255,0.04)'"],
+[data-theme="light"] .finance-root [style*="background: rgba(255,255,255,0.04)"] {
+  background: rgba(0,0,0,0.05) !important;
 }
 [data-theme="light"] .finance-root .kpi-card,
 [data-theme="light"] .finance-root .dash-card,
