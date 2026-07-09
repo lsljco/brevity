@@ -1492,13 +1492,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             <div className="dash-card" style={{ gridColumn: '3', gridRow: '2' }}>
               <div className="dash-card-header">
                 <span className="dash-card-title">Projects</span>
-                <button className="dash-card-link">View All</button>
+                <button className="dash-card-link" onClick={() => setView('property')}>View All</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflowY: 'auto' }}>
                 {projectItems.map(p => {
                   const pct = p.budget > 0 ? Math.min(100, Math.round((p.spent / p.budget) * 100)) : 0
                   return (
-                    <div key={p.id} className="luxury-project-row">
+                    <div key={p.id} className="luxury-project-row" onClick={() => setView('property')} style={{ cursor: 'pointer' }}>
                       <div className="luxury-project-image">
                         <img src={p.img} alt={p.name} />
                       </div>
