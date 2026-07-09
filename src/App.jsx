@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import FinancePlanner from './finance/FinancePlanner.jsx'
 import HomeHQ from './homehq/HomeHQ.jsx'
 
@@ -178,6 +178,14 @@ export default function App() {
   const [expandedPillar, setExpandedPillar] = useState('finance')
   const [activeView,     setActiveView]     = useState('dashboard')
   const [activePillar,   setActivePillar]   = useState('finance')
+  const [theme, setTheme] = useState(() => localStorage.getItem('brevity_theme') || 'dark')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('brevity_theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
 
   const navigateTo = (pillarId, viewId) => {
     setActivePillar(pillarId)
@@ -264,6 +272,23 @@ export default function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <button className="sidebar-footer-item" onClick={toggleTheme} style={{ justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <i className={`ti ${theme === 'dark' ? 'ti-sun' : 'ti-moon'}`} />
+              <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+            </span>
+            <span style={{
+              width: 36, height: 20, borderRadius: 10, padding: 2, display: 'flex', alignItems: 'center',
+              background: theme === 'light' ? 'var(--gold)' : 'rgba(255,255,255,0.15)',
+              transition: 'background 0.25s', flexShrink: 0
+            }}>
+              <span style={{
+                width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                transform: theme === 'light' ? 'translateX(16px)' : 'translateX(0)',
+                transition: 'transform 0.25s', display: 'block', flexShrink: 0
+              }} />
+            </span>
+          </button>
           <button className="sidebar-footer-item" onClick={() => { setActiveView('settings'); setActivePillar('') }}>
             <i className="ti ti-settings" />
             <span>Settings</span>

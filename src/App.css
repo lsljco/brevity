@@ -51,6 +51,113 @@
   --shell-h: 56px;
 }
 
+/* ── Light Mode Theme ───────────────────────────────── */
+[data-theme="light"] {
+  --black:       #FAF9F6;
+  --charcoal:    #F3F1EB;
+  --graphite:    #EAE7DF;
+  --slate:       #E0DBCF;
+  --slate-2:     #D3CEC0;
+
+  --white:       #1C1B18;
+  --soft-white:  #3A3836;
+  --muted:       #7A7870;
+  --dim:         rgba(28,27,24,0.28);
+
+  --gold:        #A8832A;
+  --gold-light:  #BF9A40;
+  --gold-dark:   #7A5F1A;
+  --gold-glow:   rgba(168,131,42,0.14);
+  --gold-dim:    rgba(168,131,42,0.07);
+
+  --income-color: #A8832A;
+  --income-dim:   rgba(168,131,42,0.12);
+  --expense-color:#C4785A;
+  --expense-dim:  rgba(196,120,90,0.12);
+
+  --glass-bg:       rgba(0,0,0,0.03);
+  --glass-hover:    rgba(0,0,0,0.055);
+  --glass-border:   rgba(0,0,0,0.08);
+  --glass-shadow:
+    0 4px 20px rgba(0,0,0,0.07),
+    0 1px 6px rgba(0,0,0,0.05),
+    inset 0 1px 0 rgba(255,255,255,0.7);
+  --glass-shadow-hover:
+    0 8px 28px rgba(0,0,0,0.10),
+    0 2px 10px rgba(0,0,0,0.07),
+    inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+/* Light mode — override hardcoded blacks */
+[data-theme="light"] html,
+[data-theme="light"] body            { background: #FAF9F6; color: #1C1B18; }
+[data-theme="light"] .app-shell      { background: #FAF9F6; }
+[data-theme="light"] .app-sidebar    { background: #F0EDE5; border-right-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .app-main       { background: #FAF9F6; }
+[data-theme="light"] .sidebar-logo   { border-bottom-color: rgba(0,0,0,0.07); }
+[data-theme="light"] .sidebar-divider { background: rgba(0,0,0,0.07); }
+[data-theme="light"] .sidebar-footer  { border-top-color: rgba(0,0,0,0.07); }
+[data-theme="light"] .sidebar-nav-item:hover { background: rgba(0,0,0,0.05); border-left-color: rgba(0,0,0,0.10); }
+[data-theme="light"] .sidebar-footer-item:hover { background: rgba(0,0,0,0.05); }
+[data-theme="light"] .pillar-header:hover { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .sidebar-user   { border-color: rgba(0,0,0,0.08); background: rgba(0,0,0,0.03); }
+[data-theme="light"] .sidebar-user:hover { background: rgba(0,0,0,0.06); }
+[data-theme="light"] .sidebar-photo-overlay {
+  background: linear-gradient(to top, rgba(240,237,229,0.90) 0%, rgba(240,237,229,0.25) 55%, transparent 100%);
+}
+
+/* Light mode — finance cards & brevity variables */
+[data-theme="light"] .finance-root {
+  --brevity-border:       rgba(0,0,0,.07);
+  --brevity-border-strong:rgba(168,131,42,.45);
+  --brevity-glass:        rgba(248,245,238,.85);
+  --brevity-glass-strong: rgba(240,237,230,.92);
+  --brevity-shadow:       0 4px 20px rgba(0,0,0,.07), 0 1px 6px rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.88);
+  --brevity-white:        #1C1B18;
+  --brevity-soft-white:   #3A3836;
+  --brevity-muted:        #7A7870;
+  --brevity-gold:         #A8832A;
+}
+[data-theme="light"] .finance-root .kpi-card,
+[data-theme="light"] .finance-root .dash-card,
+[data-theme="light"] .finance-root .dash-footer,
+[data-theme="light"] .finance-root .finance-card,
+[data-theme="light"] .finance-root .finance-inner {
+  background: linear-gradient(145deg, rgba(255,255,255,.95), rgba(244,241,234,.88)) !important;
+  border: 1px solid rgba(0,0,0,0.07) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.07), 0 1px 6px rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+[data-theme="light"] .finance-root .kpi-card:hover,
+[data-theme="light"] .finance-root .dash-card:hover {
+  border-color: rgba(168,131,42,.28) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.10), 0 2px 10px rgba(0,0,0,.06), inset 0 1px 0 rgba(255,255,255,.95) !important;
+}
+[data-theme="light"] .finance-root .kpi-card::before,
+[data-theme="light"] .finance-root .dash-card::before,
+[data-theme="light"] .finance-root .finance-card::before,
+[data-theme="light"] .finance-root .finance-inner::before { opacity: 0 !important; }
+[data-theme="light"] .finance-root .kpi-card::after,
+[data-theme="light"] .finance-root .dash-card::after,
+[data-theme="light"] .finance-root .finance-card::after,
+[data-theme="light"] .finance-root .finance-inner::after  { opacity: 0 !important; }
+[data-theme="light"] .finance-root .dash-card-header {
+  border-bottom-color: rgba(0,0,0,.06) !important;
+}
+[data-theme="light"] .finance-root .finance-tab-bar {
+  background: rgba(0,0,0,.04) !important;
+  border-color: rgba(0,0,0,.07) !important;
+}
+[data-theme="light"] .finance-root .finance-tab {
+  color: #7A7870 !important;
+}
+[data-theme="light"] .finance-root .finance-tab.active {
+  background: rgba(255,255,255,.9) !important;
+  color: #1C1B18 !important;
+}
+[data-theme="light"] .finance-root .dash-body {
+  background: transparent !important;
+}
+
 /* ── Reset ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
