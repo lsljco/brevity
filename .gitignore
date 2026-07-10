@@ -7,3 +7,5 @@ dist/
 Thumbs.db
 .plaid-tokens.json
 vite.config.js.timestamp-*
+keys/
+pocketsmith-import.js

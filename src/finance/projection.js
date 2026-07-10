@@ -39,6 +39,8 @@ export function txOccursOnDate(tx, d) {
     const e = new Date(tx.end + 'T00:00:00')
     if (d > e) return false
   }
+  // Skip individual overridden occurrences (created by drag-and-drop)
+  if (tx.skips?.includes(toISO(d))) return false
   const dom = d.getDate()
   const sdm = start.getDate()
 
@@ -64,20 +66,24 @@ export function txOccursOnDate(tx, d) {
   }
 }
 
-export function buildProjection(accounts, transactions, days = 365) {
+export function buildProjection(accounts, transactions, days = 365, overrides = {}) {
   let bal = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
   const map = new Map()
   const t = today0()
 
   for (let i = 0; i <= days; i++) {
     const d = addDays(t, i)
+    const dateStr = toISO(d)
     const hits = transactions.filter(tx => txOccursOnDate(tx, d))
     const delta = hits.reduce((s, tx) => s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0), 0)
     bal += delta
-    map.set(toISO(d), {
+    // Balance override: user can pin any date to an exact number; projection continues from there
+    if (overrides[dateStr] !== undefined) bal = overrides[dateStr]
+    map.set(dateStr, {
       bal: parseFloat(bal.toFixed(2)),
       delta,
       txns: hits,
+      isOverridden: overrides[dateStr] !== undefined,
     })
   }
   return map

@@ -13,6 +13,7 @@
       "dependencies": [
         "npm:@vitejs/plugin-react@^4.2.1",
         "npm:chart.js@^4.4.1",
+        "npm:plaid@^42.2.0",
         "npm:react-chartjs-2@^5.2.0",
         "npm:react-dom@^18.2.0",
         "npm:react-plaid-link@^3.5.1",

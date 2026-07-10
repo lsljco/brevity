@@ -545,6 +545,11 @@ const LUXURY_CSS = `
   box-shadow: inset 0 0 0 1px rgba(197,164,109,.20), 0 0 28px rgba(197,164,109,.10) !important;
 }
 .cal-cell.is-past { opacity: .50; }
+.cal-cell.drag-over {
+  border-color: rgba(197,164,109,.85) !important;
+  background: rgba(197,164,109,.12) !important;
+  box-shadow: 0 0 0 2px rgba(197,164,109,.30) !important;
+}
 
 /* Scrollbars */
 .finance-root *::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -1042,6 +1047,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     try { const v = localStorage.getItem('plaid_actuals_cache'); return v ? JSON.parse(v) : null } catch { return null }
   })
   const [actualsLoading, setActualsLoading] = useState(false)
+  const [balanceOverrides, setBalanceOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lslj_bal_overrides_v1')) || {} } catch { return {} }
+  })
 
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
@@ -1159,7 +1167,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     })
   }
 
-  const proj = useMemo(() => buildProjection(fd.accounts, fd.transactions, 365), [fd])
+  const proj = useMemo(() => buildProjection(fd.accounts, fd.transactions, 365, balanceOverrides), [fd, balanceOverrides])
 
   // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
   const fetchActuals = useCallback(async () => {
@@ -1308,6 +1316,46 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     if (!window.confirm('Delete this transaction?')) return
     setDataAndPersist(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id) }))
     showToast('Transaction deleted')
+  }
+
+  // Calendar-specific saves — don't navigate away from the calendar view
+  const calendarSaveTx = (tx) => {
+    setDataAndPersist(d => ({
+      ...d,
+      transactions: d.transactions.find(t => t.id === tx.id)
+        ? d.transactions.map(t => t.id === tx.id ? tx : t)
+        : [...d.transactions, tx],
+    }))
+    showToast('✓ Transaction saved')
+  }
+  const calendarBatchSave = (txArray) => {
+    setDataAndPersist(d => {
+      let txns = [...d.transactions]
+      txArray.forEach(tx => {
+        const idx = txns.findIndex(t => t.id === tx.id)
+        if (idx >= 0) txns[idx] = tx; else txns.push(tx)
+      })
+      return { ...d, transactions: txns }
+    })
+    showToast('✓ Transaction moved')
+  }
+
+  const saveBalanceOverride = (dateStr, amount) => {
+    setBalanceOverrides(prev => {
+      const next = { ...prev, [dateStr]: amount }
+      try { localStorage.setItem('lslj_bal_overrides_v1', JSON.stringify(next)) } catch {}
+      return next
+    })
+    showToast('✓ Balance updated')
+  }
+  const removeBalanceOverride = (dateStr) => {
+    setBalanceOverrides(prev => {
+      const next = { ...prev }
+      delete next[dateStr]
+      try { localStorage.setItem('lslj_bal_overrides_v1', JSON.stringify(next)) } catch {}
+      return next
+    })
+    showToast('↺ Balance reset to projected')
   }
 
   const updateAcct = (acct) => {
@@ -1846,7 +1894,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <CalendarView proj={proj} calYear={calYear} calMonth={calMonth}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
-            accounts={data.accounts} onSave={updateTx} onDelete={deleteTx} />
+            accounts={data.accounts} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onDelete={deleteTx}
+            showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading}
+            actualsByDate={actualsByDate} plaidActuals={plaidActuals}
+            onSaveOverride={saveBalanceOverride} onRemoveOverride={removeBalanceOverride} />
         </div>
       )}
 
@@ -2740,8 +2791,13 @@ function ReportingView({ data, proj }) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, onSave, onDelete }) {
-  const [selTx, setSelTx] = useState(null)
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsByDate, plaidActuals, onSaveOverride, onRemoveOverride }) {
+  const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
+  const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
+  const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
+  const [pendingMove, setPendingMove]= useState(null)   // { tx, fromDate, toDate }
+  const [editBal,     setEditBal]    = useState(null)   // { key, draft } inline balance edit
+
   const t = today0()
   const todayStr = toISO(t)
   const firstDow = new Date(calYear, calMonth, 1).getDay()
@@ -2755,19 +2811,41 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
   const nextMonth = () => { let m = calMonth + 1, y = calYear; if (m > 11) { m = 0; y++ }; setCalMonth(m); setCalYear(y) }
 
   const selPt = selDay ? proj.get(selDay) : null
+  const fmtDateLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-  const handleSave = (tx) => { onSave(tx); setSelTx(null) }
+  const handleSave   = (tx) => { onSave(tx); setSelTx(null) }
   const handleDelete = (id) => { onDelete(id); setSelTx(null) }
 
-  // ── Edit panel ──────────────────────────────────────────────────────────
+  const commitBal = (key, draft) => {
+    const n = parseFloat(draft)
+    if (!isNaN(n)) onSaveOverride(key, n)
+    setEditBal(null)
+  }
+
+  // ── Move handlers ────────────────────────────────────────────────────────
+  const handleMoveOne = ({ tx, fromDate, toDate }) => {
+    // Skip this occurrence on the original recurring tx; add a one-time copy on the target date
+    const withSkip = { ...tx, skips: [...(tx.skips || []), fromDate] }
+    const oneOff   = { ...tx, id: uid(), freq: 'once', start: toDate, end: toDate, skips: [] }
+    onBatchSave([withSkip, oneOff])
+    setPendingMove(null)
+  }
+
+  const handleMoveSeries = ({ tx, toDate }) => {
+    // Shift the anchor date — all future occurrences follow the new day pattern
+    onSave({ ...tx, start: toDate })
+    setPendingMove(null)
+  }
+
+  // ── Edit panel ───────────────────────────────────────────────────────────
   if (selTx) {
     return (
       <div>
         <button onClick={() => setSelTx(null)}
-          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', fontSize: 12, color: 'var(--muted)' }}>
+          style={{ marginBottom: 16, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', fontSize: 12, color: 'var(--muted)' }}>
           <i className="ti ti-arrow-left" /> Back to Calendar
         </button>
-        <p style={{ margin: '0 0 4px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+        <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
           Editing recurring transaction · changes apply to all occurrences
         </p>
         <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
@@ -2779,9 +2857,40 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
     )
   }
 
-  // ── Calendar grid ───────────────────────────────────────────────────────
+  // ── Calendar grid ────────────────────────────────────────────────────────
   return (
     <div>
+      {/* ── Move confirmation modal ── */}
+      {pendingMove && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setPendingMove(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--card-bg, #1a1a1a)', border: '1px solid rgba(197,164,109,0.3)', borderRadius: 18, padding: '28px 28px 24px', maxWidth: 380, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+            <p style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>Move "{pendingMove.tx.name}"</p>
+            <p style={{ margin: '0 0 22px', fontSize: 13, color: 'var(--muted)' }}>
+              {fmtDateLabel(pendingMove.fromDate)} → {fmtDateLabel(pendingMove.toDate)}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={() => handleMoveOne(pendingMove)}
+                style={{ padding: '11px 16px', borderRadius: 10, border: '1px solid rgba(197,164,109,0.35)', background: 'rgba(197,164,109,0.10)', color: 'var(--gold)', cursor: 'pointer', fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
+                <div style={{ fontWeight: 600 }}>Move just {fmtDateLabel(pendingMove.fromDate)}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Only this occurrence moves · series continues as normal</div>
+              </button>
+              <button onClick={() => handleMoveSeries(pendingMove)}
+                style={{ padding: '11px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'var(--white)', cursor: 'pointer', fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
+                <div style={{ fontWeight: 600 }}>Move all future occurrences</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Series anchor shifts to {fmtDateLabel(pendingMove.toDate)}</div>
+              </button>
+              <button onClick={() => setPendingMove(null)}
+                style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <button onClick={prevMonth} style={{ padding: '6px 10px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent' }}>
           <i className="ti ti-chevron-left" aria-hidden="true" />
@@ -2794,58 +2903,132 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
           style={{ padding: '5px 10px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', fontSize: 12 }}>
           Today
         </button>
+        <button onClick={toggleActuals} disabled={actualsLoading}
+          style={{ padding: '5px 10px', cursor: actualsLoading ? 'default' : 'pointer', borderRadius: 8, fontSize: 12,
+            border: showActuals ? '1px solid rgba(197,164,109,0.55)' : '1px solid var(--glass-border)',
+            background: showActuals ? 'rgba(197,164,109,0.18)' : 'transparent',
+            color: showActuals ? 'var(--gold)' : 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
+             style={{ fontSize: 11, animation: actualsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
+          {actualsLoading ? 'Loading…' : 'Actuals'}
+        </button>
       </div>
 
+      {/* ── Day-of-week headers ── */}
       <div className="cal-grid" style={{ marginBottom: 4 }}>
         {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
           <p key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--muted)', margin: '0 0 4px' }}>{d}</p>
         ))}
       </div>
 
+      {/* ── Calendar cells ── */}
       <div className="cal-grid">
         {cells.map((d, i) => {
-          if (!d) return <div key={`e${i}`} style={{ minHeight: 92 }} />
+          if (!d) return <div key={`e${i}`} style={{ minHeight: 120 }} />
           const m = String(calMonth + 1).padStart(2, '0'), dd = String(d).padStart(2, '0')
           const key = `${calYear}-${m}-${dd}`
           const pt = proj.get(key)
-          const isToday = key === todayStr
-          const isSel = key === selDay
-          const isPast = key < todayStr
-          const hasTxns = pt?.txns?.length > 0
-          const isNeg = pt && pt.bal < 0
+          const isToday      = key === todayStr
+          const isSel        = key === selDay
+          const isPast       = key < todayStr
+          const hasTxns      = pt?.txns?.length > 0
+          const isNeg        = pt && pt.bal < 0
+          const isOverridden = pt?.isOverridden
+          const isEditingBal = editBal?.key === key
+          // Plaid actuals for this cell (only meaningful on past/today dates)
+          const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
+          const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
+          const maxBudget      = showActualPills ? 3 : 5
           return (
             <div key={key}
-              className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''}`}
-              onClick={() => setSelDay(isSel ? null : key)}>
+              className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''} ${dragOver === key ? 'drag-over' : ''}`}
+              onClick={() => { if (!isEditingBal) setSelDay(isSel ? null : key) }}
+              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(key) }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null) }}
+              onDrop={e => {
+                e.preventDefault(); setDragOver(null)
+                if (!dragTx || key === dragTx.fromDate) return
+                if (dragTx.tx.freq === 'once') {
+                  onSave({ ...dragTx.tx, start: key, end: key })
+                } else {
+                  setPendingMove({ tx: dragTx.tx, fromDate: dragTx.fromDate, toDate: key })
+                }
+                setDragTx(null)
+              }}>
               {/* Day number */}
               <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : 'var(--muted)', marginBottom: 3, display: 'block' }}>{d}</span>
-              {/* Transaction pills */}
+              {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
               {hasTxns && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                  {pt.txns.slice(0, 5).map((tx, j) => (
-                    <div key={j} style={{
-                      fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
-                      background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : 'rgba(196,120,90,0.22)',
-                      color: tx.type === 'income' ? '#C5A46D' : '#E8967A',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
-                    }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
+                  {pt.txns.slice(0, maxBudget).map((tx, j) => (
+                    <div key={j}
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx, fromDate: key }) }}
+                      onDragEnd={() => setDragTx(null)}
+                      style={{
+                        fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
+                        background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : 'rgba(196,120,90,0.22)',
+                        color: tx.type === 'income' ? '#C5A46D' : '#E8967A',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
+                        overflow: 'hidden', cursor: 'grab',
+                        opacity: showActualPills ? 0.6 : 1,
+                      }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
                       <span style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {tx.type === 'income' ? `+${fmtK(tx.amount)}` : `(${fmtK(tx.amount)})`}
                       </span>
                     </div>
                   ))}
-                  {pt.txns.length > 5 && (
-                    <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{pt.txns.length - 5} more</div>
+                  {pt.txns.length > maxBudget && (
+                    <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{pt.txns.length - maxBudget} budgeted</div>
                   )}
                 </div>
               )}
-              {/* Ending balance pinned to bottom */}
+              {/* Actual (Plaid) transaction pills (teal/blue) */}
+              {showActualPills && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginTop: hasTxns ? 2 : 0 }}>
+                  {dayActuals.slice(0, 3).map((tx, j) => {
+                    const isIncome = tx.amount < 0 // Plaid: negative = credit
+                    return (
+                      <div key={`a${j}`} style={{
+                        fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
+                        background: isIncome ? 'rgba(100,180,140,0.22)' : 'rgba(100,140,220,0.22)',
+                        color: isIncome ? '#7DCBA4' : '#90AADE',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
+                      }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
+                        <span style={{ flexShrink: 0, fontWeight: 600 }}>
+                          {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {dayActuals.length > 3 && (
+                    <div style={{ fontSize: 9, color: '#90AADE', lineHeight: '13px', paddingLeft: 2 }}>+{dayActuals.length - 3} actual</div>
+                  )}
+                </div>
+              )}
+              {/* Ending balance — click to override */}
               {pt && (
-                <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: isNeg ? 'var(--expense-color)' : 'rgba(197,164,109,0.85)' }}>
-                    {fmtK(pt.bal)}
-                  </span>
+                <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}
+                  onClick={e => { e.stopPropagation(); if (!isEditingBal) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
+                  {isEditingBal ? (
+                    <input autoFocus type="number"
+                      value={editBal.draft}
+                      onChange={e => setEditBal(b => ({ ...b, draft: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') commitBal(key, editBal.draft); if (e.key === 'Escape') setEditBal(null) }}
+                      onBlur={() => commitBal(key, editBal.draft)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ width: '100%', background: 'rgba(197,164,109,0.12)', border: '1px solid rgba(197,164,109,0.55)', borderRadius: 4, color: 'var(--gold)', fontSize: 9, fontWeight: 700, textAlign: 'right', padding: '1px 3px', outline: 'none' }}
+                    />
+                  ) : (
+                    <span title="Click to override balance"
+                      style={{ fontSize: 9, fontWeight: 700, cursor: 'text',
+                        color: isNeg ? 'var(--expense-color)' : isOverridden ? 'rgba(255,255,255,0.92)' : 'rgba(197,164,109,0.85)' }}>
+                      {isOverridden && <span style={{ fontSize: 7, opacity: 0.7, marginRight: 2 }}>✎</span>}
+                      {fmtK(pt.bal)}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -2862,42 +3045,100 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 {new Date(selDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                {selPt.delta !== 0 ? `Net: ${selPt.delta > 0 ? '+' : ''}${fmtMoney(selPt.delta)}` : 'No transactions'}{selPt.txns.length > 0 ? ' · click a row to edit' : ''}
+                {selPt.delta !== 0 ? `Net: ${selPt.delta > 0 ? '+' : ''}${fmtMoney(selPt.delta)}` : 'No budgeted transactions'}
+                {selPt.txns.length > 0 ? ' · click to edit · drag to move' : ''}
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>Projected balance</p>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
+                {selPt.isOverridden ? 'Ending balance (overridden)' : 'Ending balance (projected)'}
+              </p>
               <p style={{ margin: 0, fontSize: 20, fontWeight: 600, color: selPt.bal < 0 ? 'var(--expense-color)' : 'var(--gold)' }}>
                 {fmtMoney(selPt.bal)}
               </p>
+              {selPt.isOverridden && (
+                <button onClick={() => onRemoveOverride(selDay)}
+                  style={{ fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline' }}>
+                  Reset to projected
+                </button>
+              )}
             </div>
           </div>
 
-          {selPt.txns.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {selPt.txns.map((tx, i) => (
-                <div key={i}
-                  onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
-                    background: 'rgba(255,255,255,0.04)', borderRadius: 10, cursor: 'pointer',
-                    border: '1px solid transparent', transition: 'all .15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(197,164,109,0.22)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'transparent' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
-                      {tx.cat} · {FREQ_OPTS.find(f => f.v === tx.freq)?.l}
-                      <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>
+          {/* Budgeted transactions */}
+          {selPt.txns.length > 0 && (
+            <div>
+              {showActuals && (
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Budgeted</p>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {selPt.txns.map((tx, idx2) => (
+                  <div key={idx2}
+                    onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                      background: 'rgba(255,255,255,0.04)', borderRadius: 10, cursor: 'pointer',
+                      border: '1px solid transparent', transition: 'all .15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(197,164,109,0.22)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'transparent' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
+                        {tx.cat} · {FREQ_OPTS.find(f => f.v === tx.freq)?.l}
+                        <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>
+                      </p>
+                    </div>
+                    <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
+                      color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }}>
+                      {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
                     </p>
                   </div>
-                  <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
-                    color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }}>
-                    {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
-                  </p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          ) : (
+          )}
+
+          {/* Actual (Plaid) transactions — only when toggle is on and date is past/today */}
+          {showActuals && selDay <= todayStr && (() => {
+            const dayActs = actualsByDate?.[selDay] || []
+            if (dayActs.length === 0) {
+              return (
+                <p style={{ margin: selPt.txns.length > 0 ? '14px 0 0' : '0', fontSize: 13, color: 'var(--muted)' }}>
+                  {plaidActuals ? 'No posted transactions on this date.' : 'Connect a bank to see posted actuals.'}
+                </p>
+              )
+            }
+            return (
+              <div style={{ marginTop: selPt.txns.length > 0 ? 14 : 0 }}>
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: '#90AADE', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                  Actuals{dayActs.some(t => t.pending) ? ' — includes pending' : ' — posted'}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {dayActs.map((tx, idx3) => {
+                    const isIncome = tx.amount < 0
+                    return (
+                      <div key={idx3} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                        background: 'rgba(100,140,220,0.06)', borderRadius: 10,
+                        border: `1px solid ${tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)'}` }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
+                            {tx.pending ? '⏳ Pending' : '✓ Posted'}
+                            {tx.category?.length ? ` · ${tx.category[0]}` : ''}
+                          </p>
+                        </div>
+                        <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
+                          color: isIncome ? '#7DCBA4' : '#90AADE' }}>
+                          {isIncome ? '+' : '-'}{fmtMoney(Math.abs(tx.amount))}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
+          {!showActuals && selPt.txns.length === 0 && (
             <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>No transactions on this date.</p>
           )}
         </div>
