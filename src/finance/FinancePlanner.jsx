@@ -889,32 +889,37 @@ function loadData() {
     if (!v) return JSON.parse(JSON.stringify(DEFAULT_DATA))
     const stored = JSON.parse(v)
 
-    // Guard: empty or corrupted transactions
+    // Guard: genuinely empty — first-time user or explicit reset
     if (!Array.isArray(stored.transactions) || stored.transactions.length === 0) {
       return JSON.parse(JSON.stringify(DEFAULT_DATA))
     }
 
-    const accounts = stored.accounts?.length ? stored.accounts : DEFAULT_DATA.accounts
+    // Use stored accounts, or fall back to DEFAULT_DATA accounts if missing
+    const accounts = stored.accounts?.length
+      ? stored.accounts
+      : JSON.parse(JSON.stringify(DEFAULT_DATA.accounts))
 
-    // Guard: orphaned transactions — if the majority of stored transactions reference
-    // account IDs that don't exist in stored.accounts, the accounts were deleted
-    // (e.g. user deleted DEFAULT_DATA accounts after a bad Plaid sync).
-    // Reset to DEFAULT_DATA so transactions come back.
+    // Orphan detection: if most transactions reference account IDs that no longer
+    // exist (e.g. user deleted accounts after a bad Plaid sync), ADD BACK the
+    // missing DEFAULT_DATA accounts rather than resetting everything.
+    // This preserves all stored transactions and customizations.
     const acctIdSet = new Set(accounts.map(a => a.id))
     const orphaned = stored.transactions.filter(t => t.acct && !acctIdSet.has(t.acct)).length
+    let finalAccounts = accounts
     if (orphaned > stored.transactions.length * 0.5) {
-      return JSON.parse(JSON.stringify(DEFAULT_DATA))
+      const existingIds = new Set(accounts.map(a => a.id))
+      const missingDefaults = DEFAULT_DATA.accounts.filter(a => !existingIds.has(a.id))
+      finalAccounts = [...accounts, ...missingDefaults]
     }
 
-    // Append any brand-new DEFAULT_DATA transactions that don't exist in stored data yet
-    const storedIds = new Set(stored.transactions.map(t => t.id).filter(Boolean))
-    const newDefaults = DEFAULT_DATA.transactions.filter(t => !storedIds.has(t.id))
-
+    // Stored transactions are the SOLE source of truth — never re-inject DEFAULT_DATA.
+    // User edits (moved dates, changed amounts, deletions) are preserved exactly.
+    // No merging with DEFAULT_DATA transactions across deploys.
     return {
       ...DEFAULT_DATA,
       ...stored,
-      accounts,
-      transactions: [...stored.transactions, ...newDefaults],
+      accounts: finalAccounts,
+      transactions: stored.transactions,
     }
   } catch { return JSON.parse(JSON.stringify(DEFAULT_DATA)) }
 }
