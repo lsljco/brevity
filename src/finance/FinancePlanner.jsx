@@ -888,15 +888,23 @@ function loadData() {
     const v = localStorage.getItem(LS_KEY)
     if (!v) return JSON.parse(JSON.stringify(DEFAULT_DATA))
     const stored = JSON.parse(v)
-    // Always use DEFAULT_DATA transactions as the base so recurring
-    // expenses/income are always current regardless of cached LS version.
-    // Preserve account balances (Plaid-synced) and any user-added transactions.
+
+    // Build a lookup of what the user has stored (captures their edits)
+    const storedMap = new Map((stored.transactions || []).map(t => [t.id, t]))
     const defaultIds = new Set(DEFAULT_DATA.transactions.map(t => t.id))
+
+    // For each default transaction:
+    //   • Use the stored version when it exists — preserves user edits (amount, date, etc.)
+    //   • Fall back to DEFAULT_DATA — picks up brand-new defaults added in a deploy
+    const mergedDefaults = DEFAULT_DATA.transactions.map(t => storedMap.get(t.id) ?? t)
+
+    // User-created transactions (IDs not in DEFAULT_DATA) — always keep these
     const userTxns = (stored.transactions || []).filter(t => !defaultIds.has(t.id))
+
     return {
       ...stored,
       accounts: stored.accounts?.length ? stored.accounts : DEFAULT_DATA.accounts,
-      transactions: [...DEFAULT_DATA.transactions, ...userTxns],
+      transactions: [...mergedDefaults, ...userTxns],
     }
   } catch { return JSON.parse(JSON.stringify(DEFAULT_DATA)) }
 }
