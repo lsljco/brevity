@@ -889,22 +889,22 @@ function loadData() {
     if (!v) return JSON.parse(JSON.stringify(DEFAULT_DATA))
     const stored = JSON.parse(v)
 
-    // Build a lookup of what the user has stored (captures their edits)
-    const storedMap = new Map((stored.transactions || []).map(t => [t.id, t]))
-    const defaultIds = new Set(DEFAULT_DATA.transactions.map(t => t.id))
+    // Guard: if stored data is empty or corrupted, start fresh from DEFAULT_DATA
+    if (!Array.isArray(stored.transactions) || stored.transactions.length === 0) {
+      return JSON.parse(JSON.stringify(DEFAULT_DATA))
+    }
 
-    // For each default transaction:
-    //   • Use the stored version when it exists — preserves user edits (amount, date, etc.)
-    //   • Fall back to DEFAULT_DATA — picks up brand-new defaults added in a deploy
-    const mergedDefaults = DEFAULT_DATA.transactions.map(t => storedMap.get(t.id) ?? t)
-
-    // User-created transactions (IDs not in DEFAULT_DATA) — always keep these
-    const userTxns = (stored.transactions || []).filter(t => !defaultIds.has(t.id))
+    // Use stored transactions directly — this preserves all user edits.
+    // Also append any brand-new DEFAULT_DATA transactions added in a deploy
+    // that the user hasn't seen yet (identified by ID not present in stored data).
+    const storedIds = new Set(stored.transactions.map(t => t.id).filter(Boolean))
+    const newDefaults = DEFAULT_DATA.transactions.filter(t => !storedIds.has(t.id))
 
     return {
-      ...stored,
+      ...DEFAULT_DATA,   // ensures any new top-level fields have defaults
+      ...stored,         // stored accounts, transactions, etc. win
       accounts: stored.accounts?.length ? stored.accounts : DEFAULT_DATA.accounts,
-      transactions: [...mergedDefaults, ...userTxns],
+      transactions: [...stored.transactions, ...newDefaults],
     }
   } catch { return JSON.parse(JSON.stringify(DEFAULT_DATA)) }
 }
