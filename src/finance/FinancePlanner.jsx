@@ -526,8 +526,10 @@ const LUXURY_CSS = `
   gap: 6px !important;
 }
 .cal-cell {
-  min-height: 110px !important;
+  min-height: 120px !important;
   padding: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
   cursor: pointer;
   border-radius: 14px !important;
   background: rgba(255,255,255,.028) !important;
@@ -2815,25 +2817,35 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             <div key={key}
               className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''}`}
               onClick={() => setSelDay(isSel ? null : key)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-                <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : 'var(--muted)' }}>{d}</span>
-                {pt && <span style={{ fontSize: 9, fontWeight: 600, color: isNeg ? 'var(--expense-color)' : 'rgba(197,164,109,0.7)', lineHeight: 1 }}>{fmtK(pt.bal)}</span>}
-              </div>
+              {/* Day number */}
+              <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : 'var(--muted)', marginBottom: 3, display: 'block' }}>{d}</span>
+              {/* Transaction pills */}
               {hasTxns && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
                   {pt.txns.slice(0, 5).map((tx, j) => (
                     <div key={j} style={{
                       fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
                       background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : 'rgba(196,120,90,0.22)',
                       color: tx.type === 'income' ? '#C5A46D' : '#E8967A',
-                      overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
                     }}>
-                      {tx.name}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
+                      <span style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {tx.type === 'income' ? `+${fmtK(tx.amount)}` : `(${fmtK(tx.amount)})`}
+                      </span>
                     </div>
                   ))}
                   {pt.txns.length > 5 && (
                     <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{pt.txns.length - 5} more</div>
                   )}
+                </div>
+              )}
+              {/* Ending balance pinned to bottom */}
+              {pt && (
+                <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isNeg ? 'var(--expense-color)' : 'rgba(197,164,109,0.85)' }}>
+                    {fmtK(pt.bal)}
+                  </span>
                 </div>
               )}
             </div>
