@@ -51,6 +51,8 @@ export default function PlaidConnect({ onAccountsSync }) {
   const [syncedAt, setSyncedAt]         = useState(() => localStorage.getItem('plaid_synced_at') || null)
   const [loading, setLoading]           = useState(false)
   const [syncing, setSyncing]           = useState(false)
+  // True while the initial mount sync is running — prevents "No bank connected" flicker
+  const [initialChecking, setInitialChecking] = useState(true)
   const [error, setError]               = useState(null)
   const [expanded, setExpanded]         = useState(false)
 
@@ -78,18 +80,22 @@ export default function PlaidConnect({ onAccountsSync }) {
           onAccountsSync(data.accounts, data.syncedAt)
         }
       } else {
+        // Only clear cached connections if the server explicitly confirmed "not connected"
+        // (i.e. Plaid token is gone). Don't clear on transient network errors.
         setConnections([])
         localStorage.removeItem('plaid_connections')
         localStorage.removeItem('plaid_synced_at')
       }
     } catch (err) {
-      setError('Sync failed. ' + err.message)
+      // Network / server error — keep whatever cached state we had, just show error
+      setError('Could not reach bank sync. ' + err.message)
     } finally {
       setSyncing(false)
+      setInitialChecking(false)
     }
   }, [onAccountsSync])
 
-  // Auto-sync on mount to restore state
+  // Auto-sync on mount to restore state from Plaid / Netlify Blobs
   useEffect(() => {
     syncAccounts()
   }, [syncAccounts])
@@ -150,7 +156,12 @@ export default function PlaidConnect({ onAccountsSync }) {
     <div style={{ marginBottom: 20 }}>
       {/* ── Status bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        {isConnected ? (
+        {initialChecking ? (
+          <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <i className="ti ti-refresh" style={{ fontSize: 11, marginRight: 5, animation: 'spin 0.8s linear infinite' }} aria-hidden="true" />
+            Checking bank connection…
+          </span>
+        ) : isConnected ? (
           <>
             <div className="plaid-connected-pill">
               <div className="dot" />
