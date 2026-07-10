@@ -14,4 +14,4 @@
   status = 200
 
 [functions]
-  node_bundler = "nft"
+  node_bundler = "esbuild"
