@@ -1191,7 +1191,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const fetchActuals = useCallback(async () => {
     setActualsLoading(true)
     try {
-      const res = await fetch('/.netlify/functions/plaid-transactions?days=90')
+      // Fetch full history from Jan 1, 2026 so historical balances are accurate
+      const res = await fetch('/.netlify/functions/plaid-transactions?start_date=2026-01-01')
       const json = await res.json()
       const txns = json.transactions || []
       setPlaidActuals(txns)
@@ -1200,10 +1201,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     finally { setActualsLoading(false) }
   }, [])
 
-  const toggleActuals = () => {
-    if (!showActuals && !plaidActuals) fetchActuals()
-    setShowActuals(v => !v)
-  }
+  // Auto-fetch on mount so historical balances populate without needing to click Actuals toggle
+  useEffect(() => { fetchActuals() }, [fetchActuals])
+
+  const toggleActuals = () => { setShowActuals(v => !v) }
 
   // Map plaid accountId → our local account id for filtering
   const plaidIdToLocal = useMemo(() => {
@@ -1230,6 +1231,36 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     })
     return map
   }, [filteredActuals])
+
+  // Historical ending balances — reconstructed by working backward from current balance
+  // using real Plaid transactions. Covers 2026-01-01 → today.
+  // Plaid sign convention: amount > 0 = debit/expense, amount < 0 = credit/income
+  const historicalBals = useMemo(() => {
+    if (!filteredActuals?.length) return {}
+    // Group by date
+    const byDate = {}
+    for (const txn of filteredActuals) {
+      if (!byDate[txn.date]) byDate[txn.date] = []
+      byDate[txn.date].push(txn)
+    }
+    const currentBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+    const result = {}
+    const jan1 = new Date('2026-01-01T00:00:00')
+    let runBal = currentBal
+    const cursor = today0()
+
+    while (cursor >= jan1) {
+      const ds = toISO(cursor)
+      result[ds] = parseFloat(runBal.toFixed(2))
+      // "Undo" this day's transactions to arrive at the previous day's ending balance:
+      //   prev = today - net_change_today
+      //   net_change_today = sum(-txn.amount) in our convention, so prev = today + sum(txn.amount)
+      const txnsOnDay = byDate[ds] || []
+      runBal += txnsOnDay.reduce((sum, t) => sum + t.amount, 0)
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    return result
+  }, [filteredActuals, fd.accounts])
 
   // ── Historical monthly sparkline data (last 12 months) ──────────────────
   const monthlyHistory = useMemo(() => {
@@ -1932,6 +1963,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             accounts={data.accounts} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onDelete={deleteTx}
             showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading}
             actualsByDate={actualsByDate} plaidActuals={plaidActuals}
+            historicalBals={historicalBals}
             onSaveOverride={saveBalanceOverride} onRemoveOverride={removeBalanceOverride} />
         </div>
       )}
@@ -2826,7 +2858,7 @@ function ReportingView({ data, proj }) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsByDate, plaidActuals, onSaveOverride, onRemoveOverride }) {
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride }) {
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
@@ -2970,6 +3002,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
           const isNeg        = pt && pt.bal < 0
           const isOverridden = pt?.isOverridden
           const isEditingBal = editBal?.key === key
+          // Actual (Plaid) ending balance for this date — defined for past dates when bank is synced
+          const actualBal    = (isPast || isToday) && historicalBals[key] !== undefined ? historicalBals[key] : undefined
           // Plaid actuals for this cell (only meaningful on past/today dates)
           const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
@@ -3043,10 +3077,10 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                   )}
                 </div>
               )}
-              {/* Ending balance — click to override */}
-              {pt && (
+              {/* Ending balance — actual (teal) for past, projected (gold) for future */}
+              {(pt || actualBal !== undefined) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}
-                  onClick={e => { e.stopPropagation(); if (!isEditingBal) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
+                  onClick={e => { e.stopPropagation(); if (!isEditingBal && pt) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
                   {isEditingBal ? (
                     <input autoFocus type="number"
                       value={editBal.draft}
@@ -3056,14 +3090,21 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       onClick={e => e.stopPropagation()}
                       style={{ width: '100%', background: 'rgba(197,164,109,0.12)', border: '1px solid rgba(197,164,109,0.55)', borderRadius: 4, color: 'var(--gold)', fontSize: 9, fontWeight: 700, textAlign: 'right', padding: '1px 3px', outline: 'none' }}
                     />
-                  ) : (
+                  ) : actualBal !== undefined ? (
+                    // Actual balance from Plaid — shown for past/today in teal
+                    <span title="Actual ending balance from bank"
+                      style={{ fontSize: 9, fontWeight: 700, color: actualBal < 0 ? 'var(--expense-color)' : '#7DCBA4' }}>
+                      {fmtK(actualBal)}
+                    </span>
+                  ) : pt ? (
+                    // Projected balance
                     <span title="Click to override balance"
                       style={{ fontSize: 9, fontWeight: 700, cursor: 'text',
                         color: isNeg ? 'var(--expense-color)' : isOverridden ? 'rgba(255,255,255,0.92)' : 'rgba(197,164,109,0.85)' }}>
                       {isOverridden && <span style={{ fontSize: 7, opacity: 0.7, marginRight: 2 }}>✎</span>}
                       {fmtK(pt.bal)}
                     </span>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -3085,18 +3126,31 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
-                {selPt.isOverridden ? 'Ending balance (overridden)' : 'Ending balance (projected)'}
-              </p>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 600, color: selPt.bal < 0 ? 'var(--expense-color)' : 'var(--gold)' }}>
-                {fmtMoney(selPt.bal)}
-              </p>
-              {selPt.isOverridden && (
-                <button onClick={() => onRemoveOverride(selDay)}
-                  style={{ fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline' }}>
-                  Reset to projected
-                </button>
-              )}
+              {(() => {
+                const selActualBal = (selDay <= todayStr) && historicalBals[selDay] !== undefined
+                  ? historicalBals[selDay] : undefined
+                const displayBal  = selActualBal !== undefined ? selActualBal : selPt.bal
+                const balColor    = displayBal < 0 ? 'var(--expense-color)' : selActualBal !== undefined ? '#7DCBA4' : 'var(--gold)'
+                const balLabel    = selActualBal !== undefined
+                  ? 'Actual ending balance'
+                  : selPt.isOverridden ? 'Ending balance (overridden)' : 'Ending balance (projected)'
+                return (
+                  <>
+                    <p style={{ margin: 0, fontSize: 11, color: selActualBal !== undefined ? '#7DCBA4' : 'var(--muted)' }}>
+                      {balLabel}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor }}>
+                      {fmtMoney(displayBal)}
+                    </p>
+                    {selActualBal === undefined && selPt.isOverridden && (
+                      <button onClick={() => onRemoveOverride(selDay)}
+                        style={{ fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline' }}>
+                        Reset to projected
+                      </button>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </div>
 
