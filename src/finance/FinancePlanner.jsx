@@ -2325,7 +2325,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <CalendarView proj={proj} calYear={calYear} calMonth={calMonth}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
-            accounts={data.accounts} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onDelete={deleteTx}
+            accounts={data.accounts} viewAcctIds={activeAcctIds} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onDelete={deleteTx}
             showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading}
             actualsByDate={actualsByDate} plaidActuals={plaidActuals}
             historicalBals={historicalBals}
@@ -3228,7 +3228,7 @@ function ReportingView({ data, proj }) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride }) {
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride }) {
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
@@ -3237,7 +3237,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
 
   const t = today0()
   const todayStr = toISO(t)
-  const acctIdSet = useMemo(() => new Set(accounts.map(a => a.id)), [accounts])
+  const acctIdSet = useMemo(() => viewAcctIds ?? new Set(accounts.map(a => a.id)), [viewAcctIds, accounts])
   const firstDow     = new Date(calYear, calMonth, 1).getDay()
   const daysInMo     = new Date(calYear, calMonth + 1, 0).getDate()
   const daysInPrevMo = new Date(calYear, calMonth, 0).getDate()
