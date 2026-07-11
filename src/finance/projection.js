@@ -66,13 +66,27 @@ export function txOccursOnDate(tx, d) {
   }
 }
 
-export function buildProjection(accounts, transactions, days = 365, overrides = {}) {
-  let bal = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+export function buildProjection(accounts, transactions, days = 365, overrides = {}, pastDays = 365) {
+  const currentBal = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
   const map = new Map()
   const t = today0()
+  const startDate = addDays(t, -pastDays)
 
-  for (let i = 0; i <= days; i++) {
-    const d = addDays(t, i)
+  // Reconstruct the starting balance by summing all scheduled transaction deltas
+  // that occur between startDate and yesterday. Since we know today's starting
+  // balance (currentBal), we subtract those past deltas to arrive at what the
+  // balance was at the beginning of startDate.
+  let pastDelta = 0
+  for (let i = 0; i < pastDays; i++) {
+    const d = addDays(startDate, i)
+    const hits = transactions.filter(tx => txOccursOnDate(tx, d))
+    pastDelta += hits.reduce((s, tx) => s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0), 0)
+  }
+
+  // Forward pass: project from startDate through today + future days
+  let bal = currentBal - pastDelta
+  for (let i = 0; i <= pastDays + days; i++) {
+    const d = addDays(startDate, i)
     const dateStr = toISO(d)
     const hits = transactions.filter(tx => txOccursOnDate(tx, d))
     const delta = hits.reduce((s, tx) => s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0), 0)
