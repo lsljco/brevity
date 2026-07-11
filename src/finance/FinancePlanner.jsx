@@ -1088,6 +1088,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     try { const v = localStorage.getItem('plaid_actuals_cache'); return v ? JSON.parse(v) : null } catch { return null }
   })
   const [actualsLoading, setActualsLoading] = useState(false)
+  const [actualsError, setActualsError] = useState(null)
   const [balanceOverrides, setBalanceOverrides] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lslj_bal_overrides_v1')) || {} } catch { return {} }
   })
@@ -1215,14 +1216,16 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
   const fetchActuals = useCallback(async () => {
     setActualsLoading(true)
+    setActualsError(null)
     try {
-      // Fetch full history from Jan 1, 2026 so historical balances are accurate
       const res = await fetch('/.netlify/functions/plaid-transactions?start_date=2026-01-01')
       const json = await res.json()
+      if (json.error) { setActualsError(json.error + (json.detail ? ': ' + json.detail : '')); setPlaidActuals([]); return }
       const txns = json.transactions || []
+      console.log('[Brevity] Plaid actuals fetched:', txns.length, 'transactions')
       setPlaidActuals(txns)
       try { localStorage.setItem('plaid_actuals_cache', JSON.stringify(txns)) } catch {}
-    } catch { /* no Plaid connected */ }
+    } catch (e) { setActualsError('Network error: ' + e.message); setPlaidActuals([]) }
     finally { setActualsLoading(false) }
   }, [])
 
@@ -2326,7 +2329,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
             accounts={data.accounts} viewAcctIds={activeAcctIds} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onDelete={deleteTx}
-            showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading}
+            showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading} actualsError={actualsError}
             actualsByDate={actualsByDate} plaidActuals={plaidActuals}
             historicalBals={historicalBals}
             onSaveOverride={saveBalanceOverride} onRemoveOverride={removeBalanceOverride} />
@@ -3228,7 +3231,7 @@ function ReportingView({ data, proj }) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride }) {
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride }) {
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
@@ -3371,7 +3374,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             color: showActuals ? 'var(--gold)' : 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
              style={{ fontSize: 11, animation: actualsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
-          {actualsLoading ? 'Loading…' : 'Actuals'}
+          {actualsLoading ? 'Loading…' : plaidActuals?.length ? `Actuals (${plaidActuals.length})` : 'Actuals'}
+          {actualsError && <span style={{ fontSize: 10, color: 'var(--expense-color)', marginLeft: 4 }} title={actualsError}>⚠ Error</span>}
         </button>
       </div>
 
@@ -3627,7 +3631,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                   </p>
                   {!hasActuals && (
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', fontStyle: 'italic' }}>
-                      {plaidActuals ? 'No posted transactions on this date.' : 'Connect a bank to see posted actuals alongside your planned items.'}
+                      {actualsError ? `Sync error — ${actualsError}` : plaidActuals?.length ? 'No posted transactions on this date.' : plaidActuals !== null ? 'No transactions returned — check Plaid connection.' : 'Connect a bank to see posted actuals alongside your planned items.'}
                     </p>
                   )}
                   {hasActuals && (
@@ -3694,6 +3698,17 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
           {selPt.txns.length === 0 && selDay <= todayStr && !actualsByDate?.[selDay]?.length && (
             <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--muted)' }}>No planned items on this date.</p>
           )}
+
+          {/* Add transaction to this date */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <button
+              onClick={e => { e.stopPropagation(); setSelTx({ name: '', amount: '', type: 'expense', freq: 'once', start: selDay, end: '', cat: 'Housing', acct: accounts[0]?.id || '', transferTo: '' }) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
+                border: '1px solid rgba(197,164,109,0.25)', background: 'rgba(197,164,109,0.07)',
+                color: 'var(--gold)', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+              + Add Transaction
+            </button>
+          </div>
         </div>
       )}
     </div>
