@@ -2009,7 +2009,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflowY: 'auto' }}>
                 {projectItems.length === 0 && (
                   <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', margin: 'auto 0', padding: '16px 0' }}>
-                    No projects yet. Add one in Property →
+                    No projects yet. Add one in Projects →
                   </p>
                 )}
                 {projectItems.map(p => {
@@ -2504,18 +2504,21 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 const BUDGET_LS_KEY = 'lslj_budget_v1'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-const BUDGET_CATS = {
-  Income: ['W3 LLC / Larry Consulting','Genesco / Larry Part-time','Globe Life / Terica','Robert Half / Terica','Genesco / Lorenzo','Scapa-Mativ / Javin','Other Income'],
-  Housing: ['Mortgage Payment','HELOC Payment','HOA','Lawncare','Repairs & Maintenance'],
-  Insurance: ['Home Insurance','Auto Insurance','Life Insurance','Health Insurance'],
-  Utilities: ['Electric','Gas','Water','Internet','Phone'],
-  Food: ['Groceries','Dining Out','Coffee'],
-  Transport: ['Car Payment','Gas','Car Insurance','Rideshare'],
-  Debt: ['Credit Card','Student Loan','Personal Loan'],
-  Savings: ['Emergency Fund','Retirement','College Fund','Investment'],
-  Entertainment: ['Streaming','Recreation','Travel'],
-  'Personal Care': ['Gym','Haircare','Clothing'],
-  Other: ['Subscriptions','Software','Miscellaneous'],
+function buildBudgetCats(transactions) {
+  const CAT_ORDER = ['Housing','Utilities','Transportation','Insurance','Health','Debt','Food','Household','Family','Subscriptions','Discretionary','Other']
+  const recurring = transactions.filter(t => t.freq !== 'once' && t.type !== 'transfer')
+  const income = recurring.filter(t => t.type === 'income').map(t => t.name)
+  const expMap = {}
+  recurring.filter(t => t.type === 'expense').forEach(t => {
+    const cat = t.cat || 'Other'
+    if (!expMap[cat]) expMap[cat] = []
+    if (!expMap[cat].includes(t.name)) expMap[cat].push(t.name)
+  })
+  const result = {}
+  if (income.length) result['Income'] = income
+  CAT_ORDER.forEach(c => { if (expMap[c]) result[c] = expMap[c] })
+  Object.keys(expMap).filter(c => !CAT_ORDER.includes(c)).sort().forEach(c => { result[c] = expMap[c] })
+  return result
 }
 
 function loadBudget() {
@@ -2545,6 +2548,7 @@ function BudgetView({ data }) {
   const [editActual, setEditActual] = useState(null)
 
   const year = new Date().getFullYear()
+  const BUDGET_CATS = useMemo(() => buildBudgetCats(data.transactions), [data.transactions])
 
   const monthKey = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`
 
@@ -2964,6 +2968,7 @@ function ReportingView({ data, proj }) {
   const yr = now.getFullYear()
   const mo = now.getMonth()
 
+  const BUDGET_CATS = useMemo(() => buildBudgetCats(data.transactions), [data.transactions])
   const totalIncome   = data.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
   const totalExpenses = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
   const netIncome     = totalIncome - totalExpenses

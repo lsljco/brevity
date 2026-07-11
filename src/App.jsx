@@ -26,7 +26,7 @@ const PILLARS = [
     id: 'household', label: 'Household Management', icon: 'ti-home', layer: 3,
     description: 'The heartbeat of the home — operations, property, and daily life.',
     items: [
-      { id: 'property', label: 'Property', icon: 'ti-building-estate' },
+      { id: 'property', label: 'Projects', icon: 'ti-building-estate' },
     ]
   },
   // ── Layer 4: External — Knowledge & Stewardship
@@ -45,7 +45,7 @@ const PILLARS = [
       { id: 'accounts',     label: 'Accounts',     icon: 'ti-building-bank'    },
       { id: 'budget',       label: 'Budget',       icon: 'ti-chart-bar'        },
       { id: 'reporting',    label: 'Reporting',    icon: 'ti-report-analytics' },
-      { id: 'property',     label: 'Property',     icon: 'ti-building-estate'  },
+      { id: 'property',     label: 'Projects',     icon: 'ti-building-estate'  },
     ]
   },
   // ── Layer 5: Impartation — Ministry
