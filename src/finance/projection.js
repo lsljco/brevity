@@ -76,11 +76,15 @@ export function buildProjection(accounts, transactions, days = 365, overrides = 
   // that occur between startDate and yesterday. Since we know today's starting
   // balance (currentBal), we subtract those past deltas to arrive at what the
   // balance was at the beginning of startDate.
+  // Transfers are net-zero on total balance, so excluded.
   let pastDelta = 0
   for (let i = 0; i < pastDays; i++) {
     const d = addDays(startDate, i)
     const hits = transactions.filter(tx => txOccursOnDate(tx, d))
-    pastDelta += hits.reduce((s, tx) => s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0), 0)
+    pastDelta += hits.reduce((s, tx) => {
+      if (tx.type === 'transfer') return s
+      return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)
+    }, 0)
   }
 
   // Forward pass: project from startDate through today + future days
@@ -89,7 +93,10 @@ export function buildProjection(accounts, transactions, days = 365, overrides = 
     const d = addDays(startDate, i)
     const dateStr = toISO(d)
     const hits = transactions.filter(tx => txOccursOnDate(tx, d))
-    const delta = hits.reduce((s, tx) => s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0), 0)
+    const delta = hits.reduce((s, tx) => {
+      if (tx.type === 'transfer') return s  // transfers move money between accounts; net zero on total
+      return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)
+    }, 0)
     bal += delta
     // Balance override: user can pin any date to an exact number; projection continues from there
     if (overrides[dateStr] !== undefined) bal = overrides[dateStr]

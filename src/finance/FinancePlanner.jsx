@@ -937,13 +937,16 @@ function MetricCard({ label, value, sub, subGood }) {
 }
 
 function TxForm({ tx, accounts, onSave, onCancel }) {
-  const blank = { name: '', amount: '', type: 'expense', freq: 'monthly', start: toISO(today0()), end: '', cat: 'Housing', acct: accounts[0]?.id || '' }
+  const blank = { name: '', amount: '', type: 'expense', freq: 'monthly', start: toISO(today0()), end: '', cat: 'Housing', acct: accounts[0]?.id || '', transferTo: '' }
   const [form, setForm] = useState(tx ? { ...tx } : blank)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const save = () => {
     if (!form.name || !form.amount) { alert('Name and amount are required.'); return }
-    onSave({ ...form, id: tx?.id || uid(), amount: parseFloat(form.amount) || 0 })
+    if (form.type === 'transfer' && !form.transferTo) { alert('Please select a destination account.'); return }
+    const saved = { ...form, id: tx?.id || uid(), amount: parseFloat(form.amount) || 0 }
+    if (form.type === 'transfer') saved.cat = 'Transfer'
+    onSave(saved)
   }
 
   return (
@@ -965,6 +968,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
             <select value={form.type} onChange={e => set('type', e.target.value)} style={{ width: '100%' }}>
               <option value="income">Income</option>
               <option value="expense">Expense</option>
+              <option value="transfer">Transfer</option>
             </select>
           </div>
           <div>
@@ -972,6 +976,18 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
             <input type="number" min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" style={{ width: '100%' }} />
           </div>
         </div>
+        {form.type === 'transfer' && (
+          <div style={{ padding: '12px 14px', background: 'rgba(144,170,222,0.07)', border: '1px solid rgba(144,170,222,0.20)', borderRadius: 10 }}>
+            <label className="field-label" style={{ color: '#90AADE' }}>Transfer to account</label>
+            <select value={form.transferTo || ''} onChange={e => set('transferTo', e.target.value)} style={{ width: '100%' }}>
+              <option value="">— select destination account —</option>
+              {accounts.filter(a => a.id !== form.acct).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: '#90AADE', opacity: 0.8 }}>
+              Shows as an expense on the source account and credits the destination account.
+            </p>
+          </div>
+        )}
         <div>
           <label className="field-label">Frequency</label>
           <select value={form.freq} onChange={e => set('freq', e.target.value)} style={{ width: '100%' }}>
@@ -990,15 +1006,17 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
             </div>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: form.type === 'transfer' ? '1fr' : '1fr 1fr', gap: 12 }}>
+          {form.type !== 'transfer' && (
+            <div>
+              <label className="field-label">Category</label>
+              <select value={form.cat} onChange={e => set('cat', e.target.value)} style={{ width: '100%' }}>
+                {CATS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
           <div>
-            <label className="field-label">Category</label>
-            <select value={form.cat} onChange={e => set('cat', e.target.value)} style={{ width: '100%' }}>
-              {CATS.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="field-label">Account</label>
+            <label className="field-label">{form.type === 'transfer' ? 'Transfer from (source account)' : 'Account'}</label>
             <select value={form.acct} onChange={e => set('acct', e.target.value)} style={{ width: '100%' }}>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
@@ -1093,6 +1111,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [editAcct, setEditAcct] = useState(null)
   const [toast, setToast]       = useState('')
   const [insightModal, setInsightModal] = useState(null)
+  const [insightEditTx, setInsightEditTx] = useState(null)
   const toastRef                = useRef()
 
   // ── HomeHQ Projects (live-synced from localStorage) ──────────────────
@@ -1583,8 +1602,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       const _fds = toISO(_fc)
       const _fpt = proj.get(_fds)
       _fpt?.txns?.forEach(tx => {
-        if (tx.acct && _runBals[tx.acct] !== undefined) {
-          _runBals[tx.acct] += tx.type === 'income' ? parseFloat(tx.amount) : -parseFloat(tx.amount)
+        const _amt = parseFloat(tx.amount)
+        if (tx.type === 'transfer') {
+          if (tx.acct && _runBals[tx.acct] !== undefined) _runBals[tx.acct] -= _amt
+          if (tx.transferTo && _runBals[tx.transferTo] !== undefined) _runBals[tx.transferTo] += _amt
+        } else if (tx.acct && _runBals[tx.acct] !== undefined) {
+          _runBals[tx.acct] += tx.type === 'income' ? _amt : -_amt
         }
       })
       const _next = addDays(_fc, 1)
@@ -2203,24 +2226,32 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                         const amt = isPlaid ? Math.abs(tx.amount) : parseFloat(tx.amount)
                         const moEquiv = !isPlaid && tx.freq !== 'once' ? amt * (INS_FMULT[tx.freq] ?? 1) : null
                         return (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 10,
-                            border: '1px solid rgba(255,255,255,0.07)' }}>
+                          <div key={idx}
+                            onClick={() => !isPlaid && setInsightEditTx({ ...tx })}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 10,
+                              border: '1px solid rgba(255,255,255,0.07)',
+                              cursor: isPlaid ? 'default' : 'pointer', transition: 'background .12s' }}
+                            onMouseEnter={e => { if (!isPlaid) e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                                {!isPlaid && <i className="ti ti-pencil" style={{ fontSize: 11, color: 'rgba(197,164,109,0.5)', flexShrink: 0 }} />}
+                              </div>
                               <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
                                 {isPlaid
-                                  ? `${tx.date} \u00b7 ${tx.pending ? '\u23f3 Pending' : '\u2713 Posted'}${tx.category?.length ? ` \u00b7 ${tx.category[0]}` : ''}`
-                                  : `${tx.cat || 'Uncategorized'} \u00b7 ${tx.freq} \u00b7 ${tx.acct ? (fd.accounts.find(a => a.id === tx.acct)?.name || tx.acct) : 'All accounts'}`
+                                  ? `${tx.date} · ${tx.pending ? '⏳ Pending' : '✓ Posted'}${tx.category?.length ? ` · ${tx.category[0]}` : ''}`
+                                  : `${tx.start} · ${tx.freq} · ${tx.cat || 'Uncategorized'} · ${tx.acct ? (fd.accounts.find(a => a.id === tx.acct)?.name || tx.acct) : 'All accounts'}`
                                 }
                               </p>
                             </div>
                             <div style={{ textAlign: 'right', marginLeft: 12, flexShrink: 0 }}>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: isIncome ? '#7DCBA4' : '#E8967A' }}>
-                                {isIncome ? '+' : '\u2212'}{fmtMoney(amt)}
+                                {isIncome ? '+' : '−'}{fmtMoney(amt)}
                               </p>
                               {moEquiv !== null && moEquiv !== amt && (
-                                <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--muted)' }}>\u2248 {fmtMoney(moEquiv)}/mo</p>
+                                <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--muted)' }}>≈ {fmtMoney(moEquiv)}/mo</p>
                               )}
                             </div>
                           </div>
@@ -2234,6 +2265,31 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                 <div style={{ marginTop: 18, padding: '12px 14px', background: 'rgba(197,164,109,0.06)', borderRadius: 10, border: '1px solid rgba(197,164,109,0.18)' }}>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--gold)', fontStyle: 'italic' }}>&rarr; {insightModal.action}</p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Insight transaction edit overlay ── */}
+          {insightEditTx && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', zIndex: 1300,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+              onClick={() => setInsightEditTx(null)}>
+              <div onClick={e => e.stopPropagation()} style={{
+                background: 'var(--card-bg, #1a1a1a)', border: '1px solid rgba(197,164,109,0.3)',
+                borderRadius: 18, padding: '24px 24px 20px', maxWidth: 480, width: '100%',
+                maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.9)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{insightEditTx.name}</p>
+                  <button onClick={() => setInsightEditTx(null)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--muted)', cursor: 'pointer', fontSize: 14, padding: '4px 10px', borderRadius: 8 }}>&#x2715;</button>
+                </div>
+                <TxForm tx={insightEditTx} accounts={data.accounts}
+                  onSave={tx => { calendarSaveTx(tx); setInsightEditTx(null) }}
+                  onCancel={() => setInsightEditTx(null)} />
+                <button
+                  onClick={() => { if (window.confirm('Delete this transaction entirely?')) { deleteTx(insightEditTx.id); setInsightEditTx(null); setInsightModal(null) } }}
+                  style={{ marginTop: 12, width: '100%', padding: '9px', background: 'rgba(232,150,122,0.08)', border: '1px solid rgba(232,150,122,0.25)', borderRadius: 10, color: '#E8967A', cursor: 'pointer', fontSize: 12 }}>
+                  Delete Transaction
+                </button>
               </div>
             </div>
           )}
@@ -3370,15 +3426,15 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
                       style={{
                         fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
-                        background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : 'rgba(196,120,90,0.22)',
-                        color: tx.type === 'income' ? '#C5A46D' : '#E8967A',
+                        background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : tx.type === 'transfer' ? 'rgba(100,140,220,0.18)' : 'rgba(196,120,90,0.22)',
+                        color: tx.type === 'income' ? '#C5A46D' : tx.type === 'transfer' ? '#90AADE' : '#E8967A',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
                         overflow: 'hidden', cursor: 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
                       <span style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                        {tx.type === 'income' ? `+${fmtK(tx.amount)}` : `(${fmtK(tx.amount)})`}
+                        {tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? `→${fmtK(tx.amount)}` : `(${fmtK(tx.amount)})`}
                       </span>
                     </div>
                   ))}
@@ -3417,7 +3473,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                   - Future → gold projected; click to override */}
               {(pt || actualBal !== undefined) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}
-                  onClick={e => { e.stopPropagation(); if (!isEditingBal && pt && !(isPast || isToday)) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
+                  onClick={e => { e.stopPropagation(); if (!isEditingBal && pt && actualBal === undefined) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
                   {isEditingBal ? (
                     <input autoFocus type="number"
                       value={editBal.draft}
@@ -3435,11 +3491,11 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                     </span>
                   ) : pt ? (
                     // Projected (future) or backward-anchored estimate (past) — gold
-                    // Past dates are NOT clickable to override; future dates are
-                    <span title={isPast || isToday ? 'Estimated from current balance' : 'Click to override balance'}
-                      style={{ fontSize: 9, fontWeight: 700, cursor: isPast || isToday ? 'default' : 'text',
+                    // All dates are clickable to set actual balance (unless Plaid actual already set)
+                    <span title={isOverridden ? 'Overridden — click to change' : 'Click to set actual balance'}
+                      style={{ fontSize: 9, fontWeight: 700, cursor: 'text',
                         color: isNeg ? 'var(--expense-color)' : isOverridden ? 'rgba(255,255,255,0.92)' : 'rgba(197,164,109,0.85)',
-                        opacity: isPast || isToday ? 0.6 : 1 }}>
+                        opacity: isPast || isToday ? 0.75 : 1 }}>
                       {isOverridden && <span style={{ fontSize: 7, opacity: 0.7, marginRight: 2 }}>✎</span>}
                       {fmtK(pt.bal)}
                     </span>
@@ -3472,21 +3528,35 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 // Plaid actual takes priority; fall back to backward-anchored projection estimate
                 const displayBal = selActualBal !== undefined ? selActualBal : selPt.bal
                 const balColor   = displayBal < 0 ? 'var(--expense-color)' : selActualBal !== undefined ? '#7DCBA4' : 'var(--gold)'
+                const isDetailEditing = editBal?.key === selDay && selActualBal === undefined
                 const balLabel   = selActualBal !== undefined
                   ? 'Actual ending balance'
-                  : isSelPast
-                    ? 'Estimated (connect bank for actuals)'
-                    : selPt.isOverridden ? 'Ending balance (overridden)' : 'Ending balance (projected)'
+                  : selPt.isOverridden
+                    ? 'Overridden · click to change'
+                    : isSelPast
+                      ? 'Estimated · click to set actual'
+                      : 'Projected · click to set'
                 return (
                   <>
                     <p style={{ margin: 0, fontSize: 11, color: selActualBal !== undefined ? '#7DCBA4' : 'var(--muted)' }}>
                       {balLabel}
                     </p>
-                    <p style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor,
-                      opacity: isSelPast && selActualBal === undefined ? 0.65 : 1 }}>
-                      {fmtMoney(displayBal)}
-                    </p>
-                    {!isSelPast && selActualBal === undefined && selPt.isOverridden && (
+                    {isDetailEditing ? (
+                      <input autoFocus type="number"
+                        defaultValue={Math.round(displayBal)}
+                        onKeyDown={e => { if (e.key === 'Enter') commitBal(selDay, e.target.value); if (e.key === 'Escape') setEditBal(null) }}
+                        onBlur={e => commitBal(selDay, e.target.value)}
+                        style={{ width: 140, fontSize: 18, fontWeight: 700, textAlign: 'right', background: 'rgba(197,164,109,0.10)', border: '1px solid rgba(197,164,109,0.5)', borderRadius: 6, color: 'var(--gold)', padding: '3px 8px', outline: 'none' }}
+                      />
+                    ) : (
+                      <p onClick={() => selActualBal === undefined && setEditBal({ key: selDay, draft: String(Math.round(displayBal)) })}
+                        style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor,
+                          opacity: isSelPast && selActualBal === undefined ? 0.85 : 1,
+                          cursor: selActualBal === undefined ? 'text' : 'default' }}>
+                        {fmtMoney(displayBal)}
+                      </p>
+                    )}
+                    {selActualBal === undefined && selPt.isOverridden && (
                       <button onClick={() => onRemoveOverride(selDay)}
                         style={{ fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline' }}>
                         Reset to projected
@@ -3516,13 +3586,15 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                     <div style={{ minWidth: 0 }}>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
                       <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
-                        {tx.cat} · {FREQ_OPTS.find(f => f.v === tx.freq)?.l}
+                        {tx.type === 'transfer'
+                          ? `→ ${accounts.find(a => a.id === tx.transferTo)?.name || 'Unknown account'}`
+                          : `${tx.cat} · ${FREQ_OPTS.find(f => f.v === tx.freq)?.l}`}
                         <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>
                       </p>
                     </div>
                     <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
-                      color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }}>
-                      {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
+                      color: tx.type === 'income' ? 'var(--gold)' : tx.type === 'transfer' ? '#90AADE' : 'var(--expense-color)' }}>
+                      {tx.type === 'income' ? '+' : tx.type === 'transfer' ? '→' : '-'}{fmtMoney(tx.amount)}
                     </p>
                   </div>
                 ))}
