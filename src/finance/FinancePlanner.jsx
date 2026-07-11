@@ -1113,6 +1113,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [toast, setToast]       = useState('')
   const [insightModal, setInsightModal] = useState(null)
   const [insightEditTx, setInsightEditTx] = useState(null)
+  const [insightAcctFilter, setInsightAcctFilter] = useState(() => new Set(['a2', 'a3']))
   const toastRef                = useRef()
 
   // ── HomeHQ Projects (live-synced from localStorage) ──────────────────
@@ -2184,34 +2185,64 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                 </div>
 
                 {/* Month-end forecast table — cash-flow and balance-dip insights */}
-                {(insightModal.type === 'cash-flow' || insightModal.type === 'balance-dip') && insightModal.monthlyForecasts?.length > 0 && (
-                  <div style={{ marginBottom: insightModal.transactions?.length ? 20 : 0 }}>
-                    <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                      Projected Month-End Balances
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {insightModal.monthlyForecasts.map((fc, idx) => (
-                        <div key={idx} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: fc.acctBals?.length > 1 ? 6 : 0 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--soft-white)' }}>{fc.month}</span>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: fc.totalBal >= 0 ? '#7DCBA4' : '#E8967A' }}>
-                              {fmtMoney(fc.totalBal)}
-                            </span>
-                          </div>
-                          {fc.acctBals?.length > 1 && (
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                              {fc.acctBals.map(ab => (
-                                <span key={ab.id} style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 8px', background: 'rgba(255,255,255,0.06)', borderRadius: 6, whiteSpace: 'nowrap' }}>
-                                  {ab.name}: {fmtK(ab.bal)}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                {(insightModal.type === 'cash-flow' || insightModal.type === 'balance-dip') && insightModal.monthlyForecasts?.length > 0 && (() => {
+                  const allAccts = insightModal.monthlyForecasts[0]?.acctBals || []
+                  const visAccts = allAccts.filter(ab => insightAcctFilter.has(ab.id))
+                  const toggleAcct = (id) => setInsightAcctFilter(prev => {
+                    const next = new Set(prev)
+                    next.has(id) ? next.delete(id) : next.add(id)
+                    return next.size === 0 ? prev : next  // prevent deselecting all
+                  })
+                  return (
+                    <div style={{ marginBottom: insightModal.transactions?.length ? 20 : 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                          Projected Month-End Balances
+                        </p>
+                        {/* Account filter toggles */}
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {allAccts.map(ab => {
+                            const on = insightAcctFilter.has(ab.id)
+                            return (
+                              <button key={ab.id} onClick={() => toggleAcct(ab.id)}
+                                style={{ fontSize: 10, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600, transition: 'all .15s',
+                                  border: on ? '1px solid rgba(197,164,109,0.55)' : '1px solid rgba(255,255,255,0.12)',
+                                  background: on ? 'rgba(197,164,109,0.15)' : 'rgba(255,255,255,0.04)',
+                                  color: on ? 'var(--gold)' : 'var(--muted)' }}>
+                                {ab.name.replace('Renovation / ', '').replace(' Account', '')}
+                              </button>
+                            )
+                          })}
                         </div>
-                      ))}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {insightModal.monthlyForecasts.map((fc, idx) => {
+                          const filteredBals = (fc.acctBals || []).filter(ab => insightAcctFilter.has(ab.id))
+                          const filteredTotal = filteredBals.reduce((s, ab) => s + ab.bal, 0)
+                          return (
+                            <div key={idx} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.07)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: filteredBals.length > 1 ? 6 : 0 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--soft-white)' }}>{fc.month}</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: filteredTotal >= 0 ? '#7DCBA4' : '#E8967A' }}>
+                                  {fmtMoney(filteredTotal)}
+                                </span>
+                              </div>
+                              {filteredBals.length > 0 && (
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                  {filteredBals.map(ab => (
+                                    <span key={ab.id} style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 8px', background: 'rgba(255,255,255,0.06)', borderRadius: 6, whiteSpace: 'nowrap' }}>
+                                      {ab.name}: {fmtK(ab.bal)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {/* Transaction list — large-bills, category-subs, duplicate, actuals-7d */}
                 {insightModal.transactions?.length > 0 && (
