@@ -1092,6 +1092,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [editTx, setEditTx]     = useState(null)
   const [editAcct, setEditAcct] = useState(null)
   const [toast, setToast]       = useState('')
+  const [insightModal, setInsightModal] = useState(null)
   const toastRef                = useRef()
 
   // ── HomeHQ Projects (live-synced from localStorage) ──────────────────
@@ -1565,10 +1566,37 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   // ── Financial Insights ─────────────────────────────────────────────────
+  const INS_FMULT = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
   const financialInsights = (() => {
     const ins = []
     const currentBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
-    const fMult = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
+    const fMult = INS_FMULT
+
+    // ── Month-end balance forecast (remaining months of current year) ──
+    const _thisYear = t.getFullYear()
+    const _runBals = {}
+    fd.accounts.forEach(a => { _runBals[a.id] = parseFloat(a.balance || 0) })
+    const monthlyForecasts = []
+    const _dec31 = new Date(_thisYear, 11, 31)
+    let _fc = addDays(t, 1)
+    while (_fc <= _dec31) {
+      const _fds = toISO(_fc)
+      const _fpt = proj.get(_fds)
+      _fpt?.txns?.forEach(tx => {
+        if (tx.acct && _runBals[tx.acct] !== undefined) {
+          _runBals[tx.acct] += tx.type === 'income' ? parseFloat(tx.amount) : -parseFloat(tx.amount)
+        }
+      })
+      const _next = addDays(_fc, 1)
+      if (_next.getMonth() !== _fc.getMonth() || _fds === toISO(_dec31)) {
+        monthlyForecasts.push({
+          month: _fc.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+          totalBal: _fpt?.bal ?? Object.values(_runBals).reduce((s, v) => s + v, 0),
+          acctBals: fd.accounts.map(a => ({ id: a.id, name: a.name, bal: _runBals[a.id] ?? 0 })),
+        })
+      }
+      _fc = _next
+    }
 
     // 1. Lowest projected balance in next 30 days
     let lowestBal = Infinity, lowestDate = null
@@ -1577,15 +1605,17 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       if (pt && pt.bal < lowestBal) { lowestBal = pt.bal; lowestDate = d }
     }
     if (lowestDate && lowestBal < 5000) {
-      ins.push({ sev: 'danger', icon: 'ti-cash-off',
+      ins.push({ type: 'balance-dip', sev: 'danger', icon: 'ti-cash-off',
         title: `Balance projected to drop to ${fmtK(lowestBal)}`,
-        detail: `Lowest point within 30 days falls on ${lowestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`,
-        action: 'Review large outflows near that date and consider deferring discretionary spending.' })
+        detail: `Lowest point within 30 days falls on ${lowestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. Click to see year-end forecast.`,
+        action: 'Review large outflows near that date and consider deferring discretionary spending.',
+        lowestBal, lowestDate, monthlyForecasts })
     } else if (lowestDate && currentBal > 0 && lowestBal < currentBal * 0.25) {
-      ins.push({ sev: 'warning', icon: 'ti-trending-down',
+      ins.push({ type: 'balance-dip', sev: 'warning', icon: 'ti-trending-down',
         title: `Balance dips to ${fmtK(lowestBal)} on ${lowestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-        detail: `That is ${Math.round((lowestBal / currentBal) * 100)}% of your current ${fmtK(currentBal)} balance.`,
-        action: 'Ensure large upcoming expenses are timed with income receipts.' })
+        detail: `That is ${Math.round((lowestBal / currentBal) * 100)}% of your current ${fmtK(currentBal)} balance. Click to see year-end forecast.`,
+        action: 'Ensure large upcoming expenses are timed with income receipts.',
+        lowestBal, lowestDate, monthlyForecasts })
     }
 
     // 2. Large bills due this week (>= $500)
@@ -1593,23 +1623,32 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                               .sort((a, b) => b.amount - a.amount)
     if (bigBills.length > 0) {
       const total = bigBills.reduce((s, tx) => s + tx.amount, 0)
-      ins.push({ sev: 'warning', icon: 'ti-calendar-due',
+      ins.push({ type: 'large-bills', sev: 'warning', icon: 'ti-calendar-due',
         title: `${bigBills.length === 1 ? bigBills[0].name : `${bigBills.length} large bills`} due this week`,
         detail: bigBills.slice(0, 3).map(tx => `${tx.name} ${fmtMoney(tx.amount)}`).join(' · ') + (bigBills.length > 3 ? ` +${bigBills.length - 3} more` : ''),
-        action: `${fmtMoney(total)} total due in 7 days — verify funds are in the right accounts.` })
+        action: `${fmtMoney(total)} total due in 7 days — verify funds are in the right accounts.`,
+        transactions: bigBills })
     }
 
-    // 3. Monthly cash flow health
+    // 3. Monthly cash flow health (always include so forecast is always accessible)
     if (monthlyCashFlow > 1000) {
-      ins.push({ sev: 'good', icon: 'ti-trending-up',
+      ins.push({ type: 'cash-flow', sev: 'good', icon: 'ti-trending-up',
         title: `Monthly surplus: +${fmtMoney(monthlyCashFlow)}`,
-        detail: `${fmtMoney(monthlyIncome)}/mo income · ${fmtMoney(monthlyExpense)}/mo expenses.`,
-        action: 'Strong position — consider directing surplus toward savings or investments.' })
+        detail: `${fmtMoney(monthlyIncome)}/mo income · ${fmtMoney(monthlyExpense)}/mo expenses. Click for year-end forecast.`,
+        action: 'Strong position — consider directing surplus toward savings or investments.',
+        monthlyForecasts, accounts: fd.accounts })
     } else if (monthlyCashFlow < -500) {
-      ins.push({ sev: 'danger', icon: 'ti-trending-down',
+      ins.push({ type: 'cash-flow', sev: 'danger', icon: 'ti-trending-down',
         title: `Monthly shortfall: −${fmtMoney(Math.abs(monthlyCashFlow))}`,
-        detail: `${fmtMoney(monthlyIncome)}/mo income vs ${fmtMoney(monthlyExpense)}/mo expenses.`,
-        action: 'Spending exceeds income. Review recurring expenses for cuts.' })
+        detail: `${fmtMoney(monthlyIncome)}/mo income vs ${fmtMoney(monthlyExpense)}/mo expenses. Click for year-end forecast.`,
+        action: 'Spending exceeds income. Review recurring expenses for cuts.',
+        monthlyForecasts, accounts: fd.accounts })
+    } else {
+      ins.push({ type: 'cash-flow', sev: 'tip', icon: 'ti-chart-bar',
+        title: `Cash flow: ${fmtMoney(monthlyIncome)}/mo in · ${fmtMoney(monthlyExpense)}/mo out`,
+        detail: `Monthly net: +${fmtMoney(monthlyCashFlow)}. Click to see your year-end balance forecast.`,
+        action: 'Click to see projected account balances through December.',
+        monthlyForecasts, accounts: fd.accounts })
     }
 
     // 4. Category with 3+ recurring charges
@@ -1622,10 +1661,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     if (heavyCats.length > 0) {
       const [cat, txs] = heavyCats[0]
       const total = txs.reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0)
-      ins.push({ sev: 'tip', icon: 'ti-credit-card',
+      ins.push({ type: 'category-subs', sev: 'tip', icon: 'ti-credit-card',
         title: `${txs.length} recurring ${cat} charges — ${fmtMoney(total)}/mo`,
         detail: txs.slice(0, 4).map(tx => tx.name).join(', ') + (txs.length > 4 ? ` +${txs.length - 4} more` : ''),
-        action: `Review your ${cat} subscriptions and cancel any you no longer need.` })
+        action: `Review your ${cat} subscriptions and cancel any you no longer need.`,
+        transactions: txs, category: cat })
     }
 
     // 5. Possible duplicate monthly charges (same ~amount, both monthly)
@@ -1637,10 +1677,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
     if (dups.length > 0) {
       const [, txs] = dups[0]
-      ins.push({ sev: 'tip', icon: 'ti-copy',
+      ins.push({ type: 'duplicate', sev: 'tip', icon: 'ti-copy',
         title: `Possible duplicate: ${txs.slice(0, 2).map(tx => tx.name).join(' & ')}`,
         detail: `Both billed ~${fmtMoney(txs[0].amount)}/mo — could be the same charge hitting twice.`,
-        action: 'Check your bank statement to confirm both are intentional.' })
+        action: 'Check your bank statement to confirm both are intentional.',
+        transactions: txs })
     }
 
     // 6. Last 7 days actual spend (Plaid — only when connected)
@@ -1652,10 +1693,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         const earned = last7.filter(tx => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0)
         const top    = [...last7.filter(tx => tx.amount > 0)].sort((a, b) => b.amount - a.amount)[0]
         const net    = earned - spent
-        ins.push({ sev: net >= 0 ? 'good' : 'tip', icon: 'ti-chart-bar',
+        ins.push({ type: 'actuals-7d', sev: net >= 0 ? 'good' : 'tip', icon: 'ti-chart-bar',
           title: `Last 7 days: ${fmtMoney(spent)} spent · ${fmtMoney(earned)} received`,
           detail: top ? `Largest charge: ${top.name} (${fmtMoney(top.amount)}) · ${last7.length} transactions` : `${last7.length} transactions`,
-          action: net < 0 ? `Net outflow of ${fmtMoney(Math.abs(net))} — above typical. Review discretionary spending.` : `Net positive week: +${fmtMoney(net)}.` })
+          action: net < 0 ? `Net outflow of ${fmtMoney(Math.abs(net))} — above typical. Review discretionary spending.` : `Net positive week: +${fmtMoney(net)}.`,
+          transactions: last7 })
       }
     }
 
@@ -2054,22 +2096,32 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                       warning: { border: 'rgba(197,164,109,0.35)', bg: 'rgba(197,164,109,0.07)', icon: '#C5A46D', bar: '#C5A46D' },
                       danger:  { border: 'rgba(232,150,122,0.35)', bg: 'rgba(232,150,122,0.07)', icon: '#E8967A', bar: '#E8967A' },
                     }[ins.sev] || { border: 'rgba(255,255,255,0.08)', bg: 'rgba(255,255,255,0.03)', icon: 'var(--muted)', bar: 'var(--muted)' }
+                    const hasDetail = !!(ins.transactions?.length || ins.monthlyForecasts?.length)
                     return (
-                      <div key={i} style={{
-                        display: 'flex', gap: 12, padding: '14px 16px',
-                        background: sevStyle.bg, border: `1px solid ${sevStyle.border}`,
-                        borderLeft: `3px solid ${sevStyle.bar}`,
-                        borderRadius: 12,
-                      }}>
+                      <div key={i}
+                        onClick={() => hasDetail && setInsightModal(ins)}
+                        style={{
+                          display: 'flex', gap: 12, padding: '14px 16px',
+                          background: sevStyle.bg, border: `1px solid ${sevStyle.border}`,
+                          borderLeft: `3px solid ${sevStyle.bar}`,
+                          borderRadius: 12,
+                          cursor: hasDetail ? 'pointer' : 'default',
+                          transition: 'filter .15s',
+                        }}
+                        onMouseEnter={e => { if (hasDetail) e.currentTarget.style.filter = 'brightness(1.12)' }}
+                        onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}>
                         <div style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0,
                           background: `${sevStyle.bg}`, border: `1px solid ${sevStyle.border}`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <i className={`ti ${ins.icon}`} style={{ fontSize: 16, color: sevStyle.icon }} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: '0 0 3px', fontSize: 13, fontWeight: 600, color: 'var(--soft-white)', lineHeight: 1.3 }}>
-                            {ins.title}
-                          </p>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6, marginBottom: 3 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--soft-white)', lineHeight: 1.3 }}>
+                              {ins.title}
+                            </p>
+                            {hasDetail && <i className="ti ti-chevron-right" style={{ fontSize: 13, color: 'var(--muted)', flexShrink: 0, marginTop: 2 }} />}
+                          </div>
                           <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
                             {ins.detail}
                           </p>
@@ -2085,6 +2137,106 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             </div>
 
           </div>{/* /3-col grid */}
+
+          {/* ── Insight detail modal ── */}
+          {insightModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1200,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+              onClick={() => setInsightModal(null)}>
+              <div onClick={e => e.stopPropagation()} style={{
+                background: 'var(--card-bg, #1a1a1a)', border: '1px solid rgba(197,164,109,0.25)',
+                borderRadius: 18, padding: '24px 24px 20px', maxWidth: 700, width: '100%',
+                maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}>
+
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                  <div style={{ flex: 1, marginRight: 12 }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: 'var(--soft-white)' }}>{insightModal.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{insightModal.detail.replace('. Click to see year-end forecast.','').replace('. Click for year-end forecast.','').replace('. Click to see your year-end balance forecast.','')}</p>
+                  </div>
+                  <button onClick={() => setInsightModal(null)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--muted)', cursor: 'pointer', fontSize: 14, padding: '4px 10px', borderRadius: 8, lineHeight: 1.2 }}>&#x2715;</button>
+                </div>
+
+                {/* Month-end forecast table — cash-flow and balance-dip insights */}
+                {(insightModal.type === 'cash-flow' || insightModal.type === 'balance-dip') && insightModal.monthlyForecasts?.length > 0 && (
+                  <div style={{ marginBottom: insightModal.transactions?.length ? 20 : 0 }}>
+                    <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                      Projected Month-End Balances
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {insightModal.monthlyForecasts.map((fc, idx) => (
+                        <div key={idx} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.07)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: fc.acctBals?.length > 1 ? 6 : 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--soft-white)' }}>{fc.month}</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: fc.totalBal >= 0 ? '#7DCBA4' : '#E8967A' }}>
+                              {fmtMoney(fc.totalBal)}
+                            </span>
+                          </div>
+                          {fc.acctBals?.length > 1 && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {fc.acctBals.map(ab => (
+                                <span key={ab.id} style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 8px', background: 'rgba(255,255,255,0.06)', borderRadius: 6, whiteSpace: 'nowrap' }}>
+                                  {ab.name}: {fmtK(ab.bal)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Transaction list — large-bills, category-subs, duplicate, actuals-7d */}
+                {insightModal.transactions?.length > 0 && (
+                  <div>
+                    <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                      {insightModal.type === 'actuals-7d' ? 'Transactions \u2014 Last 7 Days' :
+                       insightModal.type === 'large-bills' ? 'Upcoming Large Bills' :
+                       insightModal.type === 'duplicate' ? 'Flagged as Possible Duplicate' :
+                       insightModal.type === 'category-subs' ? `${insightModal.category} Subscriptions` : 'Transactions'}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {insightModal.transactions.map((tx, idx) => {
+                        const isPlaid = tx.date !== undefined && typeof tx.pending !== 'undefined'
+                        const isIncome = isPlaid ? tx.amount < 0 : tx.type === 'income'
+                        const amt = isPlaid ? Math.abs(tx.amount) : parseFloat(tx.amount)
+                        const moEquiv = !isPlaid && tx.freq !== 'once' ? amt * (INS_FMULT[tx.freq] ?? 1) : null
+                        return (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 10,
+                            border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
+                                {isPlaid
+                                  ? `${tx.date} \u00b7 ${tx.pending ? '\u23f3 Pending' : '\u2713 Posted'}${tx.category?.length ? ` \u00b7 ${tx.category[0]}` : ''}`
+                                  : `${tx.cat || 'Uncategorized'} \u00b7 ${tx.freq} \u00b7 ${tx.acct ? (fd.accounts.find(a => a.id === tx.acct)?.name || tx.acct) : 'All accounts'}`
+                                }
+                              </p>
+                            </div>
+                            <div style={{ textAlign: 'right', marginLeft: 12, flexShrink: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: isIncome ? '#7DCBA4' : '#E8967A' }}>
+                                {isIncome ? '+' : '\u2212'}{fmtMoney(amt)}
+                              </p>
+                              {moEquiv !== null && moEquiv !== amt && (
+                                <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--muted)' }}>\u2248 {fmtMoney(moEquiv)}/mo</p>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action footer */}
+                <div style={{ marginTop: 18, padding: '12px 14px', background: 'rgba(197,164,109,0.06)', borderRadius: 10, border: '1px solid rgba(197,164,109,0.18)' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--gold)', fontStyle: 'italic' }}>&rarr; {insightModal.action}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Footer quote bar ── */}
           <div className="dash-footer">
@@ -3346,11 +3498,11 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             </div>
           </div>
 
-          {/* Budgeted transactions */}
+          {/* Planned transactions */}
           {selPt.txns.length > 0 && (
             <div>
-              {showActuals && (
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Budgeted</p>
+              {selDay <= todayStr && (
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Planned</p>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {selPt.txns.map((tx, idx2) => (
@@ -3378,49 +3530,89 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             </div>
           )}
 
-          {/* Actual (Plaid) transactions — only when toggle is on and date is past/today */}
-          {showActuals && selDay <= todayStr && (() => {
+          {/* Actuals + reconciliation — always shown for past/today dates */}
+          {selDay <= todayStr && (() => {
             const dayActs = actualsByDate?.[selDay] || []
-            if (dayActs.length === 0) {
-              return (
-                <p style={{ margin: selPt.txns.length > 0 ? '14px 0 0' : '0', fontSize: 13, color: 'var(--muted)' }}>
-                  {plaidActuals ? 'No posted transactions on this date.' : 'Connect a bank to see posted actuals.'}
-                </p>
-              )
-            }
+            const plannedExp = selPt.txns.filter(tx => tx.type === 'expense').reduce((s, tx) => s + parseFloat(tx.amount), 0)
+            const plannedInc = selPt.txns.filter(tx => tx.type === 'income').reduce((s, tx) => s + parseFloat(tx.amount), 0)
+            const actualExp  = dayActs.filter(tx => tx.amount > 0).reduce((s, tx) => s + tx.amount, 0)
+            const actualInc  = dayActs.filter(tx => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0)
+            const hasPlanned = selPt.txns.length > 0
+            const hasActuals = dayActs.length > 0
             return (
-              <div style={{ marginTop: selPt.txns.length > 0 ? 14 : 0 }}>
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: '#90AADE', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                  Actuals{dayActs.some(t => t.pending) ? ' — includes pending' : ' — posted'}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {dayActs.map((tx, idx3) => {
-                    const isIncome = tx.amount < 0
-                    return (
-                      <div key={idx3} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
-                        background: 'rgba(100,140,220,0.06)', borderRadius: 10,
-                        border: `1px solid ${tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)'}` }}>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
-                            {tx.pending ? '⏳ Pending' : '✓ Posted'}
-                            {tx.category?.length ? ` · ${tx.category[0]}` : ''}
-                          </p>
-                        </div>
-                        <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
-                          color: isIncome ? '#7DCBA4' : '#90AADE' }}>
-                          {isIncome ? '+' : '-'}{fmtMoney(Math.abs(tx.amount))}
-                        </p>
-                      </div>
-                    )
-                  })}
+              <>
+                <div style={{ marginTop: hasPlanned ? 14 : 0 }}>
+                  <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: '#90AADE', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                    {hasActuals ? `Actuals${dayActs.some(t => t.pending) ? ' — includes pending' : ' — posted'}` : 'Actuals'}
+                  </p>
+                  {!hasActuals && (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', fontStyle: 'italic' }}>
+                      {plaidActuals ? 'No posted transactions on this date.' : 'Connect a bank to see posted actuals alongside your planned items.'}
+                    </p>
+                  )}
+                  {hasActuals && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {dayActs.map((tx, idx3) => {
+                        const isIncome = tx.amount < 0
+                        return (
+                          <div key={idx3} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                            background: 'rgba(100,140,220,0.06)', borderRadius: 10,
+                            border: `1px solid ${tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)'}` }}>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
+                                {tx.pending ? '⏳ Pending' : '✓ Posted'}
+                                {tx.category?.length ? ` · ${tx.category[0]}` : ''}
+                              </p>
+                            </div>
+                            <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
+                              color: isIncome ? '#7DCBA4' : '#90AADE' }}>
+                              {isIncome ? '+' : '−'}{fmtMoney(Math.abs(tx.amount))}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
+                {hasActuals && (hasPlanned || hasActuals) && (
+                  <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(144,170,222,0.07)', borderRadius: 10, border: '1px solid rgba(144,170,222,0.18)' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#90AADE' }}>Daily Reconciliation</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                      {[
+                        { label: 'Planned', exp: plannedExp, inc: plannedInc },
+                        { label: 'Actual', exp: actualExp, inc: actualInc },
+                        { label: 'Variance', exp: actualExp - plannedExp, inc: actualInc - plannedInc, isVar: true },
+                      ].map(col => (
+                        <div key={col.label} style={{ textAlign: 'center' }}>
+                          <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em' }}>{col.label}</p>
+                          {col.inc !== 0 && (
+                            <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 600, color: col.isVar ? (col.inc >= 0 ? '#7DCBA4' : '#E8967A') : '#7DCBA4' }}>
+                              {col.isVar && col.inc > 0 ? '+' : ''}{fmtMoney(col.inc)} in
+                            </p>
+                          )}
+                          {col.exp !== 0 && (
+                            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: col.isVar ? (col.exp <= 0 ? '#7DCBA4' : '#E8967A') : '#90AADE' }}>
+                              {col.isVar && col.exp > 0 ? '+' : ''}{fmtMoney(col.exp)} out
+                            </p>
+                          )}
+                          {col.inc === 0 && col.exp === 0 && (
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>—</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )
           })()}
 
-          {!showActuals && selPt.txns.length === 0 && (
+          {selPt.txns.length === 0 && selDay > todayStr && (
             <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>No transactions on this date.</p>
+          )}
+          {selPt.txns.length === 0 && selDay <= todayStr && !actualsByDate?.[selDay]?.length && (
+            <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--muted)' }}>No planned items on this date.</p>
           )}
         </div>
       )}
