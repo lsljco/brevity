@@ -62,4 +62,4 @@ async function setTokens(tokens) {
   }
 }
 
-module.exports = { getTokens, setTokens, isNetlify, hasBlobsModule: !!blobsGetStore }
+module.exports = { getTokens, setTokens }
