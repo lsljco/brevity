@@ -2872,12 +2872,26 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
 
   const t = today0()
   const todayStr = toISO(t)
-  const firstDow = new Date(calYear, calMonth, 1).getDay()
-  const daysInMo = new Date(calYear, calMonth + 1, 0).getDate()
-  const monthName = new Date(calYear, calMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const firstDow     = new Date(calYear, calMonth, 1).getDay()
+  const daysInMo     = new Date(calYear, calMonth + 1, 0).getDate()
+  const daysInPrevMo = new Date(calYear, calMonth, 0).getDate()
+  const monthName    = new Date(calYear, calMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
-  const cells = Array(firstDow).fill(null)
-  for (let d = 1; d <= daysInMo; d++) cells.push(d)
+  // Build cells with leading days from prev month + current month + trailing days from next month
+  const cells = []
+  for (let i = 0; i < firstDow; i++) {
+    const d = daysInPrevMo - firstDow + 1 + i
+    const m = calMonth === 0 ? 11 : calMonth - 1
+    const y = calMonth === 0 ? calYear - 1 : calYear
+    cells.push({ day: d, month: m, year: y, cur: false })
+  }
+  for (let d = 1; d <= daysInMo; d++) cells.push({ day: d, month: calMonth, year: calYear, cur: true })
+  const trail = cells.length % 7 === 0 ? 0 : 7 - (cells.length % 7)
+  for (let d = 1; d <= trail; d++) {
+    const m = calMonth === 11 ? 0 : calMonth + 1
+    const y = calMonth === 11 ? calYear + 1 : calYear
+    cells.push({ day: d, month: m, year: y, cur: false })
+  }
 
   const prevMonth = () => { let m = calMonth - 1, y = calYear; if (m < 0) { m = 11; y-- }; setCalMonth(m); setCalYear(y) }
   const nextMonth = () => { let m = calMonth + 1, y = calYear; if (m > 11) { m = 0; y++ }; setCalMonth(m); setCalYear(y) }
@@ -2909,29 +2923,38 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
     setPendingMove(null)
   }
 
-  // ── Edit panel ───────────────────────────────────────────────────────────
-  if (selTx) {
-    return (
-      <div>
-        <button onClick={() => setSelTx(null)}
-          style={{ marginBottom: 16, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', fontSize: 12, color: 'var(--muted)' }}>
-          <i className="ti ti-arrow-left" /> Back to Calendar
-        </button>
-        <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
-          Editing recurring transaction · changes apply to all occurrences
-        </p>
-        <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
-        <button onClick={() => { if (window.confirm('Delete this transaction entirely?')) handleDelete(selTx.id) }}
-          style={{ marginTop: 10, padding: '8px 18px', borderRadius: 8, border: 'none', background: 'rgba(196,120,90,0.15)', color: 'var(--expense-color)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-          Delete Transaction
-        </button>
-      </div>
-    )
-  }
-
   // ── Calendar grid ────────────────────────────────────────────────────────
   return (
     <div>
+      {/* ── Edit transaction modal (overlay — stays above calendar) ── */}
+      {selTx && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 1100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setSelTx(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--card-bg, #1a1a1a)', border: '1px solid rgba(197,164,109,0.3)',
+              borderRadius: 18, padding: '24px 24px 20px', maxWidth: 480, width: '92%',
+              maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.75)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{selTx.name}</p>
+              <button onClick={() => setSelTx(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>
+                ✕
+              </button>
+            </div>
+            <p style={{ margin: '0 0 18px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+              Changes apply to all occurrences
+            </p>
+            <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
+            <button onClick={() => { if (window.confirm('Delete this transaction entirely?')) handleDelete(selTx.id) }}
+              style={{ marginTop: 12, padding: '8px 18px', borderRadius: 8, border: 'none',
+                background: 'rgba(196,120,90,0.15)', color: 'var(--expense-color)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+              Delete Transaction
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Move confirmation modal ── */}
       {pendingMove && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -2995,10 +3018,10 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
 
       {/* ── Calendar cells ── */}
       <div className="cal-grid">
-        {cells.map((d, i) => {
-          if (!d) return <div key={`e${i}`} style={{ minHeight: 120 }} />
-          const m = String(calMonth + 1).padStart(2, '0'), dd = String(d).padStart(2, '0')
-          const key = `${calYear}-${m}-${dd}`
+        {cells.map((cell, i) => {
+          const { day, month, year, cur } = cell
+          const mm = String(month + 1).padStart(2, '0'), dd = String(day).padStart(2, '0')
+          const key = `${year}-${mm}-${dd}`
           const pt = proj.get(key)
           const isToday      = key === todayStr
           const isSel        = key === selDay
@@ -3016,6 +3039,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
           return (
             <div key={key}
               className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''} ${dragOver === key ? 'drag-over' : ''}`}
+              style={!cur ? { opacity: 0.38, background: 'rgba(255,255,255,0.01)' } : undefined}
               onClick={() => { if (!isEditingBal) setSelDay(isSel ? null : key) }}
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(key) }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null) }}
@@ -3029,8 +3053,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 }
                 setDragTx(null)
               }}>
-              {/* Day number */}
-              <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : 'var(--muted)', marginBottom: 3, display: 'block' }}>{d}</span>
+              {/* Day number — muted for overflow days */}
+              <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : cur ? 'var(--muted)' : 'rgba(136,136,132,0.55)', marginBottom: 3, display: 'block' }}>{day}</span>
               {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
               {hasTxns && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
@@ -3039,12 +3063,13 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       draggable
                       onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx, fromDate: key }) }}
                       onDragEnd={() => setDragTx(null)}
+                      onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
                       style={{
                         fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
                         background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : 'rgba(196,120,90,0.22)',
                         color: tx.type === 'income' ? '#C5A46D' : '#E8967A',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
-                        overflow: 'hidden', cursor: 'grab',
+                        overflow: 'hidden', cursor: 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
