@@ -3107,10 +3107,12 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                   )}
                 </div>
               )}
-              {/* Ending balance — actual (teal) for past, projected (gold) for future */}
-              {(pt || actualBal !== undefined) && (
+              {/* Ending balance:
+                  - Past / today → actual from Plaid only (teal); hidden when no bank data
+                  - Future       → projected (gold); click to override */}
+              {(actualBal !== undefined || (!(isPast || isToday) && pt)) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}
-                  onClick={e => { e.stopPropagation(); if (!isEditingBal && pt) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
+                  onClick={e => { e.stopPropagation(); if (!isEditingBal && pt && !(isPast || isToday)) setEditBal({ key, draft: String(Math.round(pt.bal)) }) }}>
                   {isEditingBal ? (
                     <input autoFocus type="number"
                       value={editBal.draft}
@@ -3121,20 +3123,19 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       style={{ width: '100%', background: 'rgba(197,164,109,0.12)', border: '1px solid rgba(197,164,109,0.55)', borderRadius: 4, color: 'var(--gold)', fontSize: 9, fontWeight: 700, textAlign: 'right', padding: '1px 3px', outline: 'none' }}
                     />
                   ) : actualBal !== undefined ? (
-                    // Actual balance from Plaid — shown for past/today in teal
                     <span title="Actual ending balance from bank"
                       style={{ fontSize: 9, fontWeight: 700, color: actualBal < 0 ? 'var(--expense-color)' : '#7DCBA4' }}>
                       {fmtK(actualBal)}
                     </span>
-                  ) : pt ? (
-                    // Projected balance
+                  ) : (
+                    // Future dates only — projected balance (click to override)
                     <span title="Click to override balance"
                       style={{ fontSize: 9, fontWeight: 700, cursor: 'text',
                         color: isNeg ? 'var(--expense-color)' : isOverridden ? 'rgba(255,255,255,0.92)' : 'rgba(197,164,109,0.85)' }}>
                       {isOverridden && <span style={{ fontSize: 7, opacity: 0.7, marginRight: 2 }}>✎</span>}
                       {fmtK(pt.bal)}
                     </span>
-                  ) : null}
+                  )}
                 </div>
               )}
             </div>
@@ -3157,22 +3158,33 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             </div>
             <div style={{ textAlign: 'right' }}>
               {(() => {
-                const selActualBal = (selDay <= todayStr) && historicalBals[selDay] !== undefined
+                const isSelPast    = selDay <= todayStr
+                const selActualBal = isSelPast && historicalBals[selDay] !== undefined
                   ? historicalBals[selDay] : undefined
-                const displayBal  = selActualBal !== undefined ? selActualBal : selPt.bal
-                const balColor    = displayBal < 0 ? 'var(--expense-color)' : selActualBal !== undefined ? '#7DCBA4' : 'var(--gold)'
-                const balLabel    = selActualBal !== undefined
+                // Past/today → actual only. Future → projected.
+                const showBal   = selActualBal !== undefined || !isSelPast
+                const displayBal = selActualBal !== undefined ? selActualBal : selPt.bal
+                const balColor   = displayBal < 0 ? 'var(--expense-color)' : selActualBal !== undefined ? '#7DCBA4' : 'var(--gold)'
+                const balLabel   = selActualBal !== undefined
                   ? 'Actual ending balance'
-                  : selPt.isOverridden ? 'Ending balance (overridden)' : 'Ending balance (projected)'
+                  : isSelPast
+                    ? 'No bank data'
+                    : selPt.isOverridden ? 'Ending balance (overridden)' : 'Ending balance (projected)'
                 return (
                   <>
                     <p style={{ margin: 0, fontSize: 11, color: selActualBal !== undefined ? '#7DCBA4' : 'var(--muted)' }}>
                       {balLabel}
                     </p>
-                    <p style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor }}>
-                      {fmtMoney(displayBal)}
-                    </p>
-                    {selActualBal === undefined && selPt.isOverridden && (
+                    {showBal ? (
+                      <p style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor }}>
+                        {fmtMoney(displayBal)}
+                      </p>
+                    ) : (
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>
+                        Connect bank to see actual
+                      </p>
+                    )}
+                    {!isSelPast && selActualBal === undefined && selPt.isOverridden && (
                       <button onClick={() => onRemoveOverride(selDay)}
                         style={{ fontSize: 10, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline' }}>
                         Reset to projected
