@@ -12,7 +12,8 @@ try {
 }
 
 const LOCAL_FILE = process.env.PLAID_TOKEN_FILE || path.join(process.cwd(), '.plaid-tokens.json')
-const isNetlify = !!(process.env.NETLIFY_SITE_ID && !process.env.NETLIFY_DEV)
+// NETLIFY is always "true" in deployed functions; NETLIFY_DEV is "true" in local dev
+const isNetlify = !!(process.env.NETLIFY && !process.env.NETLIFY_DEV)
 
 async function getTokens() {
   if (isNetlify) {
