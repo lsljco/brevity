@@ -68,21 +68,33 @@ export function txOccursOnDate(tx, d) {
 
 export function buildProjection(accounts, transactions, days = 365, overrides = {}, pastDays = 365) {
   const currentBal = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+  const acctIdSet  = new Set(accounts.map(a => a.id))
   const map = new Map()
   const t = today0()
   const startDate = addDays(t, -pastDays)
+
+  // Compute transfer delta for a single transaction given the accounts in scope.
+  // - Source in scope, dest out of scope → outflow (negative)
+  // - Dest in scope, source out of scope → inflow (positive)
+  // - Both or neither in scope → net zero
+  function transferDelta(tx) {
+    const srcIn = acctIdSet.has(tx.acct)
+    const dstIn = acctIdSet.has(tx.transferTo)
+    if (srcIn && !dstIn) return -parseFloat(tx.amount || 0)
+    if (!srcIn && dstIn) return  parseFloat(tx.amount || 0)
+    return 0
+  }
 
   // Reconstruct the starting balance by summing all scheduled transaction deltas
   // that occur between startDate and yesterday. Since we know today's starting
   // balance (currentBal), we subtract those past deltas to arrive at what the
   // balance was at the beginning of startDate.
-  // Transfers are net-zero on total balance, so excluded.
   let pastDelta = 0
   for (let i = 0; i < pastDays; i++) {
     const d = addDays(startDate, i)
     const hits = transactions.filter(tx => txOccursOnDate(tx, d))
     pastDelta += hits.reduce((s, tx) => {
-      if (tx.type === 'transfer') return s
+      if (tx.type === 'transfer') return s + transferDelta(tx)
       return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)
     }, 0)
   }
@@ -94,7 +106,7 @@ export function buildProjection(accounts, transactions, days = 365, overrides = 
     const dateStr = toISO(d)
     const hits = transactions.filter(tx => txOccursOnDate(tx, d))
     const delta = hits.reduce((s, tx) => {
-      if (tx.type === 'transfer') return s  // transfers move money between accounts; net zero on total
+      if (tx.type === 'transfer') return s + transferDelta(tx)
       return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)
     }, 0)
     bal += delta

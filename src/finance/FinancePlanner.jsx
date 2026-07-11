@@ -1196,7 +1196,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
   const fd = useMemo(() => ({
     accounts:     data.accounts.filter(a => activeAcctIds.has(a.id)),
-    transactions: data.transactions.filter(tx => activeAcctIds.has(tx.acct)),
+    transactions: data.transactions.filter(tx => activeAcctIds.has(tx.acct) || (tx.type === 'transfer' && tx.transferTo && activeAcctIds.has(tx.transferTo))),
   }), [data, activeAcctIds])
 
   const toggleAcct = (id) => {
@@ -3237,6 +3237,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
 
   const t = today0()
   const todayStr = toISO(t)
+  const acctIdSet = useMemo(() => new Set(accounts.map(a => a.id)), [accounts])
   const firstDow     = new Date(calYear, calMonth, 1).getDay()
   const daysInMo     = new Date(calYear, calMonth + 1, 0).getDate()
   const daysInPrevMo = new Date(calYear, calMonth, 0).getDate()
@@ -3431,15 +3432,15 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
                       style={{
                         fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
-                        background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : tx.type === 'transfer' ? 'rgba(100,140,220,0.18)' : 'rgba(196,120,90,0.22)',
-                        color: tx.type === 'income' ? '#C5A46D' : tx.type === 'transfer' ? '#90AADE' : '#E8967A',
+                        background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? 'rgba(196,120,90,0.18)' : 'rgba(100,180,140,0.18)') : 'rgba(196,120,90,0.22)',
+                        color: tx.type === 'income' ? '#C5A46D' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? '#E8967A' : '#7DCBA4') : '#E8967A',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
                         overflow: 'hidden', cursor: 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
                       <span style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                        {tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? `→${fmtK(tx.amount)}` : `(${fmtK(tx.amount)})`}
+                        {tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
                       </span>
                     </div>
                   ))}
@@ -3592,14 +3593,16 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
                       <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
                         {tx.type === 'transfer'
-                          ? `→ ${accounts.find(a => a.id === tx.transferTo)?.name || 'Unknown account'}`
+                          ? (acctIdSet.has(tx.acct)
+                              ? `→ ${accounts.find(a => a.id === tx.transferTo)?.name || 'Unknown account'}`
+                              : `← from ${accounts.find(a => a.id === tx.acct)?.name || 'Unknown account'}`)
                           : `${tx.cat} · ${FREQ_OPTS.find(f => f.v === tx.freq)?.l}`}
                         <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>
                       </p>
                     </div>
                     <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
-                      color: tx.type === 'income' ? 'var(--gold)' : tx.type === 'transfer' ? '#90AADE' : 'var(--expense-color)' }}>
-                      {tx.type === 'income' ? '+' : tx.type === 'transfer' ? '→' : '-'}{fmtMoney(tx.amount)}
+                      color: tx.type === 'income' ? 'var(--gold)' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? 'var(--expense-color)' : '#7DCBA4') : 'var(--expense-color)' }}>
+                      {tx.type === 'income' ? '+' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? '→' : '+') : '-'}{fmtMoney(tx.amount)}
                     </p>
                   </div>
                 ))}
