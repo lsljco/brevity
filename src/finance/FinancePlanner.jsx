@@ -1564,6 +1564,104 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     if (pt?.txns?.length) pt.txns.forEach(tx => recent14.push({ ...tx, date: d }))
   }
 
+  // ── Financial Insights ─────────────────────────────────────────────────
+  const financialInsights = (() => {
+    const ins = []
+    const currentBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+    const fMult = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
+
+    // 1. Lowest projected balance in next 30 days
+    let lowestBal = Infinity, lowestDate = null
+    for (let i = 1; i <= 30; i++) {
+      const d = addDays(t, i), pt = proj.get(toISO(d))
+      if (pt && pt.bal < lowestBal) { lowestBal = pt.bal; lowestDate = d }
+    }
+    if (lowestDate && lowestBal < 5000) {
+      ins.push({ sev: 'danger', icon: 'ti-cash-off',
+        title: `Balance projected to drop to ${fmtK(lowestBal)}`,
+        detail: `Lowest point within 30 days falls on ${lowestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`,
+        action: 'Review large outflows near that date and consider deferring discretionary spending.' })
+    } else if (lowestDate && currentBal > 0 && lowestBal < currentBal * 0.25) {
+      ins.push({ sev: 'warning', icon: 'ti-trending-down',
+        title: `Balance dips to ${fmtK(lowestBal)} on ${lowestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        detail: `That is ${Math.round((lowestBal / currentBal) * 100)}% of your current ${fmtK(currentBal)} balance.`,
+        action: 'Ensure large upcoming expenses are timed with income receipts.' })
+    }
+
+    // 2. Large bills due this week (>= $500)
+    const bigBills = upcoming.filter(tx => tx.type === 'expense' && tx.amount >= 500)
+                              .sort((a, b) => b.amount - a.amount)
+    if (bigBills.length > 0) {
+      const total = bigBills.reduce((s, tx) => s + tx.amount, 0)
+      ins.push({ sev: 'warning', icon: 'ti-calendar-due',
+        title: `${bigBills.length === 1 ? bigBills[0].name : `${bigBills.length} large bills`} due this week`,
+        detail: bigBills.slice(0, 3).map(tx => `${tx.name} ${fmtMoney(tx.amount)}`).join(' · ') + (bigBills.length > 3 ? ` +${bigBills.length - 3} more` : ''),
+        action: `${fmtMoney(total)} total due in 7 days — verify funds are in the right accounts.` })
+    }
+
+    // 3. Monthly cash flow health
+    if (monthlyCashFlow > 1000) {
+      ins.push({ sev: 'good', icon: 'ti-trending-up',
+        title: `Monthly surplus: +${fmtMoney(monthlyCashFlow)}`,
+        detail: `${fmtMoney(monthlyIncome)}/mo income · ${fmtMoney(monthlyExpense)}/mo expenses.`,
+        action: 'Strong position — consider directing surplus toward savings or investments.' })
+    } else if (monthlyCashFlow < -500) {
+      ins.push({ sev: 'danger', icon: 'ti-trending-down',
+        title: `Monthly shortfall: −${fmtMoney(Math.abs(monthlyCashFlow))}`,
+        detail: `${fmtMoney(monthlyIncome)}/mo income vs ${fmtMoney(monthlyExpense)}/mo expenses.`,
+        action: 'Spending exceeds income. Review recurring expenses for cuts.' })
+    }
+
+    // 4. Category with 3+ recurring charges
+    const recurringExp = fd.transactions.filter(tx => tx.type === 'expense' && tx.freq !== 'once')
+    const catGroups = {}
+    recurringExp.forEach(tx => { const c = tx.cat || 'Other'; (catGroups[c] = catGroups[c] || []).push(tx) })
+    const heavyCats = Object.entries(catGroups)
+      .filter(([, txs]) => txs.length >= 3)
+      .sort((a, b) => b[1].reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0) - a[1].reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0))
+    if (heavyCats.length > 0) {
+      const [cat, txs] = heavyCats[0]
+      const total = txs.reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0)
+      ins.push({ sev: 'tip', icon: 'ti-credit-card',
+        title: `${txs.length} recurring ${cat} charges — ${fmtMoney(total)}/mo`,
+        detail: txs.slice(0, 4).map(tx => tx.name).join(', ') + (txs.length > 4 ? ` +${txs.length - 4} more` : ''),
+        action: `Review your ${cat} subscriptions and cancel any you no longer need.` })
+    }
+
+    // 5. Possible duplicate monthly charges (same ~amount, both monthly)
+    const monthlyExpTxs = fd.transactions.filter(tx => tx.type === 'expense' && tx.freq === 'monthly')
+    const amtBuckets = {}
+    monthlyExpTxs.forEach(tx => { const b = Math.round(tx.amount / 10) * 10; (amtBuckets[b] = amtBuckets[b] || []).push(tx) })
+    const dups = Object.entries(amtBuckets)
+      .filter(([amt, txs]) => txs.length >= 2 && parseInt(amt) >= 30)
+      .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+    if (dups.length > 0) {
+      const [, txs] = dups[0]
+      ins.push({ sev: 'tip', icon: 'ti-copy',
+        title: `Possible duplicate: ${txs.slice(0, 2).map(tx => tx.name).join(' & ')}`,
+        detail: `Both billed ~${fmtMoney(txs[0].amount)}/mo — could be the same charge hitting twice.`,
+        action: 'Check your bank statement to confirm both are intentional.' })
+    }
+
+    // 6. Last 7 days actual spend (Plaid — only when connected)
+    if (filteredActuals?.length) {
+      const cutoff = addDays(t, -7)
+      const last7 = filteredActuals.filter(tx => new Date(tx.date + 'T00:00:00') >= cutoff)
+      if (last7.length > 0) {
+        const spent  = last7.filter(tx => tx.amount > 0).reduce((s, tx) => s + tx.amount, 0)
+        const earned = last7.filter(tx => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0)
+        const top    = [...last7.filter(tx => tx.amount > 0)].sort((a, b) => b.amount - a.amount)[0]
+        const net    = earned - spent
+        ins.push({ sev: net >= 0 ? 'good' : 'tip', icon: 'ti-chart-bar',
+          title: `Last 7 days: ${fmtMoney(spent)} spent · ${fmtMoney(earned)} received`,
+          detail: top ? `Largest charge: ${top.name} (${fmtMoney(top.amount)}) · ${last7.length} transactions` : `${last7.length} transactions`,
+          action: net < 0 ? `Net outflow of ${fmtMoney(Math.abs(net))} — above typical. Review discretionary spending.` : `Net positive week: +${fmtMoney(net)}.` })
+      }
+    }
+
+    return ins.slice(0, 6)
+  })()
+
   const donutColors = ['#C5A46D','#9A7B49','rgba(197,164,109,0.60)','rgba(197,164,109,0.40)','rgba(197,164,109,0.25)','rgba(197,164,109,0.14)']
   const donutDataset = {
     labels: topCats.map(([k]) => k),
@@ -1930,6 +2028,60 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* ── FINANCIAL INSIGHTS — row 4, full width ── */}
+            <div className="dash-card" style={{ gridColumn: '1 / 4', gridRow: '4' }}>
+              <div className="dash-card-header" style={{ marginBottom: 16 }}>
+                <span className="dash-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <i className="ti ti-brain" style={{ fontSize: 16, color: 'var(--gold)' }} />
+                  Financial Insights
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em' }}>
+                  {financialInsights.length} insight{financialInsights.length !== 1 ? 's' : ''} · updates with your data
+                </span>
+              </div>
+              {financialInsights.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--muted)', fontStyle: 'italic' }}>
+                  Add transactions and connect a bank to see personalized insights.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+                  {financialInsights.map((ins, i) => {
+                    const sevStyle = {
+                      good:    { border: 'rgba(125,203,164,0.30)', bg: 'rgba(125,203,164,0.06)', icon: '#7DCBA4', bar: '#7DCBA4' },
+                      tip:     { border: 'rgba(144,170,222,0.30)', bg: 'rgba(144,170,222,0.06)', icon: '#90AADE', bar: '#90AADE' },
+                      warning: { border: 'rgba(197,164,109,0.35)', bg: 'rgba(197,164,109,0.07)', icon: '#C5A46D', bar: '#C5A46D' },
+                      danger:  { border: 'rgba(232,150,122,0.35)', bg: 'rgba(232,150,122,0.07)', icon: '#E8967A', bar: '#E8967A' },
+                    }[ins.sev] || { border: 'rgba(255,255,255,0.08)', bg: 'rgba(255,255,255,0.03)', icon: 'var(--muted)', bar: 'var(--muted)' }
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', gap: 12, padding: '14px 16px',
+                        background: sevStyle.bg, border: `1px solid ${sevStyle.border}`,
+                        borderLeft: `3px solid ${sevStyle.bar}`,
+                        borderRadius: 12,
+                      }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                          background: `${sevStyle.bg}`, border: `1px solid ${sevStyle.border}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <i className={`ti ${ins.icon}`} style={{ fontSize: 16, color: sevStyle.icon }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: '0 0 3px', fontSize: 13, fontWeight: 600, color: 'var(--soft-white)', lineHeight: 1.3 }}>
+                            {ins.title}
+                          </p>
+                          <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                            {ins.detail}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 11, color: sevStyle.icon, opacity: 0.85, lineHeight: 1.4, fontStyle: 'italic' }}>
+                            → {ins.action}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
           </div>{/* /3-col grid */}
