@@ -54,6 +54,7 @@ export default function PlaidConnect({ onAccountsSync }) {
   // True while the initial mount sync is running — prevents "No bank connected" flicker
   const [initialChecking, setInitialChecking] = useState(true)
   const [error, setError]               = useState(null)
+  const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
 
   // Fetch live account balances and push to parent
@@ -76,6 +77,7 @@ export default function PlaidConnect({ onAccountsSync }) {
         const conns = Object.values(byInstitution)
         setConnections(conns)
         localStorage.setItem('plaid_connections', JSON.stringify(conns))
+        setRequiresUpdate(data.requiresUpdate || [])
         if (data.accounts?.length) {
           onAccountsSync(data.accounts, data.syncedAt)
         }
@@ -137,6 +139,20 @@ export default function PlaidConnect({ onAccountsSync }) {
       setSyncing(false)
     }
   }, [onAccountsSync, syncAccounts])
+
+  // Re-authenticate an item whose bank session has expired (ITEM_LOGIN_REQUIRED)
+  const handleRelink = async (access_token) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await apiFetch('/plaid-create-link-token', {
+        method: 'POST',
+        body: JSON.stringify({ access_token }),
+      })
+      setLinkToken(data.link_token)
+    } catch (err) { setError('Could not start re-authentication. ' + err.message) }
+    finally { setLoading(false) }
+  }
 
   const handleDisconnect = async (itemId) => {
     if (!window.confirm('Disconnect this bank account?')) return
@@ -300,6 +316,18 @@ export default function PlaidConnect({ onAccountsSync }) {
         </div>
       )}
 
+      {requiresUpdate.length > 0 && (
+        <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(196,120,90,0.08)', border: '1px solid rgba(196,120,90,0.3)', borderRadius: 10 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, color: '#C4785A', fontWeight: 600 }}>Bank session expired — re-connect to resume syncing</p>
+          {requiresUpdate.map(item => (
+            <button key={item.item_id}
+              onClick={() => handleRelink(item.item_id)}
+              style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(196,120,90,0.4)', background: 'rgba(196,120,90,0.12)', color: '#C4785A', fontFamily: 'inherit', fontWeight: 600 }}>
+              Re-connect {item.institution}
+            </button>
+          ))}
+        </div>
+      )}
       {error && (
         <p style={{ marginTop: 8, fontSize: 11, color: '#C4785A', background: 'rgba(196,120,90,0.1)', padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(196,120,90,0.2)' }}>
           {error}

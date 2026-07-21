@@ -20,6 +20,8 @@ exports.handler = async (event) => {
     }
 
     const allAccounts = []
+    const requiresUpdate = []  // items whose bank session has expired
+
     for (const { access_token, item_id, institution } of tokens) {
       try {
         const res = await plaidClient.accountsBalanceGet({ access_token })
@@ -30,10 +32,25 @@ exports.handler = async (event) => {
           balance: a.balances.available ?? a.balances.current, availableBalance: a.balances.current,
           institution,
         }))
-      } catch (err) { console.error(`Error for item ${item_id}:`, err.response?.data || err.message) }
+      } catch (err) {
+        const code = err.response?.data?.error_code
+        console.error(`Error for item ${item_id}:`, err.response?.data || err.message)
+        // ITEM_LOGIN_REQUIRED means the user needs to re-authenticate with their bank
+        if (code === 'ITEM_LOGIN_REQUIRED' || code === 'ITEM_LOCKED' || code === 'ITEM_NOT_SUPPORTED') {
+          requiresUpdate.push({ item_id, institution })
+        }
+      }
     }
 
-    return { statusCode: 200, headers, body: JSON.stringify({ accounts: allAccounts, connected: true, syncedAt: new Date().toISOString() }) }
+    return {
+      statusCode: 200, headers,
+      body: JSON.stringify({
+        accounts: allAccounts,
+        connected: true,
+        requiresUpdate,  // non-empty = show "Re-connect [bank]" prompt
+        syncedAt: new Date().toISOString(),
+      }),
+    }
   } catch (err) {
     console.error('Plaid accounts error:', err.message)
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to fetch accounts', detail: err.message }) }

@@ -1,7 +1,3 @@
-// netlify/functions/plaid-create-link-token.js
-// Creates a short-lived link_token for Plaid Link initialization.
-// The link_token is safe to expose to the browser — it's single-use and expires in 30 minutes.
-
 const { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } = require('plaid')
 
 const plaidClient = new PlaidApi(
@@ -28,13 +24,26 @@ exports.handler = async (event) => {
   }
 
   try {
-    const response = await plaidClient.linkTokenCreate({
+    // access_token present = update mode (re-authenticate existing item)
+    const body = event.body ? JSON.parse(event.body) : {}
+    const { access_token } = body
+
+    const params = {
       user: { client_user_id: 'lslj-family-hub-user' },
       client_name: 'LSLJ Family Hub',
-      products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: 'en',
-    })
+    }
+
+    if (access_token) {
+      // Update mode: re-authenticate an existing item without creating a new one
+      params.access_token = access_token
+    } else {
+      // New connection
+      params.products = [Products.Transactions]
+    }
+
+    const response = await plaidClient.linkTokenCreate(params)
 
     return {
       statusCode: 200,
