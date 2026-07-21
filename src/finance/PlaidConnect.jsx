@@ -13,12 +13,21 @@ async function apiFetch(path, options = {}) {
 }
 
 // ── PlaidLinkButton — rendered only when we have a link_token ──
-function PlaidLinkButton({ linkToken, onSuccess, onExit }) {
+function PlaidLinkButton({ linkToken, onSuccess, onExit, receivedRedirectUri }) {
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess: (public_token, metadata) => onSuccess(public_token, metadata),
     onExit,
+    ...(receivedRedirectUri ? { receivedRedirectUri } : {}),
   })
+
+  // Auto-open when returning from OAuth redirect — no button click needed
+  useEffect(() => {
+    if (ready && receivedRedirectUri) open()
+  }, [ready, receivedRedirectUri, open])
+
+  // When resuming OAuth, no button is shown — Link opens automatically
+  if (receivedRedirectUri) return null
 
   return (
     <button
@@ -56,6 +65,7 @@ export default function PlaidConnect({ onAccountsSync }) {
   const [error, setError]               = useState(null)
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
+  const [oauthReturn, setOauthReturn]   = useState(false) // returning from bank OAuth redirect
 
   // Fetch live account balances and push to parent
   const syncAccounts = useCallback(async () => {
@@ -102,12 +112,26 @@ export default function PlaidConnect({ onAccountsSync }) {
     syncAccounts()
   }, [syncAccounts])
 
+  // Detect OAuth return: Plaid redirects back with ?oauth_state_id=...
+  // Re-initialize Link with the saved token + receivedRedirectUri to complete the flow
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('oauth_state_id')) {
+      const savedToken = localStorage.getItem('plaid_oauth_link_token')
+      if (savedToken) {
+        setLinkToken(savedToken)
+        setOauthReturn(true)
+      }
+    }
+  }, [])
+
   // Get link token from server
   const startLink = async () => {
     setLoading(true)
     setError(null)
     try {
       const data = await apiFetch('/plaid-create-link-token')
+      localStorage.setItem('plaid_oauth_link_token', data.link_token) // survive OAuth redirect
       setLinkToken(data.link_token)
     } catch (err) {
       setError('Could not start Plaid Link. ' + err.message)
@@ -120,6 +144,8 @@ export default function PlaidConnect({ onAccountsSync }) {
   const handleSuccess = useCallback(async (public_token, metadata) => {
     setSyncing(true)
     setLinkToken(null)
+    setOauthReturn(false)
+    localStorage.removeItem('plaid_oauth_link_token')
     try {
       const data = await apiFetch('/plaid-exchange-token', {
         method: 'POST',
@@ -217,7 +243,7 @@ export default function PlaidConnect({ onAccountsSync }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.08em', textTransform: 'uppercase' }}>No bank connected — balances are manual</span>
             {linkToken ? (
-              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => setLinkToken(null)} />
+              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => { setLinkToken(null); setOauthReturn(false); localStorage.removeItem('plaid_oauth_link_token') }} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
             ) : (
               <button
                 onClick={startLink}
@@ -242,7 +268,7 @@ export default function PlaidConnect({ onAccountsSync }) {
       {isConnected && !expanded && (
         <div style={{ marginTop: 8 }}>
           {linkToken ? (
-            <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => setLinkToken(null)} />
+            <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => { setLinkToken(null); setOauthReturn(false); localStorage.removeItem('plaid_oauth_link_token') }} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
           ) : (
             <button
               onClick={startLink}
@@ -296,7 +322,7 @@ export default function PlaidConnect({ onAccountsSync }) {
           ))}
           <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 10 }}>
             {linkToken ? (
-              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => setLinkToken(null)} />
+              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => { setLinkToken(null); setOauthReturn(false); localStorage.removeItem('plaid_oauth_link_token') }} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
             ) : (
               <button
                 onClick={startLink}

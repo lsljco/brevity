@@ -33,6 +33,7 @@ exports.handler = async (event) => {
       client_name: 'LSLJ Family Hub',
       country_codes: [CountryCode.Us],
       language: 'en',
+      redirect_uri: process.env.PLAID_REDIRECT_URI || 'https://lslj-family-hub.netlify.app/',
     }
 
     if (access_token) {
