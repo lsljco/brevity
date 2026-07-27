@@ -1113,7 +1113,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [toast, setToast]       = useState('')
   const [insightModal, setInsightModal] = useState(null)
   const [insightEditTx, setInsightEditTx] = useState(null)
-  const [insightAcctFilter, setInsightAcctFilter] = useState(() => new Set(['a2', 'a3']))
+  const [insightAcctFilter, setInsightAcctFilter] = useState(() => new Set(['a1', 'a2', 'a3']))
   const toastRef                = useRef()
 
   // ── HomeHQ Projects (live-synced from localStorage) ──────────────────

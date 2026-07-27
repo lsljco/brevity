@@ -33,7 +33,11 @@ exports.handler = async (event) => {
       client_name: 'LSLJ Family Hub',
       country_codes: [CountryCode.Us],
       language: 'en',
-      redirect_uri: process.env.PLAID_REDIRECT_URI || 'https://lslj-family-hub.netlify.app/',
+      // redirect_uri required for OAuth banks (e.g. Pinnacle).
+      // Only set when PLAID_REDIRECT_URI env var is configured AND registered
+      // in Plaid Dashboard → Team Settings → API → Allowed redirect URIs.
+      // Omitting it allows non-OAuth banks to connect without errors.
+      ...(process.env.PLAID_REDIRECT_URI ? { redirect_uri: process.env.PLAID_REDIRECT_URI } : {}),
     }
 
     if (access_token) {
