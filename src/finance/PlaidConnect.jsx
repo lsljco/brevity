@@ -8,7 +8,11 @@ async function apiFetch(path, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
-  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`)
+  if (!res.ok) {
+    let detail = ''
+    try { const body = await res.json(); detail = body.detail || body.error || '' } catch {}
+    throw new Error(`API ${path} failed: ${res.status}${detail ? ' — ' + detail : ''}`)
+  }
   return res.json()
 }
 
@@ -142,11 +146,14 @@ export default function PlaidConnect({ onAccountsSync }) {
 
   // Plaid Link success — exchange token
   const handleSuccess = useCallback(async (public_token, metadata) => {
+    console.log('[Brevity] Plaid onSuccess fired', { institution: metadata?.institution?.name })
     setSyncing(true)
+    setError(null)
     setLinkToken(null)
     setOauthReturn(false)
     localStorage.removeItem('plaid_oauth_link_token')
     try {
+      console.log('[Brevity] Exchanging public token...')
       const data = await apiFetch('/plaid-exchange-token', {
         method: 'POST',
         body: JSON.stringify({
@@ -154,17 +161,31 @@ export default function PlaidConnect({ onAccountsSync }) {
           institutionName: metadata?.institution?.name || 'Bank',
         }),
       })
+      console.log('[Brevity] Exchange response:', data)
       if (data.accounts?.length) {
         onAccountsSync(data.accounts, new Date().toISOString())
         setSyncedAt(new Date().toISOString())
       }
       await syncAccounts()
     } catch (err) {
+      console.error('[Brevity] Exchange failed:', err)
       setError('Connection failed. ' + err.message)
     } finally {
       setSyncing(false)
     }
   }, [onAccountsSync, syncAccounts])
+
+  // Plaid Link exit — capture reason so we can display it
+  const handleExit = useCallback((err, metadata) => {
+    console.log('[Brevity] Plaid onExit fired', { err, status: metadata?.status, institution: metadata?.institution?.name })
+    setLinkToken(null)
+    setOauthReturn(false)
+    localStorage.removeItem('plaid_oauth_link_token')
+    if (err) {
+      const msg = err.display_message || err.error_message || err.error_code || 'Unknown Plaid error'
+      setError(`Bank connection exited: ${msg} (${err.error_code || ''})`)
+    }
+  }, [])
 
   // Re-authenticate an item whose bank session has expired (ITEM_LOGIN_REQUIRED)
   const handleRelink = async (access_token) => {
@@ -243,7 +264,7 @@ export default function PlaidConnect({ onAccountsSync }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.08em', textTransform: 'uppercase' }}>No bank connected — balances are manual</span>
             {linkToken ? (
-              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => { setLinkToken(null); setOauthReturn(false); localStorage.removeItem('plaid_oauth_link_token') }} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
+              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={handleExit} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
             ) : (
               <button
                 onClick={startLink}
@@ -268,7 +289,7 @@ export default function PlaidConnect({ onAccountsSync }) {
       {isConnected && !expanded && (
         <div style={{ marginTop: 8 }}>
           {linkToken ? (
-            <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => { setLinkToken(null); setOauthReturn(false); localStorage.removeItem('plaid_oauth_link_token') }} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
+            <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={handleExit} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
           ) : (
             <button
               onClick={startLink}
@@ -322,7 +343,7 @@ export default function PlaidConnect({ onAccountsSync }) {
           ))}
           <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 10 }}>
             {linkToken ? (
-              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={() => { setLinkToken(null); setOauthReturn(false); localStorage.removeItem('plaid_oauth_link_token') }} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
+              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={handleExit} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
             ) : (
               <button
                 onClick={startLink}
