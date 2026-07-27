@@ -1,8 +1,15 @@
-// storage.js — token storage with local file fallback for dev
+// storage.js — Plaid token persistence via Netlify Blobs (prod) or /tmp (dev)
+//
+// Netlify's v1 function format doesn't auto-inject the Blobs context, so we
+// configure the store manually using NETLIFY_SITE_ID + NETLIFY_TOKEN env vars.
+// Both must be set in Netlify Site Settings → Environment Variables.
+//
+// Local dev fallback: tokens are written to /tmp/plaid-tokens.json
+
 const fs = require('fs')
 const path = require('path')
 
-// Top-level require so esbuild/nft always detect and bundle this dependency
+// Top-level require so esbuild always detects and bundles this dependency
 let blobsGetStore = null
 try {
   const blobs = require('@netlify/blobs')
@@ -11,26 +18,34 @@ try {
   console.error('[storage] @netlify/blobs not available:', e.message)
 }
 
-const LOCAL_FILE = process.env.PLAID_TOKEN_FILE || path.join(process.cwd(), '.plaid-tokens.json')
-// NETLIFY is always "true" in deployed functions; NETLIFY_DEV is "true" in local dev
-const isNetlify = !!(process.env.NETLIFY && !process.env.NETLIFY_DEV)
+// /tmp is always writable in Netlify Functions; use it for local fallback
+const LOCAL_FILE = process.env.PLAID_TOKEN_FILE || path.join('/tmp', 'plaid-tokens.json')
+
+// Use Blobs when NETLIFY_SITE_ID is configured; fall back to /tmp otherwise
+const useBlobStore = !!(blobsGetStore && process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN)
+
+function makeStore() {
+  return blobsGetStore({
+    name: 'plaid-tokens',
+    consistency: 'strong',
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  })
+}
 
 async function getTokens() {
-  if (isNetlify) {
-    if (!blobsGetStore) {
-      console.error('[storage] getTokens: @netlify/blobs not loaded')
-      return []
-    }
+  if (useBlobStore) {
     try {
-      const store = blobsGetStore({ name: 'plaid-tokens', consistency: 'strong' })
+      const store = makeStore()
       const result = await store.get('tokens', { type: 'json' })
-      console.log('[storage] getTokens:', result ? `found ${result.length} token(s)` : 'null/empty')
+      console.log('[storage] getTokens blobs:', result ? `found ${result.length} token(s)` : 'null/empty')
       return result || []
     } catch (e) {
       console.error('[storage] getTokens blob error:', e.message)
       return []
     }
   }
+  // /tmp fallback (dev or Blobs not configured)
   try {
     if (!fs.existsSync(LOCAL_FILE)) return []
     return JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8'))
@@ -41,20 +56,17 @@ async function getTokens() {
 }
 
 async function setTokens(tokens) {
-  if (isNetlify) {
-    if (!blobsGetStore) {
-      console.error('[storage] setTokens: @netlify/blobs not loaded — token NOT saved')
-      return
-    }
+  if (useBlobStore) {
     try {
-      const store = blobsGetStore({ name: 'plaid-tokens', consistency: 'strong' })
+      const store = makeStore()
       await store.setJSON('tokens', tokens)
-      console.log('[storage] setTokens: saved', tokens.length, 'token(s)')
+      console.log('[storage] setTokens blobs: saved', tokens.length, 'token(s)')
     } catch (e) {
       console.error('[storage] setTokens blob error:', e.message)
     }
     return
   }
+  // /tmp fallback
   try {
     fs.writeFileSync(LOCAL_FILE, JSON.stringify(tokens, null, 2))
   } catch (e) {
@@ -62,4 +74,4 @@ async function setTokens(tokens) {
   }
 }
 
-module.exports = { getTokens, setTokens }
+module.exports = { getTokens, setTokens, useBlobStore }
