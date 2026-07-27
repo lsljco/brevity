@@ -1212,7 +1212,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     })
   }
 
-  const proj = useMemo(() => buildProjection(fd.accounts, fd.transactions, 365, balanceOverrides), [fd, balanceOverrides])
+  const proj = useMemo(() => {
+    // Pass today's actual account balance as an anchor so the projection for
+    // future dates always starts from the real current balance, not a
+    // reconstructed estimate that may drift from reality.
+    const todayAnchor = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
+    return buildProjection(fd.accounts, fd.transactions, 365, balanceOverrides, 365, todayAnchor)
+  }, [fd, balanceOverrides])
 
   // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
   const fetchActuals = useCallback(async () => {

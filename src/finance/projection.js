@@ -66,11 +66,12 @@ export function txOccursOnDate(tx, d) {
   }
 }
 
-export function buildProjection(accounts, transactions, days = 365, overrides = {}, pastDays = 365) {
+export function buildProjection(accounts, transactions, days = 365, overrides = {}, pastDays = 365, todayAnchor = null) {
   const currentBal = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
   const acctIdSet  = new Set(accounts.map(a => a.id))
   const map = new Map()
   const t = today0()
+  const todayStr0  = toISO(t)
   const startDate = addDays(t, -pastDays)
 
   // Compute transfer delta for a single transaction given the accounts in scope.
@@ -110,6 +111,9 @@ export function buildProjection(accounts, transactions, days = 365, overrides = 
       return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)
     }, 0)
     bal += delta
+    // Anchor today to the real Plaid balance so future projections start from a known-correct value.
+    // This eliminates the visual "jump" caused by mismatches between scheduled and actual past transactions.
+    if (dateStr === todayStr0 && todayAnchor !== null) bal = todayAnchor
     // Balance override: user can pin any date to an exact number; projection continues from there
     if (overrides[dateStr] !== undefined) bal = overrides[dateStr]
     map.set(dateStr, {
