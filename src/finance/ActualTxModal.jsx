@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ function RuleModal({ initial, accounts, allTxNames, txCount, onSave, onClose }) 
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 1300,
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 9300,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
@@ -292,7 +293,7 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
       position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
       background: '#1E1E1E', borderRadius: 12, padding: '14px 18px',
       display: 'flex', alignItems: 'center', gap: 20,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 1400,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 9200,
       border: '1px solid rgba(255,255,255,0.12)', minWidth: 320, maxWidth: 480,
     }}>
       <div style={{ flex: 1 }}>
@@ -390,10 +391,10 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
 
   const isIncome = tx.amount < 0
 
-  return (
+  return createPortal(
     <>
-      {/* Overlay */}
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 1200,
+      {/* Overlay — portaled to document.body to escape any parent stacking context */}
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 9100,
         display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         onClick={onClose}>
         <div onClick={e => e.stopPropagation()} style={{
@@ -634,6 +635,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
           onClose={() => setShowRuleModal(false)}
         />
       )}
-    </>
+    </>,
+    document.body
   )
 }

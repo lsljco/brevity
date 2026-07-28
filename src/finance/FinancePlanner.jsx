@@ -1480,6 +1480,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   // ── Actual transaction edit handlers ─────────────────────────────────────────
+  const openActualTxModal = (tx) => {
+    console.log('[Brevity] openActualTxModal:', tx?.name, tx?.id)
+    setSelActualTx(tx)
+    showToast(`✎ ${tx?.name || 'transaction'}`)
+  }
+
   const handleSaveActualTx = (updated) => {
     setTxOverrides(prev => {
       const next = { ...prev, [updated.id]: updated }
@@ -2019,7 +2025,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                         const isIncome = tx.amount < 0 // Plaid: negative = money in
                         return (
                           <div key={i}
-                            onClick={() => setSelActualTx(tx)}
+                            onClick={() => openActualTxModal(tx)}
                             style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderRadius: 8, padding: '4px 6px', margin: '-4px -6px', transition: 'background .15s' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
                             onMouseLeave={e => { e.currentTarget.style.background = '' }}>
@@ -2422,7 +2428,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             actualsByDate={actualsByDate} plaidActuals={plaidActuals}
             historicalBals={historicalBals}
             onSaveOverride={saveBalanceOverride} onRemoveOverride={removeBalanceOverride}
-            onActualTxClick={tx => setSelActualTx(tx)} />
+            onActualTxClick={openActualTxModal} />
         </div>
       )}
 
@@ -2466,7 +2472,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                     const isIncome = tx.amount < 0
                     return (
                       <div key={tx.id || i}
-                        onClick={() => setSelActualTx(tx)}
+                        onClick={() => openActualTxModal(tx)}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
                           background: tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)',
                           border: tx.pending ? '1px solid rgba(197,164,109,0.18)' : '1px solid rgba(255,255,255,0.07)',
