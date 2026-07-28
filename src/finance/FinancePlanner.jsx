@@ -2594,7 +2594,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {/* ══════════ REPORTING ══════════ */}
       {view === 'reporting' && (
         <div className="finance-inner">
-          <ReportingView data={fd} proj={proj} />
+          <ReportingView data={fd} proj={proj} plaidActuals={filteredActuals} />
         </div>
       )}
 
@@ -2603,6 +2603,25 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {view === 'acct-form' && <div className="finance-inner"><AcctForm acct={editAcct}                         onSave={updateAcct} onCancel={() => setView('accounts')} /></div>}
 
       {toast && <div className="toast">{toast}</div>}
+
+      {/* ══════════ ACTUAL TRANSACTION EDIT MODAL ══════════ */}
+      {selActualTx && (
+        <ActualTxModal
+          tx={selActualTx}
+          accounts={data.accounts}
+          allTxNames={allTxNames}
+          goals={[]}
+          txRules={txRules}
+          onSave={handleSaveActualTx}
+          onDelete={handleDeleteActualTx}
+          onSaveRule={handleSaveRule}
+          onMakeRecurring={() => {
+            setSelActualTx(null)
+            setTimeout(() => { setEditTx(null); setView('tx-form') }, 50)
+          }}
+          onClose={() => setSelActualTx(null)}
+        />
+      )}
     </div>
   )
 }
@@ -3050,6 +3069,328 @@ function BudgetView({ data }) {
 }
 
 // ── Reporting View ────────────────────────────────────────────────────────────────
+// ── Cash Flow Report ─────────────────────────────────────────────────────────
+function CashFlowReport({ plaidActuals = [] }) {
+  const [period,   setPeriod]   = useState('monthly')
+  const [year,     setYear]     = useState(new Date().getFullYear())
+  const [drillCat, setDrillCat] = useState(null) // { name, type:'income'|'expense' } | null
+
+  const fmt = (v) => {
+    const abs = Math.abs(v)
+    return (v < 0 ? '-' : '') + '$' + abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  }
+
+  const getPeriodKey = useCallback((dateStr) => {
+    const d = new Date(dateStr + 'T12:00:00')
+    const m = d.getMonth()
+    if (period === 'monthly')   return `${year}-${String(m + 1).padStart(2, '0')}`
+    if (period === 'quarterly') return `Q${Math.floor(m / 3) + 1}`
+    return String(year)
+  }, [period, year])
+
+  const bucketKeys = useMemo(() => {
+    if (period === 'monthly')   return Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
+    if (period === 'quarterly') return ['Q1', 'Q2', 'Q3', 'Q4']
+    return [String(year)]
+  }, [period, year])
+
+  const getPeriodLabel = useCallback((key) => {
+    if (period === 'monthly') {
+      const [y, m] = key.split('-')
+      return new Date(+y, +m - 1).toLocaleString('default', { month: 'short' })
+    }
+    return key
+  }, [period])
+
+  const yearActuals = useMemo(() => {
+    return plaidActuals.filter(t => {
+      try { return new Date(t.date + 'T12:00:00').getFullYear() === year } catch { return false }
+    })
+  }, [plaidActuals, year])
+
+  const chartData = useMemo(() => {
+    const map = {}
+    bucketKeys.forEach(k => { map[k] = { income: 0, expenses: 0 } })
+    yearActuals.forEach(t => {
+      const k = getPeriodKey(t.date)
+      if (!map[k]) return
+      if (t.amount < 0) map[k].income   += Math.abs(t.amount)
+      else              map[k].expenses  += t.amount
+    })
+    return bucketKeys.map(k => ({
+      key: k, label: getPeriodLabel(k),
+      income: map[k].income, expenses: map[k].expenses,
+      net: map[k].income - map[k].expenses,
+    }))
+  }, [yearActuals, bucketKeys, getPeriodKey, getPeriodLabel])
+
+  const totalIncome   = chartData.reduce((s, d) => s + d.income, 0)
+  const totalExpenses = chartData.reduce((s, d) => s + d.expenses, 0)
+  const totalSavings  = totalIncome - totalExpenses
+  const savingsRate   = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0
+
+  const incomeByCategory = useMemo(() => {
+    const map = {}
+    yearActuals.filter(t => t.amount < 0).forEach(t => {
+      const cat = t.category || 'Uncategorized'
+      map[cat] = (map[cat] || 0) + Math.abs(t.amount)
+    })
+    return Object.entries(map).sort((a, b) => b[1] - a[1])
+  }, [yearActuals])
+
+  const expenseByCategory = useMemo(() => {
+    const map = {}
+    yearActuals.filter(t => t.amount > 0).forEach(t => {
+      const cat = t.category || 'Uncategorized'
+      map[cat] = (map[cat] || 0) + t.amount
+    })
+    return Object.entries(map).sort((a, b) => b[1] - a[1])
+  }, [yearActuals])
+
+  const drillTxs = useMemo(() => {
+    if (!drillCat) return []
+    return yearActuals.filter(t => {
+      const cat = t.category || 'Uncategorized'
+      return cat === drillCat.name && (drillCat.type === 'income' ? t.amount < 0 : t.amount > 0)
+    }).sort((a, b) => new Date(b.date) - new Date(a.date))
+  }, [drillCat, yearActuals])
+
+  const maxBar = Math.max(...chartData.map(d => Math.max(d.income, d.expenses)), 1)
+  const CW = 600
+  const CH = 160
+  const step = CW / Math.max(chartData.length, 1)
+  const barW = Math.max(3, step * 0.35)
+
+  const noData = plaidActuals.length === 0
+
+  return (
+    <div>
+      {/* Header & Controls */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Cash Flow</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Actual income &amp; expenses from connected accounts</p>
+        </div>
+        {/* Period toggle */}
+        <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, overflow: 'hidden' }}>
+          {['monthly', 'quarterly', 'yearly'].map(p => (
+            <button key={p} onClick={() => { setPeriod(p); setDrillCat(null) }}
+              style={{ padding: '7px 16px', fontSize: 12, fontWeight: 500, fontFamily: 'var(--font)',
+                background: period === p ? 'rgba(197,164,109,0.18)' : 'transparent',
+                color: period === p ? 'var(--gold)' : 'var(--muted)',
+                border: 'none', cursor: 'pointer', textTransform: 'capitalize', transition: 'all .15s' }}>
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Year navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 24 }}>
+        <button onClick={() => { setYear(y => y - 1); setDrillCat(null) }}
+          style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 16, padding: '6px 12px', display: 'flex', alignItems: 'center' }}>
+          <i className="ti ti-chevron-left" />
+        </button>
+        <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--white)', minWidth: 50, textAlign: 'center' }}>{year}</span>
+        <button onClick={() => { setYear(y => y + 1); setDrillCat(null) }}
+          style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8, color: 'var(--muted)', cursor: 'pointer', fontSize: 16, padding: '6px 12px', display: 'flex', alignItems: 'center' }}>
+          <i className="ti ti-chevron-right" />
+        </button>
+      </div>
+
+      {/* Bar chart */}
+      <div className="finance-card" style={{ padding: '20px 20px 14px', marginBottom: 20 }}>
+        {noData ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--muted)', fontSize: 13 }}>
+            No transaction data. Connect an account to see your cash flow.
+          </div>
+        ) : (
+          <>
+            <svg viewBox={`0 0 ${CW} ${CH + 26}`} preserveAspectRatio="none"
+              style={{ width: '100%', height: 190, display: 'block' }}>
+              {/* Grid lines */}
+              {[0.25, 0.5, 0.75, 1].map(p => (
+                <line key={p} x1={0} y1={CH * (1 - p)} x2={CW} y2={CH * (1 - p)}
+                  stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+              ))}
+              {/* Bars */}
+              {chartData.map((d, i) => {
+                const cx = i * step + step / 2
+                const iH = (d.income   / maxBar) * CH
+                const eH = (d.expenses / maxBar) * CH
+                return (
+                  <g key={d.key}>
+                    <rect x={cx - barW - 1} y={CH - iH} width={barW} height={iH} fill="#4CAF50" fillOpacity={0.8} rx={2} />
+                    <rect x={cx + 1}         y={CH - eH} width={barW} height={eH} fill="#F44060" fillOpacity={0.8} rx={2} />
+                    <text x={cx} y={CH + 18} textAnchor="middle"
+                      fill="rgba(255,255,255,0.38)" fontSize={period === 'monthly' ? 9 : 11}
+                      fontFamily="var(--font)">{d.label}</text>
+                  </g>
+                )
+              })}
+              {/* Net balance line */}
+              {chartData.length > 1 && (
+                <polyline
+                  points={chartData.map((d, i) => {
+                    const cx = i * step + step / 2
+                    const cy = CH - Math.max(-CH * 0.1, Math.min(CH, (d.net / maxBar) * CH))
+                    return `${cx},${cy}`
+                  }).join(' ')}
+                  fill="none" stroke="var(--gold)" strokeWidth={1.5}
+                  strokeLinecap="round" strokeLinejoin="round" />
+              )}
+            </svg>
+            {/* Legend */}
+            <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 6 }}>
+              {[['#4CAF50', false, 'Income'], ['#F44060', false, 'Expenses'], ['var(--gold)', true, 'Net Balance']].map(([c, isLine, l]) => (
+                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
+                  {isLine
+                    ? <div style={{ width: 18, height: 2, background: c, borderRadius: 1 }} />
+                    : <div style={{ width: 10, height: 10, background: c, borderRadius: 2, opacity: 0.8 }} />}
+                  {l}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Summary stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
+        {[
+          { label: 'Income',        val: fmt(totalIncome),                color: '#4CAF50' },
+          { label: 'Expenses',      val: fmt(totalExpenses),              color: '#F44060' },
+          { label: 'Total Savings', val: fmt(totalSavings),               color: totalSavings >= 0 ? 'var(--gold)' : '#F44060' },
+          { label: 'Savings Rate',  val: `${savingsRate.toFixed(1)}%`,    color: savingsRate >= 0 ? 'var(--gold)' : '#F44060' },
+        ].map(c => (
+          <div key={c.label} className="finance-card" style={{ padding: '16px 18px', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{c.label}</p>
+            <p style={{ margin: 0, fontSize: 20, fontWeight: 300, color: c.color, letterSpacing: '-0.02em' }}>{c.val}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Income & Expense breakdowns */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: drillCat ? 16 : 0 }}>
+        {/* Income breakdown */}
+        <div className="finance-card" style={{ padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--white)' }}>Income</h3>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#4CAF50' }}>{fmt(totalIncome)}</span>
+          </div>
+          {incomeByCategory.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>No income for {year}</p>
+          ) : incomeByCategory.slice(0, 15).map(([cat, amt]) => {
+            const pct = totalIncome > 0 ? (amt / totalIncome) * 100 : 0
+            const active = drillCat?.name === cat && drillCat?.type === 'income'
+            return (
+              <div key={cat} style={{ marginBottom: 11, cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px 11px', borderRadius: 8, background: active ? 'rgba(76,175,80,0.08)' : 'transparent', transition: 'background .15s' }}
+                onClick={() => setDrillCat(active ? null : { name: cat, type: 'income' })}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: active ? '#4CAF50' : 'var(--soft-white)', fontWeight: active ? 600 : 400 }}>{cat}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fmt(amt)} · {pct.toFixed(0)}%</span>
+                </div>
+                <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
+                  <div style={{ height: '100%', borderRadius: 3, background: '#4CAF50', width: `${pct}%`, opacity: 0.7, transition: 'width .3s' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Expense breakdown */}
+        <div className="finance-card" style={{ padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--white)' }}>Expenses</h3>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#F44060' }}>{fmt(totalExpenses)}</span>
+          </div>
+          {expenseByCategory.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>No expenses for {year}</p>
+          ) : expenseByCategory.slice(0, 15).map(([cat, amt]) => {
+            const pct = totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0
+            const active = drillCat?.name === cat && drillCat?.type === 'expense'
+            return (
+              <div key={cat} style={{ marginBottom: 11, cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px 11px', borderRadius: 8, background: active ? 'rgba(244,64,96,0.08)' : 'transparent', transition: 'background .15s' }}
+                onClick={() => setDrillCat(active ? null : { name: cat, type: 'expense' })}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: active ? '#F44060' : 'var(--soft-white)', fontWeight: active ? 600 : 400 }}>{cat}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fmt(amt)} · {pct.toFixed(0)}%</span>
+                </div>
+                <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
+                  <div style={{ height: '100%', borderRadius: 3, background: '#F44060', width: `${pct}%`, opacity: 0.7, transition: 'width .3s' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Drill-down panel */}
+      {drillCat && (
+        <div className="finance-card" style={{ padding: '20px 22px', marginTop: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => setDrillCat(null)}
+                style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8, padding: '5px 10px', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center' }}>
+                <i className="ti ti-x" style={{ fontSize: 14 }} />
+              </button>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--white)' }}>{drillCat.name}</h3>
+              <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20,
+                background: drillCat.type === 'income' ? 'rgba(76,175,80,0.15)' : 'rgba(244,64,96,0.15)',
+                color: drillCat.type === 'income' ? '#4CAF50' : '#F44060', fontWeight: 600, textTransform: 'capitalize' }}>
+                {drillCat.type}
+              </span>
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 700, color: drillCat.type === 'income' ? '#4CAF50' : '#F44060' }}>
+              {fmt(drillTxs.reduce((s, t) => s + Math.abs(t.amount), 0))}
+            </span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                  {[['Date','left','100px'],['Merchant','left',''],['Status','left','90px'],['Amount','right','100px']].map(([h, a, w]) => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: a, fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', width: w || 'auto' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {drillTxs.length === 0 ? (
+                  <tr><td colSpan={4} style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--muted)' }}>No transactions found</td></tr>
+                ) : drillTxs.map((t, i) => (
+                  <tr key={t.id || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background .12s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    <td style={{ padding: '10px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      {new Date(t.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: 'var(--soft-white)' }}>{t.name}</td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 8, fontWeight: 600,
+                        background: t.pending ? 'rgba(197,164,109,0.12)' : 'rgba(255,255,255,0.06)',
+                        color: t.pending ? 'var(--gold)' : 'var(--muted)' }}>
+                        {t.pending ? 'Pending' : 'Posted'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600,
+                      color: t.amount < 0 ? '#4CAF50' : '#F44060' }}>
+                      {t.amount < 0 ? '+' : '-'}{fmt(Math.abs(t.amount))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const REPORT_TABS = [
   { id: 'income-statement', label: 'Income Statement', icon: 'ti-file-dollar'     },
   { id: 'pl',               label: 'Profit & Loss',    icon: 'ti-trending-up'     },
@@ -3069,7 +3410,7 @@ function monthlyAmt(tx) {
   }
 }
 
-function ReportingView({ data, proj }) {
+function ReportingView({ data, proj, plaidActuals = [] }) {
   const [tab, setTab] = useState('income-statement')
   const now = new Date()
   const yr = now.getFullYear()
@@ -3219,56 +3560,7 @@ function ReportingView({ data, proj }) {
       )}
 
       {/* ── Cash Flow ── */}
-      {tab === 'cashflow' && (
-        <div>
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Cash Flow</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Monthly income vs expenses · {yr}</p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
-            {monthlyData.map((d, i) => {
-              const maxVal = Math.max(totalIncome, totalExpenses) || 1
-              const isCurrent = i === mo
-              return (
-                <div key={d.month} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 1fr 100px 110px 90px', gap: 12, alignItems: 'center',
-                  padding: '10px 18px', borderRadius: 12,
-                  background: isCurrent ? 'rgba(197,164,109,0.07)' : 'rgba(255,255,255,0.02)',
-                  border: `1px solid ${isCurrent ? 'rgba(197,164,109,0.22)' : 'rgba(255,255,255,0.04)'}` }}>
-                  <span style={{ fontSize: 11, fontWeight: isCurrent ? 700 : 400, color: isCurrent ? 'var(--gold)' : 'var(--muted)' }}>{d.month}</span>
-                  <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
-                    <div style={{ width: `${(d.income / maxVal) * 100}%`, height: '100%', borderRadius: 3, background: 'var(--gold)' }} />
-                  </div>
-                  <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
-                    <div style={{ width: `${(d.expenses / maxVal) * 100}%`, height: '100%', borderRadius: 3, background: 'var(--expense-color)' }} />
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gold)', textAlign: 'right' }}>{fmtMoney(d.income)}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--expense-color)', textAlign: 'right' }}>({fmtMoney(d.expenses)})</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: d.net >= 0 ? 'var(--gold)' : 'var(--expense-color)', textAlign: 'right' }}>{d.net >= 0 ? '+' : ''}{fmtMoney(d.net)}</span>
-                </div>
-              )
-            })}
-          </div>
-          <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
-            {[['var(--gold)', 'Income bar'], ['var(--expense-color)', 'Expense bar']].map(([c, l]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
-                <div style={{ width: 12, height: 6, borderRadius: 2, background: c }} />{l}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-            {[
-              { label: 'Avg Monthly Income',   val: fmtMoney(totalIncome),   color: 'var(--gold)' },
-              { label: 'Avg Monthly Expenses', val: fmtMoney(totalExpenses), color: 'var(--expense-color)' },
-              { label: 'Avg Monthly Net',      val: fmtMoney(netIncome),     color: netIncome >= 0 ? 'var(--gold)' : 'var(--expense-color)' },
-            ].map(c => (
-              <div key={c.label} className="finance-card" style={{ padding: '16px 20px' }}>
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{c.label}</p>
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 300, color: c.color, letterSpacing: '-0.02em' }}>{c.val}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {tab === 'cashflow' && <CashFlowReport plaidActuals={plaidActuals} />}
 
       {/* ── Budget vs Actual ── */}
       {tab === 'budget-actual' && (
@@ -3331,32 +3623,6 @@ function ReportingView({ data, proj }) {
         </div>
       )}
 
-      {/* ══════════ ACTUAL TRANSACTION EDIT MODAL ══════════ */}
-      {selActualTx && (
-        <ActualTxModal
-          tx={selActualTx}
-          accounts={data.accounts}
-          allTxNames={allTxNames}
-          goals={[]}
-          txRules={txRules}
-          onSave={handleSaveActualTx}
-          onDelete={handleDeleteActualTx}
-          onSaveRule={handleSaveRule}
-          onMakeRecurring={(form) => {
-            const localAcct = data.accounts.find(a => a.plaidAccountId === selActualTx.accountId)
-            const localAcctId = localAcct?.id || data.accounts[0]?.id || ''
-            const isIncome = selActualTx.amount < 0
-            setSelActualTx(null)
-            // open recurring tx form pre-filled from the actual
-            setTimeout(() => {
-              setEditTx(null)
-              setView('tx-form')
-              // We'll carry the data via a special state flag if needed
-            }, 50)
-          }}
-          onClose={() => setSelActualTx(null)}
-        />
-      )}
     </div>
   )
 }
