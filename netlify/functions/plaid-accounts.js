@@ -29,6 +29,7 @@ exports.handler = async (event) => {
           accountId: a.account_id, itemId: item_id,
           name: a.name, officialName: a.official_name,
           type: a.type, subtype: a.subtype,
+          mask: a.mask,
           balance: a.balances.available ?? a.balances.current, availableBalance: a.balances.current,
           institution,
         }))

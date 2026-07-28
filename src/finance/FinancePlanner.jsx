@@ -6,6 +6,7 @@ import {
   Filler, Tooltip, ArcElement, DoughnutController,
 } from 'chart.js'
 import PlaidConnect from './PlaidConnect.jsx'
+import ActualTxModal from './ActualTxModal.jsx'
 import { buildProjection, today0, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
@@ -1093,6 +1094,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     try { return JSON.parse(localStorage.getItem('lslj_bal_overrides_v1')) || {} } catch { return {} }
   })
 
+  // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
+  const [txOverrides, setTxOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')) || {} } catch { return {} }
+  })
+  const [txRules, setTxRules] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lslj_tx_rules_v1')) || [] } catch { return [] }
+  })
+  const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
+
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
   const setView = (v) => {
@@ -1248,14 +1258,24 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     return m
   }, [data.accounts])
 
-  // Actuals filtered by selected accounts
+  // Actuals filtered by selected accounts, with user overrides applied
   const filteredActuals = useMemo(() => {
     if (!plaidActuals) return []
-    return plaidActuals.filter(tx => {
-      const localId = plaidIdToLocal[tx.accountId]
-      return localId ? activeAcctIds.has(localId) : true // if no mapping, include
-    })
-  }, [plaidActuals, plaidIdToLocal, activeAcctIds])
+    return plaidActuals
+      .filter(tx => {
+        const localId = plaidIdToLocal[tx.accountId]
+        return localId ? activeAcctIds.has(localId) : true
+      })
+      .filter(tx => !txOverrides[tx.id]?._deleted)
+      .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
+  }, [plaidActuals, plaidIdToLocal, activeAcctIds, txOverrides])
+
+  // All unique merchant names for the edit modal vendor dropdown
+  const allTxNames = useMemo(() => {
+    if (!plaidActuals) return []
+    const names = new Set(plaidActuals.map(t => t.name).filter(Boolean))
+    return [...names].sort()
+  }, [plaidActuals])
 
   // Group actuals by date string (YYYY-MM-DD) for calendar lookup
   const actualsByDate = useMemo(() => {
@@ -1457,6 +1477,34 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       return next
     })
     showToast('↺ Balance reset to projected')
+  }
+
+  // ── Actual transaction edit handlers ─────────────────────────────────────────
+  const handleSaveActualTx = (updated) => {
+    setTxOverrides(prev => {
+      const next = { ...prev, [updated.id]: updated }
+      try { localStorage.setItem('lslj_tx_overrides_v1', JSON.stringify(next)) } catch {}
+      return next
+    })
+    setSelActualTx(null)
+    showToast('✓ Transaction updated')
+  }
+  const handleDeleteActualTx = (id) => {
+    setTxOverrides(prev => {
+      const next = { ...prev, [id]: { _deleted: true } }
+      try { localStorage.setItem('lslj_tx_overrides_v1', JSON.stringify(next)) } catch {}
+      return next
+    })
+    setSelActualTx(null)
+    showToast('Transaction removed')
+  }
+  const handleSaveRule = (rule) => {
+    setTxRules(prev => {
+      const next = [...prev, rule]
+      try { localStorage.setItem('lslj_tx_rules_v1', JSON.stringify(next)) } catch {}
+      return next
+    })
+    showToast('✓ Rule saved')
   }
 
   const updateAcct = (acct) => {
@@ -2281,7 +2329,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                               </div>
                               <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
                                 {isPlaid
-                                  ? `${tx.date} · ${tx.pending ? '⏳ Pending' : '✓ Posted'}${tx.category?.length ? ` · ${tx.category[0]}` : ''}`
+                                  ? `${tx.date} · ${tx.pending ? '⏳ Pending' : '✓ Posted'}${tx.category ? ` · ${tx.category}` : ''}`
                                   : `${tx.start} · ${tx.freq} · ${tx.cat || 'Uncategorized'} · ${tx.acct ? (fd.accounts.find(a => a.id === tx.acct)?.name || tx.acct) : 'All accounts'}`
                                 }
                               </p>
@@ -2369,7 +2417,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading} actualsError={actualsError}
             actualsByDate={actualsByDate} plaidActuals={plaidActuals}
             historicalBals={historicalBals}
-            onSaveOverride={saveBalanceOverride} onRemoveOverride={removeBalanceOverride} />
+            onSaveOverride={saveBalanceOverride} onRemoveOverride={removeBalanceOverride}
+            onActualTxClick={tx => setSelActualTx(tx)} />
         </div>
       )}
 
@@ -2412,7 +2461,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                 : filteredActuals.map((tx, i) => {
                     const isIncome = tx.amount < 0
                     return (
-                      <div key={tx.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)', border: tx.pending ? '1px solid rgba(197,164,109,0.18)' : '1px solid rgba(255,255,255,0.07)', borderRadius: 10 }}>
+                      <div key={tx.id || i}
+                        onClick={() => setSelActualTx(tx)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                          background: tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)',
+                          border: tx.pending ? '1px solid rgba(197,164,109,0.18)' : '1px solid rgba(255,255,255,0.07)',
+                          borderRadius: 10, cursor: 'pointer', transition: 'background .15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)' }}>
                         <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: isIncome ? 'rgba(197,164,109,0.12)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <i className={`ti ti-${isIncome ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: isIncome ? 'var(--income-color)' : 'var(--expense-color)' }} />
                         </div>
@@ -2427,6 +2483,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: isIncome ? 'var(--income-color)' : 'var(--expense-color)' }}>
                           {isIncome ? '+' : '-'}{fmtMoney(Math.abs(tx.amount))}
                         </p>
+                        <i className="ti ti-chevron-right" style={{ fontSize: 14, color: 'var(--muted)', flexShrink: 0 }} />
                       </div>
                     )
                   })
@@ -3263,12 +3320,56 @@ function ReportingView({ data, proj }) {
           </div>
         </div>
       )}
+
+      {/* ══════════ ACTUAL TRANSACTION EDIT MODAL ══════════ */}
+      {selActualTx && (
+        <ActualTxModal
+          tx={selActualTx}
+          accounts={data.accounts}
+          allTxNames={allTxNames}
+          goals={[]}
+          txRules={txRules}
+          onSave={handleSaveActualTx}
+          onDelete={handleDeleteActualTx}
+          onSaveRule={handleSaveRule}
+          onMakeRecurring={(form) => {
+            const localAcct = data.accounts.find(a => a.plaidAccountId === selActualTx.accountId)
+            const localAcctId = localAcct?.id || data.accounts[0]?.id || ''
+            const isIncome = selActualTx.amount < 0
+            setSelActualTx(null)
+            // open recurring tx form pre-filled from the actual
+            setTimeout(() => {
+              setEditTx(null)
+              setView('tx-form')
+              // We'll carry the data via a special state flag if needed
+            }, 50)
+          }}
+          onClose={() => setSelActualTx(null)}
+        />
+      )}
     </div>
   )
 }
 
+// Map Plaid category array to local CATS values
+function plaidCatToLocal(plaidCats = []) {
+  const raw = (plaidCats[0] || '').toLowerCase()
+  if (raw.includes('food') || raw.includes('grocer') || raw.includes('restaurant') || raw.includes('dining')) return 'Food'
+  if (raw.includes('travel') || raw.includes('taxi') || raw.includes('uber') || raw.includes('lyft') || raw.includes('transit')) return 'Transport'
+  if (raw.includes('transport')) return 'Transport'
+  if (raw.includes('housing') || raw.includes('rent') || raw.includes('mortgage')) return 'Housing'
+  if (raw.includes('util') || raw.includes('electric') || raw.includes('water') || raw.includes('gas')) return 'Utilities'
+  if (raw.includes('insur')) return 'Insurance'
+  if (raw.includes('entertain') || raw.includes('recreation') || raw.includes('sport') || raw.includes('streaming')) return 'Entertainment'
+  if (raw.includes('health') || raw.includes('medical') || raw.includes('pharmac') || raw.includes('dental')) return 'Healthcare'
+  if (raw.includes('educat') || raw.includes('school') || raw.includes('tuition')) return 'Education'
+  if (raw.includes('saving') || raw.includes('invest')) return 'Savings'
+  if (raw.includes('transfer') || raw.includes('payment')) return 'Other'
+  return 'Other'
+}
+
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride }) {
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride, onActualTxClick }) {
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
@@ -3342,21 +3443,25 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
               borderRadius: 18, padding: '24px 24px 20px', maxWidth: 480, width: '92%',
               maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.75)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{selTx.name}</p>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+                {selTx._fromActual ? 'Create Recurring Transaction' : selTx.name}
+              </p>
               <button onClick={() => setSelTx(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>
                 ✕
               </button>
             </div>
             <p style={{ margin: '0 0 18px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
-              Changes apply to all occurrences
+              {selTx._fromActual ? `From actual · ${selTx.name}` : 'Changes apply to all occurrences'}
             </p>
             <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
-            <button onClick={() => { if (window.confirm('Delete this transaction entirely?')) handleDelete(selTx.id) }}
-              style={{ marginTop: 12, padding: '8px 18px', borderRadius: 8, border: 'none',
-                background: 'rgba(196,120,90,0.15)', color: 'var(--expense-color)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-              Delete Transaction
-            </button>
+            {!selTx._fromActual && (
+              <button onClick={() => { if (window.confirm('Delete this transaction entirely?')) handleDelete(selTx.id) }}
+                style={{ marginTop: 12, padding: '8px 18px', borderRadius: 8, border: 'none',
+                  background: 'rgba(196,120,90,0.15)', color: 'var(--expense-color)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                Delete Transaction
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -3676,14 +3781,20 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       {dayActs.map((tx, idx3) => {
                         const isIncome = tx.amount < 0
                         return (
-                          <div key={idx3} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
-                            background: 'rgba(100,140,220,0.06)', borderRadius: 10,
-                            border: `1px solid ${tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)'}` }}>
+                          <div key={idx3}
+                            onClick={e => { e.stopPropagation(); onActualTxClick?.(tx) }}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                              background: 'rgba(100,140,220,0.06)', borderRadius: 10, cursor: 'pointer',
+                              border: `1px solid ${tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)'}`,
+                              transition: 'all .15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(100,140,220,0.13)'; e.currentTarget.style.borderColor = 'rgba(100,140,220,0.4)' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(100,140,220,0.06)'; e.currentTarget.style.borderColor = tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)' }}>
                             <div style={{ minWidth: 0 }}>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
                               <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
                                 {tx.pending ? '⏳ Pending' : '✓ Posted'}
-                                {tx.category?.length ? ` · ${tx.category[0]}` : ''}
+                                {tx.category ? ` · ${tx.category}` : ''}
+                                <span style={{ color: 'rgba(144,170,222,0.7)', marginLeft: 6 }}>Edit ›</span>
                               </p>
                             </div>
                             <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,

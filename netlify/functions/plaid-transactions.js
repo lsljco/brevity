@@ -46,15 +46,16 @@ exports.handler = async (event) => {
           })
 
           res.data.transactions.forEach(t => allTxns.push({
-            id:          t.transaction_id,
-            accountId:   t.account_id,
-            name:        t.merchant_name || t.name,
-            amount:      t.amount,          // Plaid convention: +ve = debit/expense, -ve = credit/income
-            date:        t.date,
-            category:    t.personal_finance_category?.primary || t.category?.[0] || 'Other',
-            type:        t.amount > 0 ? 'expense' : 'income',
+            id:                t.transaction_id,
+            accountId:         t.account_id,
+            name:              t.merchant_name || t.name,
+            originalStatement: t.original_description || t.name,
+            amount:            t.amount,    // Plaid convention: +ve = debit/expense, -ve = credit/income
+            date:              t.date,
+            category:          t.personal_finance_category?.primary || t.category?.[0] || 'Other',
+            type:              t.amount > 0 ? 'expense' : 'income',
             institution,
-            pending:     t.pending,
+            pending:           t.pending,
           }))
 
           offset  += res.data.transactions.length
