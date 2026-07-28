@@ -2018,7 +2018,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                     : filteredActuals.slice(0, 14).map((tx, i) => {
                         const isIncome = tx.amount < 0 // Plaid: negative = money in
                         return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div key={i}
+                            onClick={() => setSelActualTx(tx)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderRadius: 8, padding: '4px 6px', margin: '-4px -6px', transition: 'background .15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '' }}>
                             <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: isIncome ? 'rgba(197,164,109,0.14)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                               <i className={`ti ti-${isIncome ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: isIncome ? 'var(--gold)' : 'var(--expense-color)' }} />
                               {tx.pending && <div style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: '50%', background: 'rgba(197,164,109,0.9)', border: '1px solid rgba(10,9,8,0.6)' }} />}
