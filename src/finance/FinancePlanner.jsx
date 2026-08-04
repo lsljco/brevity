@@ -941,6 +941,8 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
   const blank = { name: '', amount: '', type: 'expense', freq: 'monthly', start: toISO(today0()), end: '', cat: 'Housing', acct: accounts[0]?.id || '', transferTo: '' }
   const [form, setForm] = useState(tx ? { ...tx } : blank)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // Custom category support: if existing cat isn't in CATS list, treat as custom
+  const [customCatMode, setCustomCatMode] = useState(() => !!(tx?.cat && !CATS.includes(tx.cat)))
 
   const save = () => {
     if (!form.name || !form.amount) { alert('Name and amount are required.'); return }
@@ -1011,9 +1013,35 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
           {form.type !== 'transfer' && (
             <div>
               <label className="field-label">Category</label>
-              <select value={form.cat} onChange={e => set('cat', e.target.value)} style={{ width: '100%' }}>
-                {CATS.map(c => <option key={c}>{c}</option>)}
-              </select>
+              {customCatMode ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={form.cat}
+                    onChange={e => set('cat', e.target.value)}
+                    placeholder="Type a category name…"
+                    autoFocus
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setCustomCatMode(false); set('cat', 'Housing') }}
+                    style={{ padding: '6px 10px', cursor: 'pointer', borderRadius: 8, border: '1px solid rgba(0,0,0,0.12)', background: 'white', fontSize: 12, whiteSpace: 'nowrap' }}
+                    title="Back to list">
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={form.cat}
+                  onChange={e => {
+                    if (e.target.value === '__custom__') { setCustomCatMode(true); set('cat', '') }
+                    else set('cat', e.target.value)
+                  }}
+                  style={{ width: '100%' }}>
+                  {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__custom__">Custom…</option>
+                </select>
+              )}
             </div>
           )}
           <div>
@@ -3823,7 +3851,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
           // Plaid actuals for this cell (only meaningful on past/today dates)
           const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
-          const maxBudget      = showActualPills ? 3 : 5
+          const maxBudget      = showActualPills ? 5 : 10
           return (
             <div key={key}
               className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''} ${dragOver === key ? 'drag-over' : ''}`}
