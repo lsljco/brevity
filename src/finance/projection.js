@@ -32,12 +32,28 @@ export function fmtK(n) {
   return abs >= 10000 ? sign + '$' + (abs / 1000).toFixed(1) + 'k' : sign + '$' + Math.round(abs).toLocaleString()
 }
 
+export function parseISODate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '')
+  if (!match) return null
+  const [, year, month, day] = match.map(Number)
+  const date = new Date(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  return date
+}
+
+function calendarDayNumber(date) {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000
+}
+
 export function txOccursOnDate(tx, d) {
-  const start = new Date(tx.start + 'T00:00:00')
-  if (d < start) return false
+  const start = parseISODate(tx.start)
+  if (!start) return false
+  const dateDay = calendarDayNumber(d)
+  const startDay = calendarDayNumber(start)
+  if (dateDay < startDay) return false
   if (tx.end && tx.end !== '') {
-    const e = new Date(tx.end + 'T00:00:00')
-    if (d > e) return false
+    const end = parseISODate(tx.end)
+    if (end && dateDay > calendarDayNumber(end)) return false
   }
   // Skip individual overridden occurrences (created by drag-and-drop)
   if (tx.skips?.includes(toISO(d))) return false
@@ -48,11 +64,11 @@ export function txOccursOnDate(tx, d) {
     case 'once':       return toISO(d) === tx.start
     case 'daily':      return true
     case 'weekly': {
-      const diff = Math.round((d - start) / 86400000)
+      const diff = dateDay - startDay
       return diff >= 0 && diff % 7 === 0
     }
     case 'biweekly': {
-      const diff = Math.round((d - start) / 86400000)
+      const diff = dateDay - startDay
       return diff >= 0 && diff % 14 === 0
     }
     case 'semimonthly': return dom === 1 || dom === 15
