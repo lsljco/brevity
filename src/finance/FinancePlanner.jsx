@@ -8,6 +8,7 @@ import {
 import PlaidConnect from './PlaidConnect.jsx'
 import ActualTxModal from './ActualTxModal.jsx'
 import { buildProjection, today0, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
+import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinanceData } from './financeData.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -806,6 +807,7 @@ function LuxuryStyles() {
 
 
 const DEFAULT_DATA = {
+  calendarDataVersion: CALENDAR_DATA_VERSION,
   accounts: [
     { id: 'a1', name: 'Operating Account',       balance: 3847,  type: 'checking', plaidAccountId: null },
     { id: 'a2', name: 'Renovation / Projects',   balance: 55000, type: 'checking', plaidAccountId: null },
@@ -813,13 +815,13 @@ const DEFAULT_DATA = {
   ],
   transactions: [
     // ── INCOME ──────────────────────────────────────────────────────────────
-    { id: 't_i1',    name: 'LJ - Shriner Hospital',          amount:  4506.99, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i1',    name: 'LJ - Shriner Hospital',          amount:  4506.99, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '2026-08-14', cat: 'Income', acct: 'a1' },
     { id: 't_i2',    name: 'LS Income',                      amount:  8871.32, type: 'income',  freq: 'monthly', start: '2026-07-19', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i3',    name: 'TS - Globe Life Income',         amount:  2791.38, type: 'income',  freq: 'weekly',  start: '2026-07-09', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i4',    name: 'TS TransAmerica Income',         amount:  1611.00, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i5',    name: 'JS - Mativ Income',              amount:  1698.18, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i6',    name: 'LJ - Ameripro Income',           amount:  4344.03, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i7',    name: 'LJ Genesco AP Payroll',          amount:   685.14, type: 'income',  freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i3',    name: 'TS - Globe Life Income',         amount:  2791.38, type: 'income',  freq: 'weekly',  start: '2026-07-10', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i4',    name: 'TS TransAmerica Income',         amount:  1611.00, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i5',    name: 'JS - Mativ Income',              amount:  1698.18, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i6',    name: 'LJ - Ameripro Income',           amount:  4344.03, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i7',    name: 'LJ Genesco AP Payroll',          amount:   685.14, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i8',    name: 'LJ GA Tax Refund',               amount:  5063.00, type: 'income',  freq: 'once',    start: '2026-07-09', end: '', cat: 'Income',         acct: 'a2' },
     { id: 't_i9',    name: 'HOA Reimbursement',              amount:  9618.63, type: 'income',  freq: 'once',    start: '2026-07-14', end: '', cat: 'Income',         acct: 'a2' },
 
@@ -839,7 +841,7 @@ const DEFAULT_DATA = {
     { id: 't_u5',    name: 'Waste Management (Breezeway)',   amount:   100.00, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Utilities',      acct: 'a1' },
 
     // ── TRANSPORTATION ───────────────────────────────────────────────────────
-    { id: 't_t1',    name: 'Gasoline / Fuel',                amount:   150.00, type: 'expense', freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Transportation', acct: 'a1' },
+    { id: 't_t1',    name: 'Gasoline / Fuel',                amount:   150.00, type: 'expense', freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Transportation', acct: 'a1' },
     { id: 't_t2',    name: "Traveler's Auto Insurance",      amount:   688.36, type: 'expense', freq: 'monthly', start: '2026-07-05', end: '', cat: 'Transportation', acct: 'a1' },
     { id: 't_t3',    name: "Traveler's Umbrella Policy",     amount:    90.41, type: 'expense', freq: 'monthly', start: '2026-07-16', end: '', cat: 'Insurance',      acct: 'a1' },
     { id: 't_t4',    name: 'National Car Rental',            amount:  1240.00, type: 'expense', freq: 'monthly', start: '2026-07-24', end: '', cat: 'Transportation', acct: 'a1' },
@@ -861,7 +863,7 @@ const DEFAULT_DATA = {
     { id: 't_d6',    name: 'LJ - Child Support',             amount:  1024.00, type: 'expense', freq: 'monthly', start: '2026-07-19', end: '', cat: 'Family',         acct: 'a1' },
 
     // ── FOOD & HOUSEHOLD ────────────────────────────────────────────────────
-    { id: 't_f1',    name: 'Groceries',                      amount:   300.00, type: 'expense', freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Food',           acct: 'a1' },
+    { id: 't_f1',    name: 'Groceries',                      amount:   300.00, type: 'expense', freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Food',           acct: 'a1' },
     { id: 't_f2',    name: 'Cleaning / Laundry Supplies',    amount:   200.00, type: 'expense', freq: 'monthly', start: '2026-07-30', end: '', cat: 'Household',      acct: 'a1' },
 
     // ── SUBSCRIPTIONS ───────────────────────────────────────────────────────
@@ -873,7 +875,7 @@ const DEFAULT_DATA = {
     { id: 't_s6',    name: 'SmartSheet',                     amount:    20.85, type: 'expense', freq: 'monthly', start: '2026-07-25', end: '', cat: 'Subscriptions',  acct: 'a1' },
 
     // ── DISCRETIONARY ───────────────────────────────────────────────────────
-    { id: 't_disc1', name: 'LSLJ Dividends',                 amount:   150.00, type: 'expense', freq: 'weekly',  start: '2026-07-02', end: '', cat: 'Discretionary',  acct: 'a1' },
+    { id: 't_disc1', name: 'LSLJ Dividends',                 amount:   150.00, type: 'expense', freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Discretionary',  acct: 'a1' },
 
     // ── ANNUAL ──────────────────────────────────────────────────────────────
     { id: 't_a1',    name: "Nyla's Birthday",                amount:   500.00, type: 'expense', freq: 'yearly',  start: '2026-07-08', end: '', cat: 'Family',         acct: 'a1' },
@@ -886,9 +888,10 @@ const DEFAULT_DATA = {
 function uid() { return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) }
 function loadData() {
   try {
-    const v = localStorage.getItem(LS_KEY)
-    if (!v) return JSON.parse(JSON.stringify(DEFAULT_DATA))
-    const stored = JSON.parse(v)
+    const loaded = loadFinanceData(localStorage, LS_KEY)
+    if (!loaded.data) return JSON.parse(JSON.stringify(DEFAULT_DATA))
+    if (loaded.source === 'backup') console.warn('[Brevity] Recovered finance data from backup storage.')
+    const stored = migrateFinanceData(loaded.data)
 
     // Guard: genuinely empty — first-time user or explicit reset
     if (!Array.isArray(stored.transactions) || stored.transactions.length === 0) {
@@ -924,7 +927,18 @@ function loadData() {
     }
   } catch { return JSON.parse(JSON.stringify(DEFAULT_DATA)) }
 }
-function saveData(d) { try { localStorage.setItem(LS_KEY, JSON.stringify(d)) } catch {} }
+function saveData(d) {
+  const result = saveFinanceData(localStorage, LS_KEY, d)
+  if (!result.ok) console.error('[Brevity] Finance data could not be saved:', result.error)
+  return result
+}
+function loadSavedValue(key, fallback) {
+  try {
+    return loadFinanceData(localStorage, key).data ?? fallback
+  } catch {
+    return fallback
+  }
+}
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 function MetricCard({ label, value, sub, subGood }) {
@@ -947,6 +961,11 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
   const save = () => {
     if (!form.name || !form.amount) { alert('Name and amount are required.'); return }
     if (form.type === 'transfer' && !form.transferTo) { alert('Please select a destination account.'); return }
+    if (!form.start) { alert('A transaction date is required.'); return }
+    if (form.freq !== 'once' && form.end && form.end < form.start) {
+      alert('End date must be on or after the start date.')
+      return
+    }
     const saved = { ...form, id: tx?.id || uid(), amount: parseFloat(form.amount) || 0 }
     if (form.type === 'transfer') saved.cat = 'Transfer'
     onSave(saved)
@@ -1109,6 +1128,8 @@ function AcctForm({ acct, onSave, onCancel }) {
 // ── Main Component ──────────────────────────────────────────────────────────────
 export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [data, setData]         = useState(loadData)
+  const dataRef                 = useRef(data)
+  dataRef.current               = data
   const [formView, setFormView] = useState(null) // 'tx-form' | 'acct-form' | null
   const [selectedAccts, setSelectedAccts] = useState(null) // null = all selected
   const [acctFilterOpen, setAcctFilterOpen] = useState(false)
@@ -1118,17 +1139,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   })
   const [actualsLoading, setActualsLoading] = useState(false)
   const [actualsError, setActualsError] = useState(null)
-  const [balanceOverrides, setBalanceOverrides] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('lslj_bal_overrides_v1')) || {} } catch { return {} }
-  })
+  const [balanceOverrides, setBalanceOverrides] = useState(() => loadSavedValue('lslj_bal_overrides_v1', {}))
 
   // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
-  const [txOverrides, setTxOverrides] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')) || {} } catch { return {} }
-  })
-  const [txRules, setTxRules] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('lslj_tx_rules_v1')) || [] } catch { return [] }
-  })
+  const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
+  const [txRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
 
   // Primary view comes from App sidebar; form overlays are local
@@ -1149,6 +1164,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [editTx, setEditTx]     = useState(null)
   const [editAcct, setEditAcct] = useState(null)
   const [toast, setToast]       = useState('')
+  const [storageError, setStorageError] = useState('')
   const [insightModal, setInsightModal] = useState(null)
   const [insightEditTx, setInsightEditTx] = useState(null)
   const [insightAcctFilter, setInsightAcctFilter] = useState(() => new Set(['a1', 'a2', 'a3']))
@@ -1225,7 +1241,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  useEffect(() => { saveData(data) }, [data])
+  useEffect(() => {
+    const result = saveData(data)
+    setStorageError(result.ok ? '' : 'Calendar changes cannot be saved because browser storage is unavailable or full. Free browser storage, then try again.')
+  }, [data])
 
   // ── Account filter ───────────────────────────────────────────────────────
   // selectedAccts = null → all; otherwise a Set of account IDs
@@ -1401,7 +1420,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
   // Called by PlaidConnect when accounts are synced — update balances only, NEVER create accounts
   const handlePlaidSync = useCallback((plaidAccounts, syncedAt) => {
-    setData(d => {
+    const saved = setDataAndPersist(d => {
       const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
       const matchedPlaidIds = new Set()
 
@@ -1444,41 +1463,71 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       // This completely prevents the duplicate-account / orphaned-transaction problem.
       return { ...d, accounts: updated }
     })
-    showToast('✓ Balances synced from Plaid')
+    if (saved) showToast('✓ Balances synced from Plaid')
   }, [])
 
-  const setDataAndPersist = (fn) => setData(d => { const n = fn(d); return n })
+  function setDataAndPersist(fn) {
+    const next = fn(dataRef.current)
+    const result = saveData(next)
+    if (!result.ok) {
+      setStorageError('Calendar changes cannot be saved because browser storage is unavailable or full. Free browser storage, then try again.')
+      showToast('⚠ Change not saved — browser storage error')
+      return false
+    }
+    dataRef.current = next
+    setData(next)
+    setStorageError('')
+    return true
+  }
+
+  function persistAuxiliaryValue(key, value) {
+    const result = saveFinanceData(localStorage, key, value)
+    if (!result.ok) {
+      console.error(`[Brevity] ${key} could not be saved:`, result.error)
+      setStorageError('Calendar changes cannot be saved because browser storage is unavailable or full. Free browser storage, then try again.')
+      showToast('⚠ Change not saved — browser storage error')
+      return false
+    }
+    setStorageError('')
+    return true
+  }
 
   const updateTx = (tx) => {
-    setDataAndPersist(d => ({
+    const saved = setDataAndPersist(d => ({
       ...d,
       transactions: d.transactions.find(t => t.id === tx.id)
         ? d.transactions.map(t => t.id === tx.id ? tx : t)
         : [...d.transactions, tx],
     }))
+    if (!saved) return false
     setView('transactions')
     setEditTx(null)
     showToast(tx.id ? '✓ Transaction saved' : '✓ Transaction added')
+    return true
   }
 
   const deleteTx = (id) => {
     if (!window.confirm('Delete this transaction?')) return
-    setDataAndPersist(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id) }))
+    const saved = setDataAndPersist(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id) }))
+    if (!saved) return false
     showToast('Transaction deleted')
+    return true
   }
 
   // Calendar-specific saves — don't navigate away from the calendar view
   const calendarSaveTx = (tx) => {
-    setDataAndPersist(d => ({
+    const saved = setDataAndPersist(d => ({
       ...d,
       transactions: d.transactions.find(t => t.id === tx.id)
         ? d.transactions.map(t => t.id === tx.id ? tx : t)
         : [...d.transactions, tx],
     }))
+    if (!saved) return false
     showToast('✓ Transaction saved')
+    return true
   }
   const calendarBatchSave = (txArray) => {
-    setDataAndPersist(d => {
+    const saved = setDataAndPersist(d => {
       let txns = [...d.transactions]
       txArray.forEach(tx => {
         const idx = txns.findIndex(t => t.id === tx.id)
@@ -1486,25 +1535,25 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       })
       return { ...d, transactions: txns }
     })
+    if (!saved) return false
     showToast('✓ Transaction moved')
+    return true
   }
 
   const saveBalanceOverride = (dateStr, amount) => {
-    setBalanceOverrides(prev => {
-      const next = { ...prev, [dateStr]: amount }
-      try { localStorage.setItem('lslj_bal_overrides_v1', JSON.stringify(next)) } catch {}
-      return next
-    })
+    const next = { ...balanceOverrides, [dateStr]: amount }
+    if (!persistAuxiliaryValue('lslj_bal_overrides_v1', next)) return false
+    setBalanceOverrides(next)
     showToast('✓ Balance updated')
+    return true
   }
   const removeBalanceOverride = (dateStr) => {
-    setBalanceOverrides(prev => {
-      const next = { ...prev }
-      delete next[dateStr]
-      try { localStorage.setItem('lslj_bal_overrides_v1', JSON.stringify(next)) } catch {}
-      return next
-    })
+    const next = { ...balanceOverrides }
+    delete next[dateStr]
+    if (!persistAuxiliaryValue('lslj_bal_overrides_v1', next)) return false
+    setBalanceOverrides(next)
     showToast('↺ Balance reset to projected')
+    return true
   }
 
   // ── Actual transaction edit handlers ─────────────────────────────────────────
@@ -1515,47 +1564,49 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   const handleSaveActualTx = (updated) => {
-    setTxOverrides(prev => {
-      const next = { ...prev, [updated.id]: updated }
-      try { localStorage.setItem('lslj_tx_overrides_v1', JSON.stringify(next)) } catch {}
-      return next
-    })
+    const next = { ...txOverrides, [updated.id]: updated }
+    if (!persistAuxiliaryValue('lslj_tx_overrides_v1', next)) return false
+    setTxOverrides(next)
     setSelActualTx(null)
     showToast('✓ Transaction updated')
+    return true
   }
   const handleDeleteActualTx = (id) => {
-    setTxOverrides(prev => {
-      const next = { ...prev, [id]: { _deleted: true } }
-      try { localStorage.setItem('lslj_tx_overrides_v1', JSON.stringify(next)) } catch {}
-      return next
-    })
+    const next = { ...txOverrides, [id]: { _deleted: true } }
+    if (!persistAuxiliaryValue('lslj_tx_overrides_v1', next)) return false
+    setTxOverrides(next)
     setSelActualTx(null)
     showToast('Transaction removed')
+    return true
   }
   const handleSaveRule = (rule) => {
-    setTxRules(prev => {
-      const next = [...prev, rule]
-      try { localStorage.setItem('lslj_tx_rules_v1', JSON.stringify(next)) } catch {}
-      return next
-    })
+    const next = [...txRules, rule]
+    if (!persistAuxiliaryValue('lslj_tx_rules_v1', next)) return false
+    setTxRules(next)
     showToast('✓ Rule saved')
+    return true
   }
 
   const updateAcct = (acct) => {
-    setDataAndPersist(d => ({
+    const saved = setDataAndPersist(d => ({
       ...d,
       accounts: d.accounts.find(a => a.id === acct.id)
         ? d.accounts.map(a => a.id === acct.id ? acct : a)
         : [...d.accounts, acct],
     }))
+    if (!saved) return false
     setView('accounts')
     setEditAcct(null)
     showToast('✓ Account saved')
+    return true
   }
 
   const deleteAcct = (id) => {
     if (!window.confirm('Delete this account?')) return
-    setDataAndPersist(d => ({ ...d, accounts: d.accounts.filter(a => a.id !== id) }))
+    const saved = setDataAndPersist(d => ({ ...d, accounts: d.accounts.filter(a => a.id !== id) }))
+    if (!saved) return false
+    showToast('Account deleted')
+    return true
   }
 
   // ── Derived values (all use fd = filtered accounts + transactions) ─────────
@@ -2630,6 +2681,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {view === 'tx-form'   && <div className="finance-inner"><TxForm   tx={editTx}   accounts={data.accounts} onSave={updateTx}   onCancel={() => setView('transactions')} /></div>}
       {view === 'acct-form' && <div className="finance-inner"><AcctForm acct={editAcct}                         onSave={updateAcct} onCancel={() => setView('accounts')} /></div>}
 
+      {storageError && (
+        <div role="alert" style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 1200,
+          maxWidth: 620, width: 'calc(100% - 32px)', padding: '12px 16px', borderRadius: 12,
+          background: 'rgba(73,28,20,.96)', border: '1px solid rgba(232,150,122,.55)', color: '#F7F3EA',
+          fontSize: 12, lineHeight: 1.5, boxShadow: '0 12px 36px rgba(0,0,0,.45)' }}>
+          {storageError}
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
 
       {/* ══════════ ACTUAL TRANSACTION EDIT MODAL ══════════ */}
@@ -3710,8 +3769,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
   const selPt = selDay ? proj.get(selDay) : null
   const fmtDateLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-  const handleSave   = (tx) => { onSave(tx); setSelTx(null) }
-  const handleDelete = (id) => { onDelete(id); setSelTx(null) }
+  const handleSave   = (tx) => { if (onSave(tx) !== false) setSelTx(null) }
+  const handleDelete = (id) => { if (onDelete(id) !== false) setSelTx(null) }
 
   const commitBal = (key, draft) => {
     const n = parseFloat(draft)
@@ -3724,14 +3783,12 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
     // Skip this occurrence on the original recurring tx; add a one-time copy on the target date
     const withSkip = { ...tx, skips: [...(tx.skips || []), fromDate] }
     const oneOff   = { ...tx, id: uid(), freq: 'once', start: toDate, end: toDate, skips: [] }
-    onBatchSave([withSkip, oneOff])
-    setPendingMove(null)
+    if (onBatchSave([withSkip, oneOff]) !== false) setPendingMove(null)
   }
 
   const handleMoveSeries = ({ tx, toDate }) => {
     // Shift the anchor date — all future occurrences follow the new day pattern
-    onSave({ ...tx, start: toDate })
-    setPendingMove(null)
+    if (onSave({ ...tx, start: toDate }) !== false) setPendingMove(null)
   }
 
   // ── Calendar grid ────────────────────────────────────────────────────────
