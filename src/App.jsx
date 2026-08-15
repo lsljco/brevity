@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import FinancePlanner from './finance/FinancePlanner.jsx'
 import HomeHQ from './homehq/HomeHQ.jsx'
+import FamilyCalendar from './family/FamilyCalendar.jsx'
 
 // ── 7 Family Pillars ─────────────────────────────────────────────────────────
 const PILLARS = [
@@ -27,6 +28,7 @@ const PILLARS = [
     description: 'The heartbeat of the home — operations, property, and daily life.',
     items: [
       { id: 'property', label: 'Projects', icon: 'ti-building-estate' },
+      { id: 'family-calendar', label: 'Family Calendar', icon: 'ti-calendar-event' },
     ]
   },
   // ── Layer 4: External — Knowledge & Stewardship
@@ -117,7 +119,7 @@ function SettingsPage() {
   const badge   = { fontSize: 11, padding: '3px 10px', borderRadius: 10, background: 'rgba(197,164,109,0.12)', border: '1px solid rgba(197,164,109,0.22)', color: 'var(--gold)' }
 
   const handleExport = () => {
-    const keys = ['fp_accounts','fp_transactions','fp_budgets','fp_goals','homehq_items_v1']
+    const keys = ['fp_accounts','fp_transactions','fp_budgets','fp_goals','homehq_items_v1','family_calendar_events_v1']
     const data = {}
     keys.forEach(k => { try { data[k] = JSON.parse(localStorage.getItem(k) || 'null') } catch {} })
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -208,6 +210,9 @@ export default function App() {
     }
     if (activeView === 'property') {
       return <HomeHQ />
+    }
+    if (activeView === 'family-calendar') {
+      return <FamilyCalendar />
     }
     if (FINANCE_VIEWS.has(activeView) && activePillar === 'finance') {
       return <FinancePlanner view={activeView} setView={(v) => navigateTo('finance', v)} />

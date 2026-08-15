@@ -9,6 +9,7 @@ import PlaidConnect from './PlaidConnect.jsx'
 import ActualTxModal from './ActualTxModal.jsx'
 import { buildProjection, today0, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinanceData } from './financeData.js'
+import { buildBalanceSheet, summarizeActuals } from './reportingData.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -3479,10 +3480,12 @@ function CashFlowReport({ plaidActuals = [] }) {
 }
 
 const REPORT_TABS = [
-  { id: 'income-statement', label: 'Income Statement', icon: 'ti-file-dollar'     },
+  { id: 'overview',         label: 'Overview',         icon: 'ti-dashboard'       },
   { id: 'pl',               label: 'Profit & Loss',    icon: 'ti-trending-up'     },
   { id: 'cashflow',         label: 'Cash Flow',        icon: 'ti-wave-sine'       },
+  { id: 'balance-sheet',    label: 'Balance Sheet',    icon: 'ti-scale'           },
   { id: 'budget-actual',    label: 'Budget vs Actual', icon: 'ti-chart-bar'       },
+  { id: 'vendor-spend',     label: 'Vendor Spend',     icon: 'ti-building-store'  },
 ]
 
 function monthlyAmt(tx) {
@@ -3498,7 +3501,7 @@ function monthlyAmt(tx) {
 }
 
 function ReportingView({ data, proj, plaidActuals = [] }) {
-  const [tab, setTab] = useState('income-statement')
+  const [tab, setTab] = useState('overview')
   const now = new Date()
   const yr = now.getFullYear()
   const mo = now.getMonth()
@@ -3507,6 +3510,10 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
   const totalIncome   = data.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
   const totalExpenses = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
   const netIncome     = totalIncome - totalExpenses
+  const actualReport = useMemo(() => summarizeActuals(plaidActuals, yr), [plaidActuals, yr])
+  const balanceSheet = useMemo(() => buildBalanceSheet(data.accounts), [data.accounts])
+  const hasActuals = plaidActuals.length > 0
+  const monthsElapsed = Math.max(1, mo + 1)
 
   const expByCategory = useMemo(() => {
     const map = {}
@@ -3517,12 +3524,12 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
     return Object.entries(map).sort((a, b) => b[1] - a[1])
   }, [data.transactions])
 
-  const monthlyData = useMemo(() => MONTHS.map((_, mi) => ({
+  const monthlyData = useMemo(() => MONTHS.map((_, mi) => hasActuals ? ({
     month: MONTHS[mi],
-    income: totalIncome,
-    expenses: totalExpenses,
-    net: netIncome,
-  })), [totalIncome, totalExpenses, netIncome])
+    income: actualReport.months[mi].income,
+    expenses: actualReport.months[mi].expenses,
+    net: actualReport.months[mi].net,
+  }) : ({ month: MONTHS[mi], income: totalIncome, expenses: totalExpenses, net: netIncome })), [hasActuals, actualReport, totalIncome, totalExpenses, netIncome])
 
   const budget = loadBudget()
   const budgetMonthly = useMemo(() => {
@@ -3564,6 +3571,33 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
         ))}
       </div>
 
+      {/* ── Small Business Overview ── */}
+      {tab === 'overview' && (
+        <div>
+          <div style={{ marginBottom: 22 }}>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Small Business Overview</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{hasActuals ? `Actual year-to-date performance · ${yr}` : 'Connect or sync an account to replace planned figures with actual results'}</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, marginBottom: 20 }}>
+            {[
+              ['Revenue', hasActuals ? actualReport.income : totalIncome * 12, 'var(--gold)'],
+              ['Expenses', hasActuals ? actualReport.expenses : totalExpenses * 12, 'var(--expense-color)'],
+              ['Net Profit', hasActuals ? actualReport.net : netIncome * 12, (hasActuals ? actualReport.net : netIncome) >= 0 ? 'var(--gold)' : 'var(--expense-color)'],
+              ['Net Margin', hasActuals ? actualReport.margin : (totalIncome ? (netIncome / totalIncome) * 100 : 0), 'var(--gold)', true],
+              ['Cash & Investments', balanceSheet.totalAssets, 'var(--gold)'],
+              ['Liabilities', balanceSheet.totalLiabilities, 'var(--expense-color)'],
+            ].map(([label,value,color,isPercent])=><div key={label} className="finance-card" style={{padding:'17px 18px'}}><p style={{margin:'0 0 6px',fontSize:10,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',fontWeight:600}}>{label}</p><p style={{margin:0,fontSize:22,fontWeight:400,color}}>{isPercent?`${value.toFixed(1)}%`:fmtMoney(value)}</p></div>)}
+          </div>
+          <div className="finance-card" style={{padding:'20px 22px'}}>
+            {sectionTitle('Management Checks')}
+            {statRow('Profitability', (hasActuals ? actualReport.net : netIncome) >= 0 ? 'Profitable' : 'Operating at a loss', (hasActuals ? actualReport.net : netIncome) >= 0 ? 'var(--gold)' : 'var(--expense-color)', false, true)}
+            {statRow('Cash coverage', balanceSheet.totalLiabilities > 0 ? `${(balanceSheet.totalAssets / balanceSheet.totalLiabilities).toFixed(1)}×` : 'No modeled liabilities', 'var(--soft-white)')}
+            {statRow('Largest expense category', actualReport.expensesByCategory[0]?.[0] || expByCategory[0]?.[0] || 'No data', 'var(--soft-white)')}
+            {statRow('Largest vendor', actualReport.vendorSpend[0]?.[0] || 'No actual vendor data', 'var(--soft-white)')}
+          </div>
+        </div>
+      )}
+
       {/* ── Income Statement ── */}
       {tab === 'income-statement' && (
         <div style={{ maxWidth: 680 }}>
@@ -3595,7 +3629,7 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
         <div>
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Profit & Loss Statement</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>12-month view · {yr}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{hasActuals ? `Actual results · ${yr}` : `Planned monthly run rate · ${yr}`}</p>
           </div>
           <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 20 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
@@ -3621,8 +3655,8 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
                       </td>
                     ))}
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, textAlign: 'right',
-                      color: row.isNet ? (netIncome >= 0 ? 'var(--gold)' : 'var(--expense-color)') : row.color }}>
-                      {fmtMoney(row.isNet ? netIncome * 12 : row.vals.reduce((s, v) => s + v, 0))}
+                      color: row.isNet ? (row.vals.reduce((s,v)=>s+v,0) >= 0 ? 'var(--gold)' : 'var(--expense-color)') : row.color }}>
+                      {fmtMoney(row.vals.reduce((s, v) => s + v, 0))}
                     </td>
                   </tr>
                 ))}
@@ -3649,12 +3683,23 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
       {/* ── Cash Flow ── */}
       {tab === 'cashflow' && <CashFlowReport plaidActuals={plaidActuals} />}
 
+      {/* ── Balance Sheet ── */}
+      {tab === 'balance-sheet' && (
+        <div style={{maxWidth:760}}>
+          <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Balance Sheet</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Cash-basis snapshot from modeled accounts · {now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p></div>
+          <div className="finance-card" style={{padding:'20px 24px',marginBottom:14}}>{sectionTitle('Assets')}{balanceSheet.assets.length?balanceSheet.assets.map(account=>statRow(account.name,fmtMoney(account.reportBalance),'var(--gold)',true)):statRow('No asset accounts modeled','—','var(--muted)')}{statRow('Total Assets',fmtMoney(balanceSheet.totalAssets),'var(--gold)',false,true)}</div>
+          <div className="finance-card" style={{padding:'20px 24px',marginBottom:14}}>{sectionTitle('Liabilities')}{balanceSheet.liabilities.length?balanceSheet.liabilities.map(account=>statRow(account.name,fmtMoney(account.reportBalance),'var(--expense-color)',true)):statRow('No liability accounts modeled','—','var(--muted)')}{statRow('Total Liabilities',fmtMoney(balanceSheet.totalLiabilities),'var(--expense-color)',false,true)}</div>
+          <div className="finance-card" style={{padding:'20px 24px',background:'rgba(197,164,109,.06)'}}>{statRow("Owner's Equity",fmtMoney(balanceSheet.equity),balanceSheet.equity>=0?'var(--gold)':'var(--expense-color)',false,true)}</div>
+          <p style={{fontSize:11,color:'var(--muted)',lineHeight:1.6}}>This report includes cash, checking, savings, investments, credit, loan, and debt accounts currently modeled in Brevity. Add receivables, inventory, fixed assets, and additional liabilities as accounts to expand the statement.</p>
+        </div>
+      )}
+
       {/* ── Budget vs Actual ── */}
       {tab === 'budget-actual' && (
         <div>
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Budget vs Actual</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Monthly budget targets vs scheduled transactions · set budgets in the Budget tab</p>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Monthly budget targets vs {hasActuals?'actual year-to-date monthly averages':'scheduled transaction estimates'} · set budgets in the Budget tab</p>
           </div>
           <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -3668,12 +3713,14 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
               <tbody>
                 {Object.entries(BUDGET_CATS).map(([cat, items]) => {
                   const budgeted = budgetMonthly[cat] || 0
+                  const actualCategoryMap = Object.fromEntries(actualReport.expensesByCategory)
+                  const scheduledActual = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
+                    const matchesCat = t.cat === cat || items.some(i => t.name.toLowerCase().includes(i.toLowerCase().split(' ')[0]))
+                    return matchesCat ? s + monthlyAmt(t) : s
+                  }, 0)
                   const actual = cat === 'Income'
-                    ? totalIncome
-                    : data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
-                        const matchesCat = t.cat === cat || items.some(i => t.name.toLowerCase().includes(i.toLowerCase().split(' ')[0]))
-                        return matchesCat ? s + monthlyAmt(t) : s
-                      }, 0)
+                    ? (hasActuals ? actualReport.income / monthsElapsed : totalIncome)
+                    : (hasActuals ? (actualCategoryMap[cat] || 0) / monthsElapsed : scheduledActual)
                   const variance = cat === 'Income' ? actual - budgeted : budgeted - actual
                   const pct = budgeted > 0 ? Math.min((actual / budgeted) * 100, 200) : 0
                   const isGood = variance >= 0
@@ -3707,6 +3754,15 @@ function ReportingView({ data, proj, plaidActuals = [] }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ── Vendor Spend ── */}
+      {tab === 'vendor-spend' && (
+        <div>
+          <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Vendor Spend</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Actual payments by merchant · {yr}</p></div>
+          {!hasActuals?<div className="finance-card" style={{padding:'42px 20px',textAlign:'center',color:'var(--muted)'}}>Connect or sync an account to analyze actual vendor spending.</div>:
+          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} style={{borderTop:'1px solid rgba(255,255,255,.04)'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
         </div>
       )}
 
