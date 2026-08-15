@@ -1,15 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
+import {
+  HOUSEHOLD_MEMBERS as MEMBERS,
+  PROJECT_STORAGE_KEY as STORAGE_KEY,
+  normalizeProjectItem,
+  publishProjectEvents,
+  readJson,
+  writeJson,
+} from './projectData.js'
 
 const ROOMS      = ["Kitchen","Bathroom","Living Room","Bedroom","Basement","Garage","Exterior","Attic","Yard"];
 const TYPES      = ["Renovation","Maintenance","Repair"];
 const STATUSES   = ["To Do","In Progress","Done"];
 const PRIORITIES = ["High","Medium","Low"];
-const MEMBERS    = ["Larry","Terica","Javin","Nyla","Lorenzo"];
-const STORAGE_KEY = "homehq_items_v1";
-
 const EMPTY_FORM = {
   title:"", type:"Renovation", room:"Kitchen", roomCustom:"", status:"To Do", priority:"Medium",
-  assignee:"", startDate:"", due:"", estcost:"", actcost:"",
+  assignee:"", raci:{responsible:[],accountable:[],consulted:[],informed:[]},
+  pushToFamilyCalendar:false, startDate:"", due:"", estcost:"", actcost:"",
   cname:"", cphone:"", cemail:"", caddress:"",
   bizLicense:false, coi:false, workersComp:false,
   notes:"", photos:[], files:[]
@@ -122,6 +128,23 @@ function FField({label,full,children}){
   );
 }
 
+function MemberMultiSelect({label,role,value=[],onChange}){
+  const toggle = member => onChange(value.includes(member) ? value.filter(v=>v!==member) : [...value,member]);
+  return (
+    <FField label={`${label} (${role})`} full>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"10px 12px",background:GLASS,borderRadius:8,border:`1.5px solid ${BORDER}`}}>
+        {MEMBERS.map(member=>{
+          const selected=value.includes(member);
+          return <button type="button" key={member} onClick={()=>toggle(member)} aria-pressed={selected}
+            style={{padding:"6px 11px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,
+              border:`1px solid ${selected?G:BORDER}`,background:selected?'rgba(197,164,109,0.18)':GLASS,
+              color:selected?G:W2}}>{member}</button>;
+        })}
+      </div>
+    </FField>
+  );
+}
+
 const FI = {
   padding:"10px 14px",
   border:`1.5px solid ${BORDER}`,
@@ -159,8 +182,11 @@ function CostInput({label, field, form, setForm}){
   );
 }
 
-function loadItems(){ try{ const v=localStorage.getItem(STORAGE_KEY); return v?JSON.parse(v):[]; }catch(e){ return []; } }
-function saveItems(items){ try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(items)); }catch(e){} }
+function loadItems(){
+  const items=readJson(localStorage,STORAGE_KEY,[]);
+  return Array.isArray(items)?items.map(normalizeProjectItem):[];
+}
+function saveItems(items){ return writeJson(localStorage,STORAGE_KEY,items); }
 function uid(){ return "item-"+Date.now()+"-"+Math.random().toString(36).slice(2); }
 function fmtPhone(val){
   const d = val.replace(/\D/g,"").slice(0,10);
@@ -211,7 +237,7 @@ function GanttView({items,onEdit}){
   }
   const groups={};
   ganttItems.forEach(i=>{
-    const k=groupBy==="room"?roomLabel(i):groupBy==="type"?i.type:(i.assignee||"Unassigned");
+    const k=groupBy==="room"?roomLabel(i):groupBy==="type"?i.type:((i.raci?.responsible||[]).join(', ')||"Unassigned");
     if(!groups[k])groups[k]=[];
     groups[k].push(i);
   });
@@ -341,7 +367,7 @@ function BudgetView({items}){
             {items.map(i=>(
               <tr key={i.id}>
                 <td style={TD}>{i.title}</td><td style={TD}>{i.type}</td><td style={TD}>{i.status}</td>
-                <td style={TD}>{i.assignee||"—"}</td>
+                <td style={TD}>{(i.raci?.responsible||[]).join(', ')||"—"}</td>
                 <td style={TDR}>{displayCost(i.estcost)}</td>
                 <td style={TDR}>{displayCost(i.actcost)}</td>
               </tr>
@@ -521,23 +547,49 @@ function App(){
 
   function showToast(msg){ setToast(msg); clearTimeout(toastTmr.current); toastTmr.current=setTimeout(()=>setToast(""),3000); }
   function openAdd(){ setEditId(null); setForm(EMPTY_FORM); setModal(true); }
-  function openEdit(item){ setEditId(item.id); setForm({...EMPTY_FORM,...item,photos:item.photos||[],files:item.files||[]}); setModal(true); }
+  function openEdit(item){
+    const normalized=normalizeProjectItem(item);
+    setEditId(item.id);
+    setForm({...EMPTY_FORM,...normalized,raci:normalized.raci,photos:item.photos||[],files:item.files||[]});
+    setModal(true);
+  }
 
   function saveItem(){
     if(!form.title.trim()){ showToast("Title is required"); return; }
     const now=new Date().toISOString();
-    const cleaned={...form,estcost:fmtCost(form.estcost),actcost:fmtCost(form.actcost)};
+    const cleaned=normalizeProjectItem({...form,estcost:fmtCost(form.estcost),actcost:fmtCost(form.actcost)});
+    if(cleaned.pushToFamilyCalendar&&!cleaned.startDate&&!cleaned.due){ showToast("Add a start or due date before publishing to Family Calendar"); return; }
+    let nextItems;
     if(editId){
-      setItems(prev=>prev.map(i=>i.id===editId?{...cleaned,id:editId,updatedAt:now}:i));
+      nextItems=items.map(i=>i.id===editId?{...cleaned,id:editId,updatedAt:now}:i);
       showToast("Item updated");
     } else {
-      setItems(prev=>[{...cleaned,id:uid(),createdAt:now,updatedAt:now},...prev]);
+      nextItems=[{...cleaned,id:uid(),createdAt:now,updatedAt:now},...items];
       showToast("Item added");
     }
+    const saved=saveItems(nextItems);
+    if(!saved.ok){ showToast("Change not saved — browser storage error"); return; }
+    const published=publishProjectEvents(localStorage,nextItems);
+    if(!published.ok){ showToast("Project saved, but Family Calendar could not be updated"); return; }
+    setItems(nextItems);
     setModal(false);
   }
 
-  function deleteItem(id){ if(!window.confirm("Delete this item?")) return; setItems(prev=>prev.filter(i=>i.id!==id)); showToast("Deleted"); }
+  function pushAllProjectEvents(){
+    const eligible=items.filter(item=>item.startDate||item.due);
+    if(!eligible.length){ showToast("Add dates to a project before publishing"); return; }
+    const next=items.map(item=>(item.startDate||item.due)?{...item,pushToFamilyCalendar:true}:item);
+    if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Project events could not be published"); return; }
+    setItems(next);
+    showToast(`${eligible.length} project event${eligible.length===1?'':'s'} pushed to Family Calendar`);
+  }
+
+  function deleteItem(id){
+    if(!window.confirm("Delete this item?")) return;
+    const next=items.filter(i=>i.id!==id);
+    if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Delete could not be saved"); return; }
+    setItems(next); showToast("Deleted");
+  }
 
   function handlePhoto(e){
     Array.from(e.target.files).forEach(f=>{
@@ -579,7 +631,7 @@ function App(){
     r.readAsText(f); e.target.value="";
   }
 
-  const assignees=[...new Set(items.map(i=>i.assignee).filter(Boolean))];
+  const assignees=[...new Set(items.flatMap(i=>i.raci?.responsible||[]).filter(Boolean))];
   const noFilter=["budget","contractors","gantt","calendar"];
 
   const filtered=items.filter(i=>{
@@ -588,7 +640,7 @@ function App(){
     if(fStatus&&i.status!==fStatus) return false;
     if(fRoom&&roomLabel(i)!==fRoom) return false;
     if(fPriority&&i.priority!==fPriority) return false;
-    if(fAssignee&&i.assignee!==fAssignee) return false;
+    if(fAssignee&&!(i.raci?.responsible||[]).includes(fAssignee)) return false;
     if(search&&!JSON.stringify(i).toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -613,6 +665,7 @@ function App(){
           <button onClick={()=>importRef.current.click()} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer",fontSize:12,fontWeight:600,background:GLASS,color:W2}}>Import</button>
           <input ref={importRef} type="file" accept=".json" style={{display:"none"}} onChange={importData}/>
           <button onClick={exportData} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer",fontSize:12,fontWeight:600,background:GLASS,color:W2}}>Export</button>
+          <button onClick={pushAllProjectEvents} style={{padding:"8px 14px",borderRadius:8,border:`1px solid rgba(197,164,109,0.3)`,cursor:"pointer",fontSize:12,fontWeight:600,background:"rgba(197,164,109,0.09)",color:G}}>Push Project Events</button>
           <button onClick={openAdd} style={{padding:"9px 20px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G,letterSpacing:.3}}>+ Add Item</button>
         </div>
       </div>
@@ -699,7 +752,8 @@ function App(){
                           <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                             <Badge text={item.type} fg={TYPE_COLOR[item.type]} bg={TYPE_BG[item.type]}/>
                             <Badge text={item.priority} fg={PRIO_COLOR[item.priority]} bg={PRIO_BG[item.priority]}/>
-                            {item.assignee&&<Badge text={item.assignee} fg={W2} bg={GLASS2}/>}
+                            {(item.raci?.responsible||[]).map(member=><Badge key={member} text={`R · ${member}`} fg={W2} bg={GLASS2}/>)}
+                            {item.pushToFamilyCalendar&&<Badge text="Family Calendar" fg={G} bg="rgba(197,164,109,0.14)"/>}
                           </div>
                         </div>
                         <div style={{display:"flex",gap:4,flexShrink:0}}>
@@ -718,6 +772,13 @@ function App(){
                       {/* Expanded detail */}
                       {isExp&&(
                         <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BORDER}`}}>
+                          {Object.entries({responsible:'Responsible',accountable:'Accountable',consulted:'Consulted',informed:'Informed'}).some(([key])=>(item.raci?.[key]||[]).length>0)&&(
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:10,marginBottom:12}}>
+                              {Object.entries({responsible:'Responsible',accountable:'Accountable',consulted:'Consulted',informed:'Informed'}).map(([key,label])=>(
+                                <div key={key}><Lbl>{label}</Lbl><div style={{fontSize:12,color:W2}}>{(item.raci?.[key]||[]).join(', ')||'—'}</div></div>
+                              ))}
+                            </div>
+                          )}
                           {item.notes&&<div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px 12px",fontSize:13,color:W2,lineHeight:1.6,marginBottom:12,whiteSpace:"pre-wrap"}}>{item.notes}</div>}
                           {item.cname&&(
                             <div style={{marginBottom:12}}>
@@ -829,13 +890,6 @@ function App(){
                 </select>
               </FField>
 
-              <FField label="Assigned To">
-                <select style={FI} value={form.assignee} onChange={e=>setForm(p=>({...p,assignee:e.target.value}))}>
-                  <option value="">— Select —</option>
-                  {MEMBERS.map(m=><option key={m}>{m}</option>)}
-                </select>
-              </FField>
-
               <FField label="Start Date">
                 <input style={FI} type="date" value={form.startDate||""} onChange={e=>setForm(p=>({...p,startDate:e.target.value}))}/>
               </FField>
@@ -846,6 +900,26 @@ function App(){
 
               <CostInput label="Estimated Cost" field="estcost" form={form} setForm={setForm}/>
               <CostInput label="Actual Cost" field="actcost" form={form} setForm={setForm}/>
+
+              <div style={{gridColumn:"1/-1",height:1,background:BORDER,margin:"4px 0"}}/>
+
+              <div style={{gridColumn:"1/-1"}}>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:600,color:W,marginBottom:4}}>RACI Assignments</div>
+                <div style={{fontSize:12,color:W3,marginBottom:12}}>Select one or more household members for each project role.</div>
+              </div>
+              {[
+                ['Responsible','Does the work','responsible'],
+                ['Accountable','Owns the outcome','accountable'],
+                ['Consulted','Provides input','consulted'],
+                ['Informed','Receives updates','informed'],
+              ].map(([label,role,key])=><MemberMultiSelect key={key} label={label} role={role} value={form.raci?.[key]||[]} onChange={value=>setForm(p=>({...p,raci:{...p.raci,[key]:value}}))}/>)}
+
+              <FField label="Family Calendar" full>
+                <label style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 14px",background:GLASS,borderRadius:8,border:`1.5px solid ${form.pushToFamilyCalendar?'rgba(197,164,109,0.4)':BORDER}`,cursor:"pointer"}}>
+                  <input type="checkbox" checked={form.pushToFamilyCalendar||false} onChange={e=>setForm(p=>({...p,pushToFamilyCalendar:e.target.checked}))} style={{width:17,height:17,accentColor:G,marginTop:1}}/>
+                  <span><span style={{display:"block",fontSize:13,fontWeight:600,color:W}}>Push this project event to Family Calendar</span><span style={{display:"block",fontSize:11,color:W3,marginTop:3}}>Uses the start and due dates, includes all RACI members, and defaults ownerless events to Family.</span></span>
+                </label>
+              </FField>
 
               <div style={{gridColumn:"1/-1",height:1,background:BORDER,margin:"4px 0"}}/>
 
