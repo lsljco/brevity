@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildBalanceSheet, summarizeActuals, categoryGroup, groupReportTransactions, reportStats } from './reportingData.js'
+import { buildBalanceSheet, summarizeActuals, categoryGroup, groupReportTransactions, reportStats, matchesTransactionFilter, budgetCategoryForTransaction, summarizeBudgetActuals } from './reportingData.js'
 
 test('builds actual P&L totals, monthly results, categories, and vendor spend', () => {
   const report = summarizeActuals([
@@ -34,4 +34,23 @@ test('Monarch-style reports group and summarize transactions', () => {
   assert.equal(categoryGroup('Groceries'), 'Food & Dining')
   assert.deepEqual(groupReportTransactions(rows, 'expense', 'group').map(row => [row.name, row.amount]), [['Food & Dining', 20]])
   assert.deepEqual(reportStats(rows, 'expense'), { total: 20, count: 2, largest: 12, average: 10 })
+})
+
+test('report filters carry category and direction into Transactions', () => {
+  const income = { id: '1', amount: -100, category: 'TS TransAmerica Income', name: 'Robert Half' }
+  const expense = { id: '2', amount: 20, category: 'Groceries', name: 'Market' }
+  assert.equal(matchesTransactionFilter(income, { direction: 'income', displayBy: 'category', value: 'TS TransAmerica Income' }), true)
+  assert.equal(matchesTransactionFilter(expense, { direction: 'income' }), false)
+  assert.equal(matchesTransactionFilter({ amount: 45, category: 'FOOD_AND_DRINK' }, { budgetCategory: 'Food' }), true)
+})
+
+test('budget actuals normalize Plaid categories and exclude transfers', () => {
+  assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'RENT_AND_UTILITIES' }), 'Utilities')
+  assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'TRANSFER_OUT' }), null)
+  assert.deepEqual(summarizeBudgetActuals([
+    { amount: 90, category: 'RENT_AND_UTILITIES' },
+    { amount: 10, category: 'ELECTRIC' },
+    { amount: -500, category: 'INCOME' },
+    { amount: 200, category: 'TRANSFER_OUT' },
+  ]), { Utilities: 100, Income: 500 })
 })
