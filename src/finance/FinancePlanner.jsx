@@ -10,6 +10,9 @@ import ActualTxModal from './ActualTxModal.jsx'
 import { buildProjection, today0, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinanceData } from './financeData.js'
 import { buildBalanceSheet, summarizeActuals } from './reportingData.js'
+import FinanceTimeframe from './FinanceTimeframe.jsx'
+import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
+import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimeframe.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1141,6 +1144,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [actualsLoading, setActualsLoading] = useState(false)
   const [actualsError, setActualsError] = useState(null)
   const [balanceOverrides, setBalanceOverrides] = useState(() => loadSavedValue('lslj_bal_overrides_v1', {}))
+  const [financeRange, setFinanceRange] = useState(() => loadSavedValue('brevity_finance_timeframe_v1', resolveTimeframe('last-12-months')))
+
+  useEffect(() => { try { localStorage.setItem('brevity_finance_timeframe_v1', JSON.stringify(financeRange)) } catch {} }, [financeRange])
 
   // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
   const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
@@ -1317,6 +1323,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       .filter(tx => !txOverrides[tx.id]?._deleted)
       .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
   }, [plaidActuals, plaidIdToLocal, activeAcctIds, txOverrides])
+
+  const timeframeActuals = useMemo(() => filterTransactionsByTimeframe(filteredActuals, financeRange), [filteredActuals, financeRange])
 
   // All unique merchant names for the edit modal vendor dropdown
   const allTxNames = useMemo(() => {
@@ -1964,6 +1972,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
       {AccountFilterBar}
+      {!formView && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
 
       {/* ══════════ DASHBOARD ══════════ */}
       {view === 'dashboard' && (
@@ -1990,15 +1999,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           {/* ── 5 KPI Cards ── */}
           <div className="kpi-grid">
             {[
-              { label: 'Total Balance',    value: fmtMoney(totBal),                                                        sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`,                trend: `vs last month`, icon: 'ti-wallet',          spark: sparkBalance,   good: true  },
-              { label: 'Monthly Income',   value: fmtMoney(monthlyIncome),                                                 sub: `${incomeSources.length} streams`,                                                       trend: 'vs last month',  icon: 'ti-trending-up',     spark: sparkIncome,    good: true  },
-              { label: 'Monthly Expenses', value: fmtMoney(monthlyExpense),                                                sub: `${fd.transactions.filter(t=>t.type==='expense').length} items`,                          trend: 'vs last month',  icon: 'ti-trending-down',   spark: sparkExpense,   good: false },
-              { label: 'Net Cash Flow',    value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),           sub: monthlyCashFlow >= 0 ? 'Monthly surplus' : 'Monthly deficit',                           trend: 'monthly',        icon: 'ti-arrows-exchange', spark: sparkNet,       good: monthlyCashFlow >= 0 },
-              { label: '90-Day Floor',     value: minDay ? fmtMoney(minBal) : '—',                                         sub: minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—',        trend: 'lowest point',   icon: 'ti-chart-bar',       spark: sparkFloor,     good: minBal >= 1000 },
+              { label: 'Total Balance',    value: fmtMoney(totBal),                                                        sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`,                trend: `vs last month`, icon: 'ti-wallet',          spark: sparkBalance,   good: true, target: 'accounts' },
+              { label: 'Monthly Income',   value: fmtMoney(monthlyIncome),                                                 sub: `${incomeSources.length} streams`,                                                       trend: 'vs last month',  icon: 'ti-trending-up',     spark: sparkIncome,    good: true, target: 'reporting' },
+              { label: 'Monthly Expenses', value: fmtMoney(monthlyExpense),                                                sub: `${fd.transactions.filter(t=>t.type==='expense').length} items`,                          trend: 'vs last month',  icon: 'ti-trending-down',   spark: sparkExpense,   good: false, target: 'reporting' },
+              { label: 'Net Cash Flow',    value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),           sub: monthlyCashFlow >= 0 ? 'Monthly surplus' : 'Monthly deficit',                           trend: 'monthly',        icon: 'ti-arrows-exchange', spark: sparkNet,       good: monthlyCashFlow >= 0, target: 'reporting' },
+              { label: '90-Day Floor',     value: minDay ? fmtMoney(minBal) : '—',                                         sub: minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—',        trend: 'lowest point',   icon: 'ti-chart-bar',       spark: sparkFloor,     good: minBal >= 1000, target: 'calendar' },
             ].map((kpi, i) => {
               const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
               return (
-                <div key={i} className="kpi-card">
+                <div key={i} className="kpi-card" role="button" tabIndex={0} title="View what makes up this total" onClick={() => setView(kpi.target)} onKeyDown={e => { if (e.key === 'Enter') setView(kpi.target) }} style={{ cursor: 'pointer' }}>
                   <div className="kpi-icon"><i className={`ti ${kpi.icon}`} /></div>
                   <div className="kpi-label">{kpi.label}</div>
                   <div className="kpi-value">{kpi.value}</div>
@@ -2099,9 +2108,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
                 {showActuals ? (
                   // Actuals: last 14 days of real posted/pending transactions
-                  filteredActuals.length === 0
+                  timeframeActuals.length === 0
                     ? <p style={{ fontSize: 14, color: 'var(--muted)' }}>{plaidActuals ? 'No recent transactions found.' : 'Connect a bank to see actuals.'}</p>
-                    : filteredActuals.slice(0, 14).map((tx, i) => {
+                    : timeframeActuals.slice(0, 14).map((tx, i) => {
                         const isIncome = tx.amount < 0 // Plaid: negative = money in
                         return (
                           <div key={i}
@@ -2518,7 +2527,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>
               {showActuals
-                ? `${filteredActuals.length} posted/pending transaction${filteredActuals.length !== 1 ? 's' : ''}`
+                ? `${timeframeActuals.length} posted/pending transaction${timeframeActuals.length !== 1 ? 's' : ''}`
                 : `${fd.transactions.length} scheduled transaction${fd.transactions.length !== 1 ? 's' : ''}`}
             </p>
             <button onClick={() => { setEditTx(null); setView('tx-form') }}
@@ -2529,15 +2538,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
           {/* ── Monthly totals summary ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
-            <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div role="button" tabIndex={0} onClick={() => setView('reporting')} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--income-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Monthly Income</p>
               <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(monthlyIncome)}</p>
             </div>
-            <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div role="button" tabIndex={0} onClick={() => setView('reporting')} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Monthly Expenses</p>
               <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(monthlyExpense)}</p>
             </div>
-            <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}` }}>
+            <div role="button" tabIndex={0} onClick={() => setView('reporting')} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}`, cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: monthlyCashFlow >= 0 ? 'var(--income-color)' : 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Net Cash Flow</p>
               <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{monthlyCashFlow >= 0 ? '+' : ''}{fmtMoney(monthlyCashFlow)}</p>
             </div>
@@ -2546,9 +2555,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {showActuals ? (
               // ── Actuals mode: Plaid posted/pending ──
-              filteredActuals.length === 0
+              timeframeActuals.length === 0
                 ? <p style={{ fontSize: 14, color: 'var(--muted)', padding: '20px 0' }}>{plaidActuals ? 'No transactions found for selected accounts.' : 'Connect a bank account to see posted transactions.'}</p>
-                : filteredActuals.map((tx, i) => {
+                : timeframeActuals.map((tx, i) => {
                     const isIncome = tx.amount < 0
                     return (
                       <div key={tx.id || i}
@@ -2671,10 +2680,22 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         </div>
       )}
 
+      {/* ══════════ RECURRING ══════════ */}
+      {view === 'recurring' && (
+        <div className="finance-inner">
+          <RecurringFinance scheduled={fd.transactions} actuals={timeframeActuals} range={financeRange} />
+        </div>
+      )}
+
       {/* ══════════ REPORTING ══════════ */}
       {view === 'reporting' && (
         <div className="finance-inner">
-          <ReportingView data={fd} proj={proj} plaidActuals={filteredActuals} />
+          <MonarchReports transactions={timeframeActuals} range={financeRange} />
+          <div style={{ margin: '34px 0 18px', borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 26 }}>
+            <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 500 }}>Business Statements</h2>
+            <p style={{ margin: '5px 0 0', color: 'var(--muted)', fontSize: 12 }}>Profitability, liquidity, budget, and vendor analysis</p>
+          </div>
+          <ReportingView data={fd} proj={proj} plaidActuals={timeframeActuals} />
         </div>
       )}
 

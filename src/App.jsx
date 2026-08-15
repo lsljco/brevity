@@ -46,6 +46,7 @@ const PILLARS = [
       { id: 'calendar',     label: 'Calendar',     icon: 'ti-calendar'         },
       { id: 'accounts',     label: 'Accounts',     icon: 'ti-building-bank'    },
       { id: 'budget',       label: 'Budget',       icon: 'ti-chart-bar'        },
+      { id: 'recurring',    label: 'Recurring',    icon: 'ti-repeat'           },
       { id: 'reporting',    label: 'Reporting',    icon: 'ti-report-analytics' },
       { id: 'property',     label: 'Projects',     icon: 'ti-building-estate'  },
     ]
@@ -58,7 +59,7 @@ const PILLARS = [
   },
 ]
 
-const FINANCE_VIEWS = new Set(['dashboard','transactions','calendar','accounts','budget','reporting'])
+const FINANCE_VIEWS = new Set(['dashboard','transactions','calendar','accounts','budget','recurring','reporting'])
 
 // Divider before these pillar indices (layer boundaries)
 const DIVIDER_BEFORE = new Set([1, 3, 4, 6])
