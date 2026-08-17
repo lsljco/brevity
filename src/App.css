@@ -531,6 +531,108 @@ html, body {
   display: none;
 }
 
+/* ── Connected applications ─────────────────────────── */
+.external-site-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #050505;
+  position: relative;
+  z-index: 1;
+}
+.external-site-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(197,164,109,0.18);
+  background: linear-gradient(135deg, rgba(197,164,109,0.08), rgba(255,255,255,0.015));
+}
+.external-site-toolbar h1 {
+  margin: 2px 0 3px;
+  color: var(--white);
+  font: 400 25px/1.1 var(--font-serif);
+}
+.external-site-eyebrow {
+  margin: 0;
+  color: var(--gold);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.external-site-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.external-site-open,
+.external-site-launch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: none;
+  padding: 10px 14px;
+  border: 1px solid rgba(197,164,109,0.42);
+  border-radius: 10px;
+  color: var(--gold-light);
+  background: rgba(197,164,109,0.08);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background .18s ease, border-color .18s ease;
+}
+.external-site-open:hover,
+.external-site-launch:hover {
+  background: rgba(197,164,109,0.16);
+  border-color: var(--gold);
+}
+.external-site-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 640px;
+  border: 0;
+  background: #fff;
+}
+.external-site-fallback {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 48px 28px;
+  text-align: center;
+}
+.external-site-fallback-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 1px solid rgba(197,164,109,0.28);
+  border-radius: 50%;
+  color: var(--gold);
+  background: rgba(197,164,109,0.08);
+  font-size: 30px;
+}
+.external-site-fallback h2 {
+  margin: 4px 0 0;
+  color: var(--white);
+  font: 400 30px/1.2 var(--font-serif);
+}
+.external-site-fallback p {
+  max-width: 500px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 
 /* ── Finance Root ────────────────────────────────────── */
 .finance-root {
@@ -1049,4 +1151,10 @@ select option { background: var(--graphite); color: var(--white); }
 }
 @media (max-width: 640px) {
   .metric-value { font-size: 20px; }
+  .external-site-toolbar { align-items: flex-start; padding: 14px; }
+  .external-site-toolbar h1 { font-size: 21px; }
+  .external-site-description { display: none; }
+  .external-site-open { padding: 9px; font-size: 0; }
+  .external-site-open i { font-size: 17px; }
+  .external-site-frame { min-height: 720px; }
 }
