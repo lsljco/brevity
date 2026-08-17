@@ -45,7 +45,7 @@ export function transactionDirection(transaction) {
 }
 
 export function categoryGroup(category = '') {
-  const value = category.toLowerCase()
+  const value = String(category).toLowerCase()
   if (/income|paycheck|deposit|interest/.test(value)) return 'Income'
   if (/food|drink|grocer|restaurant|coffee/.test(value)) return 'Food & Dining'
   if (/home|mortgage|rent|utility|electric|water|gas/.test(value)) return 'Housing'
@@ -62,7 +62,7 @@ export function categoryGroup(category = '') {
 
 export function reportKey(transaction, displayBy = 'category') {
   if (displayBy === 'merchant') return transaction.merchant_name || transaction.name || 'Unknown merchant'
-  const category = transaction.category || transaction.cat || 'Uncategorized'
+  const category = String(transaction.category || transaction.cat || 'Uncategorized')
   return displayBy === 'group' ? categoryGroup(category) : category
 }
 
@@ -83,4 +83,41 @@ export function reportStats(transactions = [], direction = 'expense') {
   const total = rows.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount) || 0), 0)
   const largest = rows.reduce((max, transaction) => Math.max(max, Math.abs(Number(transaction.amount) || 0)), 0)
   return { total, count: rows.length, largest, average: rows.length ? total / rows.length : 0 }
+}
+
+export function matchesTransactionFilter(transaction, filter = {}) {
+  if (!filter || Object.keys(filter).length === 0) return true
+  if (filter.ids?.length && !filter.ids.includes(transaction.id)) return false
+  if (filter.direction && transactionDirection(transaction) !== filter.direction) return false
+  if (filter.displayBy && filter.value && reportKey(transaction, filter.displayBy) !== filter.value) return false
+  if (filter.budgetCategory && budgetCategoryForTransaction(transaction) !== filter.budgetCategory) return false
+  return true
+}
+
+export function budgetCategoryForTransaction(transaction) {
+  if (transactionDirection(transaction) === 'income') return 'Income'
+  const raw = String(transaction.category || transaction.cat || '').toLowerCase().replaceAll('_', ' ')
+  if (/transfer|credit card payment/.test(raw)) return null
+  if (/utilit|electric|water|internet|phone|cable/.test(raw)) return 'Utilities'
+  if (/mortgage|rent|home|housing/.test(raw)) return 'Housing'
+  if (/auto|transport|fuel|gas station|parking|rideshare/.test(raw)) return 'Transportation'
+  if (/insurance/.test(raw)) return 'Insurance'
+  if (/health|medical|doctor|dental|pharmacy/.test(raw)) return 'Health'
+  if (/loan|debt|interest|bank fee/.test(raw)) return 'Debt'
+  if (/food|drink|grocer|restaurant|coffee/.test(raw)) return 'Food'
+  if (/subscription|streaming/.test(raw)) return 'Subscriptions'
+  if (/child|family|education|tuition|school/.test(raw)) return 'Family'
+  if (/home improvement|household/.test(raw)) return 'Household'
+  if (/shop|merchandise|entertainment|personal care|travel/.test(raw)) return 'Discretionary'
+  return 'Other'
+}
+
+export function summarizeBudgetActuals(transactions = []) {
+  return transactions.reduce((summary, transaction) => {
+    const category = budgetCategoryForTransaction(transaction)
+    if (!category) return summary
+    const amount = Math.abs(Number(transaction.amount) || 0)
+    summary[category] = (summary[category] || 0) + amount
+    return summary
+  }, {})
 }
