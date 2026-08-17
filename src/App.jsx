@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import FinancePlanner from './finance/FinancePlanner.jsx'
 import HomeHQ from './homehq/HomeHQ.jsx'
 import FamilyCalendar from './family/FamilyCalendar.jsx'
-import ExternalSiteView from './components/ExternalSiteView.jsx'
 
 // ── 7 Family Pillars ─────────────────────────────────────────────────────────
 const PILLARS = [
@@ -88,6 +87,45 @@ const EXTERNAL_SITES = {
 
 // Divider before these pillar indices (layer boundaries)
 const DIVIDER_BEFORE = new Set([1, 3, 4, 6])
+
+function ExternalSiteView({ title, description, url, embedded = true, unavailableReason }) {
+  return (
+    <section className="external-site-view" aria-label={title}>
+      <header className="external-site-toolbar">
+        <div>
+          <p className="external-site-eyebrow">Connected application</p>
+          <h1>{title}</h1>
+          <p className="external-site-description">{description}</p>
+        </div>
+        <a className="external-site-open" href={url} target="_blank" rel="noreferrer">
+          Open full screen <i className="ti ti-external-link" aria-hidden="true" />
+        </a>
+      </header>
+
+      {embedded ? (
+        <iframe
+          className="external-site-frame"
+          src={url}
+          title={title}
+          loading="eager"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allow="clipboard-read; clipboard-write"
+        />
+      ) : (
+        <div className="external-site-fallback">
+          <div className="external-site-fallback-icon">
+            <i className="ti ti-building-estate" aria-hidden="true" />
+          </div>
+          <h2>{title} is connected</h2>
+          <p>{unavailableReason}</p>
+          <a className="external-site-launch" href={url} target="_blank" rel="noreferrer">
+            Launch {title} <i className="ti ti-arrow-up-right" aria-hidden="true" />
+          </a>
+        </div>
+      )}
+    </section>
+  )
+}
 
 // ── Placeholder for pillars under construction ────────────────────────────────
 function PillarPlaceholder({ pillar }) {
