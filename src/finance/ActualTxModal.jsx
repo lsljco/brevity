@@ -1,28 +1,10 @@
-import { useState, useRef } from 'react'
+import { useId, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { DEFAULT_TRANSACTION_CATEGORIES, loadStoredCategoryOptions, mergeCategoryOptions, saveStoredCategoryOptions, transactionCategories } from './categoryData.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const FAMILY = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin']
-
-const CATEGORIES = [
-  'Food & Drink', 'Groceries', 'Restaurants', 'Coffee',
-  'Housing', 'Mortgage', 'Rent', 'HOA',
-  'Utilities', 'Electric', 'Water', 'Gas', 'Internet', 'Phone',
-  'Transport', 'Gas/Fuel', 'Parking', 'Rideshare',
-  'Insurance', 'Health Insurance', 'Auto Insurance', 'Home Insurance',
-  'Entertainment', 'Streaming', 'Movies', 'Sports', 'Subscriptions',
-  'Healthcare', 'Doctor', 'Pharmacy', 'Dental',
-  'Education', 'Tuition', 'Books',
-  'Savings', 'Investment',
-  'Shopping', 'Clothing', 'Electronics',
-  'Travel', 'Hotels', 'Airlines',
-  'Personal Care',
-  'Transfer',
-  'Income', 'Paycheck',
-  'Fees',
-  'Other',
-]
 
 const CAT_ICONS = {
   'Groceries': 'ti-shopping-cart', 'Food & Drink': 'ti-salad', 'Restaurants': 'ti-tools-kitchen-2',
@@ -47,8 +29,30 @@ const inputStyle = {
 const labelStyle = { fontSize: 11, fontWeight: 600, color: '#888884', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }
 const sectionStyle = { display: 'flex', flexDirection: 'column', gap: 4 }
 
+function CategoryInput({ value, onChange, onBlur, options, ariaLabel = 'Category', placeholder = 'Type or select a category…', style }) {
+  const listId = useId()
+  const categoryOptions = mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, options, value)
+
+  return (
+    <>
+      <input
+        aria-label={ariaLabel}
+        list={listId}
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        style={style}
+      />
+      <datalist id={listId}>
+        {categoryOptions.map(category => <option key={category} value={category} />)}
+      </datalist>
+    </>
+  )
+}
+
 // ── Rule Modal ────────────────────────────────────────────────────────────────
-function RuleModal({ initial, accounts, allTxNames, txCount, onSave, onClose }) {
+function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, onSave, onClose }) {
   const [tab, setTab] = useState('settings')
   const [cond, setCond] = useState({
     originalStatement: { on: false, value: initial?.originalStatement || '' },
@@ -167,11 +171,9 @@ function RuleModal({ initial, accounts, allTxNames, txCount, onSave, onClose }) 
                 </Row>
 
                 <Row label="Categories" k="categories" src={cond} set1={setCond1}>
-                  <select value={cond.categories.value} onChange={e => setCond1('categories', { value: e.target.value })}
-                    style={{ marginTop: 8, width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13, background: 'white', cursor: 'pointer' }}>
-                    <option value="">Select category...</option>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <CategoryInput value={cond.categories.value} onChange={e => setCond1('categories', { value: e.target.value })}
+                    options={categoryOptions} ariaLabel="Rule matching category"
+                    style={{ marginTop: 8, width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
                 </Row>
 
                 <Row label="Accounts" k="accounts" src={cond} set1={setCond1}>
@@ -199,15 +201,9 @@ function RuleModal({ initial, accounts, allTxNames, txCount, onSave, onClose }) 
                 </Row>
 
                 <Row label="Update category" k="updateCategory" src={act} set1={setAct1}>
-                  <select value={act.updateCategory.value} onChange={e => setAct1('updateCategory', { value: e.target.value })}
-                    style={{ marginTop: 8, width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13, background: 'white', cursor: 'pointer' }}>
-                    <option value="">Select category...</option>
-                    {CATEGORIES.map(c => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <CategoryInput value={act.updateCategory.value} onChange={e => setAct1('updateCategory', { value: e.target.value })}
+                    options={categoryOptions} ariaLabel="Rule update category"
+                    style={{ marginTop: 8, width: '100%', padding: '7px 10px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
                 </Row>
 
                 <Row label="Add tags" k="addTags" src={act} set1={setAct1}>
@@ -242,11 +238,10 @@ function RuleModal({ initial, accounts, allTxNames, txCount, onSave, onClose }) 
                   </button>
                   {splits.map((s, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <select value={s.cat} onChange={e => setSplits(sp => sp.map((x,j)=> j===i ? {...x,cat:e.target.value} : x))}
-                        style={{ flex: 2, padding: '6px 8px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13 }}>
-                        <option value="">Category...</option>
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <CategoryInput value={s.cat} onChange={e => setSplits(sp => sp.map((x,j)=> j===i ? {...x,cat:e.target.value} : x))}
+                        options={categoryOptions} ariaLabel={`Rule split ${i + 1} category`}
+                        placeholder="Type category…"
+                        style={{ flex: 2, minWidth: 0, padding: '6px 8px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13 }} />
                       <input type="number" value={s.amount} placeholder="$0.00"
                         onChange={e => setSplits(sp => sp.map((x,j)=> j===i ? {...x,amount:e.target.value} : x))}
                         style={{ flex: 1, padding: '6px 8px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13 }} />
@@ -338,25 +333,39 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
   const [catToast, setCatToast]               = useState(null)   // {category, merchant}
   const [showRuleModal, setShowRuleModal]      = useState(false)
   const [showSplits, setShowSplits]           = useState((tx.splits?.length || 0) > 0)
+  const [storedCategories, setStoredCategories] = useState(() => loadStoredCategoryOptions(localStorage))
   const fileRef = useRef()
+  const committedCategoryRef = useRef(form.category)
+  const categoryOptions = mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, storedCategories, transactionCategories(tx))
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const handleCatChange = (newCat) => {
-    const old = form.category
+  const rememberCategories = (...transactions) => {
+    const next = mergeCategoryOptions(storedCategories, transactions.map(transactionCategories))
+    if (saveStoredCategoryOptions(localStorage, next)) setStoredCategories(next)
+  }
+
+  const commitCategory = (rawCategory) => {
+    const newCat = rawCategory.trim()
+    const old = committedCategoryRef.current
     set('category', newCat)
+    committedCategoryRef.current = newCat
     if (newCat !== old && newCat) {
       setCatToast({ category: newCat, merchant: form.name, originalStatement: form.originalStatement })
     }
   }
 
   const handleSave = () => {
-    onSave({
+    const updated = {
       ...tx,
       ...form,
+      category: form.category.trim(),
+      splits: form.splits.map(split => ({ ...split, cat: (split.cat || split.category || '').trim() })),
       amount: parseFloat(form.amount) * (tx.amount < 0 ? -1 : 1),
       attachments,
-    })
+    }
+    rememberCategories(updated)
+    onSave(updated)
     onClose()
   }
 
@@ -483,12 +492,12 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
                     fontSize: 15, color: '#888884', pointerEvents: 'none',
                   }} aria-hidden="true" />
                 )}
-                <select value={form.category} onChange={e => handleCatChange(e.target.value)}
-                  style={{ ...inputStyle, paddingLeft: form.category ? 34 : 12, cursor: 'pointer' }}>
-                  <option value="">Select category...</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <CategoryInput value={form.category} onChange={e => set('category', e.target.value)}
+                  onBlur={e => commitCategory(e.target.value)} options={categoryOptions}
+                  ariaLabel="Transaction category"
+                  style={{ ...inputStyle, paddingLeft: form.category ? 34 : 12 }} />
               </div>
+              <span style={{ fontSize: 10, color: '#888884' }}>Type a new category or choose a saved one.</span>
             </div>
 
             {/* Amount (editable) */}
@@ -523,11 +532,9 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
                   {form.splits.map((s, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <select value={s.cat} onChange={e => set('splits', form.splits.map((x,j)=> j===i?{...x,cat:e.target.value}:x))}
-                        style={{ flex: 2, padding: '6px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#F7F6F2', fontSize: 13, cursor: 'pointer' }}>
-                        <option value="">Category...</option>
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <CategoryInput value={s.cat || s.category || ''} onChange={e => set('splits', form.splits.map((x,j)=> j===i?{...x,cat:e.target.value}:x))}
+                        options={categoryOptions} ariaLabel={`Split ${i + 1} category`} placeholder="Type category…"
+                        style={{ flex: 2, minWidth: 0, padding: '6px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#F7F6F2', fontSize: 13 }} />
                       <div style={{ position: 'relative', flex: 1 }}>
                         <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#888884', fontSize: 12 }}>$</span>
                         <input type="number" step="0.01" value={s.amount} placeholder="0.00"
@@ -630,8 +637,12 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
           initial={{ merchant: form.name, category: form.category, originalStatement: form.originalStatement }}
           accounts={accounts}
           allTxNames={allTxNames}
+          categoryOptions={categoryOptions}
           txCount={matchCount}
-          onSave={rule => { onSaveRule?.(rule) }}
+          onSave={rule => {
+            rememberCategories({ category: rule.actions?.updateCategory?.value, splits: rule.splits })
+            onSaveRule?.(rule)
+          }}
           onClose={() => setShowRuleModal(false)}
         />
       )}
