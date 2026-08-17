@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import FinancePlanner from './finance/FinancePlanner.jsx'
 import HomeHQ from './homehq/HomeHQ.jsx'
 import FamilyCalendar from './family/FamilyCalendar.jsx'
+import ExternalSiteView from './components/ExternalSiteView.jsx'
 
 // ── 7 Family Pillars ─────────────────────────────────────────────────────────
 const PILLARS = [
@@ -29,6 +30,8 @@ const PILLARS = [
     items: [
       { id: 'property', label: 'Projects', icon: 'ti-building-estate' },
       { id: 'family-calendar', label: 'Family Calendar', icon: 'ti-calendar-event' },
+      { id: 'malbec-estate', label: 'Malbec Estate', icon: 'ti-building-community' },
+      { id: 'live-intentional', label: 'Live Intentional', icon: 'ti-compass' },
     ]
   },
   // ── Layer 4: External — Knowledge & Stewardship
@@ -55,11 +58,33 @@ const PILLARS = [
   {
     id: 'ministry', label: 'Ministry & Fellowship', icon: 'ti-users', layer: 5,
     description: 'Impartation of the prior six pillars and discipleship of others.',
-    items: []
+    items: [
+      { id: 'apostolic-sermon-builder', label: 'Sermon Builder', icon: 'ti-book-2' },
+    ]
   },
 ]
 
 const FINANCE_VIEWS = new Set(['dashboard','transactions','calendar','accounts','budget','recurring','reporting'])
+
+const EXTERNAL_SITES = {
+  'malbec-estate': {
+    title: 'Malbec Estate',
+    description: 'Estate and household property management',
+    url: 'https://malbecestate.netlify.app/',
+    embedded: false,
+    unavailableReason: 'Malbec Estate currently blocks secure in-app display. Open it below while its hosting security setting is updated.',
+  },
+  'live-intentional': {
+    title: 'Live Intentional',
+    description: 'Intentional living and household planning',
+    url: 'https://liveintentional.netlify.app/',
+  },
+  'apostolic-sermon-builder': {
+    title: 'Apostolic Sermon Builder',
+    description: 'Sermon preparation and ministry resources',
+    url: 'https://apostolicsermonbuilderlseay.netlify.app/',
+  },
+}
 
 // Divider before these pillar indices (layer boundaries)
 const DIVIDER_BEFORE = new Set([1, 3, 4, 6])
@@ -214,6 +239,9 @@ export default function App() {
     }
     if (activeView === 'family-calendar') {
       return <FamilyCalendar />
+    }
+    if (EXTERNAL_SITES[activeView]) {
+      return <ExternalSiteView {...EXTERNAL_SITES[activeView]} />
     }
     if (FINANCE_VIEWS.has(activeView) && activePillar === 'finance') {
       return <FinancePlanner view={activeView} setView={(v) => navigateTo('finance', v)} />
