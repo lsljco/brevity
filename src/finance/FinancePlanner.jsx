@@ -13,6 +13,8 @@ import { buildBalanceSheet, matchesTransactionFilter, summarizeActuals, summariz
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
 import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimeframe.js'
+import DailyAlignment from './DailyAlignment.jsx'
+import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1644,6 +1646,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
   // ── Derived values (all use fd = filtered accounts + transactions) ─────────
   const t = today0()
+  const todayKey = toISO(t)
   const totBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
   const pt30  = proj.get(toISO(addDays(t, 30)))
   const pt90  = proj.get(toISO(addDays(t, 90)))
@@ -1702,6 +1705,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     return s + t.amount * (m[t.freq] ?? 1)
   }, 0)
   const monthlyCashFlow = monthlyIncome - monthlyExpense
+  const dailyBudget = useMemo(() => loadBudget(), [view])
+  const todayAlignment = useMemo(() => buildDailyAlignmentSnapshot({
+    date: todayKey,
+    accounts: fd.accounts,
+    scheduled: fd.transactions,
+    actuals: filteredActuals,
+    budget: dailyBudget,
+  }), [fd.accounts, fd.transactions, filteredActuals, dailyBudget, todayKey])
 
   // ── HomeHQ → Projects card ─────────────────────────────────────────────
   const ROOM_IMGS = {
@@ -1996,7 +2007,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
       {AccountFilterBar}
-      {!formView && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {!formView && view !== 'daily-alignment' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
 
       {/* ══════════ DASHBOARD ══════════ */}
       {view === 'dashboard' && (
@@ -2049,6 +2060,30 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               )
             })}
           </div>
+
+          <button
+            type="button"
+            className="dash-card daily-alignment-launch"
+            onClick={() => setView('daily-alignment')}
+            style={{
+              margin: '0 28px 16px', padding: '15px 18px', width: 'calc(100% - 56px)',
+              display: 'grid', gridTemplateColumns: 'minmax(210px,1.2fr) repeat(4,minmax(110px,.65fr)) auto',
+              alignItems: 'center', gap: 14, textAlign: 'left', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit',
+              borderColor: 'rgba(197,164,109,.25)', background: 'linear-gradient(110deg,rgba(197,164,109,.10),rgba(255,255,255,.025))',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="kpi-icon" style={{ flexShrink: 0 }}><i className="ti ti-target-arrow" /></span>
+              <span><strong style={{ display: 'block', fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 500 }}>Daily Financial Alignment</strong><small style={{ color: 'var(--muted)', fontSize: 10 }}>Today’s truth, actions, decisions, and covenant</small></span>
+            </span>
+            {[
+              ['Operating cash', fmtMoney(todayAlignment.availableOperatingCash)],
+              ['Expected', fmtMoney(todayAlignment.expectedInflows)],
+              ['Due next', fmtMoney(todayAlignment.dueTodayTomorrow)],
+              ['Daily limit', fmtMoney(todayAlignment.approvedDiscretionary)],
+            ].map(([label, value]) => <span key={label}><small style={{ display: 'block', color: 'var(--muted)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '.1em' }}>{label}</small><strong style={{ display: 'block', marginTop: 4, fontSize: 12 }}>{value}</strong></span>)}
+            <span style={{ color: 'var(--gold)', fontSize: 11, whiteSpace: 'nowrap' }}>Open alignment <i className="ti ti-arrow-right" /></span>
+          </button>
 
           {/* ── 3-column grid ── */}
           <div className="dash-main-grid">
@@ -2528,6 +2563,20 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══════════ DAILY FINANCIAL ALIGNMENT ══════════ */}
+      {view === 'daily-alignment' && (
+        <DailyAlignment
+          accounts={fd.accounts}
+          scheduled={fd.transactions}
+          actuals={filteredActuals}
+          budget={dailyBudget}
+          projection={proj}
+          onNavigate={setView}
+          onOpenCalendar={date => { setSelDay(date); setView('calendar') }}
+          onOpenActual={openActualTxModal}
+        />
       )}
 
       {/* ══════════ CALENDAR ══════════ */}
