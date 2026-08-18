@@ -44,6 +44,7 @@ const PILLARS = [
     description: 'Governance, stewardship, and financial planning for the family.',
     items: [
       { id: 'dashboard',    label: 'Dashboard',    icon: 'ti-layout-dashboard' },
+      { id: 'daily-alignment', label: 'Daily Alignment', icon: 'ti-target-arrow' },
       { id: 'transactions', label: 'Transactions', icon: 'ti-list'             },
       { id: 'calendar',     label: 'Calendar',     icon: 'ti-calendar'         },
       { id: 'accounts',     label: 'Accounts',     icon: 'ti-building-bank'    },
@@ -63,7 +64,7 @@ const PILLARS = [
   },
 ]
 
-const FINANCE_VIEWS = new Set(['dashboard','transactions','calendar','accounts','budget','recurring','reporting'])
+const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','transactions','calendar','accounts','budget','recurring','reporting'])
 
 const EXTERNAL_SITES = {
   'malbec-estate': {
