@@ -1,0 +1,96 @@
+# Brevity Household OS
+
+Brevity is the household source of truth. Apple/iCloud Calendar is the timed alert layer. Messages and future push channels are communication surfaces, not alternate sources of truth.
+
+## Implemented operating loop
+
+1. **Today** opens as the household command center.
+2. **Morning Alignment** guides the family through all Seven Pillars.
+3. Each phone selects a **device member profile** so My Day and signals are personal while the plan remains shared.
+4. Timed commitments may opt into **Apple/iCloud Calendar**.
+5. Brevity derives **critical, action and awareness signals** from unresolved household data.
+6. **Evening Recap** records wins, carryovers, lessons and tomorrow preparation.
+7. **Tomorrow Proposal** can use server-side AI to propose the next day; the family must still approve it during Morning Alignment.
+
+## Primary files
+
+- `dailyPlan.js` — structured Seven Pillars daily-plan domain model.
+- `TodayDashboard.jsx` — household command surface.
+- `MorningAlignment.jsx` — guided Seven Pillars alignment.
+- `TimedCommitmentsEditor.jsx` — structured appointments/meetings with Calendar opt-in.
+- `NotificationCenter.jsx` / `notifications.js` — Brevity signal model.
+- `EveningRecap.jsx` — daily close workflow.
+- `TomorrowProposal.jsx` — human-approved AI proposal workflow.
+- `memberProfile.js` / `MemberSwitcher.jsx` — per-device household identity.
+- `householdApi.js` / `useDailyPlan.js` — shared plan client boundary.
+- `netlify/functions/household-data.js` — strong-consistency Netlify Blob persistence.
+- `netlify/functions/icloud-calendar.mjs` — Brevity-owned iCloud CalDAV service migrated from Malbec Estate.
+- `src/family/calendarSync.js` — idempotent Brevity → iCloud reconciliation.
+- `src/family/FamilyCalendar.jsx` — unified Brevity + iCloud calendar view.
+- `netlify/functions/daily-proposal.mjs` — optional server-side OpenAI proposal generation.
+
+## Household ownership defaults
+
+- Spiritual Maturity: Larry
+- Health & Nutrition: Terica
+- Physical Fitness: Larry coordinates
+- Household Management: Larry coordinates
+- Education / Think Tank: Larry coordinates
+- Finance: Larry
+- Ministry & Fellowship: Larry + Lorenzo
+
+## Environment
+
+Shared household storage uses:
+
+- `NETLIFY_SITE_ID`
+- `NETLIFY_TOKEN`
+
+Optional household settings:
+
+- `BREVITY_HOUSEHOLD_ID` — defaults to `lslj-family`
+- `BREVITY_FAMILY_KEY` — enables the `x-brevity-family-key` request check
+
+### Apple/iCloud Calendar
+
+- `BREVITY_FAMILY_CALENDAR_PIN` — family PIN used to unlock calendar operations
+- `ICLOUD_EMAIL` — Apple/iCloud account email that can write the selected calendar
+- `ICLOUD_APP_PASSWORD` — Apple app-specific password; never the normal Apple ID password
+- `ICLOUD_CALENDAR_NAME` — optional exact calendar name
+
+Calendar credentials remain server-side and are never returned to the browser.
+
+### Brevity AI
+
+- `OPENAI_API_KEY` — server-side only
+- `BREVITY_AI_MODEL` — optional model override; defaults to `gpt-5.6`
+
+The proposal function uses the Responses API with structured output and `store: false`. If no API key is configured, the rest of Brevity continues to operate and only proposal generation is unavailable.
+
+## Calendar policy
+
+Brevity remains authoritative. An item is eligible for Apple/iCloud Calendar only when `calendarSync: true` and it has a meaningful date/time. The reconciliation layer stores a Brevity source ID in Brevity-owned calendar events, making later synchronization idempotent and leaving unrelated iCloud events untouched.
+
+Normally sync:
+- medical appointments
+- interviews
+- school events
+- contractor appointments
+- ministry meetings
+- fixed-time commitments where an Apple alert adds value
+
+Normally remain Brevity-only:
+- Isaiah reading
+- grocery funding review
+- Think Tank topics
+- meal planning
+- finance review
+- content preparation
+
+## Malbec Estate
+
+Malbec Estate has been removed from Brevity navigation. Its reusable iCloud CalDAV capability was migrated into Brevity first. The Malbec repository should remain archived/reference-only until the family confirms there is no remaining unique data to migrate; do not delete the repository merely because the navigation link is gone.
+
+## Persistence roadmap
+
+The Household OS client talks through an API boundary rather than directly to Netlify Blob. Netlify Blob is the initial shared store. When Brevity needs full authentication, relational history, row-level permissions, richer auditability, or cross-module queries, migrate the API implementation to Postgres/Supabase without rewriting the Household OS UI.

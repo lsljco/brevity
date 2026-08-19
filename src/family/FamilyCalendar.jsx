@@ -1,34 +1,61 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
+import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
 
 const gold = '#C5A46D'
 const soft = 'rgba(247,243,234,.72)'
 const muted = 'rgba(247,243,234,.42)'
 const border = 'rgba(255,255,255,.08)'
-
 const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+
+const normalizeLegacy = event => ({
+  ...event,
+  date: event.start,
+  source: 'brevity-legacy',
+  owner: event.owner || 'Family',
+})
 
 export default function FamilyCalendar(){
   const today = new Date()
   const [month,setMonth]=useState(today.getMonth())
   const [year,setYear]=useState(today.getFullYear())
   const [member,setMember]=useState('Family')
-  const [events,setEvents]=useState(()=>readJson(localStorage,FAMILY_CALENDAR_KEY,[]))
+  const [legacyEvents,setLegacyEvents]=useState(()=>readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
+  const [icloudEvents,setIcloudEvents]=useState([])
+  const [icloudState,setIcloudState]=useState('loading')
+  const [calendarName,setCalendarName]=useState('Apple/iCloud Calendar')
+
+  const loadIcloud = async () => {
+    setIcloudState('loading')
+    try {
+      const result = await fetchICloudCalendarEvents()
+      setIcloudEvents((result.events || []).map(event => ({ ...event, source: 'icloud', owner: event.owner || 'Family' })))
+      setCalendarName(result.calendar || 'Apple/iCloud Calendar')
+      setIcloudState('ready')
+    } catch (error) {
+      setIcloudEvents([])
+      setIcloudState(error.status === 401 ? 'locked' : error.status === 503 ? 'unconfigured' : 'error')
+    }
+  }
 
   useEffect(()=>{
-    const refresh=()=>setEvents(readJson(localStorage,FAMILY_CALENDAR_KEY,[]))
+    loadIcloud()
+    const refresh=()=>setLegacyEvents(readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
     window.addEventListener('storage',refresh)
     window.addEventListener('brevity-family-calendar-updated',refresh)
     return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('brevity-family-calendar-updated',refresh)}
   },[])
 
-  const filtered=useMemo(()=>events.filter(event=>member==='Family'||event.members?.includes(member)||event.owner===member),[events,member])
+  const allEvents=useMemo(()=>[...legacyEvents,...icloudEvents],[legacyEvents,icloudEvents])
+  const filtered=useMemo(()=>allEvents.filter(event=>member==='Family'||event.members?.includes(member)||event.owner===member),[allEvents,member])
   const byDate=useMemo(()=>{
     const map={}
     filtered.forEach(event=>{
-      if(!event.start)return
-      ;(map[event.start]??=[]).push(event)
+      const key=event.date||event.start
+      if(!key)return
+      ;(map[key]??=[]).push(event)
     })
+    Object.values(map).forEach(items=>items.sort((a,b)=>(a.time||'').localeCompare(b.time||'')))
     return map
   },[filtered])
   const first=new Date(year,month,1).getDay()
@@ -37,12 +64,24 @@ export default function FamilyCalendar(){
   while(cells.length%7)cells.push(null)
   const move=delta=>{const next=new Date(year,month+delta,1);setYear(next.getFullYear());setMonth(next.getMonth())}
 
+  const stateCopy={
+    loading:'Checking secure iCloud calendar…',
+    ready:`Connected to ${calendarName}`,
+    locked:'iCloud calendar is secure and currently locked on this device.',
+    unconfigured:'iCloud calendar credentials are not configured in Brevity yet.',
+    error:'iCloud calendar could not be reached. Brevity events remain available.',
+  }
+
   return <div style={{minHeight:'100vh',background:'#000',padding:'28px 32px',color:soft,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:18,flexWrap:'wrap',marginBottom:24}}>
-      <div><h1 style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:500,color:'rgba(247,243,234,.92)'}}>Family Calendar</h1><p style={{margin:'5px 0 0',fontSize:12,color:muted}}>Shared household events · project events publish here automatically</p></div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:18,flexWrap:'wrap',marginBottom:18}}>
+      <div><h1 style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:500,color:'rgba(247,243,234,.92)'}}>Family Calendar</h1><p style={{margin:'5px 0 0',fontSize:12,color:muted}}>Brevity is authoritative · Apple Calendar supplies native timed alerts</p></div>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         {['Family',...HOUSEHOLD_MEMBERS].map(name=><button key={name} onClick={()=>setMember(name)} style={{padding:'7px 12px',borderRadius:20,border:`1px solid ${member===name?gold:border}`,background:member===name?'rgba(197,164,109,.16)':'rgba(255,255,255,.04)',color:member===name?gold:muted,cursor:'pointer',fontSize:12}}>{name==='Family'?'All / Family':name}</button>)}
       </div>
+    </div>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:20,padding:'10px 12px',border:`1px solid ${border}`,borderRadius:10,background:'rgba(255,255,255,.025)'}}>
+      <span style={{fontSize:10,color:icloudState==='ready'?gold:muted}}>{stateCopy[icloudState]}</span>
+      <button onClick={loadIcloud} style={{border:`1px solid ${border}`,background:'rgba(255,255,255,.04)',color:soft,borderRadius:8,padding:'6px 10px',fontSize:10,cursor:'pointer'}}>Refresh</button>
     </div>
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:18}}>
       <button aria-label="Previous month" onClick={()=>move(-1)} style={{background:'rgba(255,255,255,.05)',border:`1px solid ${border}`,color:soft,borderRadius:8,padding:'6px 12px',cursor:'pointer'}}>‹</button>
@@ -56,13 +95,13 @@ export default function FamilyCalendar(){
         const key=iso(new Date(year,month,day)); const dayEvents=byDate[key]||[]; const isToday=key===iso(today)
         return <div key={key} style={{minHeight:108,padding:8,borderRadius:9,border:`1px solid ${isToday?'rgba(197,164,109,.48)':border}`,background:isToday?'rgba(197,164,109,.08)':'rgba(255,255,255,.035)'}}>
           <div style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
-          {dayEvents.map(event=><div key={event.id} style={{borderLeft:`2px solid ${gold}`,background:'rgba(197,164,109,.10)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}} title={(event.members||['Family']).join(', ')}>
-            <div style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.title}</div>
-            <div style={{fontSize:9,color:muted,marginTop:2}}>{(event.members||['Family']).join(', ')}</div>
+          {dayEvents.map(event=><div key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
+            <div style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>
+            <div style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{event.source==='icloud'?'Apple alert':'Brevity legacy'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
       })}
     </div>
-    {filtered.length===0&&<div style={{textAlign:'center',padding:'42px 20px',color:muted}}>No Family Calendar events yet. Open Projects, add dates, and choose “Push this project event to Family Calendar.”</div>}
+    {filtered.length===0&&<div style={{textAlign:'center',padding:'42px 20px',color:muted}}>No calendar commitments for this view. Add timed commitments in Morning Alignment and enable Calendar when an Apple alert is useful.</div>}
   </div>
 }
