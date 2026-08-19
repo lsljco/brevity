@@ -1,3 +1,4 @@
+import './TodayDashboard.css'
 import { countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
 
 const PILLARS = [
