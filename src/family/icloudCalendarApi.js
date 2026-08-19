@@ -16,25 +16,11 @@ async function request(method, body, query = '') {
   return payload
 }
 
-export function loginFamilyCalendar(pin) {
-  return request('POST', { pin }, '?action=login')
-}
-
-export function fetchICloudCalendarEvents() {
-  return request('GET')
-}
-
-export function createICloudCalendarEvent(event) {
-  return request('POST', event)
-}
-
-export function updateICloudCalendarEvent(event) {
-  return request('PUT', event)
-}
-
-export function deleteICloudCalendarEvent(event) {
-  return request('DELETE', event)
-}
+export function loginFamilyCalendar(pin) { return request('POST', { pin }, '?action=login') }
+export function fetchICloudCalendarEvents() { return request('GET') }
+export function createICloudCalendarEvent(event) { return request('POST', event) }
+export function updateICloudCalendarEvent(event) { return request('PUT', event) }
+export function deleteICloudCalendarEvent(event) { return request('DELETE', event) }
 
 export function isCalendarEligible(item) {
   return Boolean(item?.calendarSync && item?.title && (item?.date || item?.dueAt || item?.startTime))
@@ -48,6 +34,8 @@ export function planItemToCalendarEvent(item, planDate, pillar = 'household') {
     time: item.startTime || '',
     allDay: !item.startTime,
     pillar,
+    owner: item.owner || 'Family',
+    participants: item.participants || [],
     priority: item.priority === 'high' || item.priority === 'critical',
   }
 }
