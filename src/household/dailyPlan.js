@@ -27,9 +27,13 @@ export const NOTIFICATION_LEVEL = {
   critical: 'critical',
 }
 
+const arrayOrEmpty = value => Array.isArray(value) ? value : []
+const objectOrEmpty = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+const makeId = () => globalThis.crypto?.randomUUID?.() || `brevity-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
 export function createPlanItem(overrides = {}) {
   return {
-    id: overrides.id || crypto.randomUUID(),
+    id: overrides.id || makeId(),
     title: '',
     notes: '',
     owner: 'Family',
@@ -43,6 +47,7 @@ export function createPlanItem(overrides = {}) {
     calendarSync: false,
     notificationLevel: NOTIFICATION_LEVEL.awareness,
     ...overrides,
+    participants: arrayOrEmpty(overrides.participants),
   }
 }
 
@@ -139,34 +144,93 @@ export function createEmptyDailyPlan(date) {
   }
 }
 
-export function normalizeDailyPlan(plan = {}) {
-  const base = createEmptyDailyPlan(plan.date || new Date().toISOString().slice(0, 10))
+export function normalizeDailyPlan(input = {}) {
+  const plan = objectOrEmpty(input)
+  const date = typeof plan.date === 'string' && plan.date ? plan.date : new Date().toISOString().slice(0, 10)
+  const base = createEmptyDailyPlan(date)
+  const morningAlignment = objectOrEmpty(plan.morningAlignment)
+  const spiritual = objectOrEmpty(plan.spiritual)
+  const health = objectOrEmpty(plan.health)
+  const fitness = objectOrEmpty(plan.fitness)
+  const household = objectOrEmpty(plan.household)
+  const education = objectOrEmpty(plan.education)
+  const finance = objectOrEmpty(plan.finance)
+  const ministry = objectOrEmpty(plan.ministry)
+  const recap = objectOrEmpty(plan.recap)
+
   return {
     ...base,
     ...plan,
-    morningAlignment: { ...base.morningAlignment, ...plan.morningAlignment },
-    spiritual: { ...base.spiritual, ...plan.spiritual },
-    health: { ...base.health, ...plan.health },
-    fitness: { ...base.fitness, ...plan.fitness },
-    household: { ...base.household, ...plan.household },
+    date,
+    topPriorities: arrayOrEmpty(plan.topPriorities),
+    assignments: arrayOrEmpty(plan.assignments),
+    decisions: arrayOrEmpty(plan.decisions),
+    morningAlignment: { ...base.morningAlignment, ...morningAlignment },
+    spiritual: {
+      ...base.spiritual,
+      ...spiritual,
+      scripture: arrayOrEmpty(spiritual.scripture),
+      prayerFocus: arrayOrEmpty(spiritual.prayerFocus),
+      discussionPrompts: arrayOrEmpty(spiritual.discussionPrompts),
+    },
+    health: {
+      ...base.health,
+      ...health,
+      groceries: arrayOrEmpty(health.groceries),
+    },
+    fitness: {
+      ...base.fitness,
+      ...fitness,
+      participants: arrayOrEmpty(fitness.participants),
+    },
+    household: {
+      ...base.household,
+      ...household,
+      appointments: arrayOrEmpty(household.appointments),
+      priorities: arrayOrEmpty(household.priorities),
+      errands: arrayOrEmpty(household.errands),
+      openItems: arrayOrEmpty(household.openItems),
+    },
     education: {
       ...base.education,
-      ...plan.education,
-      isaiah: { ...base.education.isaiah, ...plan.education?.isaiah },
+      ...education,
+      isaiah: { ...base.education.isaiah, ...objectOrEmpty(education.isaiah) },
     },
-    finance: { ...base.finance, ...plan.finance },
-    ministry: { ...base.ministry, ...plan.ministry },
-    recap: { ...base.recap, ...plan.recap },
-    updatedAt: plan.updatedAt || new Date().toISOString(),
+    finance: {
+      ...base.finance,
+      ...finance,
+      bills: arrayOrEmpty(finance.bills),
+      purchases: arrayOrEmpty(finance.purchases),
+      transfers: arrayOrEmpty(finance.transfers),
+      accountsToFund: arrayOrEmpty(finance.accountsToFund),
+      incomePipeline: arrayOrEmpty(finance.incomePipeline),
+    },
+    ministry: {
+      ...base.ministry,
+      ...ministry,
+      owners: arrayOrEmpty(ministry.owners).length ? arrayOrEmpty(ministry.owners) : base.ministry.owners,
+      meetings: arrayOrEmpty(ministry.meetings),
+      fellowshipFollowUps: arrayOrEmpty(ministry.fellowshipFollowUps),
+      prayerNeeds: arrayOrEmpty(ministry.prayerNeeds),
+    },
+    recap: {
+      ...base.recap,
+      ...recap,
+      wins: arrayOrEmpty(recap.wins),
+      carryovers: arrayOrEmpty(recap.carryovers),
+      lessons: arrayOrEmpty(recap.lessons),
+      tomorrowPrep: arrayOrEmpty(recap.tomorrowPrep),
+    },
+    updatedAt: typeof plan.updatedAt === 'string' && plan.updatedAt ? plan.updatedAt : new Date().toISOString(),
   }
 }
 
 export function countOpenDecisions(plan) {
   const normalized = normalizeDailyPlan(plan)
-  return normalized.decisions.filter(decision => decision.status !== ITEM_STATUS.complete && decision.status !== ITEM_STATUS.deferred).length
+  return normalized.decisions.filter(decision => decision?.status !== ITEM_STATUS.complete && decision?.status !== ITEM_STATUS.deferred).length
 }
 
 export function assignmentsForMember(plan, member) {
   const normalized = normalizeDailyPlan(plan)
-  return normalized.assignments.filter(item => item.owner === member || item.participants?.includes(member))
+  return normalized.assignments.filter(item => item && (item.owner === member || arrayOrEmpty(item.participants).includes(member)))
 }
