@@ -1,0 +1,225 @@
+import crypto from "node:crypto";
+
+const CALDAV_ROOT = "https://caldav.icloud.com";
+
+const json = (statusCode, body, extraHeaders = {}) => ({
+  statusCode,
+  headers: {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "content-type",
+    "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
+    ...extraHeaders,
+  },
+  body: JSON.stringify(body),
+});
+
+const sessionSignature = () => crypto
+  .createHmac("sha256", process.env.BREVITY_FAMILY_CALENDAR_PIN || "not-configured")
+  .update("brevity-family-calendar-v1")
+  .digest("hex");
+
+const hasCalendarSession = event => {
+  const cookie = event.headers?.cookie || event.headers?.Cookie || "";
+  const supplied = cookie.match(/(?:^|;\s*)brevity_calendar_session=([a-f0-9]+)/i)?.[1] || "";
+  const expected = sessionSignature();
+  if (supplied.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+};
+
+const handleLogin = event => {
+  const configuredPin = process.env.BREVITY_FAMILY_CALENDAR_PIN;
+  if (!configuredPin) return json(503, { error: "The Brevity family calendar PIN has not been configured yet." });
+  let suppliedPin = "";
+  try { suppliedPin = JSON.parse(event.body || "{}").pin || ""; } catch {}
+  const supplied = Buffer.from(String(suppliedPin));
+  const expected = Buffer.from(String(configuredPin));
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+    return json(401, { error: "Incorrect family calendar PIN." });
+  }
+  return json(200, { ok: true }, {
+    "set-cookie": `brevity_calendar_session=${sessionSignature()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
+  });
+};
+
+const xmlDecode = value => String(value || "")
+  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+  .replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+
+const firstTag = (xml, name) => {
+  const match = String(xml).match(new RegExp(`<(?:\\w+:)?${name}[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${name}>`, "i"));
+  return match ? xmlDecode(match[1].replace(/<[^>]+>/g, "").trim()) : "";
+};
+
+const blocks = (xml, name) => [...String(xml).matchAll(new RegExp(`<(?:\\w+:)?${name}\\b[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${name}>`, "gi"))].map(m => m[1]);
+
+const authHeader = () => {
+  const email = process.env.ICLOUD_EMAIL;
+  const password = process.env.ICLOUD_APP_PASSWORD;
+  if (!email || !password) throw new Error("iCloud Calendar is not configured yet.");
+  return `Basic ${Buffer.from(`${email}:${password.replace(/-/g, "")}`).toString("base64")}`;
+};
+
+async function caldav(url, method, body = "", extraHeaders = {}) {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      authorization: authHeader(),
+      "content-type": method === "PUT" ? "text/calendar; charset=utf-8" : "application/xml; charset=utf-8",
+      ...extraHeaders,
+    },
+    body: body || undefined,
+    redirect: "follow",
+  });
+  const text = await response.text();
+  if (!response.ok && response.status !== 207) {
+    const err = new Error(`iCloud returned ${response.status}.`);
+    err.status = response.status;
+    err.detail = text.slice(0, 300);
+    throw err;
+  }
+  return { response, text };
+}
+
+async function discoverCalendar() {
+  const principalReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
+  const principalXml = (await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" })).text;
+  const principal = firstTag(principalXml, "href");
+  if (!principal) throw new Error("Could not find the iCloud Calendar account.");
+
+  const homeReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
+  const homeXml = (await caldav(new URL(principal, CALDAV_ROOT).href, "PROPFIND", homeReq, { depth: "0" })).text;
+  const home = firstTag(homeXml, "href");
+  if (!home) throw new Error("Could not find the iCloud calendar collection.");
+
+  const listReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/></d:prop></d:propfind>`;
+  const listXml = (await caldav(new URL(home, CALDAV_ROOT).href, "PROPFIND", listReq, { depth: "1" })).text;
+  const candidates = blocks(listXml, "response").map(block => ({
+    href: firstTag(block, "href"),
+    name: firstTag(block, "displayname"),
+    calendar: /<(?:\w+:)?calendar\b/i.test(block),
+    events: /name=["']VEVENT["']/i.test(block) || !/supported-calendar-component-set/i.test(block),
+  })).filter(item => item.calendar && item.events && !/(inbox|outbox|notification)/i.test(item.href));
+
+  const wanted = (process.env.ICLOUD_CALENDAR_NAME || "").trim().toLowerCase();
+  const chosen = (wanted && candidates.find(item => item.name.toLowerCase() === wanted)) || candidates[0];
+  if (!chosen) throw new Error(wanted ? `No iCloud calendar named “${process.env.ICLOUD_CALENDAR_NAME}” was found.` : "No writable iCloud calendar was found.");
+  return { url: new URL(chosen.href, CALDAV_ROOT).href, name: chosen.name || "iCloud Calendar" };
+}
+
+const unfold = ics => String(ics).replace(/\r?\n[ \t]/g, "");
+const icsValue = (ics, key) => {
+  const match = unfold(ics).match(new RegExp(`^${key}(?:;[^:]*)?:(.*)$`, "mi"));
+  return match ? match[1].trim() : "";
+};
+const unescapeIcs = value => String(value || "").replace(/\\n/gi, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
+const escapeIcs = value => String(value || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+
+function parseDate(value) {
+  const match = String(value).match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
+  if (!match) return null;
+  return { year: +match[1], month: +match[2], day: +match[3], hour: +(match[4] || 0), minute: +(match[5] || 0), allDay: !match[4] };
+}
+
+function parseEvent(ics, href, etag) {
+  const start = parseDate(icsValue(ics, "DTSTART"));
+  if (!start) return null;
+  return {
+    id: icsValue(ics, "UID"),
+    title: unescapeIcs(icsValue(ics, "SUMMARY")) || "Untitled event",
+    date: `${start.year}-${String(start.month).padStart(2, "0")}-${String(start.day).padStart(2, "0")}`,
+    time: start.allDay ? "" : new Date(2000, 0, 1, start.hour, start.minute).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    allDay: start.allDay,
+    pillar: unescapeIcs(icsValue(ics, "CATEGORIES")).toLowerCase() || "household",
+    priority: icsValue(ics, "PRIORITY") === "1" || icsValue(ics, "X-BREVITY-PRIORITY") === "TRUE",
+    href,
+    etag,
+  };
+}
+
+function formatIcsDate(dateKey, time, allDay) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const ymd = `${year}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`;
+  if (allDay || !time) {
+    const next = new Date(year, month - 1, day + 1);
+    const nextYmd = `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, "0")}${String(next.getDate()).padStart(2, "0")}`;
+    return { start: `DTSTART;VALUE=DATE:${ymd}`, end: `DTEND;VALUE=DATE:${nextYmd}` };
+  }
+  const parsed = String(time).match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  let hour = parsed ? +parsed[1] : 9;
+  const minute = parsed ? +parsed[2] : 0;
+  const meridiem = parsed?.[3]?.toUpperCase();
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  const start = new Date(year, month - 1, day, hour, minute);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const localStamp = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
+  return { start: `DTSTART:${localStamp(start)}`, end: `DTEND:${localStamp(end)}` };
+}
+
+function makeIcs(item, uid) {
+  const dates = formatIcsDate(item.date, item.time, item.allDay);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Brevity//Household OS//EN", "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${stamp}`, dates.start, dates.end,
+    `SUMMARY:${escapeIcs(item.title)}`, `CATEGORIES:${escapeIcs(item.pillar || "household")}`,
+    `PRIORITY:${item.priority ? 1 : 0}`, `X-BREVITY-PRIORITY:${item.priority ? "TRUE" : "FALSE"}`,
+    "END:VEVENT", "END:VCALENDAR", "",
+  ].join("\r\n");
+}
+
+async function listEvents(calendar) {
+  const now = new Date();
+  const start = `${now.getFullYear() - 1}0101T000000Z`;
+  const end = `${now.getFullYear() + 3}1231T235959Z`;
+  const report = `<?xml version="1.0"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${start}" end="${end}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
+  const xml = (await caldav(calendar.url, "REPORT", report, { depth: "1" })).text;
+  return blocks(xml, "response").map(block => {
+    const href = firstTag(block, "href");
+    const etag = firstTag(block, "getetag");
+    const raw = block.match(/<(?:\w+:)?calendar-data[^>]*>([\s\S]*?)<\/(?:\w+:)?calendar-data>/i)?.[1] || "";
+    return parseEvent(xmlDecode(raw), href, etag);
+  }).filter(Boolean);
+}
+
+export const handler = async event => {
+  if (event.httpMethod === "OPTIONS") return json(204, {});
+  if (event.httpMethod === "POST" && event.queryStringParameters?.action === "login") return handleLogin(event);
+  if (!process.env.BREVITY_FAMILY_CALENDAR_PIN) return json(503, { error: "The Brevity family calendar PIN has not been configured yet." });
+  if (!hasCalendarSession(event)) return json(401, { error: "Calendar locked. Enter the family PIN to continue." });
+
+  try {
+    const calendar = await discoverCalendar();
+    if (event.httpMethod === "GET") return json(200, { calendar: calendar.name, events: await listEvents(calendar) });
+    const item = event.body ? JSON.parse(event.body) : {};
+
+    if (event.httpMethod === "POST") {
+      const uid = `${crypto.randomUUID()}@brevity-household`;
+      const href = `${calendar.url.replace(/\/?$/, "/")}${encodeURIComponent(uid)}.ics`;
+      const result = await caldav(href, "PUT", makeIcs(item, uid), { "if-none-match": "*" });
+      return json(201, { ok: true, id: uid, href: new URL(result.response.url).pathname, etag: result.response.headers.get("etag") || "" });
+    }
+
+    if (!item.href || !String(item.href).startsWith("/")) return json(400, { error: "This event is not linked to iCloud." });
+    const href = new URL(item.href, CALDAV_ROOT).href;
+
+    if (event.httpMethod === "PUT") {
+      const headers = item.etag ? { "if-match": item.etag } : {};
+      const result = await caldav(href, "PUT", makeIcs(item, item.id), headers);
+      return json(200, { ok: true, etag: result.response.headers.get("etag") || item.etag || "" });
+    }
+
+    if (event.httpMethod === "DELETE") {
+      await caldav(href, "DELETE", "", item.etag ? { "if-match": item.etag } : {});
+      return json(200, { ok: true });
+    }
+
+    return json(405, { error: "Method not allowed." });
+  } catch (error) {
+    console.error("Brevity iCloud Calendar error", error.message, error.detail || "");
+    const status = /not configured/i.test(error.message) ? 503 : error.status === 401 ? 401 : 500;
+    return json(status, { error: status === 401 ? "iCloud rejected the account email or app-specific password." : error.message });
+  }
+};
