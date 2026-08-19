@@ -127,6 +127,7 @@ function parseEvent(ics, href, etag) {
   if (!start) return null;
   return {
     id: icsValue(ics, "UID"),
+    sourceId: unescapeIcs(icsValue(ics, "X-BREVITY-SOURCE-ID")),
     title: unescapeIcs(icsValue(ics, "SUMMARY")) || "Untitled event",
     date: `${start.year}-${String(start.month).padStart(2, "0")}-${String(start.day).padStart(2, "0")}`,
     time: start.allDay ? "" : new Date(2000, 0, 1, start.hour, start.minute).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
@@ -165,6 +166,7 @@ function makeIcs(item, uid) {
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Brevity//Household OS//EN", "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${stamp}`, dates.start, dates.end,
     `SUMMARY:${escapeIcs(item.title)}`, `CATEGORIES:${escapeIcs(item.pillar || "household")}`,
+    `X-BREVITY-SOURCE-ID:${escapeIcs(item.sourceId || "")}`,
     `PRIORITY:${item.priority ? 1 : 0}`, `X-BREVITY-PRIORITY:${item.priority ? "TRUE" : "FALSE"}`,
     "END:VEVENT", "END:VCALENDAR", "",
   ].join("\r\n");
@@ -199,7 +201,7 @@ export const handler = async event => {
       const uid = `${crypto.randomUUID()}@brevity-household`;
       const href = `${calendar.url.replace(/\/?$/, "/")}${encodeURIComponent(uid)}.ics`;
       const result = await caldav(href, "PUT", makeIcs(item, uid), { "if-none-match": "*" });
-      return json(201, { ok: true, id: uid, href: new URL(result.response.url).pathname, etag: result.response.headers.get("etag") || "" });
+      return json(201, { ok: true, id: uid, sourceId: item.sourceId || "", href: new URL(result.response.url).pathname, etag: result.response.headers.get("etag") || "" });
     }
 
     if (!item.href || !String(item.href).startsWith("/")) return json(400, { error: "This event is not linked to iCloud." });
@@ -208,7 +210,7 @@ export const handler = async event => {
     if (event.httpMethod === "PUT") {
       const headers = item.etag ? { "if-match": item.etag } : {};
       const result = await caldav(href, "PUT", makeIcs(item, item.id), headers);
-      return json(200, { ok: true, etag: result.response.headers.get("etag") || item.etag || "" });
+      return json(200, { ok: true, sourceId: item.sourceId || "", etag: result.response.headers.get("etag") || item.etag || "" });
     }
 
     if (event.httpMethod === "DELETE") {
