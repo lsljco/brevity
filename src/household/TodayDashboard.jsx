@@ -11,32 +11,34 @@ const PILLARS = [
   ['ministry', 'Ministry & Fellowship', 'ti-users'],
 ]
 
+const arrayLength = value => Array.isArray(value) ? value.length : 0
+
 function formatDate(dateKey) {
   const date = new Date(`${dateKey}T12:00:00`)
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
 function PillarCard({ id, label, icon, plan }) {
-  const value = plan[id]
+  const value = plan?.[id] || {}
   const summaries = {
     spiritual: value.devotionFocus || 'Devotion focus needs confirmation',
     health: value.dinner ? `Dinner: ${value.dinner}` : 'Terica: meal plan needs confirmation',
     fitness: value.location ? `${value.location}${value.workout ? ` · ${value.workout}` : ''}` : 'Location and workout need decision',
-    household: `${value.appointments.length} appointments · ${value.priorities.length} priorities`,
+    household: `${arrayLength(value.appointments)} appointments · ${arrayLength(value.priorities)} priorities`,
     education: value.thinkTankTopic || 'Think Tank topic needs confirmation',
-    finance: `${value.bills.length} bills · ${value.transfers.length} transfers · ${value.accountsToFund.length} funding decisions`,
-    ministry: `${value.meetings.length} meetings · ${value.fellowshipFollowUps.length} follow-ups`,
+    finance: `${arrayLength(value.bills)} bills · ${arrayLength(value.transfers)} transfers · ${arrayLength(value.accountsToFund)} funding decisions`,
+    ministry: `${arrayLength(value.meetings)} meetings · ${arrayLength(value.fellowshipFollowUps)} follow-ups`,
   }
 
-  return <article className="today-pillar-card"><div className="today-pillar-icon"><i className={`ti ${icon}`} /></div><div><span className="today-pillar-label">{label}</span><strong>{summaries[id]}</strong></div></article>
+  return <article className="today-pillar-card"><div className="today-pillar-icon"><i className={`ti ${icon}`} /></div><div><span className="today-pillar-label">{label}</span><strong>{summaries[id] || 'Needs confirmation'}</strong></div></article>
 }
 
 export default function TodayDashboard({ plan, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar }) {
   const dailyPlan = normalizeDailyPlan(plan)
   const openDecisions = countOpenDecisions(dailyPlan)
   const myAssignments = assignmentsForMember(dailyPlan, currentMember)
-  const aligned = Boolean(dailyPlan.morningAlignment.completedAt)
-  const closed = Boolean(dailyPlan.recap.completedAt)
+  const aligned = Boolean(dailyPlan.morningAlignment?.completedAt)
+  const closed = Boolean(dailyPlan.recap?.completedAt)
 
   return <div className="today-dashboard">
     <header className="today-hero">
@@ -53,6 +55,6 @@ export default function TodayDashboard({ plan, currentMember = 'Larry', onStartA
 
     <section className="today-section"><div className="today-section-heading"><div><span>Ownership</span><h2>{currentMember}'s Day</h2></div><small>Only assignments owned by or explicitly involving this household member.</small></div>{myAssignments.length ? <div className="today-assignment-list">{myAssignments.map(item => <div className="today-assignment" key={item.id}><div><strong>{item.title}</strong>{item.notes && <span>{item.notes}</span>}</div><span className={`today-status today-status--${item.status}`}>{item.status}</span></div>)}</div> : <div className="today-empty">No assignments have been assigned to {currentMember} yet.</div>}</section>
 
-    <section className="today-section"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Top 3</h2></div><small>Outcomes, not generic tasks.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index}>{dailyPlan.topPriorities[index]?.title || 'Priority not set'}</li>)}</ol></section>
+    <section className="today-section"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Top 3</h2></div><small>Outcomes, not generic tasks.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index}>{dailyPlan.topPriorities?.[index]?.title || 'Priority not set'}</li>)}</ol></section>
   </div>
 }
