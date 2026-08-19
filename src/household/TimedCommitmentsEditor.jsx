@@ -1,4 +1,5 @@
 import { HOUSEHOLD_MEMBERS, createPlanItem } from './dailyPlan.js'
+import './TimedCommitmentsEditor.css'
 
 const makeCommitment = (planDate, prefix) => createPlanItem({
   id: `${prefix}-${crypto.randomUUID()}`,
