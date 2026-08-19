@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
+import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
 import './MorningAlignment.css'
 
 const STEPS = [
@@ -65,7 +66,9 @@ function HouseholdStep({ draft, update }) {
   const value = draft.household
   return <div className="alignment-form-grid">
     <Field label="Today's Top Household Outcomes" hint="One outcome per line"><textarea value={joinLines(value.priorities.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { priorities: splitLines(e.target.value).map((title, index) => ({ id: `household-priority-${index}`, title, owner: 'Larry', status: 'pending' })) })} /></Field>
-    <Field label="Appointments" hint="Use this for the operational briefing; timed events will later sync with iCalendar"><textarea value={joinLines(value.appointments.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { appointments: splitLines(e.target.value).map((title, index) => ({ id: `appointment-${index}`, title, owner: 'Family', status: 'pending', calendarSync: true })) })} /></Field>
+    <Field label="Appointments" hint="Add date/time and keep Calendar on only when an Apple alert is useful">
+      <TimedCommitmentsEditor items={value.appointments} planDate={draft.date} prefix="appointment" onChange={appointments => update('household', { appointments })} />
+    </Field>
     <Field label="Errands"><textarea value={joinLines(value.errands)} onChange={e => update('household', { errands: splitLines(e.target.value) })} /></Field>
     <Field label="Open items / confirmations"><textarea value={joinLines(value.openItems)} onChange={e => update('household', { openItems: splitLines(e.target.value) })} /></Field>
   </div>
@@ -97,7 +100,9 @@ function MinistryStep({ draft, update }) {
   const value = draft.ministry
   return <div className="alignment-form-grid">
     <Field label="Content / teaching focus"><textarea value={value.contentFocus} onChange={e => update('ministry', { contentFocus: e.target.value })} /></Field>
-    <Field label="Meetings / ministry commitments"><textarea value={joinLines(value.meetings.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('ministry', { meetings: splitLines(e.target.value).map((title, index) => ({ id: `ministry-meeting-${index}`, title, status: 'pending', calendarSync: true })) })} /></Field>
+    <Field label="Meetings / ministry commitments" hint="Only keep Calendar enabled for fixed-time commitments">
+      <TimedCommitmentsEditor items={value.meetings} planDate={draft.date} prefix="ministry-meeting" onChange={meetings => update('ministry', { meetings })} />
+    </Field>
     <Field label="Fellowship follow-ups"><textarea value={joinLines(value.fellowshipFollowUps.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('ministry', { fellowshipFollowUps: splitLines(e.target.value).map((title, index) => ({ id: `fellowship-${index}`, title, status: 'pending' })) })} /></Field>
     <Field label="Prayer needs"><textarea value={joinLines(value.prayerNeeds)} onChange={e => update('ministry', { prayerNeeds: splitLines(e.target.value) })} /></Field>
   </div>
