@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import FinancePlanner from './finance/FinancePlanner.jsx'
 import HomeHQ from './homehq/HomeHQ.jsx'
 import FamilyCalendar from './family/FamilyCalendar.jsx'
+import HouseholdToday from './household/HouseholdToday.jsx'
 
 // ── 7 Family Pillars ─────────────────────────────────────────────────────────
 const PILLARS = [
@@ -218,8 +219,8 @@ function SettingsPage() {
             <button onClick={handleExport} style={{ padding: '8px 18px', borderRadius: 10, background: 'rgba(197,164,109,0.1)', border: '1px solid rgba(197,164,109,0.25)', color: 'var(--gold)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>Export JSON</button>
           </div>
           <div style={rowLast}>
-            <div><p style={title}>Storage</p><p style={sub}>All data is stored locally in your browser.</p></div>
-            <span style={badge}>Local</span>
+            <div><p style={title}>Storage</p><p style={sub}>Finance and project data remain local while household plans move to shared storage.</p></div>
+            <span style={badge}>Hybrid</span>
           </div>
         </div>
       </div>
@@ -242,9 +243,9 @@ function SettingsPage() {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [expandedPillar, setExpandedPillar] = useState('finance')
-  const [activeView,     setActiveView]     = useState('dashboard')
-  const [activePillar,   setActivePillar]   = useState('finance')
+  const [expandedPillar, setExpandedPillar] = useState(null)
+  const [activeView,     setActiveView]     = useState('today')
+  const [activePillar,   setActivePillar]   = useState('')
   const [theme, setTheme] = useState(() => localStorage.getItem('brevity_theme') || 'dark')
 
   useEffect(() => {
@@ -260,16 +261,24 @@ export default function App() {
     setExpandedPillar(pillarId)
   }
 
+  const openPillar = pillarId => {
+    setActivePillar(pillarId)
+    setActiveView('__placeholder__')
+    setExpandedPillar(pillarId)
+  }
+
   const handlePillarClick = (pillar) => {
     if (pillar.items.length === 0) {
-      setActivePillar(pillar.id)
-      setActiveView('__placeholder__')
+      openPillar(pillar.id)
     } else {
       setExpandedPillar(prev => prev === pillar.id ? null : pillar.id)
     }
   }
 
   const renderContent = () => {
+    if (activeView === 'today') {
+      return <HouseholdToday currentMember="Larry" onOpenPillar={openPillar} />
+    }
     if (activeView === 'settings') {
       return <SettingsPage />
     }
@@ -300,6 +309,15 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
+          <button
+            className={`sidebar-nav-item${activeView === 'today' ? ' active' : ''}`}
+            onClick={() => { setActiveView('today'); setActivePillar(''); setExpandedPillar(null) }}
+          >
+            <i className="ti ti-home-2" />
+            <span>Today</span>
+          </button>
+          <div className="sidebar-divider" />
+
           {PILLARS.map((pillar, idx) => {
             const isExpanded     = expandedPillar === pillar.id
             const hasItems       = pillar.items.length > 0
