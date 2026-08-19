@@ -1,8 +1,26 @@
+import { useState } from 'react'
+import MorningAlignment from './MorningAlignment.jsx'
 import TodayDashboard from './TodayDashboard.jsx'
 import { useDailyPlan } from './useDailyPlan.js'
 
 export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }) {
-  const { plan, state, error, reload } = useDailyPlan()
+  const { plan, state, error, reload, savePlan } = useDailyPlan()
+  const [alignmentOpen, setAlignmentOpen] = useState(false)
+
+  const completeAlignment = async nextPlan => {
+    await savePlan(nextPlan)
+    setAlignmentOpen(false)
+  }
+
+  if (alignmentOpen) {
+    return (
+      <MorningAlignment
+        plan={plan}
+        onCancel={() => setAlignmentOpen(false)}
+        onComplete={completeAlignment}
+      />
+    )
+  }
 
   return (
     <div className="household-today-workspace">
@@ -29,7 +47,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
         plan={plan}
         currentMember={currentMember}
         onOpenPillar={onOpenPillar}
-        onStartAlignment={() => onOpenPillar?.('spiritual')}
+        onStartAlignment={() => setAlignmentOpen(true)}
       />
     </div>
   )
