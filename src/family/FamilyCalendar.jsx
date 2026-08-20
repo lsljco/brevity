@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
 import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
+import './FamilyCalendar.css'
 
 const gold = '#C5A46D'
 const soft = 'rgba(247,243,234,.72)'
@@ -81,14 +82,14 @@ export default function FamilyCalendar(){
     error:'iCloud calendar could not be reached. Brevity events remain available.',
   }
 
-  return <div style={{minHeight:'100vh',background:'#000',padding:'28px 32px',color:soft,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return <div className="family-calendar" style={{minHeight:'100vh',background:'#000',padding:'28px 32px',color:soft,fontFamily:"'Inter',system-ui,sans-serif"}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:18,flexWrap:'wrap',marginBottom:18}}>
-      <div><h1 style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:500,color:'rgba(247,243,234,.92)'}}>Family Calendar</h1><p style={{margin:'5px 0 0',fontSize:12,color:muted}}>Brevity is authoritative · Apple Calendar supplies native timed alerts</p></div>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+      <div><h1 className="family-calendar-title" style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:500,color:'rgba(247,243,234,.92)'}}>Family Calendar</h1><p className="family-calendar-subtitle" style={{margin:'5px 0 0',fontSize:12,color:muted}}>Brevity is authoritative · Apple Calendar supplies native timed alerts</p></div>
+      <div className="family-calendar-filters" style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         {['Family',...HOUSEHOLD_MEMBERS].map(name=><button key={name} onClick={()=>setMember(name)} style={{padding:'7px 12px',borderRadius:20,border:`1px solid ${member===name?gold:border}`,background:member===name?'rgba(197,164,109,.16)':'rgba(255,255,255,.04)',color:member===name?gold:muted,cursor:'pointer',fontSize:12}}>{name==='Family'?'All / Family':name}</button>)}
       </div>
     </div>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:20,padding:'10px 12px',border:`1px solid ${border}`,borderRadius:10,background:'rgba(255,255,255,.025)'}}>
+    <div className="family-calendar-status" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:20,padding:'10px 12px',border:`1px solid ${border}`,borderRadius:10,background:'rgba(255,255,255,.025)'}}>
       <span style={{fontSize:10,color:icloudState==='ready'?gold:muted}}>{stateCopy[icloudState]}</span>
       <button onClick={loadIcloud} style={{border:`1px solid ${border}`,background:'rgba(255,255,255,.04)',color:soft,borderRadius:8,padding:'6px 10px',fontSize:10,cursor:'pointer'}}>Refresh</button>
     </div>
@@ -97,20 +98,20 @@ export default function FamilyCalendar(){
       <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:23,color:'rgba(247,243,234,.92)',minWidth:170,textAlign:'center'}}>{new Date(year,month).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
       <button aria-label="Next month" onClick={()=>move(1)} style={{background:'rgba(255,255,255,.05)',border:`1px solid ${border}`,color:soft,borderRadius:8,padding:'6px 12px',cursor:'pointer'}}>›</button>
     </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
-      {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=><div key={day} style={{textAlign:'center',padding:8,fontSize:10,fontWeight:700,letterSpacing:1,color:muted,textTransform:'uppercase'}}>{day}</div>)}
+    <div className="family-calendar-scroll"><div className="family-calendar-grid" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
+      {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=><div className="family-calendar-weekday" key={day} style={{textAlign:'center',padding:8,fontSize:10,fontWeight:700,letterSpacing:1,color:muted,textTransform:'uppercase'}}>{day}</div>)}
       {cells.map((day,index)=>{
         if(!day)return <div key={index} style={{minHeight:108}}/>
         const key=iso(new Date(year,month,day)); const dayEvents=byDate[key]||[]; const isToday=key===iso(today)
-        return <div key={key} style={{minHeight:108,padding:8,borderRadius:9,border:`1px solid ${isToday?'rgba(197,164,109,.48)':border}`,background:isToday?'rgba(197,164,109,.08)':'rgba(255,255,255,.035)'}}>
-          <div style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
-          {dayEvents.map(event=><div key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
-            <div style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>
-            <div style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{event.source==='icloud'?'Apple alert':'Brevity legacy'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
+        return <div className="family-calendar-day" key={key} style={{minHeight:108,padding:8,borderRadius:9,border:`1px solid ${isToday?'rgba(197,164,109,.48)':border}`,background:isToday?'rgba(197,164,109,.08)':'rgba(255,255,255,.035)'}}>
+          <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
+          {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
+            <div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>
+            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{event.source==='icloud'?'Apple alert':'Brevity legacy'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
       })}
-    </div>
+    </div></div>
     {filtered.length===0&&<div style={{textAlign:'center',padding:'42px 20px',color:muted}}>No calendar commitments for this view. Add timed commitments in Morning Alignment and enable Calendar when an Apple alert is useful.</div>}
   </div>
 }
