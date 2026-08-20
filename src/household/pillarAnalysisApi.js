@@ -1,25 +1,45 @@
 const ENDPOINT = '/.netlify/functions/pillar-analysis'
+export const PILLAR_ANALYSIS_EVENT = 'brevity-pillar-analysis-refreshed'
 
 function safeJson(value, fallback) {
   try { return JSON.parse(value) } catch { return fallback }
 }
 
-export function collectPillarContext(pillar) {
-  if (typeof window === 'undefined') return {}
+export const pillarAnalysisStorageKey = (date, pillar) => `brevity_pillar_analysis_v1_${date}_${pillar}`
+
+export function readPillarAnalysis(date, pillar, storage = globalThis.localStorage) {
+  if (!storage || !date || !pillar) return null
+  return safeJson(storage.getItem(pillarAnalysisStorageKey(date, pillar)) || 'null', null)
+}
+
+export function collectPillarContextFromStorage(pillar, storage) {
+  if (!storage) return {}
   if (pillar === 'finance') {
-    const accounts = safeJson(localStorage.getItem('fp_accounts') || '[]', [])
-    const transactions = safeJson(localStorage.getItem('fp_transactions') || '[]', [])
-    const budgets = safeJson(localStorage.getItem('fp_budgets') || '[]', [])
-    const goals = safeJson(localStorage.getItem('fp_goals') || '[]', [])
-    return { accounts, transactions: Array.isArray(transactions) ? transactions.slice(-60) : [], budgets, goals }
+    const finance = safeJson(storage.getItem('lslj_finance_v9') || '{}', {})
+    const actuals = safeJson(storage.getItem('plaid_actuals_cache') || '[]', [])
+    const budgets = safeJson(storage.getItem('lslj_budget_v1') || '{}', {})
+    const goals = safeJson(storage.getItem('fp_goals') || '[]', [])
+    return {
+      accounts: Array.isArray(finance.accounts) ? finance.accounts : [],
+      scheduledTransactions: Array.isArray(finance.transactions) ? finance.transactions : [],
+      actualTransactions: Array.isArray(actuals) ? actuals.slice(0, 250) : [],
+      budgets,
+      goals,
+      syncedAt: storage.getItem('plaid_synced_at') || '',
+    }
   }
   if (pillar === 'household') {
     return {
-      projects: safeJson(localStorage.getItem('homehq_items_v1') || '[]', []),
-      legacyCalendar: safeJson(localStorage.getItem('family_calendar_events_v1') || '[]', []),
+      projects: safeJson(storage.getItem('homehq_items_v1') || '[]', []),
+      legacyCalendar: safeJson(storage.getItem('family_calendar_events_v1') || '[]', []),
     }
   }
   return {}
+}
+
+export function collectPillarContext(pillar) {
+  if (typeof window === 'undefined') return {}
+  return collectPillarContextFromStorage(pillar, window.localStorage)
 }
 
 export async function generatePillarAnalysis({ pillar, date, plan, currentMember, force = false }) {
@@ -33,6 +53,10 @@ export async function generatePillarAnalysis({ pillar, date, plan, currentMember
     const error = new Error(body.error || `Brevity AI returned ${response.status}.`)
     error.status = response.status
     throw error
+  }
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(pillarAnalysisStorageKey(date, pillar), JSON.stringify(body))
+    window.dispatchEvent(new CustomEvent(PILLAR_ANALYSIS_EVENT, { detail: body }))
   }
   return body
 }

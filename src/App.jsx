@@ -6,6 +6,7 @@ import HouseholdToday from './household/HouseholdToday.jsx'
 import PillarAnalysis from './household/PillarAnalysis.jsx'
 import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
 import { initialsForMember } from './household/memberProfile.js'
+import { refreshApplicationData } from './household/appRefresh.js'
 import './household/Readability.css'
 
 const PILLARS = [
@@ -51,7 +52,7 @@ function SettingsPage({ currentMember, role }) {
   const sub={fontSize:13,color:'var(--muted)',margin:'4px 0 0',lineHeight:1.5}
   const badge={fontSize:11,padding:'4px 10px',borderRadius:10,background:'rgba(197,164,109,.12)',border:'1px solid rgba(197,164,109,.22)',color:'var(--gold)'}
   const label={fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',margin:'28px 0 14px',display:'block',fontWeight:600}
-  const handleExport=()=>{const keys=['fp_accounts','fp_transactions','fp_budgets','fp_goals','homehq_items_v1','family_calendar_events_v1'];const data={};keys.forEach(k=>{try{data[k]=JSON.parse(localStorage.getItem(k)||'null')}catch{}});const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`brevity-backup-${new Date().toISOString().slice(0,10)}.json`;a.click()}
+  const handleExport=()=>{const keys=['lslj_finance_v9','plaid_actuals_cache','lslj_budget_v1','lslj_actuals_v1','fp_goals','homehq_items_v1','family_calendar_events_v1'];const data={};keys.forEach(k=>{try{data[k]=JSON.parse(localStorage.getItem(k)||'null')}catch{}});const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`brevity-backup-${new Date().toISOString().slice(0,10)}.json`;a.click()}
   return <div style={{maxWidth:820,margin:'0 auto',padding:'48px 32px'}}>
     <h1 style={{fontFamily:'var(--font-serif)',fontSize:42,fontWeight:400,color:'var(--white)',margin:'0 0 8px'}}>Settings</h1>
     <p style={{color:'var(--muted)',fontSize:15,margin:'0 0 32px'}}>Manage household accounts, shared data and integrations.</p>
@@ -76,6 +77,10 @@ export default function App() {
   const [theme,setTheme]=useState(()=>localStorage.getItem('brevity_theme')||'dark')
 
   useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('brevity_theme',theme)},[theme])
+  useEffect(()=>{
+    if(!auth.authenticated||!auth.member)return
+    refreshApplicationData({currentMember:auth.member}).catch(error=>console.error('[Brevity] Startup refresh failed:',error))
+  },[auth.authenticated,auth.member])
 
   if(auth.loading) return <AuthLoading/>
   if(!auth.authenticated) return <HouseholdLogin bootstrapRequired={auth.bootstrapRequired} onLogin={auth.login} onBootstrap={auth.bootstrap} error={auth.error}/>
