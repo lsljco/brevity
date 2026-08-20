@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { generatePillarAnalysis } from './pillarAnalysisApi.js'
+import { useCallback, useEffect, useState } from 'react'
+import { generatePillarAnalysis, PILLAR_ANALYSIS_EVENT, readPillarAnalysis } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
 import './PillarAnalysis.css'
 
@@ -13,7 +13,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
   const [state,setState]=useState('idle')
   const [error,setError]=useState('')
 
-  const run = async force => {
+  const run = useCallback(async force => {
     if (!plan?.date) return
     setState('loading'); setError('')
     try {
@@ -23,9 +23,25 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     } catch (err) {
       setState('error'); setError(err.message || 'Could not generate this pillar analysis.')
     }
-  }
+  }, [currentMember, pillar.id, plan])
 
-  useEffect(()=>{ if(planState==='ready' && plan?.date) run(false) },[pillar.id,plan?.date,planState])
+  useEffect(()=>{
+    if(planState!=='ready' || !plan?.date) return
+    const cached = readPillarAnalysis(plan.date, pillar.id)
+    if (cached) { setResult(cached); setState('ready'); return }
+    run(false)
+  },[pillar.id,plan?.date,planState,run])
+
+  useEffect(()=>{
+    const receive = event => {
+      if (event.detail?.pillar !== pillar.id || event.detail?.date !== plan?.date) return
+      setResult(event.detail)
+      setState('ready')
+      setError('')
+    }
+    window.addEventListener(PILLAR_ANALYSIS_EVENT, receive)
+    return () => window.removeEventListener(PILLAR_ANALYSIS_EVENT, receive)
+  },[pillar.id,plan?.date])
 
   const analysis=result?.analysis
   return <div className="pillar-analysis-page">
