@@ -652,7 +652,7 @@ function App(){
   const selectStyle={...FI,width:"auto",flex:1,minWidth:120};
 
   return(
-    <div style={{background:"#000",minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:W}}>
+    <div className="home-hq" style={{background:"#000",minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",color:W}}>
       <style>{HQ_STYLES}</style>
 
       {/* HEADER */}

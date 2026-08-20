@@ -57,27 +57,27 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
     label: value || (selectedDirection === 'income' ? 'Income' : selectedDirection === 'expense' ? 'Expenses' : 'Cash Flow'),
   })
 
-  return <div>
+  return <div className="monarch-reports">
     <div style={{ display: 'flex', gap: 8, padding: 5, borderRadius: 13, background: 'rgba(255,255,255,.035)', marginBottom: 16 }}>
       {[['cashflow','Cash Flow'],['spending','Spending'],['income','Income']].map(([id,label]) => <button key={id} style={button(tab === id)} onClick={() => setTab(id)}>{label}</button>)}
     </div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
+    <div className="report-controls" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
       <label style={{ fontSize: 10, color: 'var(--muted)' }}>Chart<select aria-label="Report chart" value={chart} onChange={e => setChart(e.target.value)} style={{ width: '100%', display: 'block', marginTop: 5, padding: 10, borderRadius: 10, background: '#171613', color: 'var(--white)', border: '1px solid rgba(255,255,255,.12)' }}><option value="bar">Bar</option><option value="pie">Pie</option></select></label>
       <label style={{ fontSize: 10, color: 'var(--muted)' }}>Display by<select aria-label="Report grouping" value={displayBy} onChange={e => setDisplayBy(e.target.value)} style={{ width: '100%', display: 'block', marginTop: 5, padding: 10, borderRadius: 10, background: '#171613', color: 'var(--white)', border: '1px solid rgba(255,255,255,.12)' }}><option value="category">Category</option><option value="group">Group</option><option value="merchant">Merchant</option></select></label>
     </div>
     <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px' }}>{timeframeLabel(range)}</p>
     {tab === 'cashflow' ? <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
+      <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
         <Stat label="Total income" value={fmtMoney(income.total)} color="var(--income-color)" onClick={() => open(null, 'income')} />
         <Stat label="Total expenses" value={fmtMoney(expense.total)} color="var(--expense-color)" onClick={() => open(null, 'expense')} />
         <Stat label="Savings" value={fmtMoney(income.total - expense.total)} color="var(--gold)" onClick={() => open(null, null)} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+      <div className="report-chart-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
         {chart === 'pie' ? <><Donut title="Income" rows={incomeRows} total={income.total} direction="income" onOpen={open} /><Donut title="Expenses" rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></> : <><Bars rows={incomeRows} total={income.total} direction="income" onOpen={open} /><Bars rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></>}
       </div>
     </> : <>
       {chart === 'pie' ? <Donut title={direction === 'income' ? 'Income' : 'Spending'} rows={rows} total={stats.total} direction={direction} onOpen={open} /> : null}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, margin: '18px 0' }}>
+      <div className="report-stat-grid report-stat-grid--four" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, margin: '18px 0' }}>
         <Stat label={`Total ${direction}`} value={fmtMoney(stats.total)} onClick={() => open(null, direction)} />
         <Stat label="Transactions" value={stats.count.toLocaleString()} onClick={() => open(null, direction)} />
         <Stat label="Largest" value={fmtMoney(stats.largest)} onClick={() => open(null, direction, transactions.filter(row => transactionDirection(row) === direction && Math.abs(Number(row.amount)) === stats.largest).map(row => row.id))} />
@@ -94,10 +94,10 @@ export function RecurringFinance({ scheduled = [], actuals = [], range }) {
   const rows = scheduled.filter(row => tab === 'all' || !row.end || row.end >= today)
   const income = rows.filter(row => row.type === 'income').reduce((sum,row) => sum + Number(row.amount || 0), 0)
   const expense = rows.filter(row => row.type === 'expense').reduce((sum,row) => sum + Number(row.amount || 0), 0)
-  return <div>
+  return <div className="recurring-finance">
     <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
     <div className="finance-card" style={{ padding: 20, marginBottom: 16 }}><h2 style={{ margin: '0 0 5px' }}>Recurring cash plan</h2><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{timeframeLabel(range)} · {actuals.length} posted transactions available for matching</p></div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(income)} /><Stat label="Recurring expenses" value={fmtMoney(expense)} /><Stat label="Expected net" value={fmtMoney(income-expense)} /></div>
-    <div className="finance-card" style={{ padding: 20 }}>{rows.map(row => <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', borderTop: '1px solid rgba(255,255,255,.06)' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.start}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></div>)}</div>
+    <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(income)} /><Stat label="Recurring expenses" value={fmtMoney(expense)} /><Stat label="Expected net" value={fmtMoney(income-expense)} /></div>
+    <div className="finance-card" style={{ padding: 20 }}>{rows.map(row => <div className="recurring-row" key={row.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', borderTop: '1px solid rgba(255,255,255,.06)' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.start}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></div>)}</div>
   </div>
 }

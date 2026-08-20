@@ -558,7 +558,7 @@ html, body {
 .external-site-eyebrow {
   margin: 0;
   color: var(--gold);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -566,7 +566,7 @@ html, body {
 .external-site-description {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 15px;
 }
 .external-site-open,
 .external-site-launch {
@@ -580,7 +580,7 @@ html, body {
   border-radius: 10px;
   color: var(--gold-light);
   background: rgba(197,164,109,0.08);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   text-decoration: none;
   transition: background .18s ease, border-color .18s ease;
@@ -629,7 +629,7 @@ html, body {
   max-width: 500px;
   margin: 0 0 8px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.7;
 }
 
@@ -1157,4 +1157,7 @@ select option { background: var(--graphite); color: var(--white); }
   .external-site-open { padding: 9px; font-size: 0; }
   .external-site-open i { font-size: 17px; }
   .external-site-frame { min-height: 720px; }
+  .settings-page { padding: 28px 16px !important; }
+  .settings-card-row { align-items: flex-start !important; flex-direction: column !important; }
+  .settings-card-row > button { width: 100%; min-height: 44px; font-size: 15px !important; }
 }
