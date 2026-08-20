@@ -3,9 +3,10 @@ import FamilyCalendar from './family/FamilyCalendar.jsx'
 import FinancePlanner from './finance/FinancePlanner.jsx'
 import HomeHQ from './homehq/HomeHQ.jsx'
 import HouseholdToday from './household/HouseholdToday.jsx'
-import MemberSwitcher from './household/MemberSwitcher.jsx'
 import PillarAnalysis from './household/PillarAnalysis.jsx'
-import { getCurrentMember, initialsForMember, setCurrentMember as persistCurrentMember } from './household/memberProfile.js'
+import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
+import { initialsForMember } from './household/memberProfile.js'
+import './household/Readability.css'
 
 const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
@@ -44,30 +45,49 @@ function ExternalSiteView({ title, description, url }) {
   return <section className="external-site-view" aria-label={title}><header className="external-site-toolbar"><div><p className="external-site-eyebrow">Connected application</p><h1>{title}</h1><p className="external-site-description">{description}</p></div><a className="external-site-open" href={url} target="_blank" rel="noreferrer">Open full screen <i className="ti ti-external-link" aria-hidden="true" /></a></header><iframe className="external-site-frame" src={url} title={title} loading="eager" referrerPolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" /></section>
 }
 
-function SettingsPage({ currentMember, onMemberChange }) {
+function SettingsPage({ currentMember, role }) {
   const card={background:'var(--glass)',border:'1px solid var(--glass-border)',borderRadius:16,padding:'24px 28px',marginBottom:12}
-  const row={display:'flex',alignItems:'center',justifyContent:'space-between',gap:20,padding:'14px 0',borderBottom:'1px solid rgba(255,255,255,.04)'}
-  const title={fontSize:14,fontWeight:600,color:'var(--white)',margin:0}; const sub={fontSize:12,color:'var(--muted)',margin:'2px 0 0'}; const badge={fontSize:11,padding:'3px 10px',borderRadius:10,background:'rgba(197,164,109,.12)',border:'1px solid rgba(197,164,109,.22)',color:'var(--gold)'}
+  const title={fontSize:15,fontWeight:600,color:'var(--white)',margin:0}
+  const sub={fontSize:13,color:'var(--muted)',margin:'4px 0 0',lineHeight:1.5}
+  const badge={fontSize:11,padding:'4px 10px',borderRadius:10,background:'rgba(197,164,109,.12)',border:'1px solid rgba(197,164,109,.22)',color:'var(--gold)'}
+  const label={fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',margin:'28px 0 14px',display:'block',fontWeight:600}
   const handleExport=()=>{const keys=['fp_accounts','fp_transactions','fp_budgets','fp_goals','homehq_items_v1','family_calendar_events_v1'];const data={};keys.forEach(k=>{try{data[k]=JSON.parse(localStorage.getItem(k)||'null')}catch{}});const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`brevity-backup-${new Date().toISOString().slice(0,10)}.json`;a.click()}
-  return <div style={{maxWidth:680,margin:'0 auto',padding:'48px 32px'}}><h1 style={{fontFamily:'var(--font-serif)',fontSize:36,fontWeight:400,color:'var(--white)',margin:'0 0 8px'}}>Settings</h1><p style={{color:'var(--muted)',fontSize:14,margin:'0 0 40px'}}>Manage this device profile, household data and integrations.</p><span style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',marginBottom:14,display:'block',fontWeight:600}}>Device Profile</span><div style={card}><div style={row}><div><p style={title}>Using Brevity as</p><p style={sub}>This controls My Day and member-specific signals on this device.</p></div><MemberSwitcher member={currentMember} onChange={onMemberChange} /></div><div style={{...row,borderBottom:0}}><div><p style={title}>Household Members</p><p style={sub}>Larry, Lorenzo, Terica, Nyla, Javin, Isaiah</p></div><span style={badge}>Shared</span></div></div><span style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',margin:'28px 0 14px',display:'block',fontWeight:600}}>Data</span><div style={card}><div style={row}><div><p style={title}>Export Legacy Data</p><p style={sub}>Download a backup of finance, project and browser-calendar records still stored locally.</p></div><button onClick={handleExport} style={{padding:'8px 18px',borderRadius:10,background:'rgba(197,164,109,.1)',border:'1px solid rgba(197,164,109,.25)',color:'var(--gold)',fontSize:13,cursor:'pointer'}}>Export JSON</button></div><div style={{...row,borderBottom:0}}><div><p style={title}>Household Plan Storage</p><p style={sub}>Seven Pillars daily plans and AI analysis are shared server-side; legacy finance/project modules remain transitional.</p></div><span style={badge}>Hybrid</span></div></div><span style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',margin:'28px 0 14px',display:'block',fontWeight:600}}>Integrations</span><div style={card}><div style={row}><div><p style={title}>Brevity AI</p><p style={sub}>Each Seven Pillar tab uses the household’s daily automation reasoning framework when OPENAI_API_KEY is configured server-side.</p></div><span style={badge}>Server Protected</span></div><div style={{...row,borderBottom:0}}><div><p style={title}>Apple/iCloud Calendar</p><p style={sub}>Timed commitments can sync after server-side iCloud credentials and the secure family calendar session are configured.</p></div><span style={badge}>Server Protected</span></div></div></div>
+  return <div style={{maxWidth:820,margin:'0 auto',padding:'48px 32px'}}>
+    <h1 style={{fontFamily:'var(--font-serif)',fontSize:42,fontWeight:400,color:'var(--white)',margin:'0 0 8px'}}>Settings</h1>
+    <p style={{color:'var(--muted)',fontSize:15,margin:'0 0 32px'}}>Manage household accounts, shared data and integrations.</p>
+    <span style={label}>Household Identity</span>
+    <div style={card}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20,marginBottom:18}}><div><p style={title}>Signed in as {currentMember}</p><p style={sub}>Your authenticated identity controls My Day and member-specific views on every device.</p></div><span style={badge}>{role === 'admin' ? 'Administrator' : 'Member'}</span></div><HouseholdAccounts sessionMember={currentMember} role={role}/></div>
+    <span style={label}>Data</span>
+    <div style={card}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}><div><p style={title}>Export Legacy Data</p><p style={sub}>Download a backup of finance, project and browser-calendar records still stored locally.</p></div><button onClick={handleExport} style={{padding:'9px 18px',borderRadius:10,background:'rgba(197,164,109,.1)',border:'1px solid rgba(197,164,109,.25)',color:'var(--gold)',fontSize:13,cursor:'pointer'}}>Export JSON</button></div></div>
+    <span style={label}>Integrations</span>
+    <div style={card}><p style={title}>Brevity AI + Apple Calendar</p><p style={sub}>AI analysis and calendar credentials remain server-protected. Household sign-in is separate from Apple/OpenAI credentials.</p></div>
+  </div>
+}
+
+function AuthLoading() {
+  return <div className="household-auth-page"><div className="household-auth-card"><img src="/brevity-logo.png" alt="Brevity" className="household-auth-logo"/><p className="household-auth-kicker">Household Operating System</p><h1>Loading Brevity…</h1></div></div>
 }
 
 export default function App() {
+  const auth = useHouseholdAuth()
   const [expandedPillar,setExpandedPillar]=useState(null)
   const [activeView,setActiveView]=useState('today')
   const [activePillar,setActivePillar]=useState('')
   const [theme,setTheme]=useState(()=>localStorage.getItem('brevity_theme')||'dark')
-  const [currentMember,setCurrentMember]=useState(()=>getCurrentMember())
 
   useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('brevity_theme',theme)},[theme])
-  const changeMember=member=>{persistCurrentMember(member);setCurrentMember(member)}
+
+  if(auth.loading) return <AuthLoading/>
+  if(!auth.authenticated) return <HouseholdLogin bootstrapRequired={auth.bootstrapRequired} onLogin={auth.login} onBootstrap={auth.bootstrap} error={auth.error}/>
+
+  const currentMember=auth.member
   const navigateTo=(pillarId,viewId)=>{setActivePillar(pillarId);setActiveView(viewId);setExpandedPillar(pillarId)}
   const openPillar=pillarId=>{setActivePillar(pillarId);setActiveView('pillar-analysis');setExpandedPillar(pillarId)}
   const handlePillarClick=pillar=>{openPillar(pillar.id);if(pillar.items.length)setExpandedPillar(pillar.id)}
 
   const renderContent=()=>{
     if(activeView==='today')return <HouseholdToday currentMember={currentMember} onOpenPillar={openPillar}/>
-    if(activeView==='settings')return <SettingsPage currentMember={currentMember} onMemberChange={changeMember}/>
+    if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role}/>
     if(activeView==='property')return <HomeHQ/>
     if(activeView==='family-calendar')return <FamilyCalendar/>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]}/>
@@ -76,5 +96,5 @@ export default function App() {
     return pillar?<PillarAnalysis pillar={pillar} currentMember={currentMember}/>:null
   }
 
-  return <div className="app-shell"><aside className="app-sidebar"><div className="sidebar-logo"><img src="/brevity-logo.png" alt="Brevity" className="sidebar-brand-logo"/></div><nav className="sidebar-nav"><button className={`sidebar-nav-item${activeView==='today'?' active':''}`} onClick={()=>{setActiveView('today');setActivePillar('');setExpandedPillar(null)}}><i className="ti ti-home-2"/><span>Today</span></button><div className="sidebar-divider"/>{PILLARS.map((pillar,idx)=>{const isExpanded=expandedPillar===pillar.id;const hasItems=pillar.items.length>0;const isPillarActive=activePillar===pillar.id;return <div key={pillar.id}>{DIVIDER_BEFORE.has(idx)&&<div className="sidebar-divider"/>}<div className="pillar-group"><button className={`pillar-header${isPillarActive?' pillar-header--active':''}`} onClick={()=>handlePillarClick(pillar)}><i className={`ti ${pillar.icon}`}/><span className="pillar-label">{pillar.label}</span>{hasItems&&<i className={`ti ti-chevron-${isExpanded?'up':'down'} pillar-chevron`}/>}</button>{hasItems&&isExpanded&&<div className="pillar-items">{pillar.items.map(item=><button key={`${pillar.id}-${item.id}`} className={`sidebar-nav-item${activePillar===pillar.id&&activeView===item.id?' active':''}`} onClick={()=>navigateTo(pillar.id,item.id)}><i className={`ti ${item.icon}`}/><span>{item.label}</span></button>)}</div>}</div></div>})}</nav><div className="sidebar-footer"><button className="sidebar-footer-item" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}><i className={`ti ${theme==='dark'?'ti-sun':'ti-moon'}`}/><span>{theme==='dark'?'Light Mode':'Dark Mode'}</span></button><button className="sidebar-footer-item" onClick={()=>{setActiveView('settings');setActivePillar('')}}><i className="ti ti-settings"/><span>Settings</span></button><div className="sidebar-user"><div className="sidebar-user-avatar">{initialsForMember(currentMember)}</div><div><div className="sidebar-user-name">{currentMember}</div><div className="sidebar-user-role">Household Member</div></div></div></div></aside><main className="app-main">{renderContent()}</main></div>
+  return <div className="app-shell"><aside className="app-sidebar"><div className="sidebar-logo"><img src="/brevity-logo.png" alt="Brevity" className="sidebar-brand-logo"/></div><nav className="sidebar-nav"><button className={`sidebar-nav-item${activeView==='today'?' active':''}`} onClick={()=>{setActiveView('today');setActivePillar('');setExpandedPillar(null)}}><i className="ti ti-home-2"/><span>Today</span></button><div className="sidebar-divider"/>{PILLARS.map((pillar,idx)=>{const isExpanded=expandedPillar===pillar.id;const hasItems=pillar.items.length>0;const isPillarActive=activePillar===pillar.id;return <div key={pillar.id}>{DIVIDER_BEFORE.has(idx)&&<div className="sidebar-divider"/>}<div className="pillar-group"><button className={`pillar-header${isPillarActive?' pillar-header--active':''}`} onClick={()=>handlePillarClick(pillar)}><i className={`ti ${pillar.icon}`}/><span className="pillar-label">{pillar.label}</span>{hasItems&&<i className={`ti ti-chevron-${isExpanded?'up':'down'} pillar-chevron`}/>}</button>{hasItems&&isExpanded&&<div className="pillar-items">{pillar.items.map(item=><button key={`${pillar.id}-${item.id}`} className={`sidebar-nav-item${activePillar===pillar.id&&activeView===item.id?' active':''}`} onClick={()=>navigateTo(pillar.id,item.id)}><i className={`ti ${item.icon}`}/><span>{item.label}</span></button>)}</div>}</div></div>})}</nav><div className="sidebar-footer"><button className="sidebar-footer-item" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}><i className={`ti ${theme==='dark'?'ti-sun':'ti-moon'}`}/><span>{theme==='dark'?'Light Mode':'Dark Mode'}</span></button><button className="sidebar-footer-item" onClick={()=>{setActiveView('settings');setActivePillar('')}}><i className="ti ti-settings"/><span>Settings</span></button><button className="sidebar-footer-item" onClick={auth.logout}><i className="ti ti-logout"/><span>Sign Out</span></button><div className="sidebar-user"><div className="sidebar-user-avatar">{initialsForMember(currentMember)}</div><div><div className="sidebar-user-name">{currentMember}</div><div className="sidebar-user-role">{auth.role === 'admin' ? 'Household Administrator' : 'Household Member'}</div></div></div></div></aside><main className="app-main">{renderContent()}</main></div>
 }
