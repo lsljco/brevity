@@ -65,7 +65,7 @@ export function createEmptyDailyPlan(date) {
       notes: '',
     },
     spiritual: {
-      owner: 'Larry',
+      owner: 'Lorenzo',
       scripture: [],
       devotionFocus: '',
       prayerFocus: [],
@@ -169,6 +169,7 @@ export function normalizeDailyPlan(input = {}) {
     spiritual: {
       ...base.spiritual,
       ...spiritual,
+      owner: 'Lorenzo',
       scripture: arrayOrEmpty(spiritual.scripture),
       prayerFocus: arrayOrEmpty(spiritual.prayerFocus),
       discussionPrompts: arrayOrEmpty(spiritual.discussionPrompts),
