@@ -15,6 +15,7 @@ import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
 import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
+import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1150,6 +1151,18 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [transactionFilter, setTransactionFilter] = useState(null)
 
   useEffect(() => { try { localStorage.setItem('brevity_finance_timeframe_v1', JSON.stringify(financeRange)) } catch {} }, [financeRange])
+
+  useEffect(() => {
+    const receiveRefresh = event => {
+      if (event.detail?.finance) {
+        dataRef.current = event.detail.finance
+        setData(event.detail.finance)
+      }
+      if (Array.isArray(event.detail?.actuals)) setPlaidActuals(event.detail.actuals)
+    }
+    window.addEventListener(FINANCE_REFRESH_EVENT, receiveRefresh)
+    return () => window.removeEventListener(FINANCE_REFRESH_EVENT, receiveRefresh)
+  }, [])
 
   // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
   const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
