@@ -1,4 +1,4 @@
-export const CALENDAR_DATA_VERSION = 1
+export const CALENDAR_DATA_VERSION = 2
 export const financeBackupKey = key => `${key}_backup`
 
 // These weekly records were originally seeded on Thursdays even though they
@@ -23,6 +23,7 @@ export function migrateFinanceData(data) {
   if (!data || typeof data !== 'object') return data
   if ((Number(data.calendarDataVersion) || 0) >= CALENDAR_DATA_VERSION) return data
 
+  const currentVersion = Number(data.calendarDataVersion) || 0
   const transactions = Array.isArray(data.transactions)
     ? data.transactions.map(transaction => {
         const correction = LEGACY_FRIDAY_ANCHORS[transaction.id]
@@ -39,6 +40,11 @@ export function migrateFinanceData(data) {
         }
 
         return next
+      }).filter(transaction => {
+        // Ameripro was a legacy starter-series, not a bank transaction. Once
+        // cancelled, it must not be recreated by a refresh or deployment.
+        if (currentVersion < 2 && transaction.id === 't_i6' && transaction.name === 'LJ - Ameripro Income') return false
+        return true
       })
     : data.transactions
 
