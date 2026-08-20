@@ -156,9 +156,10 @@ const schema = {
 
 const HOUSEHOLD_CONTEXT = `
 Household operating rhythm:
-- Larry leads spiritual alignment, household command, finance, career/income priorities and coordination.
+- Lorenzo owns Spiritual Maturity and leads the spiritual content, scripture, devotion emphasis, prayer priorities and practical obedience for the household.
+- Larry leads household command, finance, career/income priorities and overall operational coordination.
 - Terica owns complete meal communication: breakfast, lunch, dinner, snacks, hydration, groceries and next-day prep.
-- Lorenzo shares ministry/fellowship responsibility and leadership participation.
+- Lorenzo also shares ministry/fellowship responsibility and leadership participation.
 - Isaiah is 8 and entering third grade; daily education should include oral reading, sight words/vocabulary, comprehension and math/homework with a supervising adult marked CONFIRM unless established.
 - Devotion and prayer happen before food, gym, errands, shopping or outside activity.
 - Preferred dayparts: ANCHOR 4:00–8:00 AM; FOCUS 8:00 AM–12:00 PM; FLEX 12:00–4:00 PM; WIND DOWN 4:00–8:00 PM+.
@@ -196,7 +197,7 @@ function hydrateGeneratedPlan(generated, date) {
     topPriorities: generated.topPriorities.map((item, index) => itemWithId(item, 'top-priority', index, date)),
     morningAlignment: { ...generated.morningAlignment, completedAt: '' },
     dayparts: generated.dayparts,
-    spiritual: { owner: 'Larry', ...generated.spiritual },
+    spiritual: { owner: 'Lorenzo', ...generated.spiritual },
     health: { owner: 'Terica', ...generated.health },
     fitness: { owner: 'Larry', ...generated.fitness },
     household: { owner: 'Larry', ...generated.household, appointments: generated.household.appointments.map((item, index) => itemWithId(item, 'appointment', index, date)), priorities: generated.household.priorities.map((item, index) => itemWithId(item, 'household-priority', index, date)) },
@@ -227,7 +228,7 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
   const priorPlan = await dataStore.get(planKey(yesterdayKey), { type: 'json' }).catch(() => null);
 
-  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nFor appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics. Use Terica, never Tara.\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlan || {})}`;
+  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics. Use Terica, never Tara.\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlan || {})}`;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
