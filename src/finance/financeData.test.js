@@ -41,6 +41,20 @@ test('does not reapply a completed calendar migration', () => {
   assert.equal(migrateFinanceData(data), data)
 })
 
+test('removes the cancelled legacy Ameripro income series once', () => {
+  const data = {
+    calendarDataVersion: 1,
+    transactions: [
+      { id: 't_i6', name: 'LJ - Ameripro Income', freq: 'weekly', start: '2026-07-03' },
+      { id: 'custom', name: 'A user-created income', freq: 'weekly', start: '2026-07-03' },
+    ],
+  }
+
+  const migrated = migrateFinanceData(data)
+  assert.deepEqual(migrated.transactions.map(transaction => transaction.id), ['custom'])
+  assert.equal(migrated.calendarDataVersion, CALENDAR_DATA_VERSION)
+})
+
 test('reports browser storage failures instead of claiming a save succeeded', () => {
   const error = new Error('quota exceeded')
   const storage = { setItem() { throw error } }
