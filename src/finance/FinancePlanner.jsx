@@ -16,6 +16,7 @@ import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimefr
 import DailyAlignment from './DailyAlignment.jsx'
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
+import { deleteRecurringOccurrence, editRecurringOccurrence } from './recurrenceEditing.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -827,7 +828,6 @@ const DEFAULT_DATA = {
     { id: 't_i3',    name: 'TS - Globe Life Income',         amount:  2791.38, type: 'income',  freq: 'weekly',  start: '2026-07-10', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i4',    name: 'TS TransAmerica Income',         amount:  1611.00, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i5',    name: 'JS - Mativ Income',              amount:  1698.18, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i6',    name: 'LJ - Ameripro Income',           amount:  4344.03, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i7',    name: 'LJ Genesco AP Payroll',          amount:   685.14, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i8',    name: 'LJ GA Tax Refund',               amount:  5063.00, type: 'income',  freq: 'once',    start: '2026-07-09', end: '', cat: 'Income',         acct: 'a2' },
     { id: 't_i9',    name: 'HOA Reimbursement',              amount:  9618.63, type: 'income',  freq: 'once',    start: '2026-07-14', end: '', cat: 'Income',         acct: 'a2' },
@@ -1585,6 +1585,21 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     })
     if (!saved) return false
     showToast('✓ Transaction moved')
+    return true
+  }
+  const calendarApplyChanges = ({ upserts = [], deleteIds = [] }) => {
+    const deleteSet = new Set(deleteIds)
+    const saved = setDataAndPersist(d => {
+      let txns = d.transactions.filter(tx => !deleteSet.has(tx.id))
+      upserts.forEach(tx => {
+        const idx = txns.findIndex(item => item.id === tx.id)
+        if (idx >= 0) txns[idx] = tx
+        else txns.push(tx)
+      })
+      return { ...d, transactions: txns }
+    })
+    if (!saved) return false
+    showToast('✓ Calendar series updated')
     return true
   }
 
@@ -2598,7 +2613,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <CalendarView proj={proj} calYear={calYear} calMonth={calMonth}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
-            accounts={data.accounts} viewAcctIds={activeAcctIds} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onDelete={deleteTx}
+            accounts={data.accounts} viewAcctIds={activeAcctIds} onSave={calendarSaveTx} onBatchSave={calendarBatchSave} onApplyChanges={calendarApplyChanges} onDelete={deleteTx}
             showActuals={showActuals} toggleActuals={toggleActuals} actualsLoading={actualsLoading} actualsError={actualsError}
             actualsByDate={actualsByDate} plaidActuals={plaidActuals}
             historicalBals={historicalBals}
@@ -3924,11 +3939,12 @@ function plaidCatToLocal(plaidCats = []) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride, onActualTxClick }) {
+function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onBatchSave, onApplyChanges, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsByDate, plaidActuals, historicalBals = {}, onSaveOverride, onRemoveOverride, onActualTxClick }) {
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
   const [pendingMove, setPendingMove]= useState(null)   // { tx, fromDate, toDate }
+  const [pendingScope, setPendingScope] = useState(null) // { action, original, updated?, occurrenceDate }
   const [editBal,     setEditBal]    = useState(null)   // { key, draft } inline balance edit
 
   const t = today0()
@@ -3961,8 +3977,30 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
   const selPt = selDay ? proj.get(selDay) : null
   const fmtDateLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-  const handleSave   = (tx) => { if (onSave(tx) !== false) setSelTx(null) }
-  const handleDelete = (id) => { if (onDelete(id) !== false) setSelTx(null) }
+  const handleSave = tx => {
+    if (selTx?.freq !== 'once' && selTx?._occurrenceDate) {
+      setPendingScope({ action: 'edit', original: selTx, updated: tx, occurrenceDate: selTx._occurrenceDate })
+      return
+    }
+    if (onSave(tx) !== false) setSelTx(null)
+  }
+  const handleDelete = tx => {
+    if (tx.freq !== 'once' && tx._occurrenceDate) {
+      setPendingScope({ action: 'delete', original: tx, occurrenceDate: tx._occurrenceDate })
+      return
+    }
+    if (onDelete(tx.id) !== false) setSelTx(null)
+  }
+
+  const applyScope = scope => {
+    const changes = pendingScope.action === 'edit'
+      ? editRecurringOccurrence(pendingScope.original, pendingScope.updated, pendingScope.occurrenceDate, scope, uid)
+      : deleteRecurringOccurrence(pendingScope.original, pendingScope.occurrenceDate, scope)
+    if (onApplyChanges(changes) !== false) {
+      setPendingScope(null)
+      setSelTx(null)
+    }
+  }
 
   const commitBal = (key, draft) => {
     const n = parseFloat(draft)
@@ -4009,12 +4047,24 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             </p>
             <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
             {!selTx._fromActual && (
-              <button onClick={() => { if (window.confirm('Delete this transaction entirely?')) handleDelete(selTx.id) }}
+              <button onClick={() => handleDelete(selTx)}
                 style={{ marginTop: 12, padding: '8px 18px', borderRadius: 8, border: 'none',
                   background: 'rgba(196,120,90,0.15)', color: 'var(--expense-color)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-                Delete Transaction
+                Delete
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {pendingScope && (
+        <div className="calendar-scope-overlay" onClick={() => setPendingScope(null)}>
+          <div className="calendar-scope-dialog" role="dialog" aria-modal="true" aria-labelledby="calendar-scope-title" onClick={event => event.stopPropagation()}>
+            <h2 id="calendar-scope-title">{pendingScope.action === 'edit' ? 'Apply this edit to…' : 'Delete…'}</h2>
+            <p>{pendingScope.original.name} · {fmtDateLabel(pendingScope.occurrenceDate)}</p>
+            <button onClick={() => applyScope('one')}><strong>Only this event</strong><span>The rest of the recurring series stays unchanged.</span></button>
+            <button onClick={() => applyScope('future')}><strong>This and all future events</strong><span>Past records remain unchanged.</span></button>
+            <button className="calendar-scope-cancel" onClick={() => setPendingScope(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -4077,7 +4127,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
       {/* ── Day-of-week headers ── */}
       <div className="cal-grid" style={{ marginBottom: 4 }}>
         {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
-          <p key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--muted)', margin: '0 0 4px' }}>{d}</p>
+          <p className="finance-calendar-weekday" key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--muted)', margin: '0 0 4px' }}>{d}</p>
         ))}
       </div>
 
@@ -4119,16 +4169,16 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 setDragTx(null)
               }}>
               {/* Day number — muted for overflow days */}
-              <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : cur ? 'var(--muted)' : 'rgba(136,136,132,0.55)', marginBottom: 3, display: 'block' }}>{day}</span>
+              <span className="finance-calendar-day-number" style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : cur ? 'var(--muted)' : 'rgba(136,136,132,0.55)', marginBottom: 3, display: 'block' }}>{day}</span>
               {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
               {hasTxns && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
                   {pt.txns.slice(0, maxBudget).map((tx, j) => (
-                    <div key={j}
+                    <div className="finance-calendar-event" key={j}
                       draggable
                       onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx, fromDate: key }) }}
                       onDragEnd={() => setDragTx(null)}
-                      onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
+                      onClick={e => { e.stopPropagation(); setSelTx({ ...tx, _occurrenceDate: key }) }}
                       style={{
                         fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
                         background: tx.type === 'income' ? 'rgba(197,164,109,0.18)' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? 'rgba(196,120,90,0.18)' : 'rgba(100,180,140,0.18)') : 'rgba(196,120,90,0.22)',
@@ -4154,7 +4204,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                   {dayActuals.slice(0, 3).map((tx, j) => {
                     const isIncome = tx.amount < 0 // Plaid: negative = credit
                     return (
-                      <div key={`a${j}`} style={{
+                      <div className="finance-calendar-event finance-calendar-event--actual" key={`a${j}`} style={{
                         fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
                         background: isIncome ? 'rgba(100,180,140,0.22)' : 'rgba(100,140,220,0.22)',
                         color: isIncome ? '#7DCBA4' : '#90AADE',
