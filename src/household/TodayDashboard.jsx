@@ -1,5 +1,6 @@
 import './TodayDashboard.css'
 import { countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
+import DailyCommandSchedule from './DailyCommandSchedule.jsx'
 
 const PILLARS = [
   ['spiritual', 'Spiritual Maturity', 'ti-sun'],
@@ -33,23 +34,27 @@ function PillarCard({ id, label, icon, plan }) {
   return <article className="today-pillar-card"><div className="today-pillar-icon"><i className={`ti ${icon}`} /></div><div><span className="today-pillar-label">{label}</span><strong>{summaries[id] || 'Needs confirmation'}</strong></div></article>
 }
 
-export default function TodayDashboard({ plan, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar }) {
+export default function TodayDashboard({ plan, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onGeneratePlan, generationState = 'idle' }) {
   const dailyPlan = normalizeDailyPlan(plan)
   const openDecisions = countOpenDecisions(dailyPlan)
   const myAssignments = assignmentsForMember(dailyPlan, currentMember)
   const aligned = Boolean(dailyPlan.morningAlignment?.completedAt)
   const closed = Boolean(dailyPlan.recap?.completedAt)
+  const generated = dailyPlan.generatedBy === 'brevity-daily-household-plan'
 
   return <div className="today-dashboard">
     <header className="today-hero">
       <div><p className="today-kicker">Household Command Center</p><h1>Today</h1><p>{formatDate(dailyPlan.date)}</p></div>
       <div className="today-hero-actions">
+        <button className="today-alignment-button" onClick={onGeneratePlan} disabled={generationState === 'generating'}><i className="ti ti-sparkles" /> {generationState === 'generating' ? 'Generating…' : generated ? 'Refresh Daily Plan' : 'Generate Daily Plan'}</button>
         <button className="today-alignment-button" onClick={onStartAlignment}><i className="ti ti-target-arrow" /> {aligned ? 'Review Alignment' : 'Start Alignment'}</button>
         <button className="today-alignment-button today-alignment-button--secondary" onClick={onStartRecap}><i className="ti ti-clipboard-check" /> {closed ? 'Review Recap' : 'Close Today'}</button>
       </div>
     </header>
 
-    <section className="today-focus-card"><div><span>Today's Focus</span><h2>{dailyPlan.theme || 'Set today’s household focus'}</h2>{dailyPlan.governingPrinciple && <p>{dailyPlan.governingPrinciple}</p>}</div><div className="today-decision-count"><strong>{openDecisions}</strong><span>{openDecisions === 1 ? 'decision needs attention' : 'decisions need attention'}</span></div></section>
+    <section className="today-focus-card"><div><span>Today's Focus</span><h2>{dailyPlan.theme || 'Set today’s household focus'}</h2>{dailyPlan.dayObjective && <p>{dailyPlan.dayObjective}</p>}{dailyPlan.governingPrinciple && <p>{dailyPlan.governingPrinciple}</p>}</div><div className="today-decision-count"><strong>{openDecisions}</strong><span>{openDecisions === 1 ? 'decision needs attention' : 'decisions need attention'}</span></div></section>
+
+    <DailyCommandSchedule plan={dailyPlan} />
 
     <section className="today-section"><div className="today-section-heading"><div><span>Seven Pillars</span><h2>Household Status</h2></div><small>Brevity is the source of truth. Calendar remains the timed alert layer.</small></div><div className="today-pillar-grid">{PILLARS.map(([id, label, icon]) => <button key={id} className="today-pillar-button" onClick={() => onOpenPillar?.(id)}><PillarCard id={id} label={label} icon={icon} plan={dailyPlan} /></button>)}</div></section>
 
