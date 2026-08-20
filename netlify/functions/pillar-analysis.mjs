@@ -1,4 +1,5 @@
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
+const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
 const BASE_AUTOMATION = `Produce the household’s Seven Pillars daily schedule for the upcoming day. Structure it around Spiritual Maturity, Health & Nutrition, Gym/Fitness, Household Operations, Education/Think Tank, Finances, and Ministry/Fellowship. Include a morning family alignment agenda, decision points, owners, discussion prompts, and open items that need confirmation. Prioritize devotion and prayer before food, gym, errands, or outside activity. Include Terica’s meal communication section, gym location and workout decision section, household appointments and key focus, think tank topic, finance review with bills/purchases/transfers/accounts to fund, and ministry/fellowship content or meeting needs.`;
 
@@ -35,33 +36,15 @@ function outputText(response) {
   return (response.output || []).flatMap(item => item.content || []).map(part => part.text || '').join('').trim();
 }
 
-async function cacheStore() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
-  try {
-    const { getStore } = await import('@netlify/blobs');
-    return getStore({ name:'brevity-pillar-analysis', consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN });
-  } catch { return null; }
-}
-
 export const handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error:'Method not allowed.' });
-  if (!process.env.OPENAI_API_KEY) return json(503, { error:'Brevity AI is not configured yet. Add OPENAI_API_KEY in Netlify.' });
+  if (!process.env.OPENAI_API_KEY) return json(503, { error:'Brevity AI is not configured yet. OPENAI_API_KEY must be available to Netlify Functions.' });
 
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error:'Invalid request body.' }); }
-  const { pillar, date, plan, currentMember = 'Larry', localContext = {}, force = false } = body;
+  const { pillar, date, plan, currentMember = 'Larry', localContext = {} } = body;
   if (!PILLARS.has(pillar)) return json(400, { error:'Unknown Seven Pillar.' });
   if (!date || !plan) return json(400, { error:'Date and household plan are required.' });
-
-  const householdId = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
-  const key = `${householdId}/${date}/${pillar}.json`;
-  const store = await cacheStore();
-  if (!force && store) {
-    try {
-      const cached = await store.get(key, { type:'json' });
-      if (cached?.analysis) return json(200, { ...cached, cached:true });
-    } catch {}
-  }
 
   const prompt = `${BASE_AUTOMATION}\n\nYou are now producing the ${pillar} tab inside Brevity, the household source of truth. ${PILLAR_INSTRUCTIONS[pillar]}\n\nUse concrete execution language. Do not give generic motivational filler. Do not invent appointments, balances, restrictions, or commitments. When information is unavailable, explicitly use CONFIRM. Preserve human authority: AI analyzes and proposes; household members decide. Current device member: ${currentMember}.\n\nHOUSEHOLD DAILY PLAN (${date}):\n${JSON.stringify(plan)}\n\nADDITIONAL BREVITY CONTEXT:\n${JSON.stringify(localContext)}\n\nReturn a decision-oriented analysis for this pillar only.`;
 
@@ -69,17 +52,23 @@ export const handler = async event => {
     method:'POST',
     headers:{ 'authorization':`Bearer ${process.env.OPENAI_API_KEY}`, 'content-type':'application/json' },
     body:JSON.stringify({
-      model: process.env.BREVITY_AI_MODEL || 'gpt-5.6',
+      model: MODEL,
       store:false,
       input: prompt,
       text:{ format:{ type:'json_schema', name:'brevity_pillar_analysis', strict:true, schema } }
     })
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) return json(response.status, { error: payload.error?.message || 'OpenAI analysis failed.' });
+  if (!response.ok) {
+    const message = payload.error?.message || 'OpenAI analysis failed.';
+    const code = payload.error?.code || payload.error?.type || '';
+    if (response.status === 429 && /quota|billing|insufficient/i.test(`${message} ${code}`)) {
+      return json(429, { error:'Brevity AI reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then refresh the analysis.' });
+    }
+    return json(response.status, { error: message });
+  }
+
   let analysis;
   try { analysis = JSON.parse(outputText(payload)); } catch { return json(502, { error:'Brevity AI returned an unreadable analysis.' }); }
-  const result = { pillar, date, generatedAt:new Date().toISOString(), model:process.env.BREVITY_AI_MODEL || 'gpt-5.6', analysis };
-  if (store) { try { await store.setJSON(key, result); } catch {} }
-  return json(200, { ...result, cached:false });
+  return json(200, { pillar, date, generatedAt:new Date().toISOString(), model:MODEL, analysis, cached:false });
 };
