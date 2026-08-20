@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
+import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
 
 const gold = '#C5A46D'
 const soft = 'rgba(247,243,234,.72)'
@@ -21,9 +22,10 @@ export default function FamilyCalendar(){
   const [year,setYear]=useState(today.getFullYear())
   const [member,setMember]=useState('Family')
   const [legacyEvents,setLegacyEvents]=useState(()=>readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
-  const [icloudEvents,setIcloudEvents]=useState([])
-  const [icloudState,setIcloudState]=useState('loading')
-  const [calendarName,setCalendarName]=useState('Apple/iCloud Calendar')
+  const cachedCalendar=useMemo(()=>readJson(localStorage,ICLOUD_CACHE_KEY,null),[])
+  const [icloudEvents,setIcloudEvents]=useState(()=>(cachedCalendar?.events||[]).map(event=>({ ...event,source:'icloud',owner:event.owner||'Family' })))
+  const [icloudState,setIcloudState]=useState(cachedCalendar?'ready':'loading')
+  const [calendarName,setCalendarName]=useState(cachedCalendar?.calendar||'Apple/iCloud Calendar')
 
   const loadIcloud = async () => {
     setIcloudState('loading')
@@ -39,11 +41,18 @@ export default function FamilyCalendar(){
   }
 
   useEffect(()=>{
-    loadIcloud()
+    if(!cachedCalendar)loadIcloud()
     const refresh=()=>setLegacyEvents(readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
+    const receiveIcloud=event=>{
+      const result=event.detail||{}
+      setIcloudEvents((result.events||[]).map(item=>({ ...item,source:'icloud',owner:item.owner||'Family' })))
+      setCalendarName(result.calendar||'Apple/iCloud Calendar')
+      setIcloudState('ready')
+    }
     window.addEventListener('storage',refresh)
     window.addEventListener('brevity-family-calendar-updated',refresh)
-    return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('brevity-family-calendar-updated',refresh)}
+    window.addEventListener('brevity-icloud-calendar-refreshed',receiveIcloud)
+    return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('brevity-family-calendar-updated',refresh);window.removeEventListener('brevity-icloud-calendar-refreshed',receiveIcloud)}
   },[])
 
   const allEvents=useMemo(()=>[...legacyEvents,...icloudEvents],[legacyEvents,icloudEvents])
