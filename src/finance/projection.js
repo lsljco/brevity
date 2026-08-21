@@ -45,6 +45,13 @@ function calendarDayNumber(date) {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000
 }
 
+function calendarTransactionOrder(a, b) {
+  const rank = tx => tx.type === 'income' ? 0 : tx.type === 'transfer' ? 1 : 2
+  const rankDelta = rank(a) - rank(b)
+  if (rankDelta) return rankDelta
+  return String(a.name || a.title || '').localeCompare(String(b.name || b.title || ''), undefined, { sensitivity:'base' })
+}
+
 export function txOccursOnDate(tx, d) {
   const start = parseISODate(tx.start)
   if (!start) return false
@@ -121,7 +128,7 @@ export function buildProjection(accounts, transactions, days = 365, overrides = 
   for (let i = 0; i <= pastDays + days; i++) {
     const d = addDays(startDate, i)
     const dateStr = toISO(d)
-    const hits = transactions.filter(tx => txOccursOnDate(tx, d))
+    const hits = transactions.filter(tx => txOccursOnDate(tx, d)).sort(calendarTransactionOrder)
     const delta = hits.reduce((s, tx) => {
       if (tx.type === 'transfer') return s + transferDelta(tx)
       return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)
