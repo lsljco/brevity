@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { normalizeDailyPlan } from './dailyPlan.js'
+import { compactEditableLines, joinEditableLines, splitEditableLines } from './lineEditing.js'
 
-const splitLines = value => String(value || '').split('\n').map(item => item.trim()).filter(Boolean)
-const joinLines = value => Array.isArray(value) ? value.join('\n') : ''
+const splitLines = splitEditableLines
+const joinLines = joinEditableLines
 
 export default function EveningRecap({ plan, onCancel, onComplete }) {
   const normalized = normalizeDailyPlan(plan)
@@ -14,7 +15,14 @@ export default function EveningRecap({ plan, onCancel, onComplete }) {
   const finish = async () => {
     setSaving(true); setError('')
     try {
-      await onComplete({ ...normalized, recap: { ...draft, completedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() })
+      const cleanedDraft = {
+        ...draft,
+        wins: compactEditableLines(draft.wins),
+        carryovers: compactEditableLines(draft.carryovers),
+        lessons: compactEditableLines(draft.lessons),
+        tomorrowPrep: compactEditableLines(draft.tomorrowPrep),
+      }
+      await onComplete({ ...normalized, recap: { ...cleanedDraft, completedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() })
     } catch (err) {
       setError(err.message || 'Could not save the household recap.')
       setSaving(false)

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
 import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
-import SpiritualFormationStudio from './SpiritualFormationStudio.jsx'
+import { compactEditableLines, compactTitledItems, joinEditableLines, splitEditableLines } from './lineEditing.js'
 import './MorningAlignment.css'
 
 const STEPS = [
@@ -14,8 +14,36 @@ const STEPS = [
   ['ministry', 'Ministry & Fellowship', 'ti-users'],
 ]
 
-const splitLines = value => String(value || '').split('\n').map(item => item.trim()).filter(Boolean)
-const joinLines = value => Array.isArray(value) ? value.join('\n') : ''
+const splitLines = splitEditableLines
+const joinLines = joinEditableLines
+
+const cleanLineLists = draft => ({
+  ...draft,
+  spiritual: {
+    ...draft.spiritual,
+    scripture: compactEditableLines(draft.spiritual.scripture),
+    prayerFocus: compactEditableLines(draft.spiritual.prayerFocus),
+  },
+  health: { ...draft.health, groceries: compactEditableLines(draft.health.groceries) },
+  household: {
+    ...draft.household,
+    priorities: compactTitledItems(draft.household.priorities),
+    errands: compactEditableLines(draft.household.errands),
+    openItems: compactEditableLines(draft.household.openItems),
+  },
+  finance: {
+    ...draft.finance,
+    bills: compactTitledItems(draft.finance.bills),
+    purchases: compactTitledItems(draft.finance.purchases),
+    transfers: compactTitledItems(draft.finance.transfers),
+    accountsToFund: compactTitledItems(draft.finance.accountsToFund),
+  },
+  ministry: {
+    ...draft.ministry,
+    fellowshipFollowUps: compactTitledItems(draft.ministry.fellowshipFollowUps),
+    prayerNeeds: compactEditableLines(draft.ministry.prayerNeeds),
+  },
+})
 
 function Field({ label, children, hint }) {
   return <label className="alignment-field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>
@@ -24,6 +52,16 @@ function Field({ label, children, hint }) {
 function MemberChecks({ selected = [], onChange }) {
   const toggle = member => onChange(selected.includes(member) ? selected.filter(item => item !== member) : [...selected, member])
   return <div className="alignment-member-grid">{HOUSEHOLD_MEMBERS.map(member => <button type="button" key={member} className={selected.includes(member) ? 'is-selected' : ''} onClick={() => toggle(member)}>{member}</button>)}</div>
+}
+
+function SpiritualStep({ draft, update }) {
+  const value = draft.spiritual
+  return <div className="alignment-form-grid">
+    <Field label="Scripture"><textarea value={joinLines(value.scripture)} onChange={e => update('spiritual', { scripture: splitLines(e.target.value) })} placeholder="One passage per line" /></Field>
+    <Field label="Devotion focus"><textarea value={value.devotionFocus} onChange={e => update('spiritual', { devotionFocus: e.target.value })} placeholder="What is God emphasizing today?" /></Field>
+    <Field label="Prayer focus"><textarea value={joinLines(value.prayerFocus)} onChange={e => update('spiritual', { prayerFocus: splitLines(e.target.value) })} placeholder="One prayer focus per line" /></Field>
+    <Field label="Act of obedience"><textarea value={value.obedienceAction} onChange={e => update('spiritual', { obedienceAction: e.target.value })} placeholder="What will obedience look like today?" /></Field>
+  </div>
 }
 
 function HealthStep({ draft, update }) {
@@ -99,7 +137,7 @@ function MinistryStep({ draft, update }) {
   </div>
 }
 
-const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
+const STEP_COMPONENTS = { spiritual: SpiritualStep, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
 export default function MorningAlignment({ plan, onCancel, onComplete }) {
   const [draft, setDraft] = useState(() => normalizeDailyPlan(plan))
@@ -116,7 +154,8 @@ export default function MorningAlignment({ plan, onCancel, onComplete }) {
   const finish = async () => {
     setSaving(true); setError('')
     try {
-      await onComplete({ ...draft, morningAlignment: { ...draft.morningAlignment, completedAt: new Date().toISOString() } })
+      const cleanedDraft = cleanLineLists(draft)
+      await onComplete({ ...cleanedDraft, morningAlignment: { ...cleanedDraft.morningAlignment, completedAt: new Date().toISOString() } })
     } catch (err) {
       setError(err.message || 'Could not complete household alignment.')
       setSaving(false)
