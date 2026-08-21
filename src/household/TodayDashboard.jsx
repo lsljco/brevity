@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import './TodayDashboard.css'
-import { countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
+import { HOUSEHOLD_MEMBERS, ITEM_STATUS, countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
 import DailyCommandSchedule from './DailyCommandSchedule.jsx'
 
 const PILLARS = [
@@ -35,7 +35,27 @@ function PillarCard({ id, label, icon, plan }) {
   return <article className="today-pillar-card"><div className="today-pillar-icon"><i className={`ti ${icon}`} /></div><div><span className="today-pillar-label">{label}</span><strong>{summaries[id] || 'Needs confirmation'}</strong></div></article>
 }
 
-export default function TodayDashboard({ plan, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onGeneratePlan, generationState = 'idle' }) {
+function DecisionEditor({ decision, number, onSave }) {
+  const [draft, setDraft] = useState(() => ({ ...decision, owner: decision.owner || 'Family', status: decision.status || ITEM_STATUS.needsDecision }))
+  const [saveState, setSaveState] = useState('idle')
+  const [error, setError] = useState('')
+  const update = (field, value) => setDraft(current => ({ ...current, [field]: value }))
+  const save = async () => {
+    setSaveState('saving')
+    setError('')
+    try {
+      await onSave(draft)
+      setSaveState('saved')
+    } catch (saveError) {
+      setSaveState('error')
+      setError(saveError.message || 'Could not save this decision.')
+    }
+  }
+
+  return <article className="today-decision-editor"><div className="today-decision-editor-heading"><span>{String(number).padStart(2, '0')}</span><label><span>Decision</span><input value={draft.title || ''} onChange={event => update('title', event.target.value)} /></label></div><label><span>Update / resolution</span><textarea value={draft.notes || ''} onChange={event => update('notes', event.target.value)} placeholder="Enter the decision, answer, or update needed…" /></label><div className="today-decision-editor-fields"><label><span>Owner</span><select value={draft.owner} onChange={event => update('owner', event.target.value)}><option>Family</option>{HOUSEHOLD_MEMBERS.map(member => <option key={member}>{member}</option>)}</select></label><label><span>Status</span><select value={draft.status} onChange={event => update('status', event.target.value)}><option value={ITEM_STATUS.needsDecision}>Needs decision</option><option value={ITEM_STATUS.pending}>Open</option><option value={ITEM_STATUS.ready}>Ready</option><option value={ITEM_STATUS.inProgress}>In progress</option><option value={ITEM_STATUS.complete}>Complete</option><option value={ITEM_STATUS.deferred}>Deferred</option></select></label></div>{error && <p className="today-decision-save-error">{error}</p>}<footer><small>{saveState === 'saved' ? 'Update saved' : 'Changes save to the shared household plan.'}</small><button type="button" onClick={save} disabled={saveState === 'saving' || !draft.title?.trim()}><i className={`ti ${saveState === 'saved' ? 'ti-check' : 'ti-device-floppy'}`} /> {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save update'}</button></footer></article>
+}
+
+export default function TodayDashboard({ plan, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onGeneratePlan, onSavePlan, generationState = 'idle' }) {
   const dailyPlan = normalizeDailyPlan(plan)
   const attentionDecisions = dailyPlan.decisions.filter(decision => decision?.status !== 'complete' && decision?.status !== 'deferred')
   const openDecisions = countOpenDecisions(dailyPlan)
@@ -44,6 +64,15 @@ export default function TodayDashboard({ plan, currentMember = 'Larry', onStartA
   const aligned = Boolean(dailyPlan.morningAlignment?.completedAt)
   const closed = Boolean(dailyPlan.recap?.completedAt)
   const generated = dailyPlan.generatedBy === 'brevity-daily-household-plan'
+
+  const saveDecision = async (updatedDecision, decisionIndex) => {
+    const nextPlan = {
+      ...dailyPlan,
+      updatedAt: new Date().toISOString(),
+      decisions: dailyPlan.decisions.map((decision, index) => index === decisionIndex ? { ...decision, ...updatedDecision } : decision),
+    }
+    await onSavePlan?.(nextPlan)
+  }
 
   useEffect(() => {
     if (!showDecisions) return undefined
@@ -66,7 +95,7 @@ export default function TodayDashboard({ plan, currentMember = 'Larry', onStartA
 
     <section className="today-focus-card"><div><span>Today's Focus</span><h2>{dailyPlan.theme || 'Set today’s household focus'}</h2>{dailyPlan.dayObjective && <p>{dailyPlan.dayObjective}</p>}{dailyPlan.governingPrinciple && <p>{dailyPlan.governingPrinciple}</p>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!openDecisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{openDecisions}</strong><span>{openDecisions === 1 ? 'decision needs attention' : 'decisions need attention'}</span><i className="ti ti-chevron-right" aria-hidden="true" /></button></section>
 
-    {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Board</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{openDecisions} open {openDecisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{attentionDecisions.map((decision, index) => <article key={decision.id || `${decision.title}-${index}`}><div><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{decision.title || 'Decision requires attention'}</strong>{decision.notes && <p>{decision.notes}</p>}</div></div><footer><span><i className="ti ti-user" /> {decision.owner || 'Family'}</span><em>{decision.status === 'needs-decision' ? 'Needs decision' : decision.status || 'Open'}</em></footer></article>)}</div></section></div>}
+    {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Board</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{openDecisions} open {openDecisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}. Enter the update and mark it complete when resolved.</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{attentionDecisions.map((decision, index) => <DecisionEditor key={decision.id || `${decision.title}-${index}`} decision={decision} number={index + 1} onSave={updated => saveDecision(updated, dailyPlan.decisions.indexOf(decision))} />)}{!attentionDecisions.length && <div className="today-decision-all-clear"><i className="ti ti-circle-check" /><strong>All decisions are resolved.</strong><span>There are no remaining decisions needing attention.</span></div>}</div></section></div>}
 
     <DailyCommandSchedule plan={dailyPlan} />
 
