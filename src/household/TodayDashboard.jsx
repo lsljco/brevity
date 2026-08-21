@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import './TodayDashboard.css'
 import { countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
 import DailyCommandSchedule from './DailyCommandSchedule.jsx'
@@ -36,11 +37,22 @@ function PillarCard({ id, label, icon, plan }) {
 
 export default function TodayDashboard({ plan, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onGeneratePlan, generationState = 'idle' }) {
   const dailyPlan = normalizeDailyPlan(plan)
+  const attentionDecisions = dailyPlan.decisions.filter(decision => decision?.status !== 'complete' && decision?.status !== 'deferred')
   const openDecisions = countOpenDecisions(dailyPlan)
+  const [showDecisions, setShowDecisions] = useState(false)
   const myAssignments = assignmentsForMember(dailyPlan, currentMember)
   const aligned = Boolean(dailyPlan.morningAlignment?.completedAt)
   const closed = Boolean(dailyPlan.recap?.completedAt)
   const generated = dailyPlan.generatedBy === 'brevity-daily-household-plan'
+
+  useEffect(() => {
+    if (!showDecisions) return undefined
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setShowDecisions(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [showDecisions])
 
   return <div className="today-dashboard">
     <header className="today-hero">
@@ -52,7 +64,9 @@ export default function TodayDashboard({ plan, currentMember = 'Larry', onStartA
       </div>
     </header>
 
-    <section className="today-focus-card"><div><span>Today's Focus</span><h2>{dailyPlan.theme || 'Set today’s household focus'}</h2>{dailyPlan.dayObjective && <p>{dailyPlan.dayObjective}</p>}{dailyPlan.governingPrinciple && <p>{dailyPlan.governingPrinciple}</p>}</div><div className="today-decision-count"><strong>{openDecisions}</strong><span>{openDecisions === 1 ? 'decision needs attention' : 'decisions need attention'}</span></div></section>
+    <section className="today-focus-card"><div><span>Today's Focus</span><h2>{dailyPlan.theme || 'Set today’s household focus'}</h2>{dailyPlan.dayObjective && <p>{dailyPlan.dayObjective}</p>}{dailyPlan.governingPrinciple && <p>{dailyPlan.governingPrinciple}</p>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!openDecisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{openDecisions}</strong><span>{openDecisions === 1 ? 'decision needs attention' : 'decisions need attention'}</span><i className="ti ti-chevron-right" aria-hidden="true" /></button></section>
+
+    {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Board</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{openDecisions} open {openDecisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{attentionDecisions.map((decision, index) => <article key={decision.id || `${decision.title}-${index}`}><div><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{decision.title || 'Decision requires attention'}</strong>{decision.notes && <p>{decision.notes}</p>}</div></div><footer><span><i className="ti ti-user" /> {decision.owner || 'Family'}</span><em>{decision.status === 'needs-decision' ? 'Needs decision' : decision.status || 'Open'}</em></footer></article>)}</div></section></div>}
 
     <DailyCommandSchedule plan={dailyPlan} />
 
