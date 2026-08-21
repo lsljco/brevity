@@ -6,6 +6,17 @@ const RACI_KEYS = ['responsible', 'accountable', 'consulted', 'informed']
 
 const uniqueMembers = values => [...new Set((values || []).filter(value => HOUSEHOLD_MEMBERS.includes(value)))]
 
+export function parseProjectDate(value) {
+  if (value instanceof Date) return new Date(value)
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  return new Date(value)
+}
+
+export function projectDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 export function normalizeProjectItem(item = {}) {
   const legacyAssignee = HOUSEHOLD_MEMBERS.includes(item.assignee) ? [item.assignee] : []
   const raci = {}
@@ -23,13 +34,16 @@ export function projectCalendarEvent(item) {
   const members = uniqueMembers(RACI_KEYS.flatMap(key => project.raci[key]))
   return {
     id: `project-${project.id}`,
+    sourceId: `project-${project.id}`,
     projectId: project.id,
     source: 'project',
     title: project.title,
+    date: start,
     start,
     end: project.due || start,
     allDay: true,
     members: members.length ? members : ['Family'],
+    participants: members,
     owner: members.length === 1 ? members[0] : 'Family',
     calendarName: 'Family',
     calendarSyncEnabled: true,

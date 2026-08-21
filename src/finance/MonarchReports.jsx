@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { fmtMoney } from './projection.js'
+import { addDays, fmtMoney, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { groupReportTransactions, reportStats, transactionDirection } from './reportingData.js'
 import { timeframeLabel } from './financeTimeframe.js'
 
@@ -70,7 +70,7 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
       <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
         <Stat label="Total income" value={fmtMoney(income.total)} color="var(--income-color)" onClick={() => open(null, 'income')} />
         <Stat label="Total expenses" value={fmtMoney(expense.total)} color="var(--expense-color)" onClick={() => open(null, 'expense')} />
-        <Stat label="Savings" value={fmtMoney(income.total - expense.total)} color="var(--gold)" onClick={() => open(null, null)} />
+        <Stat label="Net cash flow" value={fmtMoney(income.total - expense.total)} color="var(--gold)" onClick={() => open(null, null)} />
       </div>
       <div className="report-chart-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
         {chart === 'pie' ? <><Donut title="Income" rows={incomeRows} total={income.total} direction="income" onOpen={open} /><Donut title="Expenses" rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></> : <><Bars rows={incomeRows} total={income.total} direction="income" onOpen={open} /><Bars rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></>}
@@ -88,16 +88,29 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
   </div>
 }
 
-export function RecurringFinance({ scheduled = [], actuals = [], range }) {
+export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenScheduled }) {
   const [tab, setTab] = useState('upcoming')
-  const today = new Date().toISOString().slice(0, 10)
-  const rows = scheduled.filter(row => tab === 'all' || !row.end || row.end >= today)
-  const income = rows.filter(row => row.type === 'income').reduce((sum,row) => sum + Number(row.amount || 0), 0)
-  const expense = rows.filter(row => row.type === 'expense').reduce((sum,row) => sum + Number(row.amount || 0), 0)
+  const today = toISO(new Date())
+  const rows = scheduled.filter(row => row.freq !== 'once' && row.type !== 'transfer' && (tab === 'all' || !row.end || row.end >= today))
+  const totals = useMemo(() => {
+    const from = parseISODate(range?.from)
+    const to = parseISODate(range?.to)
+    if (!from || !to) return { income: 0, expense: 0 }
+    let income = 0
+    let expense = 0
+    for (let date = from; date <= to; date = addDays(date, 1)) {
+      rows.forEach(row => {
+        if (!txOccursOnDate(row, date)) return
+        if (row.type === 'income') income += Number(row.amount || 0)
+        if (row.type === 'expense') expense += Number(row.amount || 0)
+      })
+    }
+    return { income, expense }
+  }, [range?.from, range?.to, rows])
   return <div className="recurring-finance">
     <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
     <div className="finance-card" style={{ padding: 20, marginBottom: 16 }}><h2 style={{ margin: '0 0 5px' }}>Recurring cash plan</h2><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{timeframeLabel(range)} · {actuals.length} posted transactions available for matching</p></div>
-    <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(income)} /><Stat label="Recurring expenses" value={fmtMoney(expense)} /><Stat label="Expected net" value={fmtMoney(income-expense)} /></div>
-    <div className="finance-card" style={{ padding: 20 }}>{rows.map(row => <div className="recurring-row" key={row.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', borderTop: '1px solid rgba(255,255,255,.06)' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.start}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></div>)}</div>
+    <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(totals.income)} onClick={() => onOpenScheduled?.({ direction:'income', label:'Recurring income' })} /><Stat label="Recurring expenses" value={fmtMoney(totals.expense)} onClick={() => onOpenScheduled?.({ direction:'expense', label:'Recurring expenses' })} /><Stat label="Expected net" value={fmtMoney(totals.income-totals.expense)} onClick={() => onOpenScheduled?.({ label:'Recurring cash plan' })} /></div>
+    <div className="finance-card" style={{ padding: 20 }}>{rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.start}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>)}</div>
   </div>
 }

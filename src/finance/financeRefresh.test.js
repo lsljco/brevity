@@ -18,3 +18,31 @@ test('startup balance refresh updates existing accounts without creating duplica
   ])
   assert.equal(refreshed.transactions[0].id, 'keep-me')
 })
+
+test('does not guess between ambiguous Plaid accounts using only a broad type', () => {
+  const finance = { accounts: [{ id: 'operating', name: 'Operating Account', type: 'checking', balance: 10 }], transactions: [] }
+  const refreshed = mergePlaidBalances(finance, [
+    { accountId: 'checking-1', name: 'Primary Checking', type: 'depository', subtype: 'checking', balance: 100 },
+    { accountId: 'checking-2', name: 'Secondary Checking', type: 'depository', subtype: 'checking', balance: 200 },
+  ])
+  assert.equal(refreshed.accounts[0].balance, 10)
+  assert.equal(refreshed.accounts[0].plaidAccountId, undefined)
+})
+
+test('uses a single compatible type fallback only when the mapping is unambiguous', () => {
+  const finance = { accounts: [{ id: 'operating', name: 'Operating Account', type: 'checking', balance: 10 }], transactions: [] }
+  const refreshed = mergePlaidBalances(finance, [
+    { accountId: 'checking-1', name: 'Bank Account', type: 'depository', subtype: 'checking', balance: 100 },
+  ])
+  assert.equal(refreshed.accounts[0].balance, 100)
+  assert.equal(refreshed.accounts[0].plaidAccountId, 'checking-1')
+})
+
+test('does not link an exact account name when the financial account types conflict', () => {
+  const finance = { accounts: [{ id: 'savings', name: 'Primary Account', type: 'savings', balance: 10 }], transactions: [] }
+  const refreshed = mergePlaidBalances(finance, [
+    { accountId: 'checking-1', name: 'Primary Account', type: 'depository', subtype: 'checking', balance: 100 },
+  ])
+  assert.equal(refreshed.accounts[0].balance, 10)
+  assert.equal(refreshed.accounts[0].plaidAccountId, undefined)
+})

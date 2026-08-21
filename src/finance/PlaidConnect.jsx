@@ -2,18 +2,30 @@ import { useState, useCallback, useEffect } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 
 const API = '/.netlify/functions'
+const REQUEST_TIMEOUT_MS = 15000
 
 async function apiFetch(path, options = {}) {
-  const res = await fetch(`${API}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-  if (!res.ok) {
-    let detail = ''
-    try { const body = await res.json(); detail = body.detail || body.error || '' } catch {}
-    throw new Error(`API ${path} failed: ${res.status}${detail ? ' — ' + detail : ''}`)
+  const controller = options.signal ? null : new AbortController()
+  const timeout = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null
+  try {
+    const res = await fetch(`${API}${path}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+      signal: options.signal || controller?.signal,
+    })
+    if (!res.ok) {
+      let detail = ''
+      try { const body = await res.json(); detail = body.detail || body.error || '' } catch {}
+      throw new Error(`API ${path} failed: ${res.status}${detail ? ' — ' + detail : ''}`)
+    }
+    return res.json()
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Bank sync timed out. Cached balances remain available; try Sync now again.')
+    throw error
+  } finally {
+    if (timeout) clearTimeout(timeout)
   }
-  return res.json()
 }
 
 // ── PlaidLinkButton — rendered only when we have a link_token ──
@@ -64,17 +76,14 @@ export default function PlaidConnect({ onAccountsSync }) {
   const [syncedAt, setSyncedAt]         = useState(() => localStorage.getItem('plaid_synced_at') || null)
   const [loading, setLoading]           = useState(false)
   const [syncing, setSyncing]           = useState(false)
-  // The application-level startup refresh owns the automatic Plaid refresh.
-  // Mounting/re-mounting Finance views should render cached state without another bank call.
+  // Startup refresh owns automatic synchronization. Remounts render cached state.
   const [initialChecking]               = useState(false)
   const [error, setError]               = useState(null)
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
   const [oauthReturn, setOauthReturn]   = useState(false) // returning from bank OAuth redirect
 
-  // Fetch live account balances and push to parent. This is intentionally called only by
-  // explicit user actions (Sync now, connect/re-connect, disconnect). Brevity's startup
-  // refresh is handled centrally by appRefresh.js when the authenticated app first opens.
+  // Called by explicit connect, reconnect, disconnect, and Sync now actions.
   const syncAccounts = useCallback(async () => {
     setSyncing(true)
     setError(null)

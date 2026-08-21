@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
 import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
+import SpiritualFormationStudio from './SpiritualFormationStudio.jsx'
 import { compactEditableLines, compactTitledItems, joinEditableLines, splitEditableLines } from './lineEditing.js'
 import './MorningAlignment.css'
+import './MorningAlignmentAutosave.css'
 
 const STEPS = [
   ['spiritual', 'Spiritual Maturity', 'ti-sun'],
@@ -52,16 +54,6 @@ function Field({ label, children, hint }) {
 function MemberChecks({ selected = [], onChange }) {
   const toggle = member => onChange(selected.includes(member) ? selected.filter(item => item !== member) : [...selected, member])
   return <div className="alignment-member-grid">{HOUSEHOLD_MEMBERS.map(member => <button type="button" key={member} className={selected.includes(member) ? 'is-selected' : ''} onClick={() => toggle(member)}>{member}</button>)}</div>
-}
-
-function SpiritualStep({ draft, update }) {
-  const value = draft.spiritual
-  return <div className="alignment-form-grid">
-    <Field label="Scripture"><textarea value={joinLines(value.scripture)} onChange={e => update('spiritual', { scripture: splitLines(e.target.value) })} placeholder="One passage per line" /></Field>
-    <Field label="Devotion focus"><textarea value={value.devotionFocus} onChange={e => update('spiritual', { devotionFocus: e.target.value })} placeholder="What is God emphasizing today?" /></Field>
-    <Field label="Prayer focus"><textarea value={joinLines(value.prayerFocus)} onChange={e => update('spiritual', { prayerFocus: splitLines(e.target.value) })} placeholder="One prayer focus per line" /></Field>
-    <Field label="Act of obedience"><textarea value={value.obedienceAction} onChange={e => update('spiritual', { obedienceAction: e.target.value })} placeholder="What will obedience look like today?" /></Field>
-  </div>
 }
 
 function HealthStep({ draft, update }) {
@@ -137,13 +129,18 @@ function MinistryStep({ draft, update }) {
   </div>
 }
 
-const STEP_COMPONENTS = { spiritual: SpiritualStep, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
+const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
-export default function MorningAlignment({ plan, onCancel, onComplete }) {
+export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComplete }) {
   const [draft, setDraft] = useState(() => normalizeDailyPlan(plan))
   const [stepIndex, setStepIndex] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [draftSaveState, setDraftSaveState] = useState('saved')
+  const autosaveReady = useRef(false)
+  const exiting = useRef(false)
+  const saveChain = useRef(Promise.resolve())
+  const saveDraftRef = useRef(onSaveDraft)
   const [id, label, icon] = STEPS[stepIndex]
   const Step = STEP_COMPONENTS[id]
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100)
@@ -151,12 +148,50 @@ export default function MorningAlignment({ plan, onCancel, onComplete }) {
   const update = (section, patch) => setDraft(current => ({ ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }))
   const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner', !draft.fitness.location && 'Gym/location', !draft.education.isaiah.owner && 'Isaiah education owner'].filter(Boolean), [draft])
 
-  const finish = async () => {
+  useEffect(() => { saveDraftRef.current = onSaveDraft }, [onSaveDraft])
+
+  useEffect(() => {
+    if (exiting.current) return
+    if (!autosaveReady.current) { autosaveReady.current = true; return }
+    if (!saveDraftRef.current) return
+    setDraftSaveState('pending')
+    const snapshot = draft
+    const timer = setTimeout(() => {
+      if (exiting.current) return
+      setDraftSaveState('saving')
+      saveChain.current = saveChain.current
+        .catch(() => undefined)
+        .then(() => saveDraftRef.current(snapshot))
+        .then(() => setDraftSaveState('saved'))
+        .catch(err => { setDraftSaveState('error'); setError(err.message || 'Draft autosave failed.') })
+    }, 900)
+    return () => clearTimeout(timer)
+  }, [draft])
+
+  const saveAndExit = async () => {
+    if (!saveDraftRef.current) { onCancel(); return }
+    exiting.current = true
     setSaving(true); setError('')
     try {
+      await saveChain.current.catch(() => undefined)
+      await saveDraftRef.current(draft)
+      onCancel()
+    } catch (err) {
+      exiting.current = false
+      setError(err.message || 'Could not save this alignment draft.')
+      setSaving(false)
+    }
+  }
+
+  const finish = async () => {
+    exiting.current = true
+    setSaving(true); setError('')
+    try {
+      await saveChain.current.catch(() => undefined)
       const cleanedDraft = cleanLineLists(draft)
       await onComplete({ ...cleanedDraft, morningAlignment: { ...cleanedDraft.morningAlignment, completedAt: new Date().toISOString() } })
     } catch (err) {
+      exiting.current = false
       setError(err.message || 'Could not complete household alignment.')
       setSaving(false)
     }
@@ -165,7 +200,7 @@ export default function MorningAlignment({ plan, onCancel, onComplete }) {
   return <div className="morning-alignment">
     <header className="morning-alignment-header">
       <div><span>Seven Pillars</span><h1>Morning Alignment</h1><p>Resolve the household's direction before food, fitness, errands, or outside activity.</p></div>
-      <button type="button" onClick={onCancel}>Exit</button>
+      <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${draftSaveState}`}>{draftSaveState==='pending'?'Changes pending':draftSaveState==='saving'?'Saving…':draftSaveState==='error'?'Save needs attention':'Draft saved'}</span><button type="button" disabled={saving} onClick={saveAndExit}>Save &amp; Exit</button></div>
     </header>
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
     <nav className="alignment-step-nav" aria-label="Alignment progress">

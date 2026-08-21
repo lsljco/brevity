@@ -1,7 +1,7 @@
-const DAY = 86400000
-
 export const TIMEFRAME_PRESETS = [
-  ['this-month', 'This Month'], ['last-month', 'Last Month'],
+  ['today', 'Today'], ['yesterday', 'Yesterday'], ['tomorrow', 'Tomorrow'],
+  ['this-week', 'This Week'], ['last-week', 'Last Week'], ['next-week', 'Next Week'],
+  ['this-month', 'This Month'], ['last-month', 'Last Month'], ['next-month', 'Next Month'],
   ['last-3-months', 'Last 3 Months'], ['last-6-months', 'Last 6 Months'],
   ['year-to-date', 'Year to Date'], ['last-12-months', 'Last 12 Months'],
   ['this-year', 'This Year'], ['last-year', 'Last Year'], ['all-time', 'All Time'],
@@ -13,15 +13,35 @@ export function isoDate(date) {
   return `${y}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function add(date, days) { return new Date(date.getTime() + days * DAY) }
+function add(date, days) {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
 
 export function resolveTimeframe(preset = 'last-12-months', now = new Date(), custom = {}) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   let from = new Date(today), to = new Date(today)
-  if (preset === 'this-month') from = new Date(today.getFullYear(), today.getMonth(), 1)
+  if (preset === 'yesterday') from = to = add(today, -1)
+  else if (preset === 'tomorrow') from = to = add(today, 1)
+  else if (preset === 'this-week') {
+    from = add(today, -today.getDay())
+    to = add(from, 6)
+  } else if (preset === 'last-week') {
+    to = add(today, -today.getDay() - 1)
+    from = add(to, -6)
+  } else if (preset === 'next-week') {
+    from = add(today, 7 - today.getDay())
+    to = add(from, 6)
+  } else if (preset === 'this-month') {
+    from = new Date(today.getFullYear(), today.getMonth(), 1)
+  }
   else if (preset === 'last-month') {
     from = new Date(today.getFullYear(), today.getMonth() - 1, 1)
     to = new Date(today.getFullYear(), today.getMonth(), 0)
+  } else if (preset === 'next-month') {
+    from = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    to = new Date(today.getFullYear(), today.getMonth() + 2, 0)
   } else if (preset === 'last-3-months') from = add(today, -89)
   else if (preset === 'last-6-months') from = add(today, -181)
   else if (preset === 'year-to-date' || preset === 'this-year') from = new Date(today.getFullYear(), 0, 1)

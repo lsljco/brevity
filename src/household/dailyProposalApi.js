@@ -1,6 +1,7 @@
 export async function generateDailyProposal(sourcePlan, targetDate) {
   const response = await fetch('/.netlify/functions/daily-proposal', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ sourcePlan, targetDate }),
   })

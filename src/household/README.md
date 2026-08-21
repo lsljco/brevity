@@ -46,19 +46,19 @@ Shared household storage uses:
 - `NETLIFY_SITE_ID`
 - `NETLIFY_TOKEN`
 
-Optional household settings:
+Household settings:
 
 - `BREVITY_HOUSEHOLD_ID` — defaults to `lslj-family`
-- `BREVITY_FAMILY_KEY` — enables the `x-brevity-family-key` request check
+- `BREVITY_AUTOMATION_KEY` — long random secret used only between the scheduled and background planning functions
 
 ### Apple/iCloud Calendar
 
-- `BREVITY_FAMILY_CALENDAR_PIN` — family PIN used to unlock calendar operations
 - `ICLOUD_EMAIL` — Apple/iCloud account email that can write the selected calendar
 - `ICLOUD_APP_PASSWORD` — Apple app-specific password; never the normal Apple ID password
 - `ICLOUD_CALENDAR_NAME` — optional exact calendar name
+- `BREVITY_TIME_ZONE` — IANA timezone for timed events; defaults to `America/New_York`
 
-Calendar credentials remain server-side and are never returned to the browser.
+Calendar credentials remain server-side and are never returned to the browser. Calendar access uses the signed-in Brevity household session; the obsolete shared PIN is no longer used.
 
 ### Brevity AI
 
@@ -87,10 +87,10 @@ Normally remain Brevity-only:
 - finance review
 - content preparation
 
-## Malbec Estate
+## Connected applications
 
-Malbec Estate has been removed from Brevity navigation. Its reusable iCloud CalDAV capability was migrated into Brevity first. The Malbec repository should remain archived/reference-only until the family confirms there is no remaining unique data to migrate; do not delete the repository merely because the navigation link is gone.
+Malbec Estate and Live Intentional are linked under Household Management. Apostolic Sermon Builder is linked under Ministry & Fellowship. If a connected site blocks iframe embedding, Brevity presents a secure full-screen launch link instead.
 
 ## Persistence roadmap
 
-The Household OS client talks through an API boundary rather than directly to Netlify Blob. Netlify Blob is the initial shared store. When Brevity needs full authentication, relational history, row-level permissions, richer auditability, or cross-module queries, migrate the API implementation to Postgres/Supabase without rewriting the Household OS UI.
+The Household OS client talks through an authenticated API boundary rather than directly to Netlify Blob. Netlify Blob stores household accounts, signed sessions, daily plans and synchronized browser records. When Brevity needs relational history, richer auditability or cross-module queries, migrate the API implementation to Postgres/Supabase without rewriting the Household OS UI.

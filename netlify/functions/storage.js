@@ -1,8 +1,8 @@
 // storage.js — Plaid token persistence via Netlify Blobs (prod) or /tmp (dev)
 //
 // Netlify's v1 function format doesn't auto-inject the Blobs context, so we
-// configure the store manually using NETLIFY_SITE_ID + NETLIFY_TOKEN env vars.
-// Both must be set in Netlify Site Settings → Environment Variables.
+// use an explicitly configured NETLIFY_SITE_ID + NETLIFY_TOKEN when available,
+// otherwise the scoped Blobs connection supplied by the Netlify runtime.
 //
 // Local dev fallback: tokens are written to /tmp/plaid-tokens.json
 
@@ -11,9 +11,11 @@ const path = require('path')
 
 // Top-level require so esbuild always detects and bundles this dependency
 let blobsGetStore = null
+let blobsConnectLambda = null
 try {
   const blobs = require('@netlify/blobs')
   blobsGetStore = blobs.getStore
+  blobsConnectLambda = blobs.connectLambda
 } catch (e) {
   console.error('[storage] @netlify/blobs not available:', e.message)
 }
@@ -21,30 +23,54 @@ try {
 // /tmp is always writable in Netlify Functions; use it for local fallback
 const LOCAL_FILE = process.env.PLAID_TOKEN_FILE || path.join('/tmp', 'plaid-tokens.json')
 
-// Use Blobs when NETLIFY_SITE_ID is configured; fall back to /tmp otherwise
-const useBlobStore = !!(blobsGetStore && process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN)
+// Prefer API access when explicitly configured. On deployed Lambda-compatible
+// functions Netlify supplies a scoped Blobs connection in event.blobs; use it
+// instead of silently falling back to ephemeral /tmp storage.
+const useBlobStore = !!blobsGetStore
 
-function makeStore() {
-  return blobsGetStore({
-    name: 'plaid-tokens',
-    consistency: 'strong',
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  })
+function makeStore(event) {
+  if (!blobsGetStore) return null
+  if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
+    return {
+      store: blobsGetStore({
+        name: 'plaid-tokens',
+        consistency: 'strong',
+        siteID: process.env.NETLIFY_SITE_ID,
+        token: process.env.NETLIFY_TOKEN,
+      }),
+      consistency: 'strong',
+      mode: 'api',
+    }
+  }
+  if (event?.blobs && blobsConnectLambda) {
+    blobsConnectLambda(event)
+    return { store: blobsGetStore('plaid-tokens'), consistency: 'eventual', mode: 'runtime' }
+  }
+  try {
+    // Current Netlify runtimes can pre-populate the Blobs context.
+    return { store: blobsGetStore('plaid-tokens'), consistency: 'eventual', mode: 'runtime' }
+  } catch {
+    return null
+  }
 }
 
-async function getTokens() {
-  if (useBlobStore) {
+function isHostedRuntime() {
+  return process.env.NETLIFY === 'true' || Boolean(process.env.CONTEXT)
+}
+
+async function getTokens(event) {
+  const backend = makeStore(event)
+  if (backend) {
     try {
-      const store = makeStore()
-      const result = await store.get('tokens', { type: 'json' })
+      const result = await backend.store.get('tokens', { type: 'json', consistency: backend.consistency })
       console.log('[storage] getTokens blobs:', result ? `found ${result.length} token(s)` : 'null/empty')
       return result || []
     } catch (e) {
       console.error('[storage] getTokens blob error:', e.message)
-      return []
+      throw new Error(`Plaid token storage could not be read: ${e.message}`)
     }
   }
+  if (isHostedRuntime()) throw new Error('Persistent Plaid token storage is unavailable in this deployment.')
   // /tmp fallback (dev or Blobs not configured)
   try {
     if (!fs.existsSync(LOCAL_FILE)) return []
@@ -55,22 +81,29 @@ async function getTokens() {
   }
 }
 
-async function setTokens(tokens) {
-  if (useBlobStore) {
+async function setTokens(tokens, event) {
+  const backend = makeStore(event)
+  if (backend) {
     try {
-      const store = makeStore()
-      await store.setJSON('tokens', tokens)
+      const result = await backend.store.setJSON('tokens', tokens)
+      if (result?.modified === false) throw new Error('The token record was not modified.')
       console.log('[storage] setTokens blobs: saved', tokens.length, 'token(s)')
+      return { saved: true, count: tokens.length, mode: backend.mode }
     } catch (e) {
       console.error('[storage] setTokens blob error:', e.message)
+      throw new Error(`Plaid token storage could not be saved: ${e.message}`)
     }
-    return
   }
+  if (isHostedRuntime()) throw new Error('Persistent Plaid token storage is unavailable in this deployment.')
   // /tmp fallback
   try {
     fs.writeFileSync(LOCAL_FILE, JSON.stringify(tokens, null, 2))
+    const saved = JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8'))
+    if (!Array.isArray(saved) || saved.length !== tokens.length) throw new Error('Token verification failed.')
+    return { saved: true, count: tokens.length, mode: 'local' }
   } catch (e) {
     console.error('[storage] setTokens local error:', e.message)
+    throw new Error(`Plaid token storage could not be saved: ${e.message}`)
   }
 }
 

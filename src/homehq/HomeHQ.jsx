@@ -3,10 +3,13 @@ import {
   HOUSEHOLD_MEMBERS as MEMBERS,
   PROJECT_STORAGE_KEY as STORAGE_KEY,
   normalizeProjectItem,
+  parseProjectDate,
+  projectDateKey,
   publishProjectEvents,
   readJson,
   writeJson,
 } from './projectData.js'
+import { syncProjectEventsToICloud } from './projectIcloudSync.js'
 
 const ROOMS      = ["Kitchen","Bathroom","Living Room","Bedroom","Basement","Garage","Exterior","Attic","Yard"];
 const TYPES      = ["Renovation","Maintenance","Repair"];
@@ -219,14 +222,14 @@ function GanttView({items,onEdit}){
       <div style={{fontSize:14}}>Add a due date to items to see them on the timeline.</div>
     </div>
   );
-  const allDates=ganttItems.flatMap(i=>[i.startDate&&new Date(i.startDate),i.due&&new Date(i.due)].filter(Boolean));
+  const allDates=ganttItems.flatMap(i=>[i.startDate&&parseProjectDate(i.startDate),i.due&&parseProjectDate(i.due)].filter(Boolean));
   let minDate=new Date(Math.min(...allDates)); minDate.setDate(minDate.getDate()-7);
   let maxDate=new Date(Math.max(...allDates)); maxDate.setDate(maxDate.getDate()+14);
   if(today<minDate){minDate=new Date(today);minDate.setDate(minDate.getDate()-7);}
   if(today>maxDate){maxDate=new Date(today);maxDate.setDate(maxDate.getDate()+14);}
   const totalDays=Math.ceil((maxDate-minDate)/86400000);
   const DAY_W=28,LABEL_W=200;
-  function dayOffset(date){const d=new Date(date);d.setHours(0,0,0,0);return Math.max(0,Math.round((d-minDate)/86400000));}
+  function dayOffset(date){const d=parseProjectDate(date);d.setHours(0,0,0,0);return Math.max(0,Math.round((d-minDate)/86400000));}
   const months=[];
   let mc=new Date(minDate.getFullYear(),minDate.getMonth(),1);
   while(mc<=maxDate){
@@ -288,8 +291,8 @@ function GanttView({items,onEdit}){
                 </div>
               </div>
               {gItems.map(item=>{
-                const start=item.startDate?new Date(item.startDate):new Date(item.due);
-                const end=new Date(item.due);
+                const start=item.startDate?parseProjectDate(item.startDate):parseProjectDate(item.due);
+                const end=parseProjectDate(item.due);
                 const s=dayOffset(start),e=dayOffset(end);
                 const barLeft=s*DAY_W, barW=Math.max((e-s)*DAY_W,20);
                 const isOverdue=end<today&&item.status!=="Done";
@@ -443,7 +446,7 @@ function CalendarView({items, onEdit}){
   function nextMonth(){ if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}else setViewMonth(m=>m+1); }
   function goToday(){ setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); }
 
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = projectDateKey(today);
   const monthPrefix = viewYear+"-"+(String(viewMonth+1).padStart(2,"0"));
   const monthItems  = items.filter(i=>i.due&&i.due.startsWith(monthPrefix));
   const monthEst    = monthItems.reduce((s,i)=>s+(parseFloat(i.estcost)||0),0);
@@ -493,7 +496,7 @@ function CalendarView({items, onEdit}){
                   <span style={{fontSize:12,fontWeight:700,color:isToday?"#000":W}}>{day}</span>
                 </div>
                 {hasCost&&(
-                  <span style={{fontSize:10,fontWeight:700,color:GREEN,background:'rgba(74,222,128,0.12)',borderRadius:8,padding:"1px 5px",whiteSpace:"nowrap"}}>
+                  <span style={{fontSize:13,fontWeight:700,color:GREEN,background:'rgba(74,222,128,0.12)',borderRadius:8,padding:"2px 6px",whiteSpace:"nowrap"}}>
                     {displayCost(dayAct||dayEst)}
                   </span>
                 )}
@@ -504,10 +507,10 @@ function CalendarView({items, onEdit}){
                 return(
                   <div key={item.id} onClick={()=>onEdit(item)}
                     title={item.title}
-                    style={{background:TYPE_BG[item.type]||GLASS2,borderLeft:`2px solid `+(TYPE_COLOR[item.type]||W3),borderRadius:"0 4px 4px 0",padding:"3px 5px",fontSize:10,cursor:"pointer",lineHeight:1.4}}>
+                    style={{background:TYPE_BG[item.type]||GLASS2,borderLeft:`2px solid `+(TYPE_COLOR[item.type]||W3),borderRadius:"0 4px 4px 0",padding:"4px 6px",fontSize:13,cursor:"pointer",lineHeight:1.4}}>
                     <div style={{fontWeight:700,color:TYPE_COLOR[item.type]||W,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.title}</div>
                     {itemCost>0&&(
-                      <div style={{fontWeight:600,color:isAct?GREEN:G,fontSize:10}}>
+                      <div style={{fontWeight:600,color:isAct?GREEN:G,fontSize:13}}>
                         {isAct?"Act":"Est"}: {displayCost(itemCost)}
                       </div>
                     )}
@@ -573,15 +576,21 @@ function App(){
     if(!published.ok){ showToast("Project saved, but Family Calendar could not be updated"); return; }
     setItems(nextItems);
     setModal(false);
+    if(nextItems.some(item=>item.pushToFamilyCalendar)) syncProjectEventsToICloud(nextItems).catch(()=>showToast("Project saved; Apple Calendar sync needs attention"));
   }
 
-  function pushAllProjectEvents(){
+  async function pushAllProjectEvents(){
     const eligible=items.filter(item=>item.startDate||item.due);
     if(!eligible.length){ showToast("Add dates to a project before publishing"); return; }
     const next=items.map(item=>(item.startDate||item.due)?{...item,pushToFamilyCalendar:true}:item);
     if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Project events could not be published"); return; }
     setItems(next);
-    showToast(`${eligible.length} project event${eligible.length===1?'':'s'} pushed to Family Calendar`);
+    try{
+      await syncProjectEventsToICloud(next);
+      showToast(`${eligible.length} project event${eligible.length===1?'':'s'} pushed to Family Calendar and Apple`);
+    }catch{
+      showToast("Family Calendar updated; Apple Calendar sync needs attention");
+    }
   }
 
   function deleteItem(id){
@@ -589,6 +598,14 @@ function App(){
     const next=items.filter(i=>i.id!==id);
     if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Delete could not be saved"); return; }
     setItems(next); showToast("Deleted");
+    syncProjectEventsToICloud(next).catch(()=>showToast("Project deleted; Apple Calendar sync needs attention"));
+  }
+
+  function removeStoredAsset(id, field, index){
+    const next=items.map(item=>item.id===id?{...item,[field]:(item[field]||[]).filter((_,assetIndex)=>assetIndex!==index),updatedAt:new Date().toISOString()}:item);
+    if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Attachment change could not be saved"); return; }
+    setItems(next);
+    showToast(field==="photos"?"Photo removed":"Attachment removed");
   }
 
   function handlePhoto(e){
@@ -624,7 +641,9 @@ function App(){
         const data=JSON.parse(ev.target.result);
         if(!Array.isArray(data)) throw new Error();
         if(window.confirm("Import "+data.length+" items? This will replace your current data.")){
-          setItems(data); showToast("Imported "+data.length+" items");
+          const normalized=data.map(normalizeProjectItem);
+          if(!saveItems(normalized).ok||!publishProjectEvents(localStorage,normalized).ok){ showToast("Import could not be saved"); return; }
+          setItems(normalized); showToast("Imported "+normalized.length+" items");
         }
       }catch(err){ showToast("Invalid file"); }
     };
@@ -716,7 +735,9 @@ function App(){
             <div className="hq-proj-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
               {filtered.map(item=>{
                 const isExp=expanded===item.id;
-                const isOverdue=item.due&&new Date(item.due)<new Date()&&item.status!=="Done";
+                const dueDate=item.due?parseProjectDate(item.due):null;
+                const todayStart=new Date();todayStart.setHours(0,0,0,0);
+                const isOverdue=dueDate&&dueDate<todayStart&&item.status!=="Done";
                 const heroImg=getRoomImg(item);
                 return(
                   <div key={item.id} className={`hq-card${isExp?' hq-card--expanded':''}`}>
@@ -801,7 +822,10 @@ function App(){
                               <Lbl>Photos</Lbl>
                               <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:6}}>
                                 {item.photos.map((p,i)=>(
-                                  <img key={i} src={p} onClick={()=>setLightbox({type:"image",data:p,name:"Photo",download:false})} style={{width:68,height:68,objectFit:"cover",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer"}}/>
+                                  <div key={i} style={{position:"relative"}}>
+                                    <img src={p} onClick={()=>setLightbox({type:"image",data:p,name:"Photo",download:false})} style={{width:68,height:68,objectFit:"cover",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer"}}/>
+                                    <button aria-label="Remove photo" onClick={()=>removeStoredAsset(item.id,"photos",i)} style={{position:"absolute",top:-6,right:-6,width:20,height:20,borderRadius:"50%",background:RED,color:"#000",border:"none",cursor:"pointer",fontWeight:700}}>×</button>
+                                  </div>
                                 ))}
                               </div>
                             </div>
@@ -826,7 +850,7 @@ function App(){
                                         else setLightbox({type:"unsupported",data:f.data,name:f.name,icon:icons[f.type]||"FILE",download:true});
                                       }} style={{fontSize:12,fontWeight:600,color:G,cursor:"pointer",padding:"4px 8px",borderRadius:6,background:'rgba(197,164,109,0.14)',border:"none",whiteSpace:"nowrap"}}>Preview</button>
                                       <a href={f.data} download={f.name} style={{fontSize:12,fontWeight:600,color:W2,textDecoration:"none",padding:"4px 8px",borderRadius:6,background:GLASS}}>Save</a>
-                                      <button onClick={()=>setForm(prev=>({...prev,files:prev.files.filter((_,j)=>j!==i)}))} style={{width:20,height:20,borderRadius:"50%",background:'rgba(248,113,113,0.15)',color:RED,border:"none",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>×</button>
+                                      <button aria-label="Remove attachment" onClick={()=>removeStoredAsset(item.id,"files",i)} style={{width:20,height:20,borderRadius:"50%",background:'rgba(248,113,113,0.15)',color:RED,border:"none",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>×</button>
                                     </div>
                                   );
                                 })}

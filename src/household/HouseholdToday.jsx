@@ -6,6 +6,7 @@ import NotificationCenter from './NotificationCenter.jsx'
 import TodayDashboard from './TodayDashboard.jsx'
 import TomorrowProposal from './TomorrowProposal.jsx'
 import { generateDailyPlan } from './dailyPlanGeneratorApi.js'
+import { clearPillarAnalyses } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
 import './HouseholdOS.css'
 
@@ -18,6 +19,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
 
   const persistAndSync = async nextPlan => {
     const saved = await savePlan(nextPlan)
+    clearPillarAnalyses(saved.date)
     try {
       const summary = await reconcilePlanWithICloud(saved)
       const changed = summary.created + summary.updated + summary.deleted
@@ -35,6 +37,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
     setGenerationMessage('Brevity is preparing the Seven Pillars Household Command Schedule…')
     try {
       await generateDailyPlan(plan.date, { overwrite: true })
+      clearPillarAnalyses(plan.date)
       await reload()
       setGenerationState('ready')
       setGenerationMessage('Daily command plan generated and saved to Brevity.')
@@ -45,9 +48,13 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
   }
 
   const completeAlignment = async nextPlan => { await persistAndSync(nextPlan); setMode('today') }
-  const completeRecap = async nextPlan => { await savePlan(nextPlan); setMode('today') }
+  const completeRecap = async nextPlan => {
+    const saved = await savePlan(nextPlan)
+    clearPillarAnalyses(saved.date)
+    setMode('today')
+  }
 
-  if (mode === 'alignment') return <MorningAlignment plan={plan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
+  if (mode === 'alignment') return <MorningAlignment plan={plan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
   if (mode === 'recap') return <EveningRecap plan={plan} onCancel={() => setMode('today')} onComplete={completeRecap} />
 
   return <div className="household-today-workspace">

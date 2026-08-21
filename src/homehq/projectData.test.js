@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeProjectItem, projectCalendarEvent, syncProjectCalendarEvents } from './projectData.js'
+import { normalizeProjectItem, parseProjectDate, projectCalendarEvent, projectDateKey, syncProjectCalendarEvents } from './projectData.js'
 
 test('migrates the legacy single assignee into Responsible without losing it', () => {
   const item = normalizeProjectItem({ id: 'p1', assignee: 'Terica' })
@@ -30,4 +30,12 @@ test('defaults ownerless project events to Family and removes unpublished projec
   assert.equal(events[1].owner, 'Family')
   assert.deepEqual(events[1].members, ['Family'])
   assert.equal(events.some(event => event.projectId === 'old'), false)
+})
+
+test('project dates remain local calendar dates instead of shifting through UTC', () => {
+  const date = parseProjectDate('2026-08-21')
+  assert.equal(date.getFullYear(), 2026)
+  assert.equal(date.getMonth(), 7)
+  assert.equal(date.getDate(), 21)
+  assert.equal(projectDateKey(date), '2026-08-21')
 })

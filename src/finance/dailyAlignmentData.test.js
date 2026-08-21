@@ -32,6 +32,23 @@ test('daily discretionary amount uses the remaining monthly budget and days', ()
   assert.equal(snapshot.approvedDiscretionary, 10)
 })
 
+test('monthly cash flow can use operating transactions while daily activity follows the visible account', () => {
+  const snapshot = buildDailyAlignmentSnapshot({
+    date: '2026-09-04',
+    accounts,
+    scheduled: [{ id: 'visible-savings', amount: 900, type: 'income', freq: 'weekly', start: '2026-09-04' }],
+    monthlyScheduled: [
+      { id: 'operating-income', amount: 500, type: 'income', freq: 'monthly', start: '2026-09-04' },
+      { id: 'operating-expense', amount: 200, type: 'expense', freq: 'monthly', start: '2026-09-04' },
+    ],
+  })
+
+  assert.equal(snapshot.expectedInflows, 900)
+  assert.equal(snapshot.monthlyIncome, 500)
+  assert.equal(snapshot.monthlyExpenses, 200)
+  assert.equal(snapshot.monthlyCashFlow, 300)
+})
+
 test('daily records retain the four named owners and normalize partial saves', () => {
   assert.deepEqual(emptyDailyAlignmentRecord().actions.map(row => row.person), ['Larry', 'Lorenzo', 'Terica', 'Nyla'])
   const record = normalizeDailyAlignmentRecord({ actions: [{ person: 'Larry', action: 'Send proposal' }] })

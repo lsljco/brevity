@@ -55,6 +55,42 @@ test('removes the cancelled legacy Ameripro income series once', () => {
   assert.equal(migrated.calendarDataVersion, CALENDAR_DATA_VERSION)
 })
 
+test('ends Mativ on September 18 and converts the saved CRH first check to weekly', () => {
+  const data = {
+    calendarDataVersion: 2,
+    transactions: [
+      { id: 't_i5', name: 'JS - Mativ Income', type: 'income', freq: 'weekly', start: '2026-07-03', end: '' },
+      { id: 'new-job', name: 'JS CRH Oldcastle Income', type: 'income', freq: 'once', start: '2026-09-04', end: '', amount: 1234.56 },
+    ],
+  }
+
+  const migrated = migrateFinanceData(data)
+
+  assert.deepEqual(migrated.transactions, [
+    { id: 't_i5', name: 'JS - Mativ Income', type: 'income', freq: 'weekly', start: '2026-07-03', end: '2026-09-18' },
+    { id: 'new-job', name: 'JS CRH Oldcastle Income', type: 'income', freq: 'weekly', start: '2026-09-04', end: '', amount: 1234.56 },
+  ])
+})
+
+test('repairs version 3 records that still contain Ameripro or monthly property taxes', () => {
+  const data = {
+    calendarDataVersion: 3,
+    transactions: [
+      { id: 't_i6', name: 'LJ - Ameripro Income', type: 'income', freq: 'weekly', start: '2026-07-03' },
+      { id: 't_h6', name: 'Property Taxes', type: 'expense', freq: 'monthly', start: '2026-08-14', amount: 30337.59 },
+      { id: 'custom-tax', name: 'Property Taxes', type: 'expense', freq: 'monthly', start: '2026-08-14', amount: 100 },
+    ],
+  }
+
+  const migrated = migrateFinanceData(data)
+
+  assert.equal(migrated.calendarDataVersion, CALENDAR_DATA_VERSION)
+  assert.deepEqual(migrated.transactions, [
+    { id: 't_h6', name: 'Property Taxes', type: 'expense', freq: 'yearly', start: '2026-08-14', amount: 30337.59 },
+    { id: 'custom-tax', name: 'Property Taxes', type: 'expense', freq: 'monthly', start: '2026-08-14', amount: 100 },
+  ])
+})
+
 test('reports browser storage failures instead of claiming a save succeeded', () => {
   const error = new Error('quota exceeded')
   const storage = { setItem() { throw error } }

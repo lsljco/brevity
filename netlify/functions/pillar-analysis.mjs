@@ -1,3 +1,6 @@
+import householdAuth from './household-auth.js';
+
+const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
@@ -40,9 +43,13 @@ export const handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error:'Method not allowed.' });
   if (!process.env.OPENAI_API_KEY) return json(503, { error:'Brevity AI is not configured yet. OPENAI_API_KEY must be available to Netlify Functions.' });
 
+  const session = await readSession(event).catch(() => null);
+  if (!session) return json(401, { error:'Sign in to generate a Seven Pillars analysis.' });
+
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error:'Invalid request body.' }); }
-  const { pillar, date, plan, currentMember = 'Larry', localContext = {} } = body;
+  const { pillar, date, plan, localContext = {} } = body;
+  const currentMember = session.member;
   if (!PILLARS.has(pillar)) return json(400, { error:'Unknown Seven Pillar.' });
   if (!date || !plan) return json(400, { error:'Date and household plan are required.' });
 

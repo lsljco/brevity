@@ -1,4 +1,5 @@
 const { getStore } = require('@netlify/blobs')
+const { readSession } = require('./household-auth')
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const STORE_NAME = 'brevity-household'
@@ -7,19 +8,12 @@ const headers = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type,x-brevity-family-key',
+  'access-control-allow-headers': 'content-type',
   'access-control-allow-methods': 'GET,PUT,OPTIONS',
 }
 
 function response(statusCode, body) {
   return { statusCode, headers, body: JSON.stringify(body) }
-}
-
-function authorized(event) {
-  const required = process.env.BREVITY_FAMILY_KEY
-  if (!required) return true
-  const supplied = event.headers?.['x-brevity-family-key'] || event.headers?.['X-Brevity-Family-Key'] || ''
-  return supplied === required
 }
 
 function store() {
@@ -58,9 +52,10 @@ async function putPlan(date, plan) {
 
 exports.handler = async event => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' }
-  if (!authorized(event)) return response(401, { error: 'Unauthorized household request.' })
 
   try {
+    const session = await readSession(event)
+    if (!session) return response(401, { error: 'Sign in to access the household plan.' })
     const date = event.queryStringParameters?.date
 
     if (event.httpMethod === 'GET') {

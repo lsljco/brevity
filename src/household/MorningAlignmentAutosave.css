@@ -1,0 +1,41 @@
+.alignment-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.alignment-header-actions > button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--muted);
+  font: 600 14px var(--font);
+  cursor: pointer;
+}
+
+.alignment-header-actions > button:disabled { opacity: .55; }
+.alignment-save-state { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.alignment-save-state--saved { color: #9acc9f; }
+.alignment-save-state--error { color: #efb0a4; }
+
+@media (max-width: 640px) {
+  .alignment-header-actions { width: 100%; justify-content: space-between; }
+}
+
+/* Alignment is used like a seven-slide guided workflow on tablets. */
+.alignment-step-nav small { font-size: 14px !important; line-height: 1.35; }
+.alignment-step-nav button > span { font-size: 13px !important; }
+.alignment-field > span { font-size: 14px !important; line-height: 1.4; }
+.alignment-field > small { font-size: 13px !important; line-height: 1.45; }
+.alignment-field input,
+.alignment-field textarea,
+.alignment-field select { font-size: 17px !important; line-height: 1.5; min-height: 46px; }
+.alignment-primary,
+.alignment-secondary { font-size: 16px !important; min-height: 48px; }
+
+@media (max-width: 900px) {
+  .alignment-step-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .alignment-step-nav button { min-height: 58px; }
+}

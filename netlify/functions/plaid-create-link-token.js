@@ -1,4 +1,5 @@
 const { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } = require('plaid')
+const { readSession } = require('./household-auth')
 
 const plaidClient = new PlaidApi(
   new Configuration({
@@ -24,6 +25,9 @@ exports.handler = async (event) => {
   }
 
   try {
+    const session = await readSession(event)
+    if (!session) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Sign in to connect a bank.' }) }
+    if (session.role !== 'admin') return { statusCode: 403, headers, body: JSON.stringify({ error: 'Household administrator access is required to connect a bank.' }) }
     // access_token present = update mode (re-authenticate existing item)
     const body = event.body ? JSON.parse(event.body) : {}
     const { access_token } = body
@@ -63,11 +67,8 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({
         error: 'Failed to create link token',
-        detail: err.message,
-        plaid_error: plaidError,
-        env: process.env.PLAID_ENV || '(not set)',
-        has_client_id: !!process.env.PLAID_CLIENT_ID,
-        has_secret: !!process.env.PLAID_SECRET,
+        detail: plaidError?.error_message || 'Plaid could not start the secure bank connection. Review the server logs and Plaid configuration.',
+        code: plaidError?.error_code || 'PLAID_LINK_ERROR',
       }),
     }
   }

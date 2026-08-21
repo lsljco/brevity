@@ -1,4 +1,4 @@
-export const CALENDAR_DATA_VERSION = 2
+export const CALENDAR_DATA_VERSION = 4
 export const financeBackupKey = key => `${key}_backup`
 
 // These weekly records were originally seeded on Thursdays even though they
@@ -18,6 +18,11 @@ const LEGACY_FRIDAY_ANCHORS = {
 
 const SHRINER_ID = 't_i1'
 const SHRINER_LAST_CHECK = '2026-08-14'
+const MATIV_ID = 't_i5'
+const MATIV_LAST_CHECK = '2026-09-18'
+const CRH_FIRST_CHECK = '2026-09-04'
+const CRH_INCOME_NAME = /crh|old\s*castle/i
+const PROPERTY_TAX_ID = 't_h6'
 
 export function migrateFinanceData(data) {
   if (!data || typeof data !== 'object') return data
@@ -39,11 +44,41 @@ export function migrateFinanceData(data) {
           next = { ...next, end: SHRINER_LAST_CHECK }
         }
 
+        // Javin's Mativ income ends after the September 18 check. Preserve an
+        // earlier user-selected end date, but do not project this series later.
+        if (currentVersion < 3 && transaction.id === MATIV_ID && (!transaction.end || transaction.end > MATIV_LAST_CHECK)) {
+          next = { ...next, end: MATIV_LAST_CHECK }
+        }
+
+        // The September 4 CRH/Oldcastle check is the first occurrence of the
+        // new weekly series. Keep the user's saved name and amount intact.
+        if (
+          currentVersion < 3
+          && transaction.type === 'income'
+          && transaction.start === CRH_FIRST_CHECK
+          && CRH_INCOME_NAME.test(transaction.name || '')
+          && transaction.freq !== 'weekly'
+        ) {
+          next = { ...next, freq: 'weekly' }
+        }
+
+        // The seeded property-tax obligation is annual. Older records marked
+        // it monthly, multiplying a single tax bill into every forecast month.
+        if (
+          currentVersion < 4
+          && transaction.id === PROPERTY_TAX_ID
+          && transaction.name === 'Property Taxes'
+          && transaction.type === 'expense'
+          && transaction.freq === 'monthly'
+        ) {
+          next = { ...next, freq: 'yearly' }
+        }
+
         return next
       }).filter(transaction => {
         // Ameripro was a legacy starter-series, not a bank transaction. Once
         // cancelled, it must not be recreated by a refresh or deployment.
-        if (currentVersion < 2 && transaction.id === 't_i6' && transaction.name === 'LJ - Ameripro Income') return false
+        if (currentVersion < 4 && transaction.id === 't_i6' && transaction.name === 'LJ - Ameripro Income') return false
         return true
       })
     : data.transactions

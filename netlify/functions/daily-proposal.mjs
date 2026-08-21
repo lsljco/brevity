@@ -1,3 +1,7 @@
+import householdAuth from './household-auth.js'
+
+const { readSession } = householdAuth
+
 const json = (statusCode, body) => ({
   statusCode,
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
@@ -25,6 +29,8 @@ export const handler = async event => {
   if (event.httpMethod === 'OPTIONS') return json(204, {})
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' })
   if (!process.env.OPENAI_API_KEY) return json(503, { error: 'Brevity AI is not configured yet.' })
+  const session = await readSession(event).catch(() => null)
+  if (!session) return json(401, { error: 'Sign in to generate a daily proposal.' })
 
   let payload
   try { payload = JSON.parse(event.body || '{}') } catch { return json(400, { error: 'Invalid request.' }) }
