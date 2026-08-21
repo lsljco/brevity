@@ -64,14 +64,17 @@ export default function PlaidConnect({ onAccountsSync }) {
   const [syncedAt, setSyncedAt]         = useState(() => localStorage.getItem('plaid_synced_at') || null)
   const [loading, setLoading]           = useState(false)
   const [syncing, setSyncing]           = useState(false)
-  // True while the initial mount sync is running — prevents "No bank connected" flicker
-  const [initialChecking, setInitialChecking] = useState(true)
+  // The application-level startup refresh owns the automatic Plaid refresh.
+  // Mounting/re-mounting Finance views should render cached state without another bank call.
+  const [initialChecking]               = useState(false)
   const [error, setError]               = useState(null)
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
   const [oauthReturn, setOauthReturn]   = useState(false) // returning from bank OAuth redirect
 
-  // Fetch live account balances and push to parent
+  // Fetch live account balances and push to parent. This is intentionally called only by
+  // explicit user actions (Sync now, connect/re-connect, disconnect). Brevity's startup
+  // refresh is handled centrally by appRefresh.js when the authenticated app first opens.
   const syncAccounts = useCallback(async () => {
     setSyncing(true)
     setError(null)
@@ -107,14 +110,8 @@ export default function PlaidConnect({ onAccountsSync }) {
       setError('Could not reach bank sync. ' + err.message)
     } finally {
       setSyncing(false)
-      setInitialChecking(false)
     }
   }, [onAccountsSync])
-
-  // Auto-sync on mount to restore state from Plaid / Netlify Blobs
-  useEffect(() => {
-    syncAccounts()
-  }, [syncAccounts])
 
   // Detect OAuth return: Plaid redirects back with ?oauth_state_id=...
   // Re-initialize Link with the saved token + receivedRedirectUri to complete the flow
