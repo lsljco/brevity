@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
 import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
+import SpiritualFormationStudio from './SpiritualFormationStudio.jsx'
 import './MorningAlignment.css'
 
 const STEPS = [
@@ -23,16 +24,6 @@ function Field({ label, children, hint }) {
 function MemberChecks({ selected = [], onChange }) {
   const toggle = member => onChange(selected.includes(member) ? selected.filter(item => item !== member) : [...selected, member])
   return <div className="alignment-member-grid">{HOUSEHOLD_MEMBERS.map(member => <button type="button" key={member} className={selected.includes(member) ? 'is-selected' : ''} onClick={() => toggle(member)}>{member}</button>)}</div>
-}
-
-function SpiritualStep({ draft, update }) {
-  const value = draft.spiritual
-  return <div className="alignment-form-grid">
-    <Field label="Scripture"><textarea value={joinLines(value.scripture)} onChange={e => update('spiritual', { scripture: splitLines(e.target.value) })} placeholder="One passage per line" /></Field>
-    <Field label="Devotion focus"><textarea value={value.devotionFocus} onChange={e => update('spiritual', { devotionFocus: e.target.value })} placeholder="What is God emphasizing today?" /></Field>
-    <Field label="Prayer focus"><textarea value={joinLines(value.prayerFocus)} onChange={e => update('spiritual', { prayerFocus: splitLines(e.target.value) })} placeholder="One prayer focus per line" /></Field>
-    <Field label="Act of obedience"><textarea value={value.obedienceAction} onChange={e => update('spiritual', { obedienceAction: e.target.value })} placeholder="What will obedience look like today?" /></Field>
-  </div>
 }
 
 function HealthStep({ draft, update }) {
@@ -108,7 +99,7 @@ function MinistryStep({ draft, update }) {
   </div>
 }
 
-const STEP_COMPONENTS = { spiritual: SpiritualStep, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
+const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
 export default function MorningAlignment({ plan, onCancel, onComplete }) {
   const [draft, setDraft] = useState(() => normalizeDailyPlan(plan))
