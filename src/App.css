@@ -559,6 +559,30 @@ html, body {
   background: #000000;
 }
 
+.app-refresh-status {
+  position: fixed;
+  z-index: 1200;
+  top: 14px;
+  right: 18px;
+  max-width: min(520px, calc(100vw - 110px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 13px;
+  border: 1px solid rgba(197,164,109,.28);
+  border-radius: 11px;
+  background: rgba(12,11,10,.94);
+  color: var(--soft-white);
+  box-shadow: 0 12px 36px rgba(0,0,0,.48);
+  font-size: 13px;
+  line-height: 1.4;
+  backdrop-filter: blur(18px);
+}
+.app-refresh-status--loading::before { content: ''; width: 13px; height: 13px; flex: 0 0 13px; border: 2px solid rgba(197,164,109,.25); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+.app-refresh-status--warning { border-color: rgba(232,168,96,.48); }
+.app-refresh-status--error { border-color: rgba(232,120,96,.52); }
+.app-refresh-status button { border: 0; background: transparent; color: var(--gold); font: 600 12px/1 var(--font); cursor: pointer; white-space: nowrap; }
+
 /* ── No background image — pure black ── */
 .app-main::before,
 .app-main::after {

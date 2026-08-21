@@ -1,12 +1,12 @@
 import { TIMEFRAME_PRESETS, resolveTimeframe, timeframeLabel } from './financeTimeframe.js'
 
-export default function FinanceTimeframe({ value, onChange, compact = false }) {
+export default function FinanceTimeframe({ value, onChange, compact = false, label = 'Dates / Timeframe' }) {
   const setPreset = preset => onChange(resolveTimeframe(preset, new Date(), value))
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: compact ? 14 : 20,
       padding: compact ? '10px 12px' : '12px 16px', borderRadius: 12, background: 'rgba(255,255,255,.035)', border: '1px solid var(--glass-border)' }}>
       <div>
-        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.12em', color: 'var(--gold)', fontWeight: 700 }}>Dates / Timeframe</div>
+        <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.12em', color: 'var(--gold)', fontWeight: 700 }}>{label}</div>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{timeframeLabel(value)}</div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

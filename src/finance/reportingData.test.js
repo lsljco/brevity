@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildBalanceSheet, summarizeActuals, categoryGroup, groupReportTransactions, reportStats, matchesTransactionFilter, budgetCategoryForTransaction, summarizeBudgetActuals } from './reportingData.js'
+import { buildBalanceSheet, summarizeActuals, categoryGroup, groupReportTransactions, reportStats, matchesTransactionFilter, budgetCategoryForTransaction, summarizeBudgetActuals, isTransferTransaction, transactionDirection } from './reportingData.js'
 
 test('builds actual P&L totals, monthly results, categories, and vendor spend', () => {
   const report = summarizeActuals([
@@ -44,6 +44,14 @@ test('report filters carry category and direction into Transactions', () => {
   assert.equal(matchesTransactionFilter({ amount: 45, category: 'FOOD_AND_DRINK' }, { budgetCategory: 'Food' }), true)
 })
 
+test('transaction search covers merchant, statement, category, and institution text', () => {
+  const row = { name: 'Robert Half', originalStatement: 'PAYROLL DEPOSIT', category: 'TS TransAmerica Income', institution: 'Pinnacle' }
+  assert.equal(matchesTransactionFilter(row, { query: 'robert' }), true)
+  assert.equal(matchesTransactionFilter(row, { query: 'payroll' }), true)
+  assert.equal(matchesTransactionFilter(row, { query: 'pinnacle' }), true)
+  assert.equal(matchesTransactionFilter(row, { query: 'amazon' }), false)
+})
+
 test('budget actuals normalize Plaid categories and exclude transfers', () => {
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'RENT_AND_UTILITIES' }), 'Utilities')
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'TRANSFER_OUT' }), null)
@@ -53,4 +61,22 @@ test('budget actuals normalize Plaid categories and exclude transfers', () => {
     { amount: -500, category: 'INCOME' },
     { amount: 200, category: 'TRANSFER_OUT' },
   ]), { Utilities: 100, Income: 500 })
+})
+
+test('cash flow, spending, and income reports exclude account transfers and card payments', () => {
+  const rows = [
+    { date: '2026-08-01', amount: -1000, category: 'INCOME', name: 'Employer' },
+    { date: '2026-08-02', amount: 200, category: 'FOOD_AND_DRINK', name: 'Market' },
+    { date: '2026-08-03', amount: -500, category: 'TRANSFER_IN', name: 'Transfer from savings' },
+    { date: '2026-08-04', amount: 500, category: 'TRANSFER_OUT', name: 'Transfer to savings' },
+    { date: '2026-08-05', amount: 125, category: 'LOAN_PAYMENTS', name: 'Credit Card Payment' },
+  ]
+  const report = summarizeActuals(rows, 2026)
+  assert.equal(report.income, 1000)
+  assert.equal(report.expenses, 200)
+  assert.equal(report.net, 800)
+  assert.equal(reportStats(rows, 'expense').total, 200)
+  assert.equal(reportStats(rows, 'income').total, 1000)
+  assert.equal(transactionDirection(rows[2]), 'transfer')
+  assert.equal(isTransferTransaction(rows[4]), true)
 })

@@ -7,6 +7,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 export async function generateDailyPlan(date, { overwrite = false, timeoutMs = 90000 } = {}) {
   const response = await fetch(ENDPOINT, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ date, overwrite }),
   })

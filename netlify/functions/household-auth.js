@@ -76,6 +76,12 @@ async function readSession(event) {
   }
 }
 
+// Shared by the other Brevity functions so the household login is the single
+// authorization boundary for plans, finance, calendar, and AI operations.
+// Keep this function side-effect free: callers decide whether a member or an
+// administrator is required for the requested operation.
+exports.readSession = readSession
+
 function passwordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(String(password), salt, 64).toString('hex')
   return { salt, hash }

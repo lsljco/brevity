@@ -9,6 +9,7 @@ async function parse(response){
 export async function generateSermonFormation({transcript,sermonDate,serviceType,title,targetDate}){
   const response=await fetch(ENDPOINT,{
     method:'POST',
+    credentials:'include',
     headers:{'content-type':'application/json'},
     body:JSON.stringify({transcript,sermonDate,serviceType,title,targetDate})
   })

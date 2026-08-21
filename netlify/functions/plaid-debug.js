@@ -1,5 +1,6 @@
 // plaid-debug.js — surfaces Plaid/Blobs status to the browser for diagnosis
 const { getTokens, useBlobStore } = require('./storage')
+const { readSession } = require('./household-auth')
 
 let blobsGetStore = null
 try {
@@ -14,7 +15,10 @@ exports.handler = async (event) => {
   }
 
   try {
-    const tokens = await getTokens()
+    const session = await readSession(event)
+    if (!session) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Sign in to view Plaid diagnostics.' }) }
+    if (session.role !== 'admin') return { statusCode: 403, headers, body: JSON.stringify({ error: 'Household administrator access is required.' }) }
+    const tokens = await getTokens(event)
 
     // Test write + read cycle using the same config as storage.js
     let writeReadTest = 'not run'
@@ -59,10 +63,11 @@ exports.handler = async (event) => {
       }, null, 2),
     }
   } catch (err) {
+    console.error('Plaid diagnostic error:', err)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: err.message, stack: err.stack }),
+      body: JSON.stringify({ error: 'Plaid diagnostics could not be completed.' }),
     }
   }
 }

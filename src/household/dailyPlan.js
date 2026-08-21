@@ -30,6 +30,7 @@ export const NOTIFICATION_LEVEL = {
 const arrayOrEmpty = value => Array.isArray(value) ? value : []
 const objectOrEmpty = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 const makeId = () => globalThis.crypto?.randomUUID?.() || `brevity-${Date.now()}-${Math.random().toString(36).slice(2)}`
+const localDateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 export function createPlanItem(overrides = {}) {
   return {
@@ -146,7 +147,7 @@ export function createEmptyDailyPlan(date) {
 
 export function normalizeDailyPlan(input = {}) {
   const plan = objectOrEmpty(input)
-  const date = typeof plan.date === 'string' && plan.date ? plan.date : new Date().toISOString().slice(0, 10)
+  const date = typeof plan.date === 'string' && plan.date ? plan.date : localDateKey(new Date())
   const base = createEmptyDailyPlan(date)
   const morningAlignment = objectOrEmpty(plan.morningAlignment)
   const spiritual = objectOrEmpty(plan.spiritual)

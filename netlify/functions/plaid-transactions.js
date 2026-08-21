@@ -1,5 +1,6 @@
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens } = require('./storage')
+const { readSession } = require('./household-auth')
 
 const plaidClient = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
@@ -24,14 +25,17 @@ exports.handler = async (event) => {
   const endDate   = new Date().toISOString().split('T')[0]
 
   try {
-    const tokens = await getTokens()
+    const session = await readSession(event)
+    if (!session) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Sign in to view financial transactions.' }) }
+    const tokens = await getTokens(event)
     if (!Array.isArray(tokens) || tokens.length === 0) {
       return { statusCode: 200, headers, body: JSON.stringify({ transactions: [] }) }
     }
 
     const allTxns = []
+    const syncErrors = []
 
-    for (const { access_token, institution } of tokens) {
+    for (const { access_token, item_id, institution } of tokens) {
       try {
         // Paginate — Plaid caps at 500 per request
         let offset = 0
@@ -63,11 +67,28 @@ exports.handler = async (event) => {
         }
       } catch (err) {
         console.error('Transactions error for token:', err.response?.data || err.message)
+        const code = err.response?.data?.error_code
+        syncErrors.push({
+          itemId: item_id,
+          institution: institution || 'Connected institution',
+          code: code || 'PLAID_SYNC_ERROR',
+          message: code === 'ITEM_LOGIN_REQUIRED'
+            ? 'This bank connection needs to be re-authenticated.'
+            : 'Transactions could not be refreshed for this institution.',
+        })
+      }
+    }
+
+    if (!allTxns.length && syncErrors.length === tokens.length) {
+      return {
+        statusCode: 502,
+        headers,
+        body: JSON.stringify({ error: 'Transaction sync failed for every connected institution.', errors: syncErrors }),
       }
     }
 
     allTxns.sort((a, b) => new Date(b.date) - new Date(a.date))
-    return { statusCode: 200, headers, body: JSON.stringify({ transactions: allTxns, count: allTxns.length }) }
+    return { statusCode: 200, headers, body: JSON.stringify({ transactions: allTxns, count: allTxns.length, errors: syncErrors }) }
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to fetch transactions', detail: err.message }) }
   }

@@ -116,7 +116,7 @@ export function buildProjection(accounts, transactions, days = 365, overrides = 
   let pastDelta = 0
   for (let i = 0; i < pastDays; i++) {
     const d = addDays(startDate, i)
-    const hits = transactions.filter(tx => txOccursOnDate(tx, d))
+    const hits = transactions.filter(tx => txOccursOnDate(tx, d)).sort(calendarTransactionOrder)
     pastDelta += hits.reduce((s, tx) => {
       if (tx.type === 'transfer') return s + transferDelta(tx)
       return s + (tx.type === 'income' ? 1 : -1) * parseFloat(tx.amount || 0)

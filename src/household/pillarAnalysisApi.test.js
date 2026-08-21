@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { collectPillarContextFromStorage } from './pillarAnalysisApi.js'
+import { clearPillarAnalyses, collectPillarContextFromStorage, pillarAnalysisStorageKey } from './pillarAnalysisApi.js'
 
 function storage(values) {
   return { getItem: key => values[key] ?? null }
@@ -18,4 +18,13 @@ test('finance analysis reads the active finance, Plaid and budget storage keys',
   assert.equal(context.actualTransactions[0].id, 'posted')
   assert.deepEqual(context.budgets.Groceries, [300])
   assert.equal(context.syncedAt, '2026-08-20T22:00:00.000Z')
+})
+
+test('clearing a changed daily plan invalidates every pillar analysis for that date', () => {
+  const removed = []
+  clearPillarAnalyses('2026-08-21', { removeItem: key => removed.push(key) })
+  assert.equal(removed.length, 7)
+  assert.ok(removed.includes(pillarAnalysisStorageKey('2026-08-21', 'finance')))
+  assert.ok(removed.includes(pillarAnalysisStorageKey('2026-08-21', 'spiritual')))
+  assert.ok(removed.every(key => key.includes('2026-08-21')))
 })

@@ -3,6 +3,7 @@ export function summarizeActuals(transactions = [], year = new Date().getFullYea
   const expensesByCategory = {}
   const vendorSpend = {}
   transactions.forEach(transaction => {
+    if (isTransferTransaction(transaction)) return
     const date = new Date(`${transaction.date}T12:00:00`)
     if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return
     const amount = Number(transaction.amount) || 0
@@ -41,7 +42,19 @@ export function buildBalanceSheet(accounts = []) {
 }
 
 export function transactionDirection(transaction) {
+  if (isTransferTransaction(transaction)) return 'transfer'
   return Number(transaction?.amount) < 0 ? 'income' : 'expense'
+}
+
+export function isTransferTransaction(transaction) {
+  const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
+  const name = String(transaction?.name || transaction?.merchant_name || '').toLowerCase()
+  const statement = String(transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
+  const combined = `${category} ${name} ${statement}`
+
+  // Plaid labels account-to-account movements as TRANSFER_IN / TRANSFER_OUT.
+  // Credit-card payments are also balance movements, not household spending.
+  return /\btransfer(?:s| in| out)?\b|\bcredit card payment\b|\bcard payment\b|\bpayment to (?:visa|mastercard|amex|american express|discover|capital one|chase)\b/.test(combined)
 }
 
 export function categoryGroup(category = '') {
@@ -87,7 +100,16 @@ export function reportStats(transactions = [], direction = 'expense') {
 
 export function matchesTransactionFilter(transaction, filter = {}) {
   if (!filter || Object.keys(filter).length === 0) return true
+  if (filter.query) {
+    const query = String(filter.query).trim().toLowerCase()
+    const searchable = [transaction.name, transaction.merchant_name, transaction.originalStatement, transaction.original_description, transaction.category, transaction.cat, transaction.institution]
+      .filter(Boolean).join(' ').toLowerCase()
+    if (query && !searchable.includes(query)) return false
+  }
   if (filter.ids?.length && !filter.ids.includes(transaction.id)) return false
+  if (filter.dateFrom && String(transaction.date || '') < filter.dateFrom) return false
+  if (filter.dateTo && String(transaction.date || '') > filter.dateTo) return false
+  if (filter.excludeTransfers && isTransferTransaction(transaction)) return false
   if (filter.direction && transactionDirection(transaction) !== filter.direction) return false
   if (filter.displayBy && filter.value && reportKey(transaction, filter.displayBy) !== filter.value) return false
   if (filter.budgetCategory && budgetCategoryForTransaction(transaction) !== filter.budgetCategory) return false
@@ -95,9 +117,9 @@ export function matchesTransactionFilter(transaction, filter = {}) {
 }
 
 export function budgetCategoryForTransaction(transaction) {
+  if (isTransferTransaction(transaction)) return null
   if (transactionDirection(transaction) === 'income') return 'Income'
   const raw = String(transaction.category || transaction.cat || '').toLowerCase().replaceAll('_', ' ')
-  if (/transfer|credit card payment/.test(raw)) return null
   if (/utilit|electric|water|internet|phone|cable/.test(raw)) return 'Utilities'
   if (/mortgage|rent|home|housing/.test(raw)) return 'Housing'
   if (/auto|transport|fuel|gas station|parking|rideshare/.test(raw)) return 'Transportation'

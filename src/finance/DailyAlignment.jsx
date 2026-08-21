@@ -48,7 +48,7 @@ function CompletionToggle({ checked, onChange, label = 'Complete' }) {
   )
 }
 
-export default function DailyAlignment({ accounts, scheduled, actuals, budget, projection, onNavigate, onOpenCalendar, onOpenActual }) {
+export default function DailyAlignment({ accounts, scheduled, cashFlowScheduled, actuals, budget, projection, onNavigate, onOpenCalendar, onOpenActual }) {
   const todayKey = toISO(new Date())
   const [selectedDate, setSelectedDate] = useState(todayKey)
   const [store, setStore] = useState(loadAlignmentStore)
@@ -59,15 +59,16 @@ export default function DailyAlignment({ accounts, scheduled, actuals, budget, p
     date: selectedDate,
     accounts,
     scheduled,
+    monthlyScheduled: cashFlowScheduled,
     actuals,
     budget,
     projectedBalance: selectedDate === todayKey ? undefined : projection?.get(selectedDate)?.bal,
-  }), [selectedDate, todayKey, accounts, scheduled, actuals, budget, projection])
+  }), [selectedDate, todayKey, accounts, scheduled, cashFlowScheduled, actuals, budget, projection])
 
   const selectedDateObject = parseISODate(selectedDate) || new Date()
   const selectedLabel = selectedDateObject.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const monthlyVision = Number(store.settings.monthlySurplusVision) || 0
-  const visionPct = monthlyVision > 0 ? Math.min(Math.max((snapshot.monthlySurplus / monthlyVision) * 100, 0), 100) : 0
+  const visionPct = monthlyVision > 0 ? Math.min(Math.max((snapshot.monthlyCashFlow / monthlyVision) * 100, 0), 100) : 0
 
   const persist = next => {
     setStore(next)
@@ -112,7 +113,7 @@ export default function DailyAlignment({ accounts, scheduled, actuals, budget, p
 
       <section className="alignment-vision">
         <div>
-          <span>Monthly surplus vision</span>
+          <span>Monthly cash flow goal</span>
           <label className="alignment-money-input">
             <span>$</span>
             <input
@@ -121,14 +122,14 @@ export default function DailyAlignment({ accounts, scheduled, actuals, budget, p
               step="1000"
               value={store.settings.monthlySurplusVision}
               onChange={event => updateSettings({ monthlySurplusVision: event.target.value })}
-              aria-label="Monthly surplus vision"
+              aria-label="Monthly cash flow goal"
             />
           </label>
         </div>
         <div className="alignment-vision-progress">
-          <div><span>Scheduled monthly surplus</span><strong>{fmtMoney(snapshot.monthlySurplus)}</strong></div>
+          <div><span>Scheduled cash flow</span><strong>{fmtMoney(snapshot.monthlyCashFlow)}</strong></div>
           <div className="alignment-progress-track"><span style={{ width: `${visionPct}%` }} /></div>
-          <small>{monthlyVision ? `${Math.round(visionPct)}% of ${fmtMoney(monthlyVision)} vision` : 'Set a monthly surplus vision'}</small>
+          <small>{monthlyVision ? `${Math.round(visionPct)}% of ${fmtMoney(monthlyVision)} goal` : 'Set a monthly cash flow goal'}</small>
         </div>
         <p>Today’s alignment protects the next step.</p>
       </section>

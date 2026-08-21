@@ -1,4 +1,5 @@
 const ENDPOINT = '/.netlify/functions/pillar-analysis'
+const REQUEST_TIMEOUT_MS = 45000
 export const PILLAR_ANALYSIS_EVENT = 'brevity-pillar-analysis-refreshed'
 
 function safeJson(value, fallback) {
@@ -6,6 +7,13 @@ function safeJson(value, fallback) {
 }
 
 export const pillarAnalysisStorageKey = (date, pillar) => `brevity_pillar_analysis_v1_${date}_${pillar}`
+
+const PILLAR_IDS = ['spiritual', 'health', 'fitness', 'household', 'education', 'finance', 'ministry']
+
+export function clearPillarAnalyses(date, storage = globalThis.localStorage) {
+  if (!storage || !date) return
+  PILLAR_IDS.forEach(pillar => storage.removeItem(pillarAnalysisStorageKey(date, pillar)))
+}
 
 export function readPillarAnalysis(date, pillar, storage = globalThis.localStorage) {
   if (!storage || !date || !pillar) return null
@@ -43,11 +51,23 @@ export function collectPillarContext(pillar) {
 }
 
 export async function generatePillarAnalysis({ pillar, date, plan, currentMember, force = false }) {
-  const response = await fetch(ENDPOINT, {
-    method:'POST',
-    headers:{ 'content-type':'application/json' },
-    body:JSON.stringify({ pillar, date, plan, currentMember, force, localContext:collectPillarContext(pillar) }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let response
+  try {
+    response = await fetch(ENDPOINT, {
+      method:'POST',
+      credentials:'include',
+      headers:{ 'content-type':'application/json' },
+      body:JSON.stringify({ pillar, date, plan, currentMember, force, localContext:collectPillarContext(pillar) }),
+      signal:controller.signal,
+    })
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error(`${pillar} analysis timed out; the last saved analysis remains available.`)
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
     const error = new Error(body.error || `Brevity AI returned ${response.status}.`)

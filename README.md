@@ -76,6 +76,16 @@ In Netlify: **Site configuration → Environment variables → Add variable**
 | `PLAID_CLIENT_ID` | Your Plaid client ID |
 | `PLAID_SECRET` | Your Plaid sandbox secret |
 | `PLAID_ENV` | `sandbox` (or `development` for live accounts) |
+| `NETLIFY_SITE_ID` | Site ID used by local Netlify Blob access |
+| `NETLIFY_TOKEN` | Netlify personal access token for local development |
+| `BREVITY_HOUSEHOLD_ID` | Stable shared household ID; defaults to `lslj-family` |
+| `BREVITY_AUTOMATION_KEY` | Long random server-only secret for scheduled planning |
+| `BREVITY_TIME_ZONE` | IANA timezone, such as `America/New_York` |
+| `ICLOUD_EMAIL` | Apple ID email for the shared calendar |
+| `ICLOUD_APP_PASSWORD` | Apple app-specific password |
+| `ICLOUD_CALENDAR_NAME` | Optional exact Apple Calendar name |
+| `OPENAI_API_KEY` | Server-only key used by Brevity AI analysis |
+| `BREVITY_AI_MODEL` | Optional analysis model override |
 
 ### Deploy
 
@@ -175,6 +185,9 @@ lslj-family-hub/
 - The browser only ever receives clean account names and balances
 - All Plaid API calls go through Netlify Functions (server-side), never directly from the browser
 - Your `PLAID_SECRET` is an environment variable in Netlify, never in the frontend code
+- Plaid, calendar, household data, and AI functions require a signed Brevity household session
+- Mutating Plaid connection operations require the household administrator role
+- Shared browser records synchronize through an authenticated Netlify Blob endpoint and remain exportable from Settings
 
 ---
 

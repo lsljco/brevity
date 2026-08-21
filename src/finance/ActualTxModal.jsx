@@ -54,6 +54,7 @@ function CategoryInput({ value, onChange, onBlur, options, ariaLabel = 'Category
 // ── Rule Modal ────────────────────────────────────────────────────────────────
 function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, onSave, onClose }) {
   const [tab, setTab] = useState('settings')
+  const [applyToExisting, setApplyToExisting] = useState(true)
   const [cond, setCond] = useState({
     originalStatement: { on: false, value: initial?.originalStatement || '' },
     merchantName:      { on: true,  match: 'exactly', value: initial?.merchant || '' },
@@ -77,7 +78,7 @@ function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, on
   const matchCount = txCount ?? 0
 
   const handleSave = () => {
-    onSave({ id: `rule_${Date.now()}`, conditions: cond, actions: act, splits })
+    onSave({ id: `rule_${Date.now()}`, conditions: cond, actions: act, splits, applyToExisting })
     onClose()
   }
 
@@ -265,7 +266,7 @@ function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, on
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '14px 24px', borderTop: '1px solid #eee', background: '#fafafa' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#555', cursor: 'pointer' }}>
-            <input type="checkbox" style={{ width: 16, height: 16 }} />
+            <input type="checkbox" checked={applyToExisting} onChange={event => setApplyToExisting(event.target.checked)} style={{ width: 16, height: 16 }} />
             Update existing transactions
           </label>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

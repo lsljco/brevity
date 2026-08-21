@@ -1,5 +1,6 @@
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens, setTokens } = require('./storage')
+const { readSession } = require('./household-auth')
 
 const plaidClient = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
@@ -15,16 +16,19 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
 
   try {
+    const session = await readSession(event)
+    if (!session) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Sign in to connect a bank.' }) }
+    if (session.role !== 'admin') return { statusCode: 403, headers, body: JSON.stringify({ error: 'Household administrator access is required to connect a bank.' }) }
     const { public_token, institutionName } = JSON.parse(event.body || '{}')
     if (!public_token) return { statusCode: 400, headers, body: JSON.stringify({ error: 'public_token required' }) }
 
     const exchangeResponse = await plaidClient.itemPublicTokenExchange({ public_token })
     const { access_token, item_id } = exchangeResponse.data
 
-    const tokens = await getTokens()
+    const tokens = await getTokens(event)
     const updated = (tokens || []).filter(t => t.item_id !== item_id)
     updated.push({ access_token, item_id, institution: institutionName || 'Bank', connectedAt: new Date().toISOString() })
-    await setTokens(updated)
+    await setTokens(updated, event)
 
     const accountsResponse = await plaidClient.accountsBalanceGet({ access_token })
     const accounts = accountsResponse.data.accounts.map(a => ({

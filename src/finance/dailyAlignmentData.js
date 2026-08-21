@@ -1,4 +1,5 @@
 import { addDays, parseISODate, toISO, txOccursOnDate } from './projection.js'
+import { calculateMonthlyCashFlow, calculateTransactionAmountForMonth } from './monthlyCashFlow.js'
 
 export const ALIGNMENT_PEOPLE = ['Larry', 'Lorenzo', 'Terica', 'Nyla']
 export const DEFAULT_MONTHLY_SURPLUS_VISION = 50000
@@ -40,21 +41,6 @@ function isDiscretionary(transaction) {
   return category === 'discretionary' || /shopping|entertainment|personal care|travel|merchandise/.test(category)
 }
 
-function monthlyEquivalent(transaction) {
-  const multiplier = { daily: 30, weekly: 4.33, biweekly: 2.167, semimonthly: 2, monthly: 1, quarterly: 1 / 3, yearly: 1 / 12, once: 0 }
-  return money(transaction.amount) * (multiplier[transaction.freq] ?? 1)
-}
-
-function datesInMonth(date) {
-  const dates = []
-  const cursor = new Date(date.getFullYear(), date.getMonth(), 1)
-  while (cursor.getMonth() === date.getMonth()) {
-    dates.push(new Date(cursor))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
-}
-
 function pairScheduledWithActuals(scheduled, actuals) {
   const usedActualIndexes = new Set()
   const pairs = scheduled.map(transaction => {
@@ -86,12 +72,16 @@ function outstandingForDate(transactions, actuals, date) {
   return pairScheduledWithActuals(scheduled, actual).pairs.filter(pair => !pair.actual).map(pair => pair.transaction)
 }
 
-function plannedDiscretionaryBudget(transactions, budget, monthIndex) {
+function plannedDiscretionaryBudget(transactions, budget, selectedDate) {
+  const monthIndex = selectedDate.getMonth()
   return transactions
     .filter(transaction => transaction.type === 'expense' && transaction.freq !== 'once' && isDiscretionary(transaction))
     .reduce((total, transaction) => {
-      const planned = Number(budget?.[transaction.name]?.[monthIndex])
-      return total + (planned > 0 ? planned : monthlyEquivalent(transaction))
+      const plannedValue = budget?.[transaction.name]?.[monthIndex]
+      const hasPlan = plannedValue !== undefined && plannedValue !== null && plannedValue !== ''
+      return total + (hasPlan
+        ? Math.max(Number(plannedValue) || 0, 0)
+        : calculateTransactionAmountForMonth(transaction, selectedDate, { recurringOnly: true }))
     }, 0)
 }
 
@@ -99,6 +89,7 @@ export function buildDailyAlignmentSnapshot({
   date,
   accounts = [],
   scheduled = [],
+  monthlyScheduled = scheduled,
   actuals = [],
   budget = {},
   projectedBalance,
@@ -121,17 +112,16 @@ export function buildDailyAlignmentSnapshot({
     .filter(transaction => transaction.type === 'expense')
     .reduce((total, transaction) => total + money(transaction.amount), 0)
 
-  const monthDates = datesInMonth(selectedDate)
-  const scheduledMonth = monthDates.flatMap(day => scheduledForDate(scheduled, day))
-  const monthlyIncome = scheduledMonth.filter(transaction => transaction.type === 'income').reduce((sum, transaction) => sum + money(transaction.amount), 0)
-  const monthlyExpenses = scheduledMonth.filter(transaction => transaction.type === 'expense').reduce((sum, transaction) => sum + money(transaction.amount), 0)
+  const monthlyTotals = calculateMonthlyCashFlow(monthlyScheduled, selectedDate)
+  const monthlyIncome = monthlyTotals.income
+  const monthlyExpenses = monthlyTotals.recurringExpenses
 
   const monthPrefix = dateKey.slice(0, 7)
   const actualMonthToDate = actuals.filter(transaction => transaction.date?.startsWith(monthPrefix) && transaction.date <= dateKey)
   const discretionarySpent = actualMonthToDate
     .filter(transaction => directionOfActual(transaction) === 'expense' && isDiscretionary(transaction))
     .reduce((sum, transaction) => sum + money(transaction.amount), 0)
-  const discretionaryBudget = plannedDiscretionaryBudget(scheduled, budget, selectedDate.getMonth())
+  const discretionaryBudget = plannedDiscretionaryBudget(scheduled, budget, selectedDate)
   const discretionaryRemaining = Math.max(discretionaryBudget - discretionarySpent, 0)
   const daysRemaining = Math.max(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() - selectedDate.getDate() + 1, 1)
   const approvedDiscretionary = discretionaryRemaining / daysRemaining
@@ -174,7 +164,9 @@ export function buildDailyAlignmentSnapshot({
     discretionarySpent,
     monthlyIncome,
     monthlyExpenses,
-    monthlySurplus: monthlyIncome - monthlyExpenses,
+    monthlyCashFlow: monthlyTotals.cashFlow,
+    // Retain the legacy field so previously shipped consumers remain compatible.
+    monthlySurplus: monthlyTotals.cashFlow,
     movements,
     risks: {
       balance: availableOperatingCash < dueTodayTomorrow

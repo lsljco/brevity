@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import householdAuth from "./household-auth.js";
+
+const { readSession } = householdAuth;
 
 const CALDAV_ROOT = "https://caldav.icloud.com";
 
@@ -14,34 +17,6 @@ const json = (statusCode, body, extraHeaders = {}) => ({
   },
   body: JSON.stringify(body),
 });
-
-const sessionSignature = () => crypto
-  .createHmac("sha256", process.env.BREVITY_FAMILY_CALENDAR_PIN || "not-configured")
-  .update("brevity-family-calendar-v1")
-  .digest("hex");
-
-const hasCalendarSession = event => {
-  const cookie = event.headers?.cookie || event.headers?.Cookie || "";
-  const supplied = cookie.match(/(?:^|;\s*)brevity_calendar_session=([a-f0-9]+)/i)?.[1] || "";
-  const expected = sessionSignature();
-  if (supplied.length !== expected.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
-};
-
-const handleLogin = event => {
-  const configuredPin = process.env.BREVITY_FAMILY_CALENDAR_PIN;
-  if (!configuredPin) return json(503, { error: "The Brevity family calendar PIN has not been configured yet." });
-  let suppliedPin = "";
-  try { suppliedPin = JSON.parse(event.body || "{}").pin || ""; } catch {}
-  const supplied = Buffer.from(String(suppliedPin));
-  const expected = Buffer.from(String(configuredPin));
-  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
-    return json(401, { error: "Incorrect family calendar PIN." });
-  }
-  return json(200, { ok: true }, {
-    "set-cookie": `brevity_calendar_session=${sessionSignature()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
-  });
-};
 
 const xmlDecode = value => String(value || "")
   .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
@@ -134,6 +109,8 @@ function parseEvent(ics, href, etag) {
     allDay: start.allDay,
     pillar: unescapeIcs(icsValue(ics, "CATEGORIES")).toLowerCase() || "household",
     priority: icsValue(ics, "PRIORITY") === "1" || icsValue(ics, "X-BREVITY-PRIORITY") === "TRUE",
+    owner: unescapeIcs(icsValue(ics, "X-BREVITY-OWNER")) || "Family",
+    participants: unescapeIcs(icsValue(ics, "X-BREVITY-PARTICIPANTS")).split("|").filter(Boolean),
     href,
     etag,
   };
@@ -156,7 +133,8 @@ function formatIcsDate(dateKey, time, allDay) {
   const start = new Date(year, month - 1, day, hour, minute);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   const localStamp = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
-  return { start: `DTSTART:${localStamp(start)}`, end: `DTEND:${localStamp(end)}` };
+  const timeZone = /^[A-Za-z0-9_+\-/]+$/.test(process.env.BREVITY_TIME_ZONE || "") ? process.env.BREVITY_TIME_ZONE : "America/New_York";
+  return { start: `DTSTART;TZID=${timeZone}:${localStamp(start)}`, end: `DTEND;TZID=${timeZone}:${localStamp(end)}` };
 }
 
 function makeIcs(item, uid) {
@@ -167,6 +145,8 @@ function makeIcs(item, uid) {
     "BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${stamp}`, dates.start, dates.end,
     `SUMMARY:${escapeIcs(item.title)}`, `CATEGORIES:${escapeIcs(item.pillar || "household")}`,
     `X-BREVITY-SOURCE-ID:${escapeIcs(item.sourceId || "")}`,
+    `X-BREVITY-OWNER:${escapeIcs(item.owner || "Family")}`,
+    `X-BREVITY-PARTICIPANTS:${escapeIcs((item.participants || []).join("|"))}`,
     `PRIORITY:${item.priority ? 1 : 0}`, `X-BREVITY-PRIORITY:${item.priority ? "TRUE" : "FALSE"}`,
     "END:VEVENT", "END:VCALENDAR", "",
   ].join("\r\n");
@@ -188,9 +168,9 @@ async function listEvents(calendar) {
 
 export const handler = async event => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
-  if (event.httpMethod === "POST" && event.queryStringParameters?.action === "login") return handleLogin(event);
-  if (!process.env.BREVITY_FAMILY_CALENDAR_PIN) return json(503, { error: "The Brevity family calendar PIN has not been configured yet." });
-  if (!hasCalendarSession(event)) return json(401, { error: "Calendar locked. Enter the family PIN to continue." });
+  const session = await readSession(event).catch(() => null);
+  if (!session) return json(401, { error: "Sign in to access the family calendar." });
+  if (event.httpMethod === "POST" && event.queryStringParameters?.action === "login") return json(200, { ok: true, member: session.member });
 
   try {
     const calendar = await discoverCalendar();

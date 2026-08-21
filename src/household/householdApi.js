@@ -1,14 +1,10 @@
 import { normalizeDailyPlan } from './dailyPlan.js'
 
 const ENDPOINT = '/.netlify/functions/household-data'
-const FAMILY_KEY_STORAGE = 'brevity_family_key'
+const REQUEST_TIMEOUT_MS = 20000
 
 function headers() {
-  const familyKey = typeof window !== 'undefined' ? localStorage.getItem(FAMILY_KEY_STORAGE) : ''
-  return {
-    'content-type': 'application/json',
-    ...(familyKey ? { 'x-brevity-family-key': familyKey } : {}),
-  }
+  return { 'content-type': 'application/json' }
 }
 
 async function parse(response) {
@@ -17,22 +13,23 @@ async function parse(response) {
   return body
 }
 
-export function setFamilyKey(value) {
-  if (typeof window === 'undefined') return
-  if (value) localStorage.setItem(FAMILY_KEY_STORAGE, value)
-  else localStorage.removeItem(FAMILY_KEY_STORAGE)
-}
-
 export async function fetchDailyPlan(date) {
-  const response = await fetch(`${ENDPOINT}?date=${encodeURIComponent(date)}`, { headers: headers() })
-  const body = await parse(response)
-  return body.plan ? normalizeDailyPlan(body.plan) : null
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(`${ENDPOINT}?date=${encodeURIComponent(date)}`, { headers: headers(), credentials: 'include', signal: controller.signal })
+    const body = await parse(response)
+    return body.plan ? normalizeDailyPlan(body.plan) : null
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function saveDailyPlan(plan) {
   const normalized = normalizeDailyPlan(plan)
   const response = await fetch(`${ENDPOINT}?date=${encodeURIComponent(normalized.date)}`, {
     method: 'PUT',
+    credentials: 'include',
     headers: headers(),
     body: JSON.stringify({ plan: normalized }),
   })

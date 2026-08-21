@@ -1,19 +1,30 @@
 const ENDPOINT = '/.netlify/functions/icloud-calendar'
+const REQUEST_TIMEOUT_MS = 20000
 
 async function request(method, body, query = '') {
-  const response = await fetch(`${ENDPOINT}${query}`, {
-    method,
-    credentials: 'include',
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(payload.error || `Calendar request failed (${response.status}).`)
-    error.status = response.status
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(`${ENDPOINT}${query}`, {
+      method,
+      credentials: 'include',
+      headers: body ? { 'content-type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const error = new Error(payload.error || `Calendar request failed (${response.status}).`)
+      error.status = response.status
+      throw error
+    }
+    return payload
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Calendar refresh timed out; cached events remain available.')
     throw error
+  } finally {
+    clearTimeout(timeout)
   }
-  return payload
 }
 
 export function loginFamilyCalendar(pin) { return request('POST', { pin }, '?action=login') }

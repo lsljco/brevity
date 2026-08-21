@@ -9,14 +9,22 @@ import PlaidConnect from './PlaidConnect.jsx'
 import ActualTxModal from './ActualTxModal.jsx'
 import { buildProjection, today0, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinanceData } from './financeData.js'
-import { buildBalanceSheet, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
+import { buildBalanceSheet, isTransferTransaction, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
 import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
-import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
+import {
+  calculateMonthlyCashFlow,
+  calculateScheduledTotalsForMonth,
+  calculateTransactionAmountForMonth,
+  selectOperatingTransactions,
+} from './monthlyCashFlow.js'
+import { FINANCE_REFRESH_EVENT, mergePlaidBalances } from './financeRefresh.js'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from './recurrenceEditing.js'
+import { applyTransactionRules } from './transactionRules.js'
+import { actualToScheduledTransaction } from './actualToScheduled.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -827,7 +835,7 @@ const DEFAULT_DATA = {
     { id: 't_i2',    name: 'LS Income',                      amount:  8871.32, type: 'income',  freq: 'monthly', start: '2026-07-19', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i3',    name: 'TS - Globe Life Income',         amount:  2791.38, type: 'income',  freq: 'weekly',  start: '2026-07-10', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i4',    name: 'TS TransAmerica Income',         amount:  1611.00, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
-    { id: 't_i5',    name: 'JS - Mativ Income',              amount:  1698.18, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
+    { id: 't_i5',    name: 'JS - Mativ Income',              amount:  1698.18, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '2026-09-18', cat: 'Income', acct: 'a1' },
     { id: 't_i7',    name: 'LJ Genesco AP Payroll',          amount:   685.14, type: 'income',  freq: 'weekly',  start: '2026-07-03', end: '', cat: 'Income',         acct: 'a1' },
     { id: 't_i8',    name: 'LJ GA Tax Refund',               amount:  5063.00, type: 'income',  freq: 'once',    start: '2026-07-09', end: '', cat: 'Income',         acct: 'a2' },
     { id: 't_i9',    name: 'HOA Reimbursement',              amount:  9618.63, type: 'income',  freq: 'once',    start: '2026-07-14', end: '', cat: 'Income',         acct: 'a2' },
@@ -1149,6 +1157,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [balanceOverrides, setBalanceOverrides] = useState(() => loadSavedValue('lslj_bal_overrides_v1', {}))
   const [financeRange, setFinanceRange] = useState(() => loadSavedValue('brevity_finance_timeframe_v1', resolveTimeframe('last-12-months')))
   const [transactionFilter, setTransactionFilter] = useState(null)
+  const [dashboardSearch, setDashboardSearch] = useState('')
 
   useEffect(() => { try { localStorage.setItem('brevity_finance_timeframe_v1', JSON.stringify(financeRange)) } catch {} }, [financeRange])
 
@@ -1167,6 +1176,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
   const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
   const [txRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
+  const [goals] = useState(() => loadSavedValue('fp_goals', []))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
 
   // Primary view comes from App sidebar; form overlays are local
@@ -1281,6 +1291,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     transactions: data.transactions.filter(tx => activeAcctIds.has(tx.acct) || (tx.type === 'transfer' && tx.transferTo && activeAcctIds.has(tx.transferTo))),
   }), [data, activeAcctIds])
 
+  // Cash Flow is an operating-account metric. It must not change when the
+  // dashboard account filter is switched to savings or project accounts.
+  const operatingTransactions = useMemo(
+    () => selectOperatingTransactions(data.accounts, data.transactions),
+    [data.accounts, data.transactions],
+  )
+
   const toggleAcct = (id) => {
     setSelectedAccts(prev => {
       const current = prev ?? new Set(data.accounts.map(a => a.id))
@@ -1305,7 +1322,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     setActualsLoading(true)
     setActualsError(null)
     try {
-      const res = await fetch('/.netlify/functions/plaid-transactions?start_date=2026-01-01')
+      const res = await fetch('/.netlify/functions/plaid-transactions?start_date=2000-01-01', { credentials: 'include' })
       const json = await res.json()
       if (json.error) { setActualsError(json.error + (json.detail ? ': ' + json.detail : '')); setPlaidActuals([]); return }
       const txns = json.transactions || []
@@ -1319,7 +1336,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   // Auto-fetch on mount so historical balances populate without needing to click Actuals toggle
   useEffect(() => { fetchActuals() }, [fetchActuals])
 
-  const toggleActuals = () => { setShowActuals(v => !v) }
+  const toggleActuals = () => { setTransactionFilter(null); setShowActuals(v => !v) }
 
   // Map plaid accountId → our local account id for filtering
   const plaidIdToLocal = useMemo(() => {
@@ -1331,24 +1348,26 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   // Actuals filtered by selected accounts, with user overrides applied
   const filteredActuals = useMemo(() => {
     if (!plaidActuals) return []
+    const allAccountsSelected = activeAcctIds.size === data.accounts.length
     return plaidActuals
       .filter(tx => {
         const localId = plaidIdToLocal[tx.accountId]
-        return localId ? activeAcctIds.has(localId) : true
+        return localId ? activeAcctIds.has(localId) : allAccountsSelected
       })
-      .filter(tx => !txOverrides[tx.id]?._deleted)
+      .map(tx => applyTransactionRules(tx, txRules, data.accounts))
       .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
-  }, [plaidActuals, plaidIdToLocal, activeAcctIds, txOverrides])
+      .filter(tx => !tx._deleted)
+  }, [plaidActuals, plaidIdToLocal, activeAcctIds, data.accounts, txOverrides, txRules])
 
   const timeframeActuals = useMemo(() => filterTransactionsByTimeframe(filteredActuals, financeRange), [filteredActuals, financeRange])
-  const transactionViewActuals = useMemo(
-    () => timeframeActuals.filter(tx => matchesTransactionFilter(tx, transactionFilter || {})),
-    [timeframeActuals, transactionFilter],
-  )
+  const transactionViewActuals = useMemo(() => {
+    const source = transactionFilter?.dateFrom || transactionFilter?.dateTo ? filteredActuals : timeframeActuals
+    return source.filter(tx => matchesTransactionFilter(tx, transactionFilter || {}))
+  }, [filteredActuals, timeframeActuals, transactionFilter])
   const transactionViewStats = useMemo(() => transactionViewActuals.reduce((stats, tx) => {
     const amount = Math.abs(Number(tx.amount) || 0)
     if (transactionDirection(tx) === 'income') stats.income += amount
-    else stats.expenses += amount
+    if (transactionDirection(tx) === 'expense') stats.expenses += amount
     return stats
   }, { income: 0, expenses: 0 }), [transactionViewActuals])
   const transactionHistory = useMemo(() => Object.entries(transactionViewActuals.reduce((months, tx) => {
@@ -1358,10 +1377,22 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     months[month].total += Math.abs(Number(tx.amount) || 0)
     return months
   }, {})).sort(([a], [b]) => b.localeCompare(a)), [transactionViewActuals])
+  const scheduledViewTransactions = useMemo(() => fd.transactions.filter(tx => {
+    if (!transactionFilter?.scheduled) return true
+    if (transactionFilter.ids?.length && !transactionFilter.ids.includes(tx.id)) return false
+    if (transactionFilter.direction && tx.type !== transactionFilter.direction) return false
+    if (transactionFilter.value && transactionFilter.displayBy === 'category' && tx.cat !== transactionFilter.value) return false
+    return true
+  }), [fd.transactions, transactionFilter])
 
   const openFilteredTransactions = (filter = null) => {
     setTransactionFilter(filter)
     setShowActuals(true)
+    setView('transactions')
+  }
+  const openScheduledTransactions = (filter = null) => {
+    setTransactionFilter(filter ? { ...filter, scheduled: true } : { scheduled: true, label: 'Scheduled transactions' })
+    setShowActuals(false)
     setView('transactions')
   }
 
@@ -1383,7 +1414,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }, [filteredActuals])
 
   // Historical ending balances — reconstructed by working backward from current balance
-  // using real Plaid transactions. Covers 2026-01-01 → today.
+  // using all available real Plaid transactions instead of a hard-coded calendar year.
   // Plaid sign convention: amount > 0 = debit/expense, amount < 0 = credit/income
   const historicalBals = useMemo(() => {
     if (!filteredActuals?.length) return {}
@@ -1395,11 +1426,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     }
     const currentBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
     const result = {}
-    const jan1 = new Date('2026-01-01T00:00:00')
+    const earliestKey = Object.keys(byDate).sort()[0]
+    const earliest = earliestKey ? new Date(`${earliestKey}T00:00:00`) : today0()
     let runBal = currentBal
     const cursor = today0()
 
-    while (cursor >= jan1) {
+    while (cursor >= earliest) {
       const ds = toISO(cursor)
       result[ds] = parseFloat(runBal.toFixed(2))
       // "Undo" this day's transactions to arrive at the previous day's ending balance:
@@ -1428,15 +1460,21 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         fd.transactions.forEach(tx => {
           if (txOccursOnDate(tx, dt)) {
             const amt = parseFloat(tx.amount || 0)
-            if (tx.type === 'income') income  += amt
-            else                      expense += amt
+            if (tx.type === 'income') income += amt
+            else if (tx.type === 'expense') expense += amt
+            else if (tx.type === 'transfer') {
+              const sourceSelected = activeAcctIds.has(tx.acct)
+              const destinationSelected = activeAcctIds.has(tx.transferTo)
+              if (sourceSelected && !destinationSelected) expense += amt
+              if (!sourceSelected && destinationSelected) income += amt
+            }
           }
         })
       }
       months.push({ income, expense, net: income - expense })
     }
     return months
-  }, [fd.transactions])
+  }, [fd.transactions, activeAcctIds])
 
   // Reconstruct historical running balance by walking backward from today
   const sparkBalance = useMemo(() => {
@@ -1449,9 +1487,17 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     return bals
   }, [monthlyHistory, fd.accounts])
 
-  const sparkIncome  = monthlyHistory.map(m => m.income)
-  const sparkExpense = monthlyHistory.map(m => m.expense)
-  const sparkNet     = monthlyHistory.map(m => m.net)
+  const operatingCashFlowHistory = useMemo(() => {
+    const now = new Date()
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1)
+      const totals = calculateMonthlyCashFlow(operatingTransactions, month)
+      return { income: totals.income, expense: totals.recurringExpenses, net: totals.cashFlow }
+    })
+  }, [operatingTransactions])
+  const sparkIncome  = operatingCashFlowHistory.map(m => m.income)
+  const sparkExpense = operatingCashFlowHistory.map(m => m.expense)
+  const sparkNet     = operatingCashFlowHistory.map(m => m.net)
 
   // Future 90-day balance sampled at ~8-day intervals for the floor card
   const sparkFloor = []
@@ -1469,47 +1515,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   // Called by PlaidConnect when accounts are synced — update balances only, NEVER create accounts
   const handlePlaidSync = useCallback((plaidAccounts, syncedAt) => {
     const saved = setDataAndPersist(d => {
-      const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-      const matchedPlaidIds = new Set()
-
-      const updated = d.accounts.map(a => {
-        // 1. Exact stored Plaid ID (most reliable — already linked)
-        let match = plaidAccounts.find(pa => pa.accountId && pa.accountId === a.plaidAccountId)
-
-        // 2. Normalized name — "Operating Account" matches "Operating Account",
-        //    any shared substring works too
-        if (!match) {
-          const na = norm(a.name)
-          match = plaidAccounts.find(pa => {
-            if (matchedPlaidIds.has(pa.accountId)) return false
-            const np = norm(pa.name)
-            return np === na || np.includes(na) || na.includes(np)
-          })
-        }
-
-        // 3. Type fallback — savings→savings, checking→checking/depository.
-        //    Uses unmatched Plaid accounts only. Prevents total miss when bank
-        //    names differ from what we stored.
-        if (!match) {
-          const aType = (a.type || '').toLowerCase()
-          match = plaidAccounts.find(pa => {
-            if (matchedPlaidIds.has(pa.accountId)) return false
-            const pt = (pa.subtype || pa.type || '').toLowerCase()
-            return aType === 'savings' ? pt === 'savings' : pt !== 'savings'
-          })
-        }
-
-        if (match) {
-          matchedPlaidIds.add(match.accountId)
-          // Update balance and link the Plaid ID, but keep all other local fields
-          return { ...a, balance: match.balance, plaidAccountId: match.accountId }
-        }
-        return a
-      })
-
-      // NEVER create new accounts from Plaid — only update existing ones.
-      // This completely prevents the duplicate-account / orphaned-transaction problem.
-      return { ...d, accounts: updated }
+      return mergePlaidBalances(d, plaidAccounts)
     })
     if (saved) showToast('✓ Balances synced from Plaid')
   }, [])
@@ -1643,7 +1649,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     return true
   }
   const handleSaveRule = (rule) => {
-    const next = [...txRules, rule]
+    const next = [...txRules, {
+      ...rule,
+      createdDate: rule.createdDate || toISO(today0()),
+      applyToExisting: Boolean(rule.applyToExisting),
+    }]
     if (!persistAuxiliaryValue('lslj_tx_rules_v1', next)) return false
     setTxRules(next)
     showToast('✓ Rule saved')
@@ -1665,6 +1675,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   const deleteAcct = (id) => {
+    const scheduledCount = data.transactions.filter(tx => tx.acct === id || tx.transferTo === id).length
+    const actualCount = (plaidActuals || []).filter(tx => plaidIdToLocal[tx.accountId] === id).length
+    if (scheduledCount || actualCount) {
+      showToast(`Move or remove ${scheduledCount + actualCount} linked transaction${scheduledCount + actualCount === 1 ? '' : 's'} before deleting this account`)
+      return false
+    }
     if (!window.confirm('Delete this account?')) return
     const saved = setDataAndPersist(d => ({ ...d, accounts: d.accounts.filter(a => a.id !== id) }))
     if (!saved) return false
@@ -1723,24 +1739,24 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     if (pt?.txns?.length) pt.txns.forEach(tx => upcoming.push({ ...tx, date: d, balAfter: pt.bal }))
   }
 
-  // Monthly income & expense summary
-  const monthlyIncome  = fd.transactions.filter(t => t.type === 'income').reduce((s, t) => {
-    const m = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
-    return s + t.amount * (m[t.freq] ?? 1)
-  }, 0)
-  const monthlyExpense = fd.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
-    const m = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
-    return s + t.amount * (m[t.freq] ?? 1)
-  }, 0)
-  const monthlyCashFlow = monthlyIncome - monthlyExpense
+  // Current-month recurring cash flow. Count each scheduled occurrence so
+  // partial-month starts/ends and five-paycheck months are represented exactly.
+  const monthlyTotals = useMemo(
+    () => calculateMonthlyCashFlow(operatingTransactions, todayKey),
+    [operatingTransactions, todayKey],
+  )
+  const monthlyIncome = monthlyTotals.income
+  const monthlyExpense = monthlyTotals.recurringExpenses
+  const monthlyCashFlow = monthlyTotals.cashFlow
   const dailyBudget = useMemo(() => loadBudget(), [view])
   const todayAlignment = useMemo(() => buildDailyAlignmentSnapshot({
     date: todayKey,
     accounts: fd.accounts,
     scheduled: fd.transactions,
+    monthlyScheduled: operatingTransactions,
     actuals: filteredActuals,
     budget: dailyBudget,
-  }), [fd.accounts, fd.transactions, filteredActuals, dailyBudget, todayKey])
+  }), [fd.accounts, fd.transactions, operatingTransactions, filteredActuals, dailyBudget, todayKey])
 
   // ── HomeHQ → Projects card ─────────────────────────────────────────────
   const ROOM_IMGS = {
@@ -1768,15 +1784,16 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }))
 
   // ── Dashboard extras ──────────────────────────────────────────────────────
-  const freqMult = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
-  const incomeSources = fd.transactions
+  const incomeSources = operatingTransactions
     .filter(tx => tx.type === 'income')
-    .map(tx => ({ ...tx, monthly: tx.amount * (freqMult[tx.freq] ?? 1) }))
+    .map(tx => ({ ...tx, monthly: calculateTransactionAmountForMonth(tx, t, { recurringOnly: true }) }))
+    .filter(tx => tx.monthly > 0)
     .sort((a, b) => b.monthly - a.monthly)
 
   const expByCat = {}
   fd.transactions.filter(tx => tx.type === 'expense').forEach(tx => {
-    expByCat[tx.cat] = (expByCat[tx.cat] || 0) + tx.amount * (freqMult[tx.freq] ?? 1)
+    const monthAmount = calculateTransactionAmountForMonth(tx, t, { recurringOnly: true })
+    if (monthAmount > 0) expByCat[tx.cat] = (expByCat[tx.cat] || 0) + monthAmount
   })
   const topCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 6)
 
@@ -1800,11 +1817,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }
 
   // ── Financial Insights ─────────────────────────────────────────────────
-  const INS_FMULT = { weekly: 4.33, biweekly: 2.17, semimonthly: 2, monthly: 1, quarterly: 1/3, yearly: 1/12, daily: 30, once: 0 }
   const financialInsights = (() => {
     const ins = []
     const currentBal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
-    const fMult = INS_FMULT
+    const currentRecurringAmount = tx => calculateTransactionAmountForMonth(tx, t, { recurringOnly: true })
 
     // ── Month-end balance forecast (remaining months of current year) ──
     const _thisYear = t.getFullYear()
@@ -1871,14 +1887,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     // 3. Monthly cash flow health (always include so forecast is always accessible)
     if (monthlyCashFlow > 1000) {
       ins.push({ type: 'cash-flow', sev: 'good', icon: 'ti-trending-up',
-        title: `Monthly surplus: +${fmtMoney(monthlyCashFlow)}`,
-        detail: `${fmtMoney(monthlyIncome)}/mo income · ${fmtMoney(monthlyExpense)}/mo expenses. Click for year-end forecast.`,
-        action: 'Strong position — consider directing surplus toward savings or investments.',
+        title: `Monthly cash flow: +${fmtMoney(monthlyCashFlow)}`,
+        detail: `${fmtMoney(monthlyIncome)} net income · ${fmtMoney(monthlyExpense)} recurring expenses. Click for year-end forecast.`,
+        action: 'Strong position — consider directing positive cash flow toward savings or investments.',
         monthlyForecasts, accounts: fd.accounts })
     } else if (monthlyCashFlow < -500) {
       ins.push({ type: 'cash-flow', sev: 'danger', icon: 'ti-trending-down',
         title: `Monthly shortfall: −${fmtMoney(Math.abs(monthlyCashFlow))}`,
-        detail: `${fmtMoney(monthlyIncome)}/mo income vs ${fmtMoney(monthlyExpense)}/mo expenses. Click for year-end forecast.`,
+        detail: `${fmtMoney(monthlyIncome)} net income vs ${fmtMoney(monthlyExpense)} recurring expenses. Click for year-end forecast.`,
         action: 'Spending exceeds income. Review recurring expenses for cuts.',
         monthlyForecasts, accounts: fd.accounts })
     } else {
@@ -1895,10 +1911,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     recurringExp.forEach(tx => { const c = tx.cat || 'Other'; (catGroups[c] = catGroups[c] || []).push(tx) })
     const heavyCats = Object.entries(catGroups)
       .filter(([, txs]) => txs.length >= 3)
-      .sort((a, b) => b[1].reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0) - a[1].reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0))
+      .sort((a, b) => b[1].reduce((s, tx) => s + currentRecurringAmount(tx), 0) - a[1].reduce((s, tx) => s + currentRecurringAmount(tx), 0))
     if (heavyCats.length > 0) {
       const [cat, txs] = heavyCats[0]
-      const total = txs.reduce((s, tx) => s + tx.amount * (fMult[tx.freq] ?? 1), 0)
+      const total = txs.reduce((s, tx) => s + currentRecurringAmount(tx), 0)
       ins.push({ type: 'category-subs', sev: 'tip', icon: 'ti-credit-card',
         title: `${txs.length} recurring ${cat} charges — ${fmtMoney(total)}/mo`,
         detail: txs.slice(0, 4).map(tx => tx.name).join(', ') + (txs.length > 4 ? ` +${txs.length - 4} more` : ''),
@@ -2050,9 +2066,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               <PlaidConnect onAccountsSync={handlePlaidSync} />
               <div className="dash-search">
                 <i className="ti ti-search" />
-                <input placeholder="Search…" readOnly style={{ cursor: 'default' }} />
+                <input aria-label="Search transactions" placeholder="Search transactions…" value={dashboardSearch} onChange={event => setDashboardSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && dashboardSearch.trim()) openFilteredTransactions({ query: dashboardSearch.trim(), label: `Search: ${dashboardSearch.trim()}` }) }} />
               </div>
-              <button className="dash-icon-btn" title="Notifications"><i className="ti ti-bell" /></button>
+              <button className="dash-icon-btn" title="Upcoming financial calendar" onClick={() => setView('calendar')}><i className="ti ti-bell" /></button>
               <button className="dash-icon-btn gold" title="Add transaction" onClick={() => { setEditTx(null); setView('tx-form') }}>
                 <i className="ti ti-plus" />
               </button>
@@ -2063,9 +2079,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <div className="kpi-grid">
             {[
               { label: 'Total Balance',    value: fmtMoney(totBal),                                                        sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`,                trend: `vs last month`, icon: 'ti-wallet',          spark: sparkBalance,   good: true, target: 'accounts' },
-              { label: 'Monthly Income',   value: fmtMoney(monthlyIncome),                                                 sub: `${incomeSources.length} streams`,                                                       trend: 'vs last month',  icon: 'ti-trending-up',     spark: sparkIncome,    good: true, target: 'reporting' },
-              { label: 'Monthly Expenses', value: fmtMoney(monthlyExpense),                                                sub: `${fd.transactions.filter(t=>t.type==='expense').length} items`,                          trend: 'vs last month',  icon: 'ti-trending-down',   spark: sparkExpense,   good: false, target: 'reporting' },
-              { label: 'Net Cash Flow',    value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),           sub: monthlyCashFlow >= 0 ? 'Monthly surplus' : 'Monthly deficit',                           trend: 'monthly',        icon: 'ti-arrows-exchange', spark: sparkNet,       good: monthlyCashFlow >= 0, target: 'reporting' },
+              { label: 'Monthly Net Income', value: fmtMoney(monthlyIncome),                                               sub: `${incomeSources.length} streams`,                                                       trend: 'this month',     icon: 'ti-trending-up',     spark: sparkIncome,    good: true, target: 'recurring' },
+              { label: 'Recurring Expenses', value: fmtMoney(monthlyExpense),                                              sub: `${operatingTransactions.filter(t=>t.type==='expense' && t.freq !== 'once').length} items`, trend: 'this month',   icon: 'ti-trending-down',   spark: sparkExpense,   good: false, target: 'recurring' },
+              { label: 'Cash Flow',          value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),         sub: 'Net income minus recurring expenses',                                                   trend: 'this month',     icon: 'ti-arrows-exchange', spark: sparkNet,       good: monthlyCashFlow >= 0, target: 'recurring' },
               { label: '90-Day Floor',     value: minDay ? fmtMoney(minBal) : '—',                                         sub: minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—',        trend: 'lowest point',   icon: 'ti-chart-bar',       spark: sparkFloor,     good: minBal >= 1000, target: 'calendar' },
             ].map((kpi, i) => {
               const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
@@ -2498,7 +2514,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                         const isPlaid = tx.date !== undefined && typeof tx.pending !== 'undefined'
                         const isIncome = isPlaid ? tx.amount < 0 : tx.type === 'income'
                         const amt = isPlaid ? Math.abs(tx.amount) : parseFloat(tx.amount)
-                        const moEquiv = !isPlaid && tx.freq !== 'once' ? amt * (INS_FMULT[tx.freq] ?? 1) : null
+                        const moEquiv = !isPlaid && tx.freq !== 'once'
+                          ? calculateTransactionAmountForMonth(tx, t, { recurringOnly: true })
+                          : null
                         return (
                           <div key={idx}
                             onClick={() => !isPlaid && setInsightEditTx({ ...tx })}
@@ -2598,6 +2616,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         <DailyAlignment
           accounts={fd.accounts}
           scheduled={fd.transactions}
+          cashFlowScheduled={operatingTransactions}
           actuals={filteredActuals}
           budget={dailyBudget}
           projection={proj}
@@ -2629,7 +2648,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             <p style={{ fontSize: 14, fontWeight: 600 }}>
               {showActuals
                 ? `${transactionViewActuals.length} posted/pending transaction${transactionViewActuals.length !== 1 ? 's' : ''}`
-                : `${fd.transactions.length} scheduled transaction${fd.transactions.length !== 1 ? 's' : ''}`}
+                : `${scheduledViewTransactions.length} scheduled transaction${scheduledViewTransactions.length !== 1 ? 's' : ''}`}
             </p>
             <button onClick={() => { setEditTx(null); setView('tx-form') }}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
@@ -2637,24 +2656,24 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             </button>
           </div>
 
-          {showActuals && transactionFilter && (
+          {transactionFilter && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12, background: 'rgba(197,164,109,.08)', border: '1px solid rgba(197,164,109,.2)' }}>
-              <div><strong style={{ color: 'var(--gold)' }}>{transactionFilter.label || 'Filtered transactions'}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{transactionViewActuals.length} matching transactions in the selected timeframe</div></div>
+              <div><strong style={{ color: 'var(--gold)' }}>{transactionFilter.label || 'Filtered transactions'}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{showActuals?transactionViewActuals.length:scheduledViewTransactions.length} matching transactions in the selected timeframe</div></div>
               <button onClick={() => setTransactionFilter(null)} style={{ border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--soft-white)', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>Clear filter</button>
             </div>
           )}
 
           {/* ── Monthly totals summary ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
-            <div role="button" tabIndex={0} onClick={() => openFilteredTransactions({ direction: 'income', label: 'Income' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
-              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--income-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Monthly Income</p>
+            <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'income', label: 'Income' }):openScheduledTransactions({ direction:'income', label:'Scheduled income' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--income-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{showActuals ? 'Income' : 'Monthly Net Income'}</p>
               <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income : monthlyIncome)}</p>
             </div>
-            <div role="button" tabIndex={0} onClick={() => openFilteredTransactions({ direction: 'expense', label: 'Expenses' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
-              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Monthly Expenses</p>
+            <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'expense', label: 'Expenses' }):openScheduledTransactions({ direction:'expense', label:'Scheduled expenses' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{showActuals ? 'Expenses' : 'Recurring Expenses'}</p>
               <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.expenses : monthlyExpense)}</p>
             </div>
-            <div role="button" tabIndex={0} onClick={() => openFilteredTransactions(null)} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}`, cursor: 'pointer' }}>
+            <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions(null):openScheduledTransactions()} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}`, cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: monthlyCashFlow >= 0 ? 'var(--income-color)' : 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Net Cash Flow</p>
               <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income - transactionViewStats.expenses : monthlyCashFlow)}</p>
             </div>
@@ -2703,7 +2722,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                   })
             ) : (
               // ── Projected mode: scheduled recurring transactions ──
-              [...fd.transactions]
+              [...scheduledViewTransactions]
                 .sort((a, b) => a.type !== b.type ? (a.type === 'income' ? -1 : 1) : a.name.localeCompare(b.name))
                 .map(tx => {
                   const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
@@ -2778,7 +2797,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                 { label: 'In 30 days', val: pt30 ? fmtMoney(pt30.bal) : '—' },
                 { label: 'In 90 days', val: pt90 ? fmtMoney(pt90.bal) : '—' },
               ].map(m => (
-                <div key={m.label}>
+                <div key={m.label} role="button" tabIndex={0} title="Open forecast calendar" onClick={() => setView('calendar')} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setView('calendar') }} style={{ cursor: 'pointer' }}>
                   <p style={{ margin: '0 0 3px', fontSize: 11, color: 'var(--muted)' }}>{m.label}</p>
                   <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--gold)' }}>{m.val}</p>
                 </div>
@@ -2791,14 +2810,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {/* ══════════ BUDGET ══════════ */}
       {view === 'budget' && (
         <div className="finance-inner">
-          <BudgetView data={fd} plaidActuals={filteredActuals} />
+          <BudgetView data={fd} plaidActuals={filteredActuals} onOpenTransactions={openFilteredTransactions} onOpenRecurring={() => setView('recurring')} />
         </div>
       )}
 
       {/* ══════════ RECURRING ══════════ */}
       {view === 'recurring' && (
         <div className="finance-inner">
-          <RecurringFinance scheduled={fd.transactions} actuals={timeframeActuals} range={financeRange} />
+          <RecurringFinance scheduled={fd.transactions} actuals={timeframeActuals} range={financeRange} onOpenScheduled={openScheduledTransactions} />
         </div>
       )}
 
@@ -2810,7 +2829,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 500 }}>Business Statements</h2>
             <p style={{ margin: '5px 0 0', color: 'var(--muted)', fontSize: 12 }}>Profitability, liquidity, budget, and vendor analysis</p>
           </div>
-          <ReportingView data={fd} proj={proj} plaidActuals={timeframeActuals} onOpenTransactions={openFilteredTransactions} />
+          <ReportingView data={fd} proj={proj} plaidActuals={timeframeActuals} onOpenTransactions={openFilteredTransactions} onOpenAccounts={() => setView('accounts')} />
         </div>
       )}
 
@@ -2834,14 +2853,21 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           tx={selActualTx}
           accounts={data.accounts}
           allTxNames={allTxNames}
-          goals={[]}
+          goals={goals}
           txRules={txRules}
           onSave={handleSaveActualTx}
           onDelete={handleDeleteActualTx}
           onSaveRule={handleSaveRule}
-          onMakeRecurring={() => {
+          onMakeRecurring={(form) => {
+            const signedActual = {
+              ...selActualTx,
+              ...form,
+              amount: Math.abs(Number(form.amount) || 0) * (Number(selActualTx.amount) < 0 ? -1 : 1),
+            }
+            const localAccountId = plaidIdToLocal[selActualTx.accountId] || ''
+            setEditTx(actualToScheduledTransaction(signedActual, localAccountId, null))
             setSelActualTx(null)
-            setTimeout(() => { setEditTx(null); setView('tx-form') }, 50)
+            setTimeout(() => setView('tx-form'), 50)
           }}
           onClose={() => setSelActualTx(null)}
         />
@@ -2885,7 +2911,7 @@ function saveActuals(a) {
   try { localStorage.setItem(ACTUALS_LS_KEY, JSON.stringify(a)) } catch {}
 }
 
-function BudgetView({ data, plaidActuals = [] }) {
+function BudgetView({ data, plaidActuals = [], onOpenTransactions, onOpenRecurring }) {
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
@@ -2901,6 +2927,8 @@ function BudgetView({ data, plaidActuals = [] }) {
   const BUDGET_CATS = useMemo(() => buildBudgetCats(data.transactions), [data.transactions])
 
   const monthKey = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`
+  const monthFrom = `${monthKey}-01`
+  const monthTo = `${monthKey}-${String(new Date(selYear, selMonth + 1, 0).getDate()).padStart(2, '0')}`
   const selectedMonthActuals = useMemo(
     () => plaidActuals.filter(tx => String(tx.date || '').startsWith(monthKey)),
     [plaidActuals, monthKey],
@@ -2919,18 +2947,11 @@ function BudgetView({ data, plaidActuals = [] }) {
   // First check the plan grid, then fall back to recurring transaction amount
   const getBudgeted = (item) => {
     const planVal = budget[item]?.[selMonth]
-    if (planVal) return planVal
-    const tx = data.transactions.find(t => t.name === item)
-    if (!tx) return 0
-    switch (tx.freq) {
-      case 'weekly':      return tx.amount * 4.33
-      case 'biweekly':    return tx.amount * 2.167
-      case 'semimonthly': return tx.amount * 2
-      case 'monthly':     return tx.amount
-      case 'quarterly':   return tx.amount / 3
-      case 'yearly':      return tx.amount / 12
-      default:            return tx.amount
-    }
+    if (planVal !== undefined && planVal !== null && planVal !== '') return Number(planVal) || 0
+    const month = new Date(selYear, selMonth, 1)
+    return data.transactions
+      .filter(transaction => transaction.name === item)
+      .reduce((total, transaction) => total + calculateTransactionAmountForMonth(transaction, month, { recurringOnly: true }), 0)
   }
 
   const catBudgeted = (cat) => (BUDGET_CATS[cat] || []).reduce((s, item) => s + (getBudgeted(item) || 0), 0)
@@ -2986,12 +3007,17 @@ function BudgetView({ data, plaidActuals = [] }) {
             { label: 'Income Actual',    val: totalIncomeActual, color: 'var(--income-color)' },
             { label: 'Expenses Budgeted', val: totalBudget,      color: 'var(--muted)' },
             { label: 'Expenses Actual',   val: totalActual,      color: totalActual > totalBudget ? 'var(--expense-color)' : 'var(--income-color)' },
-          ].map(({ label, val, color }) => (
-            <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)' }}>
+          ].map(({ label, val, color }) => {
+            const actual = label.endsWith('Actual')
+            const direction = label.startsWith('Income') ? 'income' : 'expense'
+            const open = actual
+              ? () => onOpenTransactions?.({ direction, dateFrom: monthFrom, dateTo: monthTo, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
+              : onOpenRecurring
+            return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open recurring plan'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
               <div style={{ fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-serif)', color }}>{fmtMoney(val)}</div>
             </div>
-          ))}
+          })}
         </div>
 
         {/* Overall expense progress */}
@@ -3096,21 +3122,12 @@ function BudgetView({ data, plaidActuals = [] }) {
     data.transactions.forEach(tx => {
       const key = tx.name
       if (!map[key]) map[key] = Array(12).fill(0)
-      const monthlyAmt = (() => {
-        switch (tx.freq) {
-          case 'weekly':      return tx.amount * 4.33
-          case 'biweekly':   return tx.amount * 2.167
-          case 'semimonthly': return tx.amount * 2
-          case 'monthly':     return tx.amount
-          case 'quarterly':   return tx.amount / 3
-          case 'yearly':      return tx.amount / 12
-          default:            return tx.amount
-        }
-      })()
-      map[key] = Array(12).fill(monthlyAmt)
+      MONTHS.forEach((_, monthIndex) => {
+        map[key][monthIndex] += calculateTransactionAmountForMonth(tx, new Date(year, monthIndex, 1), { recurringOnly: true })
+      })
     })
     return map
-  }, [data.transactions])
+  }, [data.transactions, year])
 
   const getCellVal = (item, month) => budget[item]?.[month] ?? ''
 
@@ -3309,7 +3326,7 @@ function BudgetView({ data, plaidActuals = [] }) {
 
 // ── Reporting View ────────────────────────────────────────────────────────────────
 // ── Cash Flow Report ─────────────────────────────────────────────────────────
-function CashFlowReport({ plaidActuals = [] }) {
+function CashFlowReport({ plaidActuals = [], onOpenTransactions }) {
   const [period,   setPeriod]   = useState('monthly')
   const [year,     setYear]     = useState(new Date().getFullYear())
   const [drillCat, setDrillCat] = useState(null) // { name, type:'income'|'expense' } | null
@@ -3343,9 +3360,17 @@ function CashFlowReport({ plaidActuals = [] }) {
 
   const yearActuals = useMemo(() => {
     return plaidActuals.filter(t => {
+      if (isTransferTransaction(t)) return false
       try { return new Date(t.date + 'T12:00:00').getFullYear() === year } catch { return false }
     })
   }, [plaidActuals, year])
+
+  const open = useCallback((filter = {}) => onOpenTransactions?.({
+    dateFrom: `${year}-01-01`,
+    dateTo: `${year}-12-31`,
+    excludeTransfers: true,
+    ...filter,
+  }), [onOpenTransactions, year])
 
   const chartData = useMemo(() => {
     const map = {}
@@ -3365,8 +3390,8 @@ function CashFlowReport({ plaidActuals = [] }) {
 
   const totalIncome   = chartData.reduce((s, d) => s + d.income, 0)
   const totalExpenses = chartData.reduce((s, d) => s + d.expenses, 0)
-  const totalSavings  = totalIncome - totalExpenses
-  const savingsRate   = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0
+  const totalCashFlow = totalIncome - totalExpenses
+  const cashFlowRate  = totalIncome > 0 ? (totalCashFlow / totalIncome) * 100 : 0
 
   const incomeByCategory = useMemo(() => {
     const map = {}
@@ -3497,15 +3522,16 @@ function CashFlowReport({ plaidActuals = [] }) {
       {/* Summary stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
         {[
-          { label: 'Income',        val: fmt(totalIncome),                color: '#4CAF50' },
-          { label: 'Expenses',      val: fmt(totalExpenses),              color: '#F44060' },
-          { label: 'Total Savings', val: fmt(totalSavings),               color: totalSavings >= 0 ? 'var(--gold)' : '#F44060' },
-          { label: 'Savings Rate',  val: `${savingsRate.toFixed(1)}%`,    color: savingsRate >= 0 ? 'var(--gold)' : '#F44060' },
+          { label: 'Income',        val: fmt(totalIncome),                color: '#4CAF50', filter: { direction: 'income' } },
+          { label: 'Expenses',      val: fmt(totalExpenses),              color: '#F44060', filter: { direction: 'expense' } },
+          { label: 'Net Cash Flow', val: fmt(totalCashFlow),              color: totalCashFlow >= 0 ? 'var(--gold)' : '#F44060', filter: {} },
+          { label: 'Cash Flow Rate', val: `${cashFlowRate.toFixed(1)}%`,  color: cashFlowRate >= 0 ? 'var(--gold)' : '#F44060', filter: {} },
         ].map(c => (
-          <div key={c.label} className="finance-card" style={{ padding: '16px 18px', textAlign: 'center' }}>
+          <button type="button" key={c.label} className="finance-card" onClick={() => open(c.filter)}
+            style={{ padding: '16px 18px', textAlign: 'center', cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}>
             <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{c.label}</p>
             <p style={{ margin: 0, fontSize: 20, fontWeight: 300, color: c.color, letterSpacing: '-0.02em' }}>{c.val}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -3524,7 +3550,7 @@ function CashFlowReport({ plaidActuals = [] }) {
             const active = drillCat?.name === cat && drillCat?.type === 'income'
             return (
               <div key={cat} style={{ marginBottom: 11, cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px 11px', borderRadius: 8, background: active ? 'rgba(76,175,80,0.08)' : 'transparent', transition: 'background .15s' }}
-                onClick={() => setDrillCat(active ? null : { name: cat, type: 'income' })}
+                onClick={() => open({ direction: 'income', displayBy: 'category', value: cat })}
                 onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, alignItems: 'center' }}>
@@ -3552,7 +3578,7 @@ function CashFlowReport({ plaidActuals = [] }) {
             const active = drillCat?.name === cat && drillCat?.type === 'expense'
             return (
               <div key={cat} style={{ marginBottom: 11, cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px 11px', borderRadius: 8, background: active ? 'rgba(244,64,96,0.08)' : 'transparent', transition: 'background .15s' }}
-                onClick={() => setDrillCat(active ? null : { name: cat, type: 'expense' })}
+                onClick={() => open({ direction: 'expense', displayBy: 'category', value: cat })}
                 onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, alignItems: 'center' }}>
@@ -3639,31 +3665,24 @@ const REPORT_TABS = [
   { id: 'vendor-spend',     label: 'Vendor Spend',     icon: 'ti-building-store'  },
 ]
 
-function monthlyAmt(tx) {
-  switch (tx.freq) {
-    case 'weekly':       return tx.amount * 4.33
-    case 'biweekly':    return tx.amount * 2.167
-    case 'semimonthly': return tx.amount * 2
-    case 'monthly':      return tx.amount
-    case 'quarterly':    return tx.amount / 3
-    case 'yearly':       return tx.amount / 12
-    default:             return tx.amount
-  }
-}
-
-function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
+function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions, onOpenAccounts }) {
   const [tab, setTab] = useState('overview')
   const now = new Date()
   const yr = now.getFullYear()
   const mo = now.getMonth()
 
   const BUDGET_CATS = useMemo(() => buildBudgetCats(data.transactions), [data.transactions])
-  const totalIncome   = data.transactions.filter(t => t.type === 'income').reduce((s, t) => s + monthlyAmt(t), 0)
-  const totalExpenses = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + monthlyAmt(t), 0)
-  const netIncome     = totalIncome - totalExpenses
+  const plannedCurrentMonth = useMemo(
+    () => calculateScheduledTotalsForMonth(data.transactions, new Date(yr, mo, 1)),
+    [data.transactions, yr, mo],
+  )
+  const totalIncome = plannedCurrentMonth.income
+  const totalExpenses = plannedCurrentMonth.expenses
+  const netIncome = plannedCurrentMonth.net
   const actualReport = useMemo(() => summarizeActuals(plaidActuals, yr), [plaidActuals, yr])
-  const normalizedActuals = useMemo(() => summarizeBudgetActuals(plaidActuals), [plaidActuals])
-  const actualMonthCount = useMemo(() => Math.max(1, new Set(plaidActuals.map(tx => String(tx.date || '').slice(0, 7)).filter(Boolean)).size), [plaidActuals])
+  const currentYearActuals = useMemo(() => plaidActuals.filter(tx => String(tx.date || '').startsWith(`${yr}-`)), [plaidActuals, yr])
+  const normalizedActuals = useMemo(() => summarizeBudgetActuals(currentYearActuals), [currentYearActuals])
+  const actualMonthCount = useMemo(() => Math.max(1, new Set(currentYearActuals.map(tx => String(tx.date || '').slice(0, 7)).filter(Boolean)).size), [currentYearActuals])
   const balanceSheet = useMemo(() => buildBalanceSheet(data.accounts), [data.accounts])
   const hasActuals = plaidActuals.length > 0
 
@@ -3671,17 +3690,27 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
     const map = {}
     data.transactions.filter(t => t.type === 'expense').forEach(t => {
       const cat = t.cat || 'Other'
-      map[cat] = (map[cat] || 0) + monthlyAmt(t)
+      map[cat] = (map[cat] || 0) + calculateTransactionAmountForMonth(t, new Date(yr, mo, 1))
     })
     return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [data.transactions])
+  }, [data.transactions, yr, mo])
 
-  const monthlyData = useMemo(() => MONTHS.map((_, mi) => hasActuals ? ({
-    month: MONTHS[mi],
-    income: actualReport.months[mi].income,
-    expenses: actualReport.months[mi].expenses,
-    net: actualReport.months[mi].net,
-  }) : ({ month: MONTHS[mi], income: totalIncome, expenses: totalExpenses, net: netIncome })), [hasActuals, actualReport, totalIncome, totalExpenses, netIncome])
+  const monthlyData = useMemo(() => MONTHS.map((_, mi) => {
+    if (hasActuals) {
+      return {
+        month: MONTHS[mi],
+        income: actualReport.months[mi].income,
+        expenses: actualReport.months[mi].expenses,
+        net: actualReport.months[mi].net,
+      }
+    }
+    return { month: MONTHS[mi], ...calculateScheduledTotalsForMonth(data.transactions, new Date(yr, mi, 1)) }
+  }), [hasActuals, actualReport, data.transactions, yr])
+  const plannedAnnual = useMemo(() => monthlyData.reduce((totals, month) => ({
+    income: totals.income + month.income,
+    expenses: totals.expenses + month.expenses,
+    net: totals.net + month.net,
+  }), { income: 0, expenses: 0, net: 0 }), [monthlyData])
 
   const budget = loadBudget()
   const budgetMonthly = useMemo(() => {
@@ -3732,13 +3761,16 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, marginBottom: 20 }}>
             {[
-              ['Revenue', hasActuals ? actualReport.income : totalIncome * 12, 'var(--gold)', false, { direction: 'income', label: 'Revenue' }],
-              ['Expenses', hasActuals ? actualReport.expenses : totalExpenses * 12, 'var(--expense-color)', false, { direction: 'expense', label: 'Expenses' }],
-              ['Net Profit', hasActuals ? actualReport.net : netIncome * 12, (hasActuals ? actualReport.net : netIncome) >= 0 ? 'var(--gold)' : 'var(--expense-color)', false, { label: 'Net Profit' }],
-              ['Net Margin', hasActuals ? actualReport.margin : (totalIncome ? (netIncome / totalIncome) * 100 : 0), 'var(--gold)', true],
+              ['Revenue', hasActuals ? actualReport.income : plannedAnnual.income, 'var(--gold)', false, { direction: 'income', label: 'Revenue' }],
+              ['Expenses', hasActuals ? actualReport.expenses : plannedAnnual.expenses, 'var(--expense-color)', false, { direction: 'expense', label: 'Expenses' }],
+              ['Net Profit', hasActuals ? actualReport.net : plannedAnnual.net, (hasActuals ? actualReport.net : plannedAnnual.net) >= 0 ? 'var(--gold)' : 'var(--expense-color)', false, { label: 'Net Profit' }],
+              ['Net Margin', hasActuals ? actualReport.margin : (plannedAnnual.income ? (plannedAnnual.net / plannedAnnual.income) * 100 : 0), 'var(--gold)', true],
               ['Cash & Investments', balanceSheet.totalAssets, 'var(--gold)'],
               ['Liabilities', balanceSheet.totalLiabilities, 'var(--expense-color)'],
-            ].map(([label,value,color,isPercent,filter])=><button key={label} className="finance-card" disabled={!filter} onClick={() => filter && onOpenTransactions?.(filter)} style={{padding:'17px 18px',textAlign:'left',color:'inherit',fontFamily:'inherit',cursor:filter?'pointer':'default'}}><p style={{margin:'0 0 6px',fontSize:10,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',fontWeight:600}}>{label}</p><p style={{margin:0,fontSize:22,fontWeight:400,color}}>{isPercent?`${value.toFixed(1)}%`:fmtMoney(value)}</p></button>)}
+            ].map(([label,value,color,isPercent,filter])=>{
+              const open = filter ? () => onOpenTransactions?.(filter) : /Cash & Investments|Liabilities/.test(label) ? onOpenAccounts : null
+              return <button key={label} className="finance-card" disabled={!open} onClick={open} style={{padding:'17px 18px',textAlign:'left',color:'inherit',fontFamily:'inherit',cursor:open?'pointer':'default'}}><p style={{margin:'0 0 6px',fontSize:10,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',fontWeight:600}}>{label}</p><p style={{margin:0,fontSize:22,fontWeight:400,color}}>{isPercent?`${value.toFixed(1)}%`:fmtMoney(value)}</p></button>
+            })}
           </div>
           <div className="finance-card" style={{padding:'20px 22px'}}>
             {sectionTitle('Management Checks')}
@@ -3761,7 +3793,7 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
             {sectionTitle('Revenue')}
-            {data.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(monthlyAmt(t)), 'var(--gold)', true))}
+            {data.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(calculateTransactionAmountForMonth(t, new Date(yr, mo, 1))), 'var(--gold)', true))}
             {statRow('Total Revenue', fmtMoney(totalIncome), 'var(--gold)', false, true)}
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
@@ -3781,7 +3813,7 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
         <div>
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Profit & Loss Statement</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{hasActuals ? `Actual results · ${yr}` : `Planned monthly run rate · ${yr}`}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{hasActuals ? `Actual results · ${yr}` : `Planned calendar occurrences · ${yr}`}</p>
           </div>
           <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 20 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
@@ -3794,19 +3826,19 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
               </thead>
               <tbody>
                 {[
-                  { label: 'Income',   vals: monthlyData.map(d => d.income),   color: 'var(--gold)',           isNet: false },
-                  { label: 'Expenses', vals: monthlyData.map(d => d.expenses),  color: 'var(--expense-color)', isNet: false },
+                  { label: 'Income',   vals: monthlyData.map(d => d.income),   color: 'var(--gold)',           isNet: false, direction: 'income' },
+                  { label: 'Expenses', vals: monthlyData.map(d => d.expenses),  color: 'var(--expense-color)', isNet: false, direction: 'expense' },
                   { label: 'Net',      vals: monthlyData.map(d => d.net),       color: null,                   isNet: true  },
                 ].map(row => (
                   <tr key={row.label} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: row.isNet ? 'rgba(197,164,109,0.04)' : 'transparent' }}>
                     <td style={{ padding: '10px 16px', fontSize: 12, fontWeight: 700, color: 'var(--soft-white)' }}>{row.label}</td>
                     {row.vals.map((v, i) => (
-                      <td key={i} style={{ padding: '10px 6px', fontSize: 11, fontWeight: 600, textAlign: 'right',
+                      <td key={i} role="button" tabIndex={0} title="Open matching transactions" onClick={() => onOpenTransactions?.({ direction: row.direction, excludeTransfers: true, dateFrom: `${yr}-${String(i + 1).padStart(2, '0')}-01`, dateTo: `${yr}-${String(i + 1).padStart(2, '0')}-${String(new Date(yr, i + 1, 0).getDate()).padStart(2, '0')}`, label: `${row.label} · ${MONTHS[i]} ${yr}` })} style={{ padding: '10px 6px', fontSize: 11, fontWeight: 600, textAlign: 'right', cursor: 'pointer',
                         color: row.isNet ? (v >= 0 ? 'var(--gold)' : 'var(--expense-color)') : row.color }}>
                         {fmtMoney(v)}
                       </td>
                     ))}
-                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, textAlign: 'right',
+                    <td role="button" tabIndex={0} title="Open matching transactions" onClick={() => onOpenTransactions?.({ direction: row.direction, excludeTransfers: true, dateFrom: `${yr}-01-01`, dateTo: `${yr}-12-31`, label: `${row.label} · ${yr}` })} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, textAlign: 'right', cursor: 'pointer',
                       color: row.isNet ? (row.vals.reduce((s,v)=>s+v,0) >= 0 ? 'var(--gold)' : 'var(--expense-color)') : row.color }}>
                       {fmtMoney(row.vals.reduce((s, v) => s + v, 0))}
                     </td>
@@ -3833,14 +3865,14 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
       )}
 
       {/* ── Cash Flow ── */}
-      {tab === 'cashflow' && <CashFlowReport plaidActuals={plaidActuals} />}
+      {tab === 'cashflow' && <CashFlowReport plaidActuals={plaidActuals} onOpenTransactions={onOpenTransactions} />}
 
       {/* ── Balance Sheet ── */}
       {tab === 'balance-sheet' && (
         <div style={{maxWidth:760}}>
           <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Balance Sheet</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Cash-basis snapshot from modeled accounts · {now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p></div>
-          <div className="finance-card" style={{padding:'20px 24px',marginBottom:14}}>{sectionTitle('Assets')}{balanceSheet.assets.length?balanceSheet.assets.map(account=>statRow(account.name,fmtMoney(account.reportBalance),'var(--gold)',true)):statRow('No asset accounts modeled','—','var(--muted)')}{statRow('Total Assets',fmtMoney(balanceSheet.totalAssets),'var(--gold)',false,true)}</div>
-          <div className="finance-card" style={{padding:'20px 24px',marginBottom:14}}>{sectionTitle('Liabilities')}{balanceSheet.liabilities.length?balanceSheet.liabilities.map(account=>statRow(account.name,fmtMoney(account.reportBalance),'var(--expense-color)',true)):statRow('No liability accounts modeled','—','var(--muted)')}{statRow('Total Liabilities',fmtMoney(balanceSheet.totalLiabilities),'var(--expense-color)',false,true)}</div>
+          <div className="finance-card" role="button" tabIndex={0} title="Open accounts" onClick={onOpenAccounts} style={{padding:'20px 24px',marginBottom:14,cursor:'pointer'}}>{sectionTitle('Assets')}{balanceSheet.assets.length?balanceSheet.assets.map(account=>statRow(account.name,fmtMoney(account.reportBalance),'var(--gold)',true)):statRow('No asset accounts modeled','—','var(--muted)')}{statRow('Total Assets',fmtMoney(balanceSheet.totalAssets),'var(--gold)',false,true)}</div>
+          <div className="finance-card" role="button" tabIndex={0} title="Open accounts" onClick={onOpenAccounts} style={{padding:'20px 24px',marginBottom:14,cursor:'pointer'}}>{sectionTitle('Liabilities')}{balanceSheet.liabilities.length?balanceSheet.liabilities.map(account=>statRow(account.name,fmtMoney(account.reportBalance),'var(--expense-color)',true)):statRow('No liability accounts modeled','—','var(--muted)')}{statRow('Total Liabilities',fmtMoney(balanceSheet.totalLiabilities),'var(--expense-color)',false,true)}</div>
           <div className="finance-card" style={{padding:'20px 24px',background:'rgba(197,164,109,.06)'}}>{statRow("Owner's Equity",fmtMoney(balanceSheet.equity),balanceSheet.equity>=0?'var(--gold)':'var(--expense-color)',false,true)}</div>
           <p style={{fontSize:11,color:'var(--muted)',lineHeight:1.6}}>This report includes cash, checking, savings, investments, credit, loan, and debt accounts currently modeled in Brevity. Add receivables, inventory, fixed assets, and additional liabilities as accounts to expand the statement.</p>
         </div>
@@ -3867,7 +3899,7 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
                   const budgeted = budgetMonthly[cat] || 0
                   const scheduledActual = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
                     const matchesCat = t.cat === cat || items.some(i => t.name.toLowerCase().includes(i.toLowerCase().split(' ')[0]))
-                    return matchesCat ? s + monthlyAmt(t) : s
+                    return matchesCat ? s + calculateTransactionAmountForMonth(t, new Date(yr, mo, 1)) : s
                   }, 0)
                   const actual = cat === 'Income'
                     ? (hasActuals ? (normalizedActuals.Income || 0) / actualMonthCount : totalIncome)
@@ -3913,7 +3945,7 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions }) {
         <div>
           <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Vendor Spend</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Actual payments by merchant · {yr}</p></div>
           {!hasActuals?<div className="finance-card" style={{padding:'42px 20px',textAlign:'center',color:'var(--muted)'}}>Connect or sync an account to analyze actual vendor spending.</div>:
-          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} style={{borderTop:'1px solid rgba(255,255,255,.04)'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
+          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', displayBy:'merchant', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
         </div>
       )}
 
