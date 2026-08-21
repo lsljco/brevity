@@ -63,7 +63,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
     {state === 'saving' && <div className="today-sync-banner"><i className="ti ti-cloud-upload" /> Saving household changes…</div>}
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
-    <TodayDashboard plan={plan} currentMember={currentMember} onOpenPillar={onOpenPillar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} generationState={generationState} />
+    <TodayDashboard plan={plan} currentMember={currentMember} onOpenPillar={onOpenPillar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
     <NotificationCenter plan={plan} member={currentMember} />
     <TomorrowProposal plan={plan} />
   </div>
