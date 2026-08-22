@@ -2,6 +2,7 @@ export const SHARED_STATE_EVENT = 'brevity-shared-state-updated'
 export const SHARED_STATE_KEYS = [
   'lslj_finance_v9', 'lslj_budget_v1', 'lslj_actuals_v1', 'lslj_bal_overrides_v1',
   'lslj_tx_overrides_v1', 'lslj_tx_rules_v1', 'brevity_finance_categories_v1',
+  'brevity_finance_scenarios_v1',
   'fp_goals', 'homehq_items_v1', 'family_calendar_events_v1',
   'brevity_daily_financial_alignment_v1', 'brevity_finance_timeframe_v1',
 ]

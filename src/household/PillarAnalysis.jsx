@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { generatePillarAnalysis, PILLAR_ANALYSIS_EVENT, readPillarAnalysis } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
+import SermonRepository from './SermonRepository.jsx'
 import './PillarAnalysis.css'
 
 function List({ items = [], empty = 'None identified.' }) {
@@ -72,5 +73,6 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
         <div className="pillar-analysis-section pillar-analysis-standard"><div className="pillar-analysis-heading"><span>Success Standard</span><h2>Done Means Done</h2></div><p>{analysis.successStandard}</p><blockquote>{analysis.governingPrinciple}</blockquote></div>
       </section>
     </>}
+    {pillar.id==='spiritual'&&planState==='ready'&&<SermonRepository notes={plan?.spiritual?.sermonNotes} source={plan?.spiritual?.sermonSource}/>}
   </div>
 }

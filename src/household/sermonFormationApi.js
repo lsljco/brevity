@@ -15,3 +15,16 @@ export async function generateSermonFormation({transcript,sermonDate,serviceType
   })
   return parse(response)
 }
+
+export async function archiveSermonDocuments({notes,source}){
+  const response=await fetch('/.netlify/functions/sermon-documents',{
+    method:'POST',credentials:'include',headers:{'content-type':'application/json'},
+    body:JSON.stringify({notes,source})
+  })
+  return parse(response)
+}
+
+export async function listSermonDocuments(){
+  const response=await fetch('/.netlify/functions/sermon-documents',{credentials:'include'})
+  return parse(response)
+}
