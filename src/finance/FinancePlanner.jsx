@@ -14,6 +14,7 @@ import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
 import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
+import ScenarioModeling from './ScenarioModeling.jsx'
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 import {
   calculateMonthlyCashFlow,
@@ -2050,8 +2051,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
-      {AccountFilterBar}
-      {!formView && view !== 'daily-alignment' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {view !== 'scenario-modeling' && AccountFilterBar}
+      {!formView && view !== 'daily-alignment' && view !== 'scenario-modeling' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
 
       {/* ══════════ DASHBOARD ══════════ */}
       {view === 'dashboard' && (
@@ -2624,6 +2625,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           onOpenCalendar={date => { setSelDay(date); setView('calendar') }}
           onOpenActual={openActualTxModal}
         />
+      )}
+
+      {/* ══════════ SCENARIO MODELING ══════════ */}
+      {view === 'scenario-modeling' && (
+        <ScenarioModeling liveOperatingExpense={monthlyExpense} />
       )}
 
       {/* ══════════ CALENDAR ══════════ */}

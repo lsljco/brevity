@@ -1,22 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
-import { generateSermonFormation } from './sermonFormationApi.js'
+import { archiveSermonDocuments, generateSermonFormation } from './sermonFormationApi.js'
 import { joinEditableLines, splitEditableLines } from './lineEditing.js'
+import SermonNotesView from './SermonNotesView.jsx'
 import './SpiritualFormationStudio.css'
-
-const NOTE_SECTIONS=[
-  ['title','Title'],['scriptures','Scriptures'],['themes','Theme(s)'],['bigIdea','Big Idea'],['definition','Definition'],['coreRevelation','Core Revelation'],['foundationalTruths','Foundational Truths'],['whatThisProduces','What This Produces'],['applicationQuestions','Application Questions'],['call','Call'],['prayer','Prayer']
-]
 
 const toLines=value=>Array.isArray(value)?value:splitEditableLines(String(value||''))
 const joinLines=value=>joinEditableLines(Array.isArray(value)?value:[])
-
-function NotesView({notes}){
-  if(!notes) return null
-  return <div className="sermon-notes-grid">{NOTE_SECTIONS.map(([key,label])=>{
-    const value=notes[key]
-    return <article key={key} className="sermon-note-card"><span>{label}</span>{Array.isArray(value)?<ul>{value.map((item,index)=><li key={`${key}-${index}`}>{item}</li>)}</ul>:<p>{value||'—'}</p>}</article>
-  })}</div>
-}
 
 export default function SpiritualFormationStudio({draft,update}){
   const spiritual=draft.spiritual||{}
@@ -28,6 +17,9 @@ export default function SpiritualFormationStudio({draft,update}){
   const [title,setTitle]=useState(existingSource.title||'')
   const [state,setState]=useState('idle')
   const [error,setError]=useState('')
+  const [archiveState,setArchiveState]=useState('idle')
+  const [archiveError,setArchiveError]=useState('')
+  const [archivedDocument,setArchivedDocument]=useState(existingSource.document||null)
   const fileRef=useRef(null)
 
   const hasGenerated=Boolean(spiritual.sermonNotes)
@@ -59,6 +51,7 @@ export default function SpiritualFormationStudio({draft,update}){
     setState('loading');setError('')
     try{
       const result=await generateSermonFormation({transcript,sermonDate,serviceType,title,targetDate:draft.date})
+      const source={sermonDate,serviceType,title:result.sermonNotes?.documentTitle||result.sermonNotes?.title||title,fileName,generatedAt:result.generatedAt,model:result.model}
       update('spiritual',{
         owner:'Lorenzo',
         scripture:toLines(result.formation.scripture),
@@ -71,12 +64,31 @@ export default function SpiritualFormationStudio({draft,update}){
         formationEmphasis:result.formation.formationEmphasis||'',
         weeklyAssignment:result.formation.weeklyAssignment||'',
         sermonNotes:result.sermonNotes,
-        sermonSource:{sermonDate,serviceType,title:result.sermonNotes?.title||title,fileName,generatedAt:result.generatedAt,model:result.model}
+        sermonSource:source
       })
+      setArchiveState('saving');setArchiveError('')
+      try{
+        const archived=await archiveSermonDocuments({notes:result.sermonNotes,source})
+        setArchivedDocument(archived.document);setArchiveState('ready')
+        update('spiritual',{sermonNotes:result.sermonNotes,sermonSource:{...source,document:archived.document}})
+      }catch(archiveErr){
+        setArchiveState('error');setArchiveError(`${archiveErr.message||'Documents could not be archived.'} The generated notes remain saved in Brevity.`)
+      }
       setState('ready')
     }catch(err){
       setState('error');setError(err.message||'Could not create sermon notes and spiritual formation.')
     }
+  }
+
+  const archiveCurrent=async()=>{
+    if(!spiritual.sermonNotes)return
+    setArchiveState('saving');setArchiveError('')
+    try{
+      const source={...existingSource,sermonDate:existingSource.sermonDate||sermonDate,serviceType:existingSource.serviceType||serviceType,title:spiritual.sermonNotes.documentTitle||spiritual.sermonNotes.title||title}
+      const archived=await archiveSermonDocuments({notes:spiritual.sermonNotes,source})
+      setArchivedDocument(archived.document);setArchiveState('ready')
+      update('spiritual',{sermonNotes:spiritual.sermonNotes,sermonSource:{...source,document:archived.document}})
+    }catch(err){setArchiveState('error');setArchiveError(err.message||'Documents could not be archived.')}
   }
 
   const clearSource=()=>{
@@ -120,7 +132,11 @@ export default function SpiritualFormationStudio({draft,update}){
         <article><span>Act of Obedience</span><p>{spiritual.obedienceAction}</p></article>
         <article><span>Weekly Assignment</span><p>{spiritual.weeklyAssignment}</p></article>
       </div>
-      <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>11-section Church Triumphant framework</small></summary><NotesView notes={spiritual.sermonNotes}/></details>
+      <section className="sermon-document-actions">
+        <div><span>Document Repository</span><strong>{archivedDocument?'Word and PDF saved':'Save permanent Word and PDF copies'}</strong>{archiveError&&<small>{archiveError}</small>}</div>
+        <div>{archivedDocument&&<><a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a><a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> PDF</a></>}<button type="button" disabled={archiveState==='saving'} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Saving…':archivedDocument?'Update documents':'Save documents'}</button></div>
+      </section>
+      <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>Full Church Triumphant teaching-document framework</small></summary><SermonNotesView notes={spiritual.sermonNotes}/></details>
     </>}
 
     <details className="spiritual-manual-edit" open={!hasGenerated}>
