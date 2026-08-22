@@ -37,9 +37,9 @@ export function isCalendarEligible(item) {
   return Boolean(item?.calendarSync && item?.title && (item?.date || item?.dueAt || item?.startTime))
 }
 
-export function planItemToCalendarEvent(item, planDate, pillar = 'household') {
+export function planItemToCalendarEvent(item, planDate, pillar = 'household', sourceId = item.id) {
   return {
-    sourceId: item.id,
+    sourceId,
     title: item.title,
     date: item.date || item.dueAt?.slice?.(0, 10) || planDate,
     time: item.startTime || '',

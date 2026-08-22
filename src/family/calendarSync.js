@@ -20,27 +20,39 @@ function planCalendarItems(plan) {
 }
 
 function sameEvent(a, b) {
+  const participants = value => [...(value || [])].sort().join('|')
   return a.title === b.title &&
     a.date === b.date &&
     (a.time || '') === (b.time || '') &&
     Boolean(a.allDay) === Boolean(b.allDay) &&
     (a.pillar || 'household') === (b.pillar || 'household') &&
+    (a.owner || 'Family') === (b.owner || 'Family') &&
+    participants(a.participants) === participants(b.participants) &&
     Boolean(a.priority) === Boolean(b.priority)
 }
 
-export async function reconcilePlanWithICloud(plan) {
-  const remote = await fetchICloudCalendarEvents()
+export async function reconcilePlanWithICloud(plan, api = {}) {
+  const client = {
+    fetch: api.fetch || fetchICloudCalendarEvents,
+    create: api.create || createICloudCalendarEvent,
+    update: api.update || updateICloudCalendarEvent,
+    remove: api.remove || deleteICloudCalendarEvent,
+  }
+  const remote = await client.fetch()
   const existing = remote.events || []
   const existingBySource = new Map(existing.filter(event => event.sourceId).map(event => [event.sourceId, event]))
   const desired = planCalendarItems(plan)
-  const desiredSourceIds = new Set(desired.map(({ item }) => item.id))
+  const sourcePrefix = `daily-${plan.date}-`
+  const desiredSourceIds = new Set(desired.map(({ item }) => `${sourcePrefix}${item.id}`))
   const summary = { calendar: remote.calendar || 'iCloud Calendar', created: 0, updated: 0, deleted: 0, unchanged: 0 }
 
   for (const { item, pillar } of desired) {
-    const candidate = planItemToCalendarEvent(item, plan.date, pillar)
-    const current = existingBySource.get(item.id)
+    const candidate = planItemToCalendarEvent(item, plan.date, pillar, `${sourcePrefix}${item.id}`)
+    // Match the legacy unscoped ID once so existing events are upgraded without
+    // duplication. New records are always scoped to their daily plan.
+    const current = existingBySource.get(candidate.sourceId) || existingBySource.get(item.id)
     if (!current) {
-      await createICloudCalendarEvent(candidate)
+      await client.create(candidate)
       summary.created += 1
       continue
     }
@@ -50,13 +62,15 @@ export async function reconcilePlanWithICloud(plan) {
       continue
     }
 
-    await updateICloudCalendarEvent({ ...candidate, id: current.id, href: current.href, etag: current.etag })
+    await client.update({ ...candidate, id: current.uid || current.id, href: current.href, etag: current.etag })
     summary.updated += 1
   }
 
   for (const event of existing) {
-    if (!event.sourceId || desiredSourceIds.has(event.sourceId)) continue
-    await deleteICloudCalendarEvent(event)
+    // Saving one day must never delete unrelated Apple events, project events,
+    // or Brevity events belonging to another day.
+    if (!event.sourceId?.startsWith(sourcePrefix) || desiredSourceIds.has(event.sourceId)) continue
+    await client.remove(event)
     summary.deleted += 1
   }
 

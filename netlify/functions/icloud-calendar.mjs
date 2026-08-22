@@ -77,9 +77,13 @@ async function discoverCalendar() {
     events: /name=["']VEVENT["']/i.test(block) || !/supported-calendar-component-set/i.test(block),
   })).filter(item => item.calendar && item.events && !/(inbox|outbox|notification)/i.test(item.href));
 
-  const wanted = (process.env.ICLOUD_CALENDAR_NAME || "").trim().toLowerCase();
-  const chosen = (wanted && candidates.find(item => item.name.toLowerCase() === wanted)) || candidates[0];
-  if (!chosen) throw new Error(wanted ? `No iCloud calendar named “${process.env.ICLOUD_CALENDAR_NAME}” was found.` : "No writable iCloud calendar was found.");
+  // Never silently synchronize with the first calendar returned by Apple. The
+  // shared Family calendar is the default and deployments may override its
+  // display name explicitly when Apple localizes or renames it.
+  const targetName = (process.env.ICLOUD_CALENDAR_NAME || "Family").trim();
+  const wanted = targetName.toLocaleLowerCase();
+  const chosen = candidates.find(item => item.name.trim().toLocaleLowerCase() === wanted);
+  if (!chosen) throw new Error(`The shared Apple calendar named “${targetName}” was not found. Set ICLOUD_CALENDAR_NAME to its exact name.`);
   return { url: new URL(chosen.href, CALDAV_ROOT).href, name: chosen.name || "iCloud Calendar" };
 }
 
@@ -97,11 +101,14 @@ function parseDate(value) {
   return { year: +match[1], month: +match[2], day: +match[3], hour: +(match[4] || 0), minute: +(match[5] || 0), allDay: !match[4] };
 }
 
-function parseEvent(ics, href, etag) {
+function parseEvent(ics, href, etag, forceOccurrenceId = false) {
   const start = parseDate(icsValue(ics, "DTSTART"));
   if (!start) return null;
+  const uid = icsValue(ics, "UID");
+  const recurrenceId = icsValue(ics, "RECURRENCE-ID");
   return {
-    id: icsValue(ics, "UID"),
+    id: recurrenceId || forceOccurrenceId ? `${uid}::${recurrenceId || icsValue(ics, "DTSTART")}` : uid,
+    uid,
     sourceId: unescapeIcs(icsValue(ics, "X-BREVITY-SOURCE-ID")),
     title: unescapeIcs(icsValue(ics, "SUMMARY")) || "Untitled event",
     date: `${start.year}-${String(start.month).padStart(2, "0")}-${String(start.day).padStart(2, "0")}`,
@@ -156,13 +163,16 @@ async function listEvents(calendar) {
   const now = new Date();
   const start = `${now.getFullYear() - 1}0101T000000Z`;
   const end = `${now.getFullYear() + 3}1231T235959Z`;
-  const report = `<?xml version="1.0"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${start}" end="${end}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
+  const report = `<?xml version="1.0"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data><c:expand start="${start}" end="${end}"/></c:calendar-data></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${start}" end="${end}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
   const xml = (await caldav(calendar.url, "REPORT", report, { depth: "1" })).text;
-  return blocks(xml, "response").map(block => {
+  return blocks(xml, "response").flatMap(block => {
     const href = firstTag(block, "href");
     const etag = firstTag(block, "getetag");
     const raw = block.match(/<(?:\w+:)?calendar-data[^>]*>([\s\S]*?)<\/(?:\w+:)?calendar-data>/i)?.[1] || "";
-    return parseEvent(xmlDecode(raw), href, etag);
+    const decoded = xmlDecode(raw);
+    const occurrences = [...decoded.matchAll(/BEGIN:VEVENT[\s\S]*?END:VEVENT/gi)].map(match => match[0]);
+    const records = occurrences.length ? occurrences : [decoded];
+    return records.map(record => parseEvent(record, href, etag, records.length > 1)).filter(Boolean);
   }).filter(Boolean);
 }
 
@@ -174,7 +184,7 @@ export const handler = async event => {
 
   try {
     const calendar = await discoverCalendar();
-    if (event.httpMethod === "GET") return json(200, { calendar: calendar.name, events: await listEvents(calendar) });
+    if (event.httpMethod === "GET") return json(200, { calendar: calendar.name, syncMode: "two-way", events: await listEvents(calendar) });
     const item = event.body ? JSON.parse(event.body) : {};
 
     if (event.httpMethod === "POST") {
