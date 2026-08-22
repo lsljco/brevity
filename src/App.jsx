@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import HouseholdToday from './household/HouseholdToday.jsx'
 import PillarAnalysis from './household/PillarAnalysis.jsx'
 import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
@@ -48,8 +48,17 @@ const EXTERNAL_SITES = {
 }
 const DIVIDER_BEFORE = new Set([1,3,4,6])
 
-function ExternalSiteView({ title, description, url, icon, embed }) {
-  return <section className="external-site-view" aria-label={title}><header className="external-site-toolbar"><div><p className="external-site-eyebrow">Connected application</p><h1>{title}</h1><p className="external-site-description">{description}</p></div><a className="external-site-open" href={url} target="_blank" rel="noreferrer">Open full screen <i className="ti ti-external-link" aria-hidden="true" /></a></header>{embed?<iframe className="external-site-frame" src={url} title={title} loading="eager" referrerPolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" />:<div className="external-site-fallback"><div className="external-site-fallback-icon"><i className={`ti ${icon}`} aria-hidden="true" /></div><h2>{title} is connected</h2><p>{title} currently blocks secure in-app display. Open it below while its hosting security setting is updated.</p><a className="external-site-launch" href={url} target="_blank" rel="noreferrer">Launch {title} <i className="ti ti-arrow-up-right" aria-hidden="true" /></a></div>}</section>
+function ExternalSiteView({ title, description, url, icon, embed, currentMember }) {
+  const frameRef=useRef(null)
+  const targetOrigin=useMemo(()=>{try{return new URL(url).origin}catch{return''}},[url])
+  const sendMember=()=>{if(embed&&currentMember&&targetOrigin)frameRef.current?.contentWindow?.postMessage({type:'brevity-authenticated-member',member:currentMember},targetOrigin)}
+  useEffect(()=>{
+    if(!embed||!currentMember||!targetOrigin)return
+    const receive=event=>{if(event.origin===targetOrigin&&event.data?.type==='live-intentional-ready')sendMember()}
+    window.addEventListener('message',receive)
+    return()=>window.removeEventListener('message',receive)
+  },[embed,currentMember,targetOrigin])
+  return <section className="external-site-view" aria-label={title}><header className="external-site-toolbar"><div><p className="external-site-eyebrow">Connected application</p><h1>{title}</h1><p className="external-site-description">{description}</p></div><a className="external-site-open" href={url} target="_blank" rel="noreferrer">Open full screen <i className="ti ti-external-link" aria-hidden="true" /></a></header>{embed?<iframe ref={frameRef} onLoad={sendMember} className="external-site-frame" src={url} title={title} loading="eager" referrerPolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" />:<div className="external-site-fallback"><div className="external-site-fallback-icon"><i className={`ti ${icon}`} aria-hidden="true" /></div><h2>{title} is connected</h2><p>{title} currently blocks secure in-app display. Open it below while its hosting security setting is updated.</p><a className="external-site-launch" href={url} target="_blank" rel="noreferrer">Launch {title} <i className="ti ti-arrow-up-right" aria-hidden="true" /></a></div>}</section>
 }
 
 function SettingsPage({ currentMember, role }) {
@@ -147,9 +156,9 @@ export default function App() {
     if(activeView==='today')return <HouseholdToday currentMember={currentMember} onOpenPillar={openPillar}/>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ/></Suspense>
-    if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
-    if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple Calendar supplies native timed alerts"/></Suspense>
-    if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]}/>
+    if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily lockMember title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
+    if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Two-way sync with the shared Apple Family Calendar"/></Suspense>
+    if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><FinancePlanner view={activeView} setView={v=>navigateTo('finance',v)}/></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)
     return pillar?<PillarAnalysis pillar={pillar} currentMember={currentMember}/>:null
