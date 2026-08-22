@@ -1,4 +1,7 @@
 # Never cache HTML — ensures browser always loads the latest JS bundle references
+/*
+  Permissions-Policy: microphone=(self)
+
 /*.html
   Cache-Control: no-cache, no-store, must-revalidate
 
