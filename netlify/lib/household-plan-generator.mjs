@@ -1,4 +1,6 @@
 import { getStore } from '@netlify/blobs';
+import { buildDailyDevotionPdf } from './devotion-document.mjs';
+import { getOneDriveConnection, publishDailyDevotion } from './onedrive.mjs';
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
 const STORE_NAME = 'brevity-household';
@@ -242,6 +244,15 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   if (!response.ok) throw new Error(payload.error?.message || 'OpenAI daily-plan generation failed.');
   const generated = JSON.parse(outputText(payload));
   const plan = hydrateGeneratedPlan(generated, date, activeSermon);
+  if (await getOneDriveConnection()) {
+    try {
+      const pdf = await buildDailyDevotionPdf(plan);
+      plan.spiritual.devotionDocument = await publishDailyDevotion({ pdf, baseName: `${date}-daily-devotion` });
+    } catch (error) {
+      console.error('[daily-household-plan devotion publishing]', error);
+      plan.spiritual.devotionDocument = { state: 'error', error: error.message || 'OneDrive devotion publishing failed.' };
+    }
+  }
   await dataStore.setJSON(planKey(date), plan);
   return { plan, skipped: false };
 }
