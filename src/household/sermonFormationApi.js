@@ -54,3 +54,6 @@ export async function getOneDriveStatus(){
 }
 
 export const oneDriveConnectUrl='/.netlify/functions/onedrive-oauth-start'
+
+export async function generateSermonSlides({id,notes,source}){const response=await fetch('/.netlify/functions/sermon-slides-background',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({id,notes,source})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Slide generation returned ${response.status}.`);return payload}
+export async function getSermonSlideStatus(id){const response=await fetch(`/.netlify/functions/sermon-slides?id=${encodeURIComponent(id)}`,{credentials:'include'});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Slide status returned ${response.status}.`);return payload}

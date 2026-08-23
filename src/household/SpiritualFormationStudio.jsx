@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { archiveSermonDocuments, generateSermonFormation, getOneDriveStatus, oneDriveConnectUrl } from './sermonFormationApi.js'
+import { archiveSermonDocuments, generateSermonFormation, generateSermonSlides, getOneDriveStatus, getSermonSlideStatus, oneDriveConnectUrl } from './sermonFormationApi.js'
 import { joinEditableLines, splitEditableLines } from './lineEditing.js'
 import SermonNotesView from './SermonNotesView.jsx'
 import './SpiritualFormationStudio.css'
@@ -21,10 +21,12 @@ export default function SpiritualFormationStudio({draft,update}){
   const [archiveError,setArchiveError]=useState('')
   const [archivedDocument,setArchivedDocument]=useState(existingSource.document||null)
   const [oneDrive,setOneDrive]=useState({loading:true,configured:false,connected:false,connection:null,error:''})
+  const [slides,setSlides]=useState(existingSource.slideDeck||{state:'not-started'})
   const fileRef=useRef(null)
 
   const hasGenerated=Boolean(spiritual.sermonNotes)
   useEffect(()=>{getOneDriveStatus().then(status=>setOneDrive({...status,loading:false,error:''})).catch(err=>setOneDrive(current=>({...current,loading:false,error:err.message||'Could not check OneDrive.'})))},[])
+  useEffect(()=>{if(slides.state!=='generating'||!slides.id)return;const timer=setInterval(()=>{getSermonSlideStatus(slides.id).then(status=>{setSlides(current=>({...current,...status,id:slides.id}));if(status.state==='ready')update('spiritual',{sermonNotes:spiritual.sermonNotes,sermonSource:{...existingSource,document:archivedDocument,slideDeck:{...status,id:slides.id}}})}).catch(err=>setSlides({state:'error',id:slides.id,error:err.message}))},4000);return()=>clearInterval(timer)},[slides.state,slides.id])
   const sourceLabel=useMemo(()=>{
     if(!hasGenerated) return ''
     return [existingSource.serviceType,existingSource.sermonDate,existingSource.title].filter(Boolean).join(' · ')
@@ -98,6 +100,8 @@ export default function SpiritualFormationStudio({draft,update}){
     if(fileRef.current) fileRef.current.value=''
   }
 
+  const createSlides=async()=>{if(!spiritual.sermonNotes)return;const id=archivedDocument?.id||`sermon-${Date.now()}`;setSlides({state:'generating',id,completed:0,total:0});try{await generateSermonSlides({id,notes:spiritual.sermonNotes,source:{...existingSource,title:spiritual.sermonNotes.documentTitle||title}})}catch(err){setSlides({state:'error',id,error:err.message||'Could not start sermon slides.'})}}
+
   return <div className="spiritual-studio">
     <section className="sermon-source-card">
       <div className="sermon-source-heading">
@@ -135,8 +139,8 @@ export default function SpiritualFormationStudio({draft,update}){
         <article><span>Weekly Assignment</span><p>{spiritual.weeklyAssignment}</p></article>
       </div>
       <section className="sermon-document-actions">
-        <div><span>Document Repository</span><strong>{archivedDocument?.oneDrive?.state==='published'?'PDF published to Sermon Notes · Word file published to Sermon Notes - Word Documents':archivedDocument?'Word and PDF saved in Brevity':'Save permanent Word and PDF copies'}</strong>{oneDrive.connected?<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> Church Triumphant publishing connected{oneDrive.connection?.account?` · ${oneDrive.connection.account}`:''}. Daily devotion PDFs publish to Devotions.</small>:oneDrive.configured&&!oneDrive.loading?<small>Connect Church Triumphant OneDrive to publish every generated sermon automatically.</small>:null}{archiveError&&<small>{archiveError}</small>}</div>
-        <div>{archivedDocument&&<><a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a><a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> PDF</a></>}{archivedDocument?.oneDrive?.folderWebUrl&&<a href={archivedDocument.oneDrive.folderWebUrl} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> OneDrive</a>}{oneDrive.configured&&!oneDrive.connected&&<a className="sermon-connect-cloud" href={oneDriveConnectUrl}><i className="ti ti-brand-microsoft"/> Connect OneDrive</a>}<button type="button" disabled={archiveState==='saving'} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Saving…':archivedDocument?'Update documents':'Save documents'}</button></div>
+        <div><span>Document Repository</span><strong>{archivedDocument?.oneDrive?.state==='published'?'PDF published to Sermon Notes · Word file published to Sermon Notes - Word Documents':archivedDocument?'Word and PDF saved in Brevity':'Save permanent Word and PDF copies'}</strong>{oneDrive.connected?<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> Church Triumphant publishing connected{oneDrive.connection?.account?` · ${oneDrive.connection.account}`:''}. Daily devotion PDFs publish to Devotions.</small>:oneDrive.configured&&!oneDrive.loading?<small>Connect Church Triumphant OneDrive to publish every generated sermon automatically.</small>:null}{slides.state==='generating'&&<small className="sermon-cloud-ready"><i className="ti ti-photo"/> Creating photorealistic sermon slides{slides.total?` · ${slides.completed||0} of ${slides.total} images`:''}…</small>}{slides.state==='error'&&<small>{slides.error}</small>}{archiveError&&<small>{archiveError}</small>}</div>
+        <div>{archivedDocument&&<><a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a><a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> PDF</a></>}{slides.state==='ready'&&<a href={slides.download}><i className="ti ti-file-type-ppt"/> PowerPoint</a>}{hasGenerated&&slides.state!=='ready'&&<button type="button" disabled={slides.state==='generating'} onClick={createSlides}><i className={`ti ${slides.state==='generating'?'ti-loader-2':'ti-presentation'}`}/> {slides.state==='generating'?'Creating slides…':'Create sermon slides'}</button>}{archivedDocument?.oneDrive?.folderWebUrl&&<a href={archivedDocument.oneDrive.folderWebUrl} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> OneDrive</a>}{oneDrive.configured&&!oneDrive.connected&&<a className="sermon-connect-cloud" href={oneDriveConnectUrl}><i className="ti ti-brand-microsoft"/> Connect OneDrive</a>}<button type="button" disabled={archiveState==='saving'} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Saving…':archivedDocument?'Update documents':'Save documents'}</button></div>
       </section>
       <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>Full Church Triumphant teaching-document framework</small></summary><SermonNotesView notes={spiritual.sermonNotes}/></details>
     </>}
