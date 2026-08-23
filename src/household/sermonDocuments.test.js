@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { normalizeSermonSections, sermonItemParagraphs } from '../../netlify/functions/sermon-documents.mjs'
+import { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs } from '../../netlify/functions/sermon-documents.mjs'
 
 const section = (sections, heading) => sections.find(([name]) => name === heading)?.[1] || []
 
@@ -39,4 +39,9 @@ test('legacy sermon fields remain available for document export', () => {
   assert.equal(section(sections,'PRIMARY SCRIPTURES')[0],'James 1:22')
   assert.deepEqual(section(sections,'KINGDOM PRINCIPLES'),['Hearing is not completion.'])
   assert.deepEqual(section(sections,'REFLECTION QUESTIONS'),['What will I obey?'])
+})
+
+test('sermon guide filenames follow the Church Triumphant ministry standard', () => {
+  assert.equal(sermonGuideBaseName('From the Page to the Pattern','2026-08-23'),'08.23.2026 - From the Page to the Pattern Sermon Teaching Guide')
+  assert.equal(sermonGuideBaseName('From the Page to the Pattern Sermon Teaching Guide','2026-08-23'),'08.23.2026 - From the Page to the Pattern Sermon Teaching Guide')
 })

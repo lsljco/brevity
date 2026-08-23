@@ -18,25 +18,38 @@ const fileKey = (id, format) => `${HOUSEHOLD_ID}/sermons/${id}/sermon.${format}`
 const clean = value => String(value || '').trim()
 const values = value => Array.isArray(value) ? value.filter(Boolean) : value ? [value] : []
 const slugify = value => clean(value).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80) || 'sermon-notes'
+const guideDate=value=>{const raw=clean(value);const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(iso)return `${iso[2]}.${iso[3]}.${iso[1]}`;const parsed=new Date(raw);return Number.isNaN(parsed.getTime())?raw:String(parsed.getMonth()+1).padStart(2,'0')+'.'+String(parsed.getDate()).padStart(2,'0')+'.'+parsed.getFullYear()}
+export const sermonGuideBaseName=(title,date)=>{const cleanTitle=clean(title).replace(/\s+(?:Sermon\s+)?Teaching\s+Guide$/i,'').trim()||'Sermon';const prefix=guideDate(date);return `${prefix?`${prefix} - `:''}${cleanTitle} Sermon Teaching Guide`}
 
 export function normalizeSermonSections(notes = {}) {
   const primary = values(notes.primaryScriptures || notes.scriptures).map(item => typeof item === 'string' ? { reference:item, explanation:'' } : item)
   return [
+    ['TEACHING OBJECTIVES', values(notes.teachingObjectives)],
+    ['ANCHOR DECLARATION', values(notes.anchorDeclaration)],
     ['AIM', values(notes.aim)],
     ['THESIS', values(notes.thesis || notes.bigIdea)],
     ['OPENING EXHORTATION', values(notes.openingExhortation || notes.coreRevelation)],
     ['PRIMARY SCRIPTURES', primary.map(item => `${clean(item.reference)}${item.explanation ? ` — ${clean(item.explanation)}` : ''}`)],
     ['SUPPORTING BIBLICAL WITNESSES', values(notes.supportingBiblicalWitnesses).map(item => typeof item === 'string' ? item : `${clean(item.reference)}${item.explanation ? ` — ${clean(item.explanation)}` : ''}`)],
     ['GOVERNING QUESTION', values(notes.governingQuestion)],
+    ['WORKING DEFINITIONS', values(notes.workingDefinitions)],
     ['HISTORICAL AND BIBLICAL CONTEXT', values(notes.historicalBiblicalContext)],
     ['DETAILED EXPOSITION', values(notes.detailedExposition)],
     ['KINGDOM PRINCIPLES', values(notes.kingdomPrinciples || notes.foundationalTruths)],
     ['ARCHITECTURAL FRAMEWORKS', values(notes.architecturalFrameworks)],
+    ['MEMORABLE LINES', values(notes.memorableLines)],
     ['PRACTICAL APPLICATION', values(notes.practicalApplication || notes.whatThisProduces)],
+    ['DIAGNOSTIC WORKSHEETS', values(notes.diagnosticWorksheets)],
+    ['PASTORAL GUARDRAILS', values(notes.pastoralGuardrails)],
     ['REFLECTION QUESTIONS', values(notes.reflectionQuestions || notes.applicationQuestions)],
+    ['SEVEN-DAY MEDITATION AND FORMATION PLAN', values(notes.sevenDayFormationPlan)],
+    ['SMALL-GROUP TEACHING PLAN', values(notes.smallGroupTeachingPlan)],
+    ['CONTRIBUTOR INSIGHTS', values(notes.contributorInsights)],
     ['WEEKLY CHARGE', values(notes.weeklyCharge || notes.call)],
     ['CONGREGATIONAL RESPONSE', values(notes.congregationalResponse)],
     ['PRAYER', values(notes.prayer)],
+    ['CLOSING COMMISSION', values(notes.closingCommission)],
+    ['PERSONAL CLOSING RESPONSE', values(notes.personalResponseQuestions)],
     ['SCRIPTURE INDEX', values(notes.scriptureIndex)],
   ].filter(([,items]) => items.length)
 }
@@ -85,8 +98,8 @@ function docxChildren(notes, source) {
       const titleText = objectTitle(item)
       if (titleText) children.push(new Paragraph({ text:titleText, heading:HeadingLevel.HEADING_2 }))
       const paragraphs = sermonItemParagraphs(item)
-      if (!titleText && typeof item === 'string') children.push(bodyParagraph(item, { bullet:['KINGDOM PRINCIPLES','REFLECTION QUESTIONS'].includes(heading) }))
-      else paragraphs.forEach(text => children.push(bodyParagraph(text, { bullet:['PRACTICAL APPLICATION','WEEKLY CHARGE'].includes(heading) })))
+      if (!titleText && typeof item === 'string') children.push(bodyParagraph(item, { bullet:['TEACHING OBJECTIVES','KINGDOM PRINCIPLES','MEMORABLE LINES','PASTORAL GUARDRAILS','REFLECTION QUESTIONS','PERSONAL CLOSING RESPONSE'].includes(heading) }))
+      else paragraphs.forEach(text => children.push(bodyParagraph(text, { bullet:['PRACTICAL APPLICATION','DIAGNOSTIC WORKSHEETS','SEVEN-DAY MEDITATION AND FORMATION PLAN','SMALL-GROUP TEACHING PLAN','WEEKLY CHARGE'].includes(heading) })))
       values(item?.quotes).forEach(quote => children.push(bodyParagraph(`“${clean(quote).replace(/^['“"]|['”"]$/g,'')}”`, { quote:true })))
       if (heading === 'SCRIPTURE INDEX' && index === items.length - 1) children.push(new Paragraph({text:''}))
     })
@@ -139,8 +152,10 @@ export async function buildSermonPdf(notes, source) {
       const titleText=objectTitle(item)
       if(titleText)pdfText(doc,titleText,{bold:true,size:11.5,after:.3})
       const paragraphs=sermonItemParagraphs(item)
-      if(!titleText&&typeof item==='string')pdfText(doc,`${['KINGDOM PRINCIPLES','REFLECTION QUESTIONS'].includes(heading)?'•  ':''}${item}`,{indent:['KINGDOM PRINCIPLES','REFLECTION QUESTIONS'].includes(heading)?10:0})
-      else paragraphs.forEach(text=>pdfText(doc,`${['PRACTICAL APPLICATION','WEEKLY CHARGE'].includes(heading)?'•  ':''}${text}`,{indent:['PRACTICAL APPLICATION','WEEKLY CHARGE'].includes(heading)?10:0}))
+      const bulletHeading=['TEACHING OBJECTIVES','KINGDOM PRINCIPLES','MEMORABLE LINES','PASTORAL GUARDRAILS','REFLECTION QUESTIONS','PERSONAL CLOSING RESPONSE'].includes(heading)
+      const stepHeading=['PRACTICAL APPLICATION','DIAGNOSTIC WORKSHEETS','SEVEN-DAY MEDITATION AND FORMATION PLAN','SMALL-GROUP TEACHING PLAN','WEEKLY CHARGE'].includes(heading)
+      if(!titleText&&typeof item==='string')pdfText(doc,`${bulletHeading?'•  ':''}${item}`,{indent:bulletHeading?10:0})
+      else paragraphs.forEach(text=>pdfText(doc,`${stepHeading?'•  ':''}${text}`,{indent:stepHeading?10:0}))
       values(item?.quotes).forEach(quote=>pdfText(doc,`“${clean(quote).replace(/^['“"]|['”"]$/g,'')}”`,{italic:true,size:11,color:'#6F5630',indent:18}))
     })
   })
@@ -168,7 +183,10 @@ export const handler = async event => {
         const bytes=await dataStore.get(fileKey(params.id,params.format),{type:'arrayBuffer'}).catch(()=>null)
         if(!bytes)return json(404,{error:'That sermon document was not found.'})
         const ext=params.format
-        return {statusCode:200,isBase64Encoded:true,headers:{'content-type':ext==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','content-disposition':`attachment; filename="${params.id}.${ext}"`,'cache-control':'private, no-store'},body:Buffer.from(bytes).toString('base64')}
+        const entries=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
+        const entry=(Array.isArray(entries)?entries:[]).find(item=>item.id===params.id)
+        const filename=clean(entry?.fileNames?.[ext]||`${params.id}.${ext}`).replace(/["\r\n]/g,'')
+        return {statusCode:200,isBase64Encoded:true,headers:{'content-type':ext==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','content-disposition':`attachment; filename="${filename}"`,'cache-control':'private, no-store'},body:Buffer.from(bytes).toString('base64')}
       }
       const entries=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
       return json(200,{documents:Array.isArray(entries)?entries:[]})
@@ -181,15 +199,16 @@ export const handler = async event => {
     const title=clean(notes.documentTitle||notes.title||source.title)
     if(!title)return json(400,{error:'Generated sermon notes need a title before they can be archived.'})
     const id=`${clean(source.sermonDate)||new Date().toISOString().slice(0,10)}-${slugify(title)}`
+    const baseName=sermonGuideBaseName(title,source.sermonDate||notes.sermonDate)
     const [docx,pdf]=await Promise.all([buildSermonDocx(notes,source),buildSermonPdf(notes,source)])
     await Promise.all([dataStore.set(fileKey(id,'docx'),docx),dataStore.set(fileKey(id,'pdf'),pdf)])
     const prior=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
     let oneDrive={state:'not-connected'}
     if(await getOneDriveConnection()){
-      try{oneDrive=await publishSermonDocuments({docx,pdf,baseName:id})}
+      try{oneDrive=await publishSermonDocuments({docx,pdf,baseName})}
       catch(error){console.error('[sermon-documents onedrive]',error);oneDrive={state:'error',error:error.message||'OneDrive publishing failed.'}}
     }
-    const entry={id,title,sermonDate:clean(source.sermonDate),serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),updatedAt:new Date().toISOString(),updatedBy:session.member,files:{docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`,pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`},oneDrive}
+    const entry={id,title,baseName,fileNames:{docx:`${baseName}.docx`,pdf:`${baseName}.pdf`},sermonDate:clean(source.sermonDate),serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),updatedAt:new Date().toISOString(),updatedBy:session.member,files:{docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`,pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`},oneDrive}
     const entries=[entry,...(Array.isArray(prior)?prior:[]).filter(item=>item.id!==id)].slice(0,200)
     await dataStore.setJSON(indexKey,entries)
     return json(200,{document:entry})
