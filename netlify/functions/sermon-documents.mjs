@@ -5,7 +5,8 @@ import {
 } from 'docx'
 import PDFDocument from 'pdfkit'
 import householdAuth from './household-auth.js'
-import { getOneDriveConnection, publishSermonDocuments } from '../lib/onedrive.mjs'
+import { getOneDriveConnection, publishSermonDocuments, publishSevenDayDevotions } from '../lib/onedrive.mjs'
+import { buildSevenDayDevotionsPdf } from '../lib/devotion-document.mjs'
 
 const { readSession } = householdAuth
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
@@ -222,7 +223,18 @@ export const handler = async event => {
     const prior=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
     let oneDrive={state:'not-connected'}
     if(await getOneDriveConnection()){
-      try{oneDrive=await publishSermonDocuments({docx,pdf,baseName})}
+      try{
+        oneDrive=await publishSermonDocuments({docx,pdf,baseName})
+        if(values(notes.sevenDayFormationPlan).length){
+          try{
+            const devotionPdf=await buildSevenDayDevotionsPdf(notes,source)
+            oneDrive.devotions=await publishSevenDayDevotions({pdf:devotionPdf,baseName})
+          }catch(error){
+            console.error('[sermon-documents devotions onedrive]',error)
+            oneDrive.devotions={state:'error',error:error.message||'OneDrive devotion publishing failed.'}
+          }
+        }
+      }
       catch(error){console.error('[sermon-documents onedrive]',error);oneDrive={state:'error',error:error.message||'OneDrive publishing failed.'}}
     }
     const entry={id,title,baseName,fileNames:{docx:`${baseName}.docx`,pdf:`${baseName}.pdf`},sermonDate:clean(source.sermonDate),serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),updatedAt:new Date().toISOString(),updatedBy:session.member,files:{docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`,pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`},oneDrive}
