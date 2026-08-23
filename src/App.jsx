@@ -12,6 +12,7 @@ import './AppDeferred.css'
 const FamilyCalendar = lazy(() => import('./family/FamilyCalendar.jsx'))
 const FinancePlanner = lazy(() => import('./finance/FinancePlanner.jsx'))
 const HomeHQ = lazy(() => import('./homehq/HomeHQ.jsx'))
+const EstateWorkspace = lazy(() => import('./estate/EstateWorkspace.jsx'))
 
 const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
@@ -44,7 +45,6 @@ const PILLARS = [
 
 const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','budget','recurring','reporting'])
 const EXTERNAL_SITES = {
-  'malbec-estate': { title:'Malbec Estate', description:'Estate and household property management', url:'https://malbecestate.netlify.app/', icon:'ti-building-community', embed:false },
   'live-intentional': { title:'Live Intentional', description:'Intentional living and household planning', url:'https://liveintentional.netlify.app/', icon:'ti-compass', embed:true },
   'apostolic-sermon-builder': { title:'Apostolic Sermon Builder', description:'Sermon preparation and ministry resources', url:'https://apostolicsermonbuilderlseay.netlify.app/', icon:'ti-book-2', embed:true },
 }
@@ -163,6 +163,7 @@ export default function App() {
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ/></Suspense>
     if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily lockMember title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Two-way sync with the shared Apple Family Calendar"/></Suspense>
+    if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace currentMember={currentMember} role={auth.role}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><FinancePlanner view={activeView} setView={v=>navigateTo('finance',v)}/></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)
