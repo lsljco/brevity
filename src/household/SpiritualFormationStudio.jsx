@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { archiveSermonDocuments, generateSermonFormation, generateSermonSlides, getOneDriveStatus, getSermonSlideStatus, oneDriveConnectUrl } from './sermonFormationApi.js'
+import { archiveSermonDocuments, generateSermonFormation, generateSermonSlides, getOneDriveStatus, getSermonSlideStatus, importSermonNotes, oneDriveConnectUrl } from './sermonFormationApi.js'
 import { joinEditableLines, splitEditableLines } from './lineEditing.js'
 import SermonNotesView from './SermonNotesView.jsx'
 import './SpiritualFormationStudio.css'
@@ -12,6 +12,7 @@ export default function SpiritualFormationStudio({draft,update}){
   const existingSource=spiritual.sermonSource||{}
   const [transcript,setTranscript]=useState('')
   const [fileName,setFileName]=useState(existingSource.fileName||'')
+  const [sourceKind,setSourceKind]=useState(existingSource.sourceKind||'transcript')
   const [serviceType,setServiceType]=useState(existingSource.serviceType||'Sunday')
   const [sermonDate,setSermonDate]=useState(existingSource.sermonDate||draft.date||'')
   const [title,setTitle]=useState(existingSource.title||'')
@@ -23,6 +24,7 @@ export default function SpiritualFormationStudio({draft,update}){
   const [oneDrive,setOneDrive]=useState({loading:true,configured:false,connected:false,connection:null,error:''})
   const [slides,setSlides]=useState(existingSource.slideDeck||{state:'not-started'})
   const fileRef=useRef(null)
+  const notesFileRef=useRef(null)
 
   const hasGenerated=Boolean(spiritual.sermonNotes)
   useEffect(()=>{getOneDriveStatus().then(status=>setOneDrive({...status,loading:false,error:''})).catch(err=>setOneDrive(current=>({...current,loading:false,error:err.message||'Could not check OneDrive.'})))},[])
@@ -41,7 +43,7 @@ export default function SpiritualFormationStudio({draft,update}){
       return
     }
     try{
-      setTranscript(await file.text());setFileName(file.name);setError('')
+      setTranscript(await file.text());setFileName(file.name);setSourceKind('transcript');setError('')
     }catch{
       setError('Brevity could not read that transcript file.')
     }
@@ -54,8 +56,8 @@ export default function SpiritualFormationStudio({draft,update}){
     }
     setState('loading');setError('')
     try{
-      const result=await generateSermonFormation({transcript,sermonDate,serviceType,title,targetDate:draft.date})
-      const source={sermonDate,serviceType,title:result.sermonNotes?.documentTitle||result.sermonNotes?.title||title,fileName,generatedAt:result.generatedAt,model:result.model}
+      const result=await generateSermonFormation({transcript,sermonDate,serviceType,title,targetDate:draft.date,sourceKind})
+      const source={sermonDate,serviceType,title:result.sermonNotes?.documentTitle||result.sermonNotes?.title||title,fileName,sourceKind,generatedAt:result.generatedAt,model:result.model}
       update('spiritual',{
         owner:'Lorenzo',
         scripture:toLines(result.formation.scripture),
@@ -96,8 +98,22 @@ export default function SpiritualFormationStudio({draft,update}){
   }
 
   const clearSource=()=>{
-    setTranscript('');setFileName('');setTitle('');setError('');setState('idle')
+    setTranscript('');setFileName('');setTitle('');setSourceKind('transcript');setError('');setState('idle')
     if(fileRef.current) fileRef.current.value=''
+    if(notesFileRef.current) notesFileRef.current.value=''
+  }
+
+  const chooseNotesFile=async event=>{
+    const file=event.target.files?.[0]
+    if(!file)return
+    if(!/\.(docx|pdf|txt|md|markdown)$/i.test(file.name)){setError('Upload sermon notes as Word (.docx), PDF (.pdf), or text.');event.target.value='';return}
+    setState('reading');setError('')
+    try{
+      const result=/\.(docx|pdf)$/i.test(file.name)?await importSermonNotes(file):{text:await file.text()}
+      setTranscript(result.text);setFileName(file.name);setSourceKind('notes');setState('idle')
+      const inferred=file.name.replace(/\.(docx|pdf|txt|md|markdown)$/i,'').replace(/^\d{2}[.-]\d{2}[.-]\d{4}\s*-\s*/,'').replace(/\s+Sermon(?:\s+Teaching)?\s+Guide$/i,'').trim()
+      if(!title&&inferred)setTitle(inferred)
+    }catch(err){setState('error');setError(err.message||'Brevity could not read those sermon notes.')}
   }
 
   const createSlides=async()=>{if(!spiritual.sermonNotes)return;const id=archivedDocument?.id||`sermon-${Date.now()}`;setSlides({state:'generating',id,completed:0,total:0});try{await generateSermonSlides({id,notes:spiritual.sermonNotes,source:{...existingSource,title:spiritual.sermonNotes.documentTitle||title}})}catch(err){setSlides({state:'error',id,error:err.message||'Could not start sermon slides.'})}}
@@ -105,7 +121,7 @@ export default function SpiritualFormationStudio({draft,update}){
   return <div className="spiritual-studio">
     <section className="sermon-source-card">
       <div className="sermon-source-heading">
-        <div><span>Sermon Source</span><h3>{hasGenerated?'Active teaching':'Upload the Word that will govern the formation cycle'}</h3><p>{hasGenerated?`${sourceLabel}. This sermon will govern each new daily Spiritual Maturity devotion until you upload another transcript.`:'Brevity will create sermon notes, then derive a fresh daily Spiritual Maturity focus from that message until you replace it.'}</p></div>
+        <div><span>Sermon Source</span><h3>{hasGenerated?'Active teaching':'Upload the Word that will govern the formation cycle'}</h3><p>{hasGenerated?`${sourceLabel}. This sermon will govern each new daily Spiritual Maturity devotion until you upload another sermon source.`:'Start with a transcript or sermon notes you already have. Brevity will populate the teaching framework and run the complete document and formation flow.'}</p></div>
         {hasGenerated&&<div className="sermon-status"><i className="ti ti-circle-check"/> Active source</div>}
       </div>
       <div className="sermon-source-meta">
@@ -115,16 +131,18 @@ export default function SpiritualFormationStudio({draft,update}){
       </div>
       <div className="transcript-actions">
         <input ref={fileRef} className="transcript-file-input" type="file" accept=".txt,.md,.markdown,.vtt,.srt,text/plain,text/markdown,text/vtt" onChange={chooseFile}/>
-        <button type="button" className="transcript-upload" onClick={()=>fileRef.current?.click()}><i className="ti ti-upload"/> {fileName?'Replace transcript':'Upload transcript'}</button>
+        <button type="button" className="transcript-upload" onClick={()=>fileRef.current?.click()}><i className="ti ti-upload"/> {fileName&&sourceKind==='transcript'?'Replace transcript':'Upload transcript'}</button>
+        <input ref={notesFileRef} className="transcript-file-input" type="file" accept=".docx,.pdf,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={chooseNotesFile}/>
+        <button type="button" className="transcript-upload" disabled={state==='reading'} onClick={()=>notesFileRef.current?.click()}><i className={`ti ${state==='reading'?'ti-loader-2':'ti-file-upload'}`}/> {state==='reading'?'Reading notes…':'Upload existing sermon notes'}</button>
         {fileName&&<span className="transcript-filename"><i className="ti ti-file-text"/> {fileName}</span>}
         {(fileName||transcript)&&<button type="button" className="transcript-clear" onClick={clearSource}>Clear</button>}
       </div>
       <details className="transcript-paste" open={!fileName&&!hasGenerated}>
-        <summary>Paste transcript instead</summary>
-        <textarea value={transcript} onChange={e=>setTranscript(e.target.value)} placeholder="Paste the Sunday or Wednesday sermon transcript here…"/>
+        <summary>Paste transcript or sermon notes instead</summary>
+        <textarea value={transcript} onChange={e=>{setTranscript(e.target.value);setSourceKind('transcript')}} placeholder="Paste the Sunday or Wednesday sermon transcript, or existing sermon notes, here…"/>
       </details>
       {error&&<div className="sermon-error">{error}</div>}
-      <button type="button" className="sermon-generate" disabled={state==='loading'} onClick={generate}><i className={`ti ${state==='loading'?'ti-loader-2':'ti-sparkles'}`}/> {state==='loading'?(transcript.length>120000?'Analyzing the complete transcript in sections…':'Creating sermon notes and formation…'):hasGenerated?'Regenerate from transcript':'Generate Sermon Notes + Daily Formation'}</button>
+      <button type="button" className="sermon-generate" disabled={state==='loading'||state==='reading'} onClick={generate}><i className={`ti ${state==='loading'?'ti-loader-2':'ti-sparkles'}`}/> {state==='loading'?(transcript.length>120000?'Analyzing the complete sermon source in sections…':'Creating sermon notes and formation…'):hasGenerated?'Regenerate complete sermon flow':'Generate Sermon Notes + Daily Formation'}</button>
     </section>
 
     {hasGenerated&&<>

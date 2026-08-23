@@ -82,13 +82,14 @@ export const handler=async event=>{
   const serviceType=String(body.serviceType||'').trim()
   const suppliedTitle=String(body.title||'').trim()
   const targetDate=String(body.targetDate||'').trim()
-  if(!transcript) return json(400,{error:'A sermon transcript is required.'})
-  if(transcript.length>MAX_TRANSCRIPT_LENGTH) return json(413,{error:'This transcript exceeds Brevity’s 600,000-character upload capacity. Please remove non-sermon material or split it into two services.'})
+  const sourceKind=body.sourceKind==='notes'?'notes':'transcript'
+  if(!transcript) return json(400,{error:'A sermon transcript or existing sermon-notes document is required.'})
+  if(transcript.length>MAX_TRANSCRIPT_LENGTH) return json(413,{error:'This sermon source exceeds Brevity’s 600,000-character capacity. Please remove duplicate or non-sermon material.'})
 
   let analysisSource=transcript
-  let sourceLabel='TRANSCRIPT'
+  let sourceLabel=sourceKind==='notes'?'EXISTING SERMON NOTES':'TRANSCRIPT'
   if(transcript.length>SINGLE_ANALYSIS_LIMIT){
-    try{analysisSource=await analyzeTranscriptChunks(transcript);sourceLabel='ORDERED SOURCE DIGESTS FROM THE COMPLETE TRANSCRIPT'}
+    try{analysisSource=await analyzeTranscriptChunks(transcript);sourceLabel=sourceKind==='notes'?'ORDERED SOURCE DIGESTS FROM THE COMPLETE EXISTING SERMON NOTES':'ORDERED SOURCE DIGESTS FROM THE COMPLETE TRANSCRIPT'}
     catch(error){return json(error.status||502,{error:error.message||'Brevity could not analyze the transcript sections.'})}
   }
 
@@ -99,9 +100,12 @@ Service: ${serviceType||'Unspecified'}
 Sermon date: ${sermonDate||'Unspecified'}
 Target daily formation date: ${targetDate||'Today'}
 Supplied title: ${suppliedTitle||'None'}
+Source type: ${sourceKind==='notes'?'Existing sermon notes supplied by the user':'Sermon transcript'}
+
+${sourceKind==='notes'?'Treat the supplied notes as the authoritative sermon record. Preserve their established title, headings, sequence, theological claims, Scripture treatment, named frameworks, applications, and distinctive wording. Map existing material into every appropriate Brevity field. Fill missing organizational fields only by faithful synthesis from the supplied notes; do not pretend the notes are a verbatim transcript and do not manufacture quotations.':'Treat the transcript as the authoritative sermon record and preserve the preacher’s sequence and wording.'}
 
 SERMON-NOTE STANDARD — create a permanent Church Triumphant teaching document with the depth and organization of the household's approved reference, "The Architecture of Wisdom — The Breakdown Point Between Hearing and Doing". Use every structured section in the schema:
-- Complete title-page metadata and one exact lead quotation from the transcript.
+- Complete title-page metadata and one lead quotation only when the source contains exact quoted wording.
 - A Teaching Guide at a Glance with concrete teaching objectives and a strong anchor declaration.
 - Aim and thesis written as substantive, precise paragraphs.
 - Opening exhortation with multiple developed paragraphs.
@@ -117,12 +121,12 @@ SERMON-NOTE STANDARD — create a permanent Church Triumphant teaching document 
 - Pastoral guardrails wherever the sermon touches trauma, mental health, medical concerns, spiritual warfare, abuse, safety, or other sensitive matters. Do not diagnose or overstate.
 - A seven-day meditation and formation plan, with a distinct Scripture/focus and concrete practice for each day, drawn only from the sermon.
 - A timed small-group teaching plan with facilitator questions and guardrails.
-- Named contributor insights only when the transcript identifies the speaker; never guess an identity.
+- Named contributor insights only when the source identifies the speaker; never guess an identity.
 - Reflection questions, weekly charge, congregational response, full prayer, closing commission, personal response prompts, and Scripture index with teaching emphasis.
 
 Match the intelligence and usefulness of the approved Church Triumphant “Sermon Teaching Guide” pattern: this must serve the preacher, learner, small-group facilitator, and household formation process. Do not merely make the document longer. Develop the sermon’s own conceptual architecture, distinctions, analogies, diagnostics, practices, and movement from hearing to sustained fruit.
 
-Preserve the preacher's wording, doctrinal weight, sequence, emphases, illustrations, bullet logic, and Scripture references as faithfully as the transcript allows. Notes must be detailed enough to function as the permanent teaching record—not an outline, synopsis, or collection of generic cards. Do not invent quotations, doctrines, stories, Scriptures, definitions, or claims. Only place text in quotation fields when it is traceable to the transcript. Normalize transcription noise only where meaning is clear. Do not add a Greeting section.
+Preserve the preacher's wording, doctrinal weight, sequence, emphases, illustrations, bullet logic, and Scripture references as faithfully as the supplied source allows. Notes must be detailed enough to function as the permanent teaching record—not an outline, synopsis, or collection of generic cards. Do not invent quotations, doctrines, stories, Scriptures, definitions, or claims. Only place text in quotation fields when it is traceable to the supplied source. Normalize transcription noise only where meaning is clear. Do not add a Greeting section.
 
 After establishing the notes, derive the household's daily Spiritual Maturity content from this sermon: Scripture, Devotion Focus, Prayer Focus, Discussion Prompts, Act of Obedience, Today's Focus, Key Principle, Formation Emphasis, and Weekly Assignment. Make every element traceable to the sermon. The formation goal is revelation → responsibility → preparation → execution → fruit → review. Brevity proposes; the household may edit before saving.
 
@@ -135,7 +139,7 @@ ${analysisSource}`
   let result
   try{result=JSON.parse(outputText(payload))}catch{return json(502,{error:'Brevity AI returned unreadable sermon formation data.'})}
   const generatedAt=new Date().toISOString()
-  const source={sermonDate,serviceType,title:suppliedTitle||result.sermonNotes?.documentTitle||'',targetDate,transcriptSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1}
+  const source={sermonDate,serviceType,title:suppliedTitle||result.sermonNotes?.documentTitle||'',targetDate,sourceKind,sourceSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1}
   try{await store().setJSON(ACTIVE_SERMON_KEY,{householdId:HOUSEHOLD_ID,activatedAt:generatedAt,model:MODEL,source,sermonNotes:result.sermonNotes})}
   catch(error){console.error('[sermon-formation active source]',error);return json(502,{error:'The sermon was analyzed, but Brevity could not make it the active household devotion source. Please try again.'})}
   return json(200,{generatedAt,model:MODEL,source,...result})

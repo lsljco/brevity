@@ -10,8 +10,8 @@ async function parse(response){
   return body
 }
 
-export async function generateSermonFormation({transcript,sermonDate,serviceType,title,targetDate}){
-  const request={transcript,sermonDate,serviceType,title,targetDate}
+export async function generateSermonFormation({transcript,sermonDate,serviceType,title,targetDate,sourceKind='transcript'}){
+  const request={transcript,sermonDate,serviceType,title,targetDate,sourceKind}
   if(String(transcript||'').length>BACKGROUND_THRESHOLD){
     const jobId=crypto.randomUUID()
     const accepted=await fetch(BACKGROUND_ENDPOINT,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({jobId,request})})
@@ -45,6 +45,15 @@ export async function archiveSermonDocuments({notes,source}){
 
 export async function listSermonDocuments(){
   const response=await fetch('/.netlify/functions/sermon-documents',{credentials:'include'})
+  return parse(response)
+}
+
+export async function importSermonNotes(file){
+  if(file.size>4_500_000)throw new Error('This sermon-notes file is too large. Upload a file smaller than 4.5 MB.')
+  const bytes=new Uint8Array(await file.arrayBuffer())
+  let binary=''
+  for(let index=0;index<bytes.length;index+=0x8000)binary+=String.fromCharCode(...bytes.subarray(index,index+0x8000))
+  const response=await fetch('/.netlify/functions/sermon-notes-import',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name:file.name,data:btoa(binary)})})
   return parse(response)
 }
 
