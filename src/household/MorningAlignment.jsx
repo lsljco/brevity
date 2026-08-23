@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
 import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
 import SpiritualFormationStudio from './SpiritualFormationStudio.jsx'
+import HealthAlertBanner from './HealthAlertBanner.jsx'
 import { compactEditableLines, compactTitledItems, joinEditableLines, splitEditableLines } from './lineEditing.js'
 import './MorningAlignment.css'
 import './MorningAlignmentAutosave.css'
@@ -58,7 +59,7 @@ function MemberChecks({ selected = [], onChange }) {
 
 function HealthStep({ draft, update }) {
   const value = draft.health
-  return <div className="alignment-form-grid alignment-form-grid--two">
+  return <><HealthAlertBanner/><div className="alignment-form-grid alignment-form-grid--two">
     <Field label="Breakfast"><input value={value.breakfast} onChange={e => update('health', { breakfast: e.target.value })} /></Field>
     <Field label="Lunch"><input value={value.lunch} onChange={e => update('health', { lunch: e.target.value })} /></Field>
     <Field label="Dinner"><input value={value.dinner} onChange={e => update('health', { dinner: e.target.value })} /></Field>
@@ -66,7 +67,7 @@ function HealthStep({ draft, update }) {
     <Field label="Hydration"><input value={value.hydration} onChange={e => update('health', { hydration: e.target.value })} /></Field>
     <Field label="Tomorrow prep"><input value={value.nextDayPrep} onChange={e => update('health', { nextDayPrep: e.target.value })} /></Field>
     <Field label="Groceries" hint="One item per line"><textarea value={joinLines(value.groceries)} onChange={e => update('health', { groceries: splitLines(e.target.value) })} /></Field>
-  </div>
+  </div></>
 }
 
 function FitnessStep({ draft, update }) {

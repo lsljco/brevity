@@ -1,0 +1,14 @@
+.health-alert-banner{margin-bottom:20px;padding:20px;border:1px solid rgba(224,151,78,.48);border-radius:15px;background:linear-gradient(135deg,rgba(133,57,24,.24),rgba(197,164,109,.07));box-shadow:0 14px 36px rgba(0,0,0,.22)}
+.health-alert-banner header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.health-alert-banner header span,.health-alert-item>div>span{color:#e5b86c;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.health-alert-banner h3{margin:7px 0 0;font:400 25px/1.25 var(--font-serif);color:#fff}
+.health-alert-banner header small,.health-alert-item small,.health-alert-delay{color:var(--muted);font-size:12px}
+.health-alert-item{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px;padding:17px;border:1px solid rgba(255,255,255,.09);border-left:4px solid #d7a151;border-radius:11px;background:rgba(0,0,0,.23)}
+.health-alert-item--urgent{border-left-color:#df655d}
+.health-alert-item h4{margin:6px 0 7px;font-size:18px}
+.health-alert-item p,.health-alert-item li{color:#d1cbc1;font-size:14px;line-height:1.55}
+.health-alert-item strong{font-size:13px;color:#fff}
+.health-alert-item ul{margin:8px 0;padding-left:19px}
+.health-alert-item footer{grid-column:1/-1;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}
+.health-alert-item footer span{color:var(--muted);font-size:12px}.health-alert-item footer a{color:var(--gold);font-size:12px;text-decoration:none}.health-alert-delay{margin:13px 0 0}.health-alert-quiet{margin-bottom:10px;color:var(--muted);font-size:12px}
+@media(max-width:800px){.health-alert-banner header,.health-alert-item{display:grid;grid-template-columns:1fr}.health-alert-item footer{grid-column:auto}}

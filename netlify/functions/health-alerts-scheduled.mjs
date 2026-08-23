@@ -1,0 +1,2 @@
+export default async function handler(){if(!process.env.BREVITY_AUTOMATION_KEY)throw new Error('BREVITY_AUTOMATION_KEY is required.');const response=await fetch('https://brevityoflife.netlify.app/.netlify/functions/health-alerts-background',{method:'POST',headers:{'content-type':'application/json','x-brevity-automation-key':process.env.BREVITY_AUTOMATION_KEY},body:'{}'});if(!response.ok&&response.status!==202)throw new Error(`Could not enqueue the daily health-alert refresh (${response.status}).`)}
+export const config={schedule:'15 10 * * *'}
