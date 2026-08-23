@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchEstateEntities, fetchEstateSummary } from './estateApi.js'
+import { fetchEstateEntities, fetchEstateSummary, fetchHomeHQBridgeAudit } from './estateApi.js'
 import './EstateWorkspace.css'
 
 const LEGACY_URL = 'https://malbecestate.netlify.app/'
@@ -31,7 +31,21 @@ function RecordList({ label, records, loading, error }) {
   return <div className="estate-record-list">{records.map(record=><article key={record.id}><div><span>{record.entityType}</span><h3>{displayName(record)}</h3></div><div><strong>{String(record.status || 'active').replaceAll('_', ' ')}</strong><small>Updated {record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : '—'}</small></div></article>)}</div>
 }
 
-export default function EstateWorkspace({ currentMember, role }) {
+function HomeHQBridgeCard({ role, audit, state, error, onAudit }) {
+  const manifest = audit?.manifest
+  return <section className="estate-bridge-card">
+    <header><span>HomeHQ compatibility bridge</span><h2>{audit?.available ? `${manifest.sourceCount} source item${manifest.sourceCount===1?'':'s'} audited` : 'Non-destructive dry run'}</h2></header>
+    {audit?.available
+      ? <p>{manifest.counts.propertyProject} project · {manifest.counts.workOrder} work order · {manifest.counts.vendor} vendor · {manifest.attachmentCount} attachment record{manifest.attachmentCount===1?'':'s'}. Nothing was imported.</p>
+      : <p>Inspect the synchronized <code>homehq_items_v1</code> record without changing HomeHQ or enabling Estate imports.</p>}
+    {manifest?.vendorConflictCount>0&&<p className="estate-bridge-warning">{manifest.vendorConflictCount} contractor conflict{manifest.vendorConflictCount===1?'':'s'} require review.</p>}
+    {manifest?.itemConflictCount>0&&<p className="estate-bridge-warning">{manifest.itemConflictCount} duplicate item ID conflict{manifest.itemConflictCount===1?'':'s'} require review.</p>}
+    {state==='error'&&<p className="estate-bridge-warning">{error}</p>}
+    {role==='admin'&&<button type="button" onClick={onAudit} disabled={state==='loading'}>{state==='loading'?'Auditing…':'Run compatibility audit'}</button>}
+  </section>
+}
+
+export default function EstateWorkspace({ currentMember, role, onOpenProjects }) {
   const [tab, setTab] = useState('command')
   const [summary, setSummary] = useState(null)
   const [summaryState, setSummaryState] = useState('loading')
@@ -39,8 +53,21 @@ export default function EstateWorkspace({ currentMember, role }) {
   const [records, setRecords] = useState([])
   const [recordsState, setRecordsState] = useState('idle')
   const [recordsError, setRecordsError] = useState('')
+  const [bridgeState, setBridgeState] = useState('idle')
+  const [bridgeAudit, setBridgeAudit] = useState(null)
+  const [bridgeError, setBridgeError] = useState('')
   const active = useMemo(() => TABS.find(item => item[0] === tab) || TABS[0], [tab])
   const propertyId = summary?.property?.id
+
+  const auditHomeHQ = async () => {
+    setBridgeState('loading'); setBridgeError('')
+    try {
+      const result = await fetchHomeHQBridgeAudit(propertyId)
+      setBridgeAudit(result); setBridgeState('ready')
+    } catch (error) {
+      setBridgeError(error.message); setBridgeState('error')
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -86,6 +113,7 @@ export default function EstateWorkspace({ currentMember, role }) {
     <div className="estate-command-grid">
       <section><header><span>Property health</span><h2>{summaryState === 'loading' ? 'Loading verified records…' : summary?.property ? 'Canonical Estate foundation active' : 'Migration foundation ready'}</h2></header><p>{summary?.property ? 'This workspace is reading authenticated, household-scoped Estate records.' : 'No Malbec records have been imported. This is intentional until every browser export is collected, transformed, and reconciled.'}</p></section>
       <section><header><span>Alerts</span><h2>{summary?.alerts?.length || 0} current alerts</h2></header>{summary?.alerts?.length ? <ul>{summary.alerts.map(alert=><li key={`${alert.type}-${alert.entityId}`}>{alert.title} <small>{alert.dueDate}</small></li>)}</ul> : <p>No verified Estate alerts yet.</p>}</section>
+      <HomeHQBridgeCard role={role} audit={bridgeAudit} state={bridgeState} error={bridgeError} onAudit={auditHomeHQ}/>
     </div>
   </>
 
@@ -94,7 +122,7 @@ export default function EstateWorkspace({ currentMember, role }) {
     <nav className="estate-tabs" aria-label="Malbec Estate sections">{TABS.map(([id,label,icon])=><button type="button" key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><i className={`ti ${icon}`}/><span>{label}</span></button>)}</nav>
     <main className="estate-content">
       {summaryState === 'error' && <div className="estate-banner"><strong>Estate foundation is not connected in this environment.</strong><span>{summaryError}</span><a href={LEGACY_URL} target="_blank" rel="noreferrer">Continue in legacy Malbec</a></div>}
-      <div className="estate-section-heading"><div><p>Malbec Estate</p><h2>{active[1]}</h2></div>{active[3]&&<span>{records.length} verified record{records.length===1?'':'s'}</span>}</div>
+      <div className="estate-section-heading"><div><p>Malbec Estate</p><h2>{active[1]}</h2></div><div className="estate-section-actions">{tab==='projects'&&onOpenProjects&&<button type="button" onClick={onOpenProjects}>Open current HomeHQ Projects</button>}{active[3]&&<span>{records.length} verified record{records.length===1?'':'s'}</span>}</div></div>
       {tab === 'command' || tab === 'reports' ? command : <RecordList label={active[1]} records={records} loading={recordsState==='loading'} error={recordsError}/>}
     </main>
   </div>

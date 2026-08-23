@@ -1,4 +1,5 @@
 import householdAuth from './household-auth.js'
+import { auditHomeHQBridge } from '../lib/homehq-bridge.mjs'
 import { createEstateRepository } from '../lib/estate-store.mjs'
 import { isEstateEntityType } from '../../src/estate/estateModel.js'
 
@@ -37,6 +38,10 @@ export const handler = async event => {
     if (event.httpMethod === 'GET' && action === 'export') {
       if (session.role !== 'admin') return json(403, { error: 'Household administrator access is required to export Estate records.' })
       return json(200, await repository.exportAll())
+    }
+    if (event.httpMethod === 'GET' && action === 'homehq-bridge') {
+      if (session.role !== 'admin') return json(403, { error: 'Household administrator access is required to audit HomeHQ migration data.' })
+      return json(200, await auditHomeHQBridge({ householdId: HOUSEHOLD_ID, propertyId: query.propertyId }))
     }
 
     const entityType = query.entityType

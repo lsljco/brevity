@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "estate:homehq:dry-run": "node scripts/audit-homehq-export.mjs",
     "estate:migration:dry-run": "node scripts/reconcile-malbec-exports.mjs",
     "test": "node --test src/assistant/*.test.js src/estate/*.test.js src/finance/*.test.js src/homehq/*.test.js src/household/*.test.js",
     "preview": "vite preview"

@@ -163,7 +163,7 @@ export default function App() {
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ/></Suspense>
     if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily lockMember title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Two-way sync with the shared Apple Family Calendar"/></Suspense>
-    if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace currentMember={currentMember} role={auth.role}/></Suspense>
+    if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace currentMember={currentMember} role={auth.role} onOpenProjects={()=>navigateTo('household','property')}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><FinancePlanner view={activeView} setView={v=>navigateTo('finance',v)}/></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)

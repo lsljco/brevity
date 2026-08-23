@@ -26,3 +26,7 @@ export function fetchEstateSummary(propertyId) {
 export function fetchEstateEntities(entityType, propertyId) {
   return request({ entityType, ...(propertyId ? { propertyId } : {}) })
 }
+
+export function fetchHomeHQBridgeAudit(propertyId) {
+  return request({ action: 'homehq-bridge', ...(propertyId ? { propertyId } : {}) })
+}
