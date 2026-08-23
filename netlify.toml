@@ -15,3 +15,7 @@
 
 [functions]
   node_bundler = "esbuild"
+
+[functions."sermon-documents"]
+  external_node_modules = ["pdfkit"]
+  included_files = ["node_modules/pdfkit/js/data/**"]
