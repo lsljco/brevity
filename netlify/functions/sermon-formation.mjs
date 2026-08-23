@@ -1,12 +1,17 @@
 import householdAuth from './household-auth.js'
+import { getStore } from '@netlify/blobs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
+const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
+const STORE_NAME = 'brevity-household'
+const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`
 const SINGLE_ANALYSIS_LIMIT = 120000
 const MAX_TRANSCRIPT_LENGTH = 600000
 const TRANSCRIPT_CHUNK_SIZE = 90000
 const json = (statusCode, body) => ({ statusCode, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}, body:JSON.stringify(body) })
 const outputText = response => (response.output||[]).flatMap(item=>item.content||[]).map(part=>part.text||'').join('').trim()
+const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 
 const splitTranscript=(text,size=TRANSCRIPT_CHUNK_SIZE)=>{
   const chunks=[]
@@ -120,5 +125,9 @@ ${analysisSource}`
   catch(error){return json(error.status||502,{error:error.message||'OpenAI sermon analysis failed.'})}
   let result
   try{result=JSON.parse(outputText(payload))}catch{return json(502,{error:'Brevity AI returned unreadable sermon formation data.'})}
-  return json(200,{generatedAt:new Date().toISOString(),model:MODEL,source:{sermonDate,serviceType,title:suppliedTitle,targetDate,transcriptSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1},...result})
+  const generatedAt=new Date().toISOString()
+  const source={sermonDate,serviceType,title:suppliedTitle||result.sermonNotes?.documentTitle||'',targetDate,transcriptSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1}
+  try{await store().setJSON(ACTIVE_SERMON_KEY,{householdId:HOUSEHOLD_ID,activatedAt:generatedAt,model:MODEL,source,sermonNotes:result.sermonNotes})}
+  catch(error){console.error('[sermon-formation active source]',error);return json(502,{error:'The sermon was analyzed, but Brevity could not make it the active household devotion source. Please try again.'})}
+  return json(200,{generatedAt,model:MODEL,source,...result})
 }

@@ -99,8 +99,8 @@ export default function SpiritualFormationStudio({draft,update}){
   return <div className="spiritual-studio">
     <section className="sermon-source-card">
       <div className="sermon-source-heading">
-        <div><span>Sermon Source</span><h3>{hasGenerated?'Active teaching':'Upload the Word that will govern the formation cycle'}</h3><p>{hasGenerated?sourceLabel:'Brevity will create sermon notes, then derive daily Spiritual Maturity content from that message.'}</p></div>
-        {hasGenerated&&<div className="sermon-status"><i className="ti ti-circle-check"/> Generated</div>}
+        <div><span>Sermon Source</span><h3>{hasGenerated?'Active teaching':'Upload the Word that will govern the formation cycle'}</h3><p>{hasGenerated?`${sourceLabel}. This sermon will govern each new daily Spiritual Maturity devotion until you upload another transcript.`:'Brevity will create sermon notes, then derive a fresh daily Spiritual Maturity focus from that message until you replace it.'}</p></div>
+        {hasGenerated&&<div className="sermon-status"><i className="ti ti-circle-check"/> Active source</div>}
       </div>
       <div className="sermon-source-meta">
         <label><span>Service</span><select value={serviceType} onChange={e=>setServiceType(e.target.value)}><option>Sunday</option><option>Wednesday</option><option>Other</option></select></label>

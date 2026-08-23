@@ -5,6 +5,7 @@ const STORE_NAME = 'brevity-household';
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
 const planKey = date => `${HOUSEHOLD_ID}/daily-plans/${date}`;
+const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`;
 
 function store() {
   return getStore({
@@ -184,7 +185,7 @@ function itemWithId(item, prefix, index, date) {
   return { id: `${prefix}-${date}-${index}`, ...item };
 }
 
-function hydrateGeneratedPlan(generated, date) {
+function hydrateGeneratedPlan(generated, date, activeSermon = null) {
   const now = new Date().toISOString();
   return {
     id: `daily-plan-${date}`,
@@ -197,7 +198,7 @@ function hydrateGeneratedPlan(generated, date) {
     topPriorities: generated.topPriorities.map((item, index) => itemWithId(item, 'top-priority', index, date)),
     morningAlignment: { ...generated.morningAlignment, completedAt: '' },
     dayparts: generated.dayparts,
-    spiritual: { owner: 'Lorenzo', ...generated.spiritual },
+    spiritual: { owner: 'Lorenzo', ...generated.spiritual, ...(activeSermon?{sermonNotes:activeSermon.sermonNotes,sermonSource:{...activeSermon.source,generatedAt:activeSermon.activatedAt,model:activeSermon.model,active:true}}:{}) },
     health: { owner: 'Terica', ...generated.health },
     fitness: { owner: 'Larry', ...generated.fitness },
     household: { owner: 'Larry', ...generated.household, appointments: generated.household.appointments.map((item, index) => itemWithId(item, 'appointment', index, date)), priorities: generated.household.priorities.map((item, index) => itemWithId(item, 'household-priority', index, date)) },
@@ -227,8 +228,10 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
   const priorPlan = await dataStore.get(planKey(yesterdayKey), { type: 'json' }).catch(() => null);
+  const activeSermon = await dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null);
+  const priorPlanContext = priorPlan ? { ...priorPlan, spiritual: { ...priorPlan.spiritual, sermonNotes: undefined } } : null;
 
-  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics. Use Terica, never Tara.\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlan || {})}`;
+  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. ${activeSermon?'The ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until it is replaced by a new successful transcript upload. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No active sermon transcript is stored. Keep Spiritual Maturity clearly marked for Lorenzo to confirm rather than inventing a sermon source.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics. Use Terica, never Tara.\n\nACTIVE SERMON SOURCE, retained until replaced:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -238,7 +241,7 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error?.message || 'OpenAI daily-plan generation failed.');
   const generated = JSON.parse(outputText(payload));
-  const plan = hydrateGeneratedPlan(generated, date);
+  const plan = hydrateGeneratedPlan(generated, date, activeSermon);
   await dataStore.setJSON(planKey(date), plan);
   return { plan, skipped: false };
 }
