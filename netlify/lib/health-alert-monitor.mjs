@@ -13,7 +13,18 @@ const sources=[
 const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 const textFromHtml=html=>String(html||'').replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g,' ').trim()
 const outputText=response=>(response.output||[]).flatMap(item=>item.content||[]).map(item=>item.text||'').join('').trim()
-const alertSchema={type:'object',additionalProperties:false,properties:{status:{type:'string',enum:['clear','alert']},summary:{type:'string'},alerts:{type:'array',items:{type:'object',additionalProperties:false,properties:{severity:{type:'string',enum:['watch','important','urgent']},category:{type:'string'},title:{type:'string'},geography:{type:'string'},evidence:{type:'string'},recommendations:{type:'array',items:{type:'string'}},sourceIndexes:{type:'array',items:{type:'integer'}},reportedDate:{type:'string'}},required:['severity','category','title','geography','evidence','recommendations','sourceIndexes','reportedDate']}},required:['status','summary','alerts']}
+const alertSchema={
+  type:'object',additionalProperties:false,
+  properties:{
+    status:{type:'string',enum:['clear','alert']},summary:{type:'string'},
+    alerts:{type:'array',items:{
+      type:'object',additionalProperties:false,
+      properties:{severity:{type:'string',enum:['watch','important','urgent']},category:{type:'string'},title:{type:'string'},geography:{type:'string'},evidence:{type:'string'},recommendations:{type:'array',items:{type:'string'}},sourceIndexes:{type:'array',items:{type:'integer'}},reportedDate:{type:'string'}},
+      required:['severity','category','title','geography','evidence','recommendations','sourceIndexes','reportedDate']
+    }}
+  },
+  required:['status','summary','alerts']
+}
 
 export async function refreshHealthAlerts(){
   if(!process.env.OPENAI_API_KEY)throw new Error('Brevity AI is not configured for health monitoring.')
