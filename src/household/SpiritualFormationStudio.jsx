@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { archiveSermonDocuments, generateSermonFormation } from './sermonFormationApi.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { archiveSermonDocuments, generateSermonFormation, getOneDriveStatus, oneDriveConnectUrl } from './sermonFormationApi.js'
 import { joinEditableLines, splitEditableLines } from './lineEditing.js'
 import SermonNotesView from './SermonNotesView.jsx'
 import './SpiritualFormationStudio.css'
@@ -20,9 +20,11 @@ export default function SpiritualFormationStudio({draft,update}){
   const [archiveState,setArchiveState]=useState('idle')
   const [archiveError,setArchiveError]=useState('')
   const [archivedDocument,setArchivedDocument]=useState(existingSource.document||null)
+  const [oneDrive,setOneDrive]=useState({loading:true,configured:false,connected:false,connection:null,error:''})
   const fileRef=useRef(null)
 
   const hasGenerated=Boolean(spiritual.sermonNotes)
+  useEffect(()=>{getOneDriveStatus().then(status=>setOneDrive({...status,loading:false,error:''})).catch(err=>setOneDrive(current=>({...current,loading:false,error:err.message||'Could not check OneDrive.'})))},[])
   const sourceLabel=useMemo(()=>{
     if(!hasGenerated) return ''
     return [existingSource.serviceType,existingSource.sermonDate,existingSource.title].filter(Boolean).join(' · ')
@@ -69,7 +71,7 @@ export default function SpiritualFormationStudio({draft,update}){
       setArchiveState('saving');setArchiveError('')
       try{
         const archived=await archiveSermonDocuments({notes:result.sermonNotes,source})
-        setArchivedDocument(archived.document);setArchiveState('ready')
+        setArchivedDocument(archived.document);setArchiveState('ready');if(archived.document?.oneDrive?.state==='error')setArchiveError(`Brevity saved both files, but OneDrive reported: ${archived.document.oneDrive.error}`)
         update('spiritual',{sermonNotes:result.sermonNotes,sermonSource:{...source,document:archived.document}})
       }catch(archiveErr){
         setArchiveState('error');setArchiveError(`${archiveErr.message||'Documents could not be archived.'} The generated notes remain saved in Brevity.`)
@@ -86,7 +88,7 @@ export default function SpiritualFormationStudio({draft,update}){
     try{
       const source={...existingSource,sermonDate:existingSource.sermonDate||sermonDate,serviceType:existingSource.serviceType||serviceType,title:spiritual.sermonNotes.documentTitle||spiritual.sermonNotes.title||title}
       const archived=await archiveSermonDocuments({notes:spiritual.sermonNotes,source})
-      setArchivedDocument(archived.document);setArchiveState('ready')
+      setArchivedDocument(archived.document);setArchiveState('ready');if(archived.document?.oneDrive?.state==='error')setArchiveError(`Brevity saved both files, but OneDrive reported: ${archived.document.oneDrive.error}`)
       update('spiritual',{sermonNotes:spiritual.sermonNotes,sermonSource:{...source,document:archived.document}})
     }catch(err){setArchiveState('error');setArchiveError(err.message||'Documents could not be archived.')}
   }
@@ -133,8 +135,8 @@ export default function SpiritualFormationStudio({draft,update}){
         <article><span>Weekly Assignment</span><p>{spiritual.weeklyAssignment}</p></article>
       </div>
       <section className="sermon-document-actions">
-        <div><span>Document Repository</span><strong>{archivedDocument?'Word and PDF saved':'Save permanent Word and PDF copies'}</strong>{archiveError&&<small>{archiveError}</small>}</div>
-        <div>{archivedDocument&&<><a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a><a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> PDF</a></>}<button type="button" disabled={archiveState==='saving'} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Saving…':archivedDocument?'Update documents':'Save documents'}</button></div>
+        <div><span>Document Repository</span><strong>{archivedDocument?.oneDrive?.state==='published'?'Word and PDF saved to Brevity + Church Triumphant OneDrive':archivedDocument?'Word and PDF saved in Brevity':'Save permanent Word and PDF copies'}</strong>{oneDrive.connected?<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> Connected to {oneDrive.connection?.folderName||'OneDrive'}{oneDrive.connection?.account?` · ${oneDrive.connection.account}`:''}</small>:oneDrive.configured&&!oneDrive.loading?<small>Connect Church Triumphant OneDrive to publish every generated sermon automatically.</small>:null}{archiveError&&<small>{archiveError}</small>}</div>
+        <div>{archivedDocument&&<><a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a><a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> PDF</a></>}{archivedDocument?.oneDrive?.folderWebUrl&&<a href={archivedDocument.oneDrive.folderWebUrl} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> OneDrive</a>}{oneDrive.configured&&!oneDrive.connected&&<a className="sermon-connect-cloud" href={oneDriveConnectUrl}><i className="ti ti-brand-microsoft"/> Connect OneDrive</a>}<button type="button" disabled={archiveState==='saving'} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Saving…':archivedDocument?'Update documents':'Save documents'}</button></div>
       </section>
       <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>Full Church Triumphant teaching-document framework</small></summary><SermonNotesView notes={spiritual.sermonNotes}/></details>
     </>}

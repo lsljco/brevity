@@ -5,6 +5,7 @@ import {
 } from 'docx'
 import PDFDocument from 'pdfkit'
 import householdAuth from './household-auth.js'
+import { getOneDriveConnection, publishSermonDocuments } from '../lib/onedrive.mjs'
 
 const { readSession } = householdAuth
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
@@ -183,7 +184,12 @@ export const handler = async event => {
     const [docx,pdf]=await Promise.all([buildSermonDocx(notes,source),buildSermonPdf(notes,source)])
     await Promise.all([dataStore.set(fileKey(id,'docx'),docx),dataStore.set(fileKey(id,'pdf'),pdf)])
     const prior=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
-    const entry={id,title,sermonDate:clean(source.sermonDate),serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),updatedAt:new Date().toISOString(),updatedBy:session.member,files:{docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`,pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`}}
+    let oneDrive={state:'not-connected'}
+    if(await getOneDriveConnection()){
+      try{oneDrive=await publishSermonDocuments({docx,pdf,baseName:id})}
+      catch(error){console.error('[sermon-documents onedrive]',error);oneDrive={state:'error',error:error.message||'OneDrive publishing failed.'}}
+    }
+    const entry={id,title,sermonDate:clean(source.sermonDate),serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),updatedAt:new Date().toISOString(),updatedBy:session.member,files:{docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`,pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`},oneDrive}
     const entries=[entry,...(Array.isArray(prior)?prior:[]).filter(item=>item.id!==id)].slice(0,200)
     await dataStore.setJSON(indexKey,entries)
     return json(200,{document:entry})

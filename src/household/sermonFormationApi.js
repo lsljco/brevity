@@ -47,3 +47,10 @@ export async function listSermonDocuments(){
   const response=await fetch('/.netlify/functions/sermon-documents',{credentials:'include'})
   return parse(response)
 }
+
+export async function getOneDriveStatus(){
+  const response=await fetch('/.netlify/functions/onedrive-status',{credentials:'include'})
+  return parse(response)
+}
+
+export const oneDriveConnectUrl='/.netlify/functions/onedrive-oauth-start'
