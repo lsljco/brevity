@@ -29,7 +29,7 @@ export default function SermonRepository({notes,source}){
       const result=await archiveSermonDocuments({notes,source:source||{}})
       const document=result.document
       setDocuments(current=>[document,...current.filter(item=>item.id!==document.id)])
-      if(document.oneDrive?.state==='published')setPublishMessage('Published the PDF to Sermon Notes and the Word file to Sermon Notes Word Documents.')
+      if(document.oneDrive?.state==='published')setPublishMessage('Published the PDF to Sermon Notes and the Word file to Sermon Notes - Word Documents.')
       else if(document.oneDrive?.state==='error')setPublishMessage(`Saved in Brevity, but OneDrive reported: ${document.oneDrive.error}`)
       else setPublishMessage('Saved in Brevity. Connect OneDrive to publish the Church Triumphant copies.')
       setPublishState('ready')
@@ -39,7 +39,7 @@ export default function SermonRepository({notes,source}){
   return <section className="pillar-analysis-section sermon-repository">
     <div className="pillar-analysis-heading"><span>Teaching Repository</span><h2>Permanent Sermon Notes</h2><p>Detailed teaching documents generated from sermon transcripts and retained as Word and PDF files.</p></div>
     <div className="sermon-cloud-panel">
-      <div><span>Church Triumphant OneDrive</span><strong>{oneDrive.loading?'Checking connection…':oneDrive.connected?'Connected for organized Church Triumphant publishing':'Connect the shared Sermon Notes folder'}</strong>{oneDrive.connected&&<small>PDFs → Sermon Notes · Word files → Sermon Notes Word Documents · Daily devotions → Devotions<br/>{oneDrive.connection?.account}</small>}{oneDrive.error&&<small className="sermon-library-error">{oneDrive.error}</small>}{publishMessage&&<small className={publishState==='error'?'sermon-library-error':''}>{publishMessage}</small>}</div>
+      <div><span>Church Triumphant OneDrive</span><strong>{oneDrive.loading?'Checking connection…':oneDrive.connected?'Connected for organized Church Triumphant publishing':'Connect the shared Sermon Notes folder'}</strong>{oneDrive.connected&&<small>PDFs → Sermon Notes · Word files → Sermon Notes - Word Documents · Daily devotions → Devotions<br/>{oneDrive.connection?.account}</small>}{oneDrive.error&&<small className="sermon-library-error">{oneDrive.error}</small>}{publishMessage&&<small className={publishState==='error'?'sermon-library-error':''}>{publishMessage}</small>}</div>
       <div>{oneDrive.configured&&!oneDrive.connected&&<a className="sermon-connect-cloud" href={oneDriveConnectUrl}><i className="ti ti-brand-microsoft"/> Connect OneDrive</a>}{oneDrive.connected&&oneDrive.connection?.folderWebUrl&&<a href={oneDrive.connection.folderWebUrl} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> Open folder</a>}{notes&&<button type="button" disabled={publishState==='saving'||!oneDrive.connected} onClick={publishCurrent}><i className={`ti ${publishState==='saving'?'ti-loader-2':'ti-cloud-upload'}`}/> {publishState==='saving'?'Publishing…':'Publish current sermon'}</button>}</div>
     </div>
     {source?.document&&<div className="sermon-current-downloads"><strong>{source.document.title}</strong><span><a href={source.document.files.docx}>Download Word</a><a href={source.document.files.pdf}>Download PDF</a></span></div>}
