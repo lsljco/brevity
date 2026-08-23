@@ -118,7 +118,7 @@ export default function SpiritualFormationStudio({draft,update}){
         <textarea value={transcript} onChange={e=>setTranscript(e.target.value)} placeholder="Paste the Sunday or Wednesday sermon transcript here…"/>
       </details>
       {error&&<div className="sermon-error">{error}</div>}
-      <button type="button" className="sermon-generate" disabled={state==='loading'} onClick={generate}><i className={`ti ${state==='loading'?'ti-loader-2':'ti-sparkles'}`}/> {state==='loading'?'Creating sermon notes and formation…':hasGenerated?'Regenerate from transcript':'Generate Sermon Notes + Daily Formation'}</button>
+      <button type="button" className="sermon-generate" disabled={state==='loading'} onClick={generate}><i className={`ti ${state==='loading'?'ti-loader-2':'ti-sparkles'}`}/> {state==='loading'?(transcript.length>120000?'Analyzing the complete transcript in sections…':'Creating sermon notes and formation…'):hasGenerated?'Regenerate from transcript':'Generate Sermon Notes + Daily Formation'}</button>
     </section>
 
     {hasGenerated&&<>

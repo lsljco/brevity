@@ -2,8 +2,51 @@ import householdAuth from './household-auth.js'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
+const SINGLE_ANALYSIS_LIMIT = 120000
+const MAX_TRANSCRIPT_LENGTH = 600000
+const TRANSCRIPT_CHUNK_SIZE = 90000
 const json = (statusCode, body) => ({ statusCode, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}, body:JSON.stringify(body) })
 const outputText = response => (response.output||[]).flatMap(item=>item.content||[]).map(part=>part.text||'').join('').trim()
+
+const splitTranscript=(text,size=TRANSCRIPT_CHUNK_SIZE)=>{
+  const chunks=[]
+  let remaining=text.trim()
+  while(remaining.length>size){
+    const window=remaining.slice(0,size)
+    const paragraph=window.lastIndexOf('\n\n')
+    const line=window.lastIndexOf('\n')
+    const sentence=Math.max(window.lastIndexOf('. '),window.lastIndexOf('? '),window.lastIndexOf('! '))
+    const boundary=Math.max(paragraph,line,sentence)
+    const cut=boundary>size*.6?boundary+(boundary===sentence?1:0):size
+    chunks.push(remaining.slice(0,cut).trim())
+    remaining=remaining.slice(cut).trim()
+  }
+  if(remaining)chunks.push(remaining)
+  return chunks
+}
+
+const requestOpenAI=async body=>{
+  const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'content-type':'application/json'},body:JSON.stringify({model:MODEL,store:false,...body})})
+  const payload=await response.json().catch(()=>({}))
+  if(!response.ok){
+    const message=payload.error?.message||'OpenAI sermon analysis failed.'
+    const code=payload.error?.code||payload.error?.type||''
+    const error=new Error(response.status===429&&/quota|billing|insufficient/i.test(`${message} ${code}`)?'Brevity AI reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.':message)
+    error.status=response.status
+    throw error
+  }
+  return payload
+}
+
+const analyzeTranscriptChunks=async transcript=>{
+  const chunks=splitTranscript(transcript)
+  const analyses=await Promise.all(chunks.map(async(chunk,index)=>{
+    const prompt=`You are preparing source-faithful notes for section ${index+1} of ${chunks.length} of one sermon transcript. Produce a detailed ordered source digest for a later synthesis. Preserve every teaching movement, doctrinal claim, Scripture reference and its stated use, illustration, definition, framework, application, congregational response, prayer element, and distinctive phrase. Include a small number of exact quotations only when traceable to this section. Do not summarize into generic themes, invent content, or write the final sermon document. Clearly mark where a thought begins or ends mid-section.\n\nTRANSCRIPT SECTION ${index+1} OF ${chunks.length}:\n${chunk}`
+    const payload=await requestOpenAI({input:prompt,max_output_tokens:8000})
+    return `SECTION ${index+1} OF ${chunks.length}\n${outputText(payload)}`
+  }))
+  return analyses.join('\n\n')
+}
 
 const scriptureItem={type:'object',additionalProperties:false,properties:{reference:{type:'string'},explanation:{type:'string'}},required:['reference','explanation']}
 const teachingSection={type:'object',additionalProperties:false,properties:{title:{type:'string'},paragraphs:{type:'array',items:{type:'string'}},quotes:{type:'array',items:{type:'string'}}},required:['title','paragraphs','quotes']}
@@ -35,7 +78,14 @@ export const handler=async event=>{
   const suppliedTitle=String(body.title||'').trim()
   const targetDate=String(body.targetDate||'').trim()
   if(!transcript) return json(400,{error:'A sermon transcript is required.'})
-  if(transcript.length>120000) return json(413,{error:'This transcript is too large for one Brevity analysis. Reduce it to 120,000 characters or less.'})
+  if(transcript.length>MAX_TRANSCRIPT_LENGTH) return json(413,{error:'This transcript exceeds Brevity’s 600,000-character upload capacity. Please remove non-sermon material or split it into two services.'})
+
+  let analysisSource=transcript
+  let sourceLabel='TRANSCRIPT'
+  if(transcript.length>SINGLE_ANALYSIS_LIMIT){
+    try{analysisSource=await analyzeTranscriptChunks(transcript);sourceLabel='ORDERED SOURCE DIGESTS FROM THE COMPLETE TRANSCRIPT'}
+    catch(error){return json(error.status||502,{error:error.message||'Brevity could not analyze the transcript sections.'})}
+  }
 
   const prompt=`You are Brevity's Spiritual Maturity formation engine. Lorenzo owns Spiritual Maturity.
 
@@ -62,18 +112,13 @@ Preserve the preacher's wording, doctrinal weight, sequence, emphases, illustrat
 
 After establishing the notes, derive the household's daily Spiritual Maturity content from this sermon: Scripture, Devotion Focus, Prayer Focus, Discussion Prompts, Act of Obedience, Today's Focus, Key Principle, Formation Emphasis, and Weekly Assignment. Make every element traceable to the sermon. The formation goal is revelation → responsibility → preparation → execution → fruit → review. Brevity proposes; the household may edit before saving.
 
-TRANSCRIPT:
-${transcript}`
+${sourceLabel}:
+${analysisSource}`
 
-  const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'content-type':'application/json'},body:JSON.stringify({model:MODEL,store:false,input:prompt,max_output_tokens:50000,text:{format:{type:'json_schema',name:'brevity_sermon_formation',strict:true,schema}}})})
-  const payload=await response.json().catch(()=>({}))
-  if(!response.ok){
-    const message=payload.error?.message||'OpenAI sermon analysis failed.'
-    const code=payload.error?.code||payload.error?.type||''
-    if(response.status===429&&/quota|billing|insufficient/i.test(`${message} ${code}`)) return json(429,{error:'Brevity AI reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
-    return json(response.status,{error:message})
-  }
+  let payload
+  try{payload=await requestOpenAI({input:prompt,max_output_tokens:50000,text:{format:{type:'json_schema',name:'brevity_sermon_formation',strict:true,schema}}})}
+  catch(error){return json(error.status||502,{error:error.message||'OpenAI sermon analysis failed.'})}
   let result
   try{result=JSON.parse(outputText(payload))}catch{return json(502,{error:'Brevity AI returned unreadable sermon formation data.'})}
-  return json(200,{generatedAt:new Date().toISOString(),model:MODEL,source:{sermonDate,serviceType,title:suppliedTitle,targetDate},...result})
+  return json(200,{generatedAt:new Date().toISOString(),model:MODEL,source:{sermonDate,serviceType,title:suppliedTitle,targetDate,transcriptSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1},...result})
 }
