@@ -12,10 +12,13 @@ import './AppDeferred.css'
 const FamilyCalendar = lazy(() => import('./family/FamilyCalendar.jsx'))
 const FinancePlanner = lazy(() => import('./finance/FinancePlanner.jsx'))
 const HomeHQ = lazy(() => import('./homehq/HomeHQ.jsx'))
+const MealPlanner = lazy(() => import('./meals/MealPlanner.jsx'))
 
 const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
-  { id:'health', label:'Health & Nutrition', icon:'ti-heart', layer:2, description:'Stewardship of the body — nourishment and whole-family wellness.', items:[] },
+  { id:'health', label:'Health & Nutrition', icon:'ti-heart', layer:2, description:'Stewardship of the body — nourishment and whole-family wellness.', items:[
+    { id:'meal-plan', label:'Meal Plan', icon:'ti-tools-kitchen-2' },
+  ] },
   { id:'fitness', label:'Physical Fitness', icon:'ti-run', layer:2, description:'Strength, discipline, and physical stewardship.', items:[] },
   { id:'household', label:'Household Management', icon:'ti-home', layer:3, description:'The heartbeat of the home — operations, property, and daily life.', items:[
     { id:'property', label:'Projects', icon:'ti-building-estate' },
@@ -158,11 +161,12 @@ export default function App() {
   const assistantPageLabel=activeView==='today'?'Today':activeView==='settings'?'Settings':activeItem?.label||activePillarRecord?.label||activeView
 
   const renderContent=()=>{
-    if(activeView==='today')return <HouseholdToday currentMember={currentMember} onOpenPillar={openPillar}/>
+    if(activeView==='today')return <HouseholdToday currentMember={currentMember} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')}/>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ/></Suspense>
     if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily lockMember title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Two-way sync with the shared Apple Family Calendar"/></Suspense>
+    if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><FinancePlanner view={activeView} setView={v=>navigateTo('finance',v)}/></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)

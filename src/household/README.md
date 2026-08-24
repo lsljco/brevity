@@ -32,7 +32,7 @@ Brevity is the household source of truth. Apple/iCloud Calendar is the timed ale
 ## Household ownership defaults
 
 - Spiritual Maturity: Larry
-- Health & Nutrition: Terica
+- Health & Nutrition: Brevity supplies the rolling meal plan; Terica retains the remaining health coordination defaults
 - Physical Fitness: Larry coordinates
 - Household Management: Larry coordinates
 - Education / Think Tank: Larry coordinates
@@ -49,6 +49,7 @@ Shared household storage uses:
 Household settings:
 
 - `BREVITY_HOUSEHOLD_ID` — defaults to `lslj-family`
+- `BREVITY_TIME_ZONE` — household date boundary for rolling meal plans; defaults to `America/New_York`
 - `BREVITY_AUTOMATION_KEY` — long random secret used only between the scheduled and background planning functions
 
 ### Apple/iCloud Calendar

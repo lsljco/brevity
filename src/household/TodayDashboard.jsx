@@ -24,7 +24,7 @@ function PillarCard({ id, label, icon, plan }) {
   const value = plan?.[id] || {}
   const summaries = {
     spiritual: value.devotionFocus || 'Devotion focus needs confirmation',
-    health: value.dinner ? `Dinner: ${value.dinner}` : 'Terica: meal plan needs confirmation',
+    health: value.dinner ? `Dinner: ${value.dinner}` : 'Meal plan needs attention',
     fitness: value.location ? `${value.location}${value.workout ? ` · ${value.workout}` : ''}` : 'Location and workout need decision',
     household: `${arrayLength(value.appointments)} appointments · ${arrayLength(value.priorities)} priorities`,
     education: value.thinkTankTopic || 'Think Tank topic needs confirmation',

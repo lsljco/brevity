@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { reconcilePlanWithICloud } from '../family/calendarSync.js'
+import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import EveningRecap from './EveningRecap.jsx'
 import MorningAlignment from './MorningAlignment.jsx'
 import NotificationCenter from './NotificationCenter.jsx'
@@ -10,12 +11,28 @@ import { clearPillarAnalyses } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
 import './HouseholdOS.css'
 
-export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }) {
+export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, onOpenMealPlan }) {
   const { plan, state, error, reload, savePlan } = useDailyPlan()
+  const mealPlan = useRollingMealPlan()
   const [mode, setMode] = useState('today')
   const [calendarMessage, setCalendarMessage] = useState('')
   const [generationState, setGenerationState] = useState('idle')
   const [generationMessage, setGenerationMessage] = useState('')
+  const displayedPlan = useMemo(() => {
+    const mealDay = mealPlan.data?.days?.find(day => day.date === plan.date)
+    if (!mealDay) return plan
+    return {
+      ...plan,
+      health: {
+        ...plan.health,
+        breakfast: mealDay.resolvedMeals.breakfast?.name || plan.health.breakfast,
+        lunch: mealDay.resolvedMeals.lunch?.name || plan.health.lunch,
+        dinner: mealDay.resolvedMeals.dinner?.name || plan.health.dinner,
+        mealPlanSource: 'rolling',
+        mealPlanVersion: mealDay.version,
+      },
+    }
+  }, [mealPlan.data, plan])
 
   const persistAndSync = async nextPlan => {
     const saved = await savePlan(nextPlan)
@@ -54,8 +71,8 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
     setMode('today')
   }
 
-  if (mode === 'alignment') return <MorningAlignment plan={plan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
-  if (mode === 'recap') return <EveningRecap plan={plan} onCancel={() => setMode('today')} onComplete={completeRecap} />
+  if (mode === 'alignment') return <MorningAlignment plan={displayedPlan} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
+  if (mode === 'recap') return <EveningRecap plan={displayedPlan} onCancel={() => setMode('today')} onComplete={completeRecap} />
 
   return <div className="household-today-workspace">
     {error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Household sync needs attention</strong><span>{error}</span></div><button onClick={reload}>Retry</button></div>}
@@ -63,8 +80,9 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar }
     {state === 'saving' && <div className="today-sync-banner"><i className="ti ti-cloud-upload" /> Saving household changes…</div>}
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
-    <TodayDashboard plan={plan} currentMember={currentMember} onOpenPillar={onOpenPillar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
-    <NotificationCenter plan={plan} member={currentMember} />
-    <TomorrowProposal plan={plan} />
+    {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
+    <TodayDashboard plan={displayedPlan} currentMember={currentMember} onOpenPillar={onOpenPillar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
+    <NotificationCenter plan={displayedPlan} member={currentMember} />
+    <TomorrowProposal plan={displayedPlan} />
   </div>
 }

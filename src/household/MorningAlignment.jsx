@@ -57,12 +57,13 @@ function MemberChecks({ selected = [], onChange }) {
   return <div className="alignment-member-grid">{HOUSEHOLD_MEMBERS.map(member => <button type="button" key={member} className={selected.includes(member) ? 'is-selected' : ''} onClick={() => toggle(member)}>{member}</button>)}</div>
 }
 
-function HealthStep({ draft, update }) {
+function HealthStep({ draft, update, onOpenMealPlan }) {
   const value = draft.health
   return <><HealthAlertBanner/><div className="alignment-form-grid alignment-form-grid--two">
-    <Field label="Breakfast"><input value={value.breakfast} onChange={e => update('health', { breakfast: e.target.value })} /></Field>
-    <Field label="Lunch"><input value={value.lunch} onChange={e => update('health', { lunch: e.target.value })} /></Field>
-    <Field label="Dinner"><input value={value.dinner} onChange={e => update('health', { dinner: e.target.value })} /></Field>
+    {value.mealPlanSource === 'rolling' && <div className="alignment-meal-plan-notice"><div><i className="ti ti-calendar-check" /><span><strong>Brevity supplied today’s meals.</strong><small>Use the rolling plan to choose from 30 replacements for any meal.</small></span></div><button type="button" onClick={onOpenMealPlan}>Open Meal Plan</button></div>}
+    <Field label="Breakfast"><input readOnly={value.mealPlanSource === 'rolling'} value={value.breakfast} onChange={e => update('health', { breakfast: e.target.value })} /></Field>
+    <Field label="Lunch"><input readOnly={value.mealPlanSource === 'rolling'} value={value.lunch} onChange={e => update('health', { lunch: e.target.value })} /></Field>
+    <Field label="Dinner"><input readOnly={value.mealPlanSource === 'rolling'} value={value.dinner} onChange={e => update('health', { dinner: e.target.value })} /></Field>
     <Field label="Snacks"><input value={value.snacks} onChange={e => update('health', { snacks: e.target.value })} /></Field>
     <Field label="Hydration"><input value={value.hydration} onChange={e => update('health', { hydration: e.target.value })} /></Field>
     <Field label="Tomorrow prep"><input value={value.nextDayPrep} onChange={e => update('health', { nextDayPrep: e.target.value })} /></Field>
@@ -132,7 +133,7 @@ function MinistryStep({ draft, update }) {
 
 const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
-export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComplete }) {
+export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComplete, onOpenMealPlan }) {
   const [draft, setDraft] = useState(() => normalizeDailyPlan(plan))
   const [stepIndex, setStepIndex] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -209,7 +210,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
     </nav>
     <section className="alignment-workspace">
       <div className="alignment-workspace-heading"><div className="alignment-step-icon"><i className={`ti ${icon}`} /></div><div><span>Pillar {stepIndex + 1} of {STEPS.length}</span><h2>{label}</h2></div></div>
-      <Step draft={draft} update={update} />
+      <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} />
     </section>
     {error && <div className="alignment-error">{error}</div>}
     <footer className="alignment-footer">
