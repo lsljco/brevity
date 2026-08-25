@@ -6,7 +6,7 @@ export function deriveHouseholdNotifications(plan) {
   const p = normalizeDailyPlan(plan)
   const notes = []
 
-  if (!p.health.dinner) notes.push(make('meal-dinner', 'action', 'Dinner needs a decision', 'Terica has not yet confirmed dinner.', 'Terica'))
+  if (!p.health.dinner) notes.push(make('meal-dinner', 'action', 'Meal plan needs attention', 'Brevity could not resolve today’s rolling dinner plan.', 'Family'))
   if (!p.fitness.location) notes.push(make('fitness-location', 'action', 'Fitness location unresolved', 'Choose the location before anyone leaves for the workout.', 'Larry'))
   if (!p.education.isaiah.owner) notes.push(make('isaiah-owner', 'action', 'Isaiah education owner unresolved', 'Assign the supervising adult for today.', 'Family'))
 

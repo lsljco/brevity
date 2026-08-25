@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { buildDailyDevotionPdf } from './devotion-document.mjs';
 import { getOneDriveConnection, publishDailyDevotion } from './onedrive.mjs';
+import { productionMealPlanRepository } from './meal-plan-store.mjs';
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
 const STORE_NAME = 'brevity-household';
@@ -161,7 +162,8 @@ const HOUSEHOLD_CONTEXT = `
 Household operating rhythm:
 - Lorenzo owns Spiritual Maturity and leads the spiritual content, scripture, devotion emphasis, prayer priorities and practical obedience for the household.
 - Larry leads household command, finance, career/income priorities and overall operational coordination.
-- Terica owns complete meal communication: breakfast, lunch, dinner, snacks, hydration, groceries and next-day prep.
+- Brevity's rolling meal plan is the source of truth for breakfast, lunch and dinner. Lunch and dinner are simple animal protein plus vegetables; breakfast excludes bacon, sausage, pancakes, waffles and heavy American breakfast platters.
+- Health ownership covers snacks, hydration, groceries and next-day preparation; the three planned meals do not depend on manual communication.
 - Lorenzo also shares ministry/fellowship responsibility and leadership participation.
 - Isaiah is 8 and entering third grade; daily education should include oral reading, sight words/vocabulary, comprehension and math/homework with a supervising adult marked CONFIRM unless established.
 - Devotion and prayer happen before food, gym, errands, shopping or outside activity.
@@ -187,7 +189,7 @@ function itemWithId(item, prefix, index, date) {
   return { id: `${prefix}-${date}-${index}`, ...item };
 }
 
-function hydrateGeneratedPlan(generated, date, activeSermon = null) {
+function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = null) {
   const now = new Date().toISOString();
   return {
     id: `daily-plan-${date}`,
@@ -201,7 +203,15 @@ function hydrateGeneratedPlan(generated, date, activeSermon = null) {
     morningAlignment: { ...generated.morningAlignment, completedAt: '' },
     dayparts: generated.dayparts,
     spiritual: { owner: 'Lorenzo', ...generated.spiritual, ...(activeSermon?{sermonNotes:activeSermon.sermonNotes,sermonSource:{...activeSermon.source,generatedAt:activeSermon.activatedAt,model:activeSermon.model,active:true}}:{}) },
-    health: { owner: 'Terica', ...generated.health },
+    health: {
+      owner: 'Terica',
+      ...generated.health,
+      breakfast: mealDay.resolvedMeals.breakfast.name,
+      lunch: mealDay.resolvedMeals.lunch.name,
+      dinner: mealDay.resolvedMeals.dinner.name,
+      mealPlanSource: 'rolling',
+      mealPlanVersion: mealDay.version,
+    },
     fitness: { owner: 'Larry', ...generated.fitness },
     household: { owner: 'Larry', ...generated.household, appointments: generated.household.appointments.map((item, index) => itemWithId(item, 'appointment', index, date)), priorities: generated.household.priorities.map((item, index) => itemWithId(item, 'household-priority', index, date)) },
     education: { owner: 'Larry', ...generated.education },
@@ -232,8 +242,12 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   const priorPlan = await dataStore.get(planKey(yesterdayKey), { type: 'json' }).catch(() => null);
   const activeSermon = await dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null);
   const priorPlanContext = priorPlan ? { ...priorPlan, spiritual: { ...priorPlan.spiritual, sermonNotes: undefined } } : null;
+  const mealRepository = await productionMealPlanRepository();
+  const mealWindow = await mealRepository.getWindow({ startDate: date, count: 1 });
+  const mealDay = mealWindow.days[0];
+  const scheduledMeals = Object.fromEntries(Object.entries(mealDay.resolvedMeals).map(([mealType, meal]) => [mealType, meal.name]));
 
-  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. ${activeSermon?'The ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until it is replaced by a new successful transcript upload. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No active sermon transcript is stored. Keep Spiritual Maturity clearly marked for Lorenzo to confirm rather than inventing a sermon source.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics. Use Terica, never Tara.\n\nACTIVE SERMON SOURCE, retained until replaced:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
+  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nBrevity's already-selected meals for this date are authoritative and must be copied exactly into the health fields:\n${JSON.stringify(scheduledMeals)}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. ${activeSermon?'The ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until it is replaced by a new successful transcript upload. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No active sermon transcript is stored. Keep Spiritual Maturity clearly marked for Lorenzo to confirm rather than inventing a sermon source.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics.\n\nACTIVE SERMON SOURCE, retained until replaced:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -243,7 +257,7 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error?.message || 'OpenAI daily-plan generation failed.');
   const generated = JSON.parse(outputText(payload));
-  const plan = hydrateGeneratedPlan(generated, date, activeSermon);
+  const plan = hydrateGeneratedPlan(generated, date, mealDay, activeSermon);
   if (await getOneDriveConnection()) {
     try {
       const pdf = await buildDailyDevotionPdf(plan);
