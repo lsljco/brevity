@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs } from '../../netlify/functions/sermon-documents.mjs'
-import { buildSermonSlideSpecs, sermonSlidesFileName } from '../../netlify/lib/sermon-slides.mjs'
+import { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs } from '../../netlify/lib/sermon-document-model.mjs'
+import { buildSermonSlideSpecs, sermonSlidesFileName } from '../../netlify/lib/sermon-slide-model.mjs'
 
 const section = (sections, heading) => sections.find(([name]) => name === heading)?.[1] || []
 
