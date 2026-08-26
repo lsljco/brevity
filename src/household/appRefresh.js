@@ -1,4 +1,5 @@
 import { fetchICloudCalendarEvents } from '../family/icloudCalendarApi.js'
+import { mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
 import { refreshFinanceData } from '../finance/financeRefresh.js'
 import { PILLAR_IDS } from './dailyPlan.js'
 import { fetchDailyPlan } from './householdApi.js'
@@ -28,15 +29,16 @@ async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
 
   const [financeResult, planResult] = await Promise.allSettled([financePromise, planPromise])
   const plan = planResult.status === 'fulfilled' ? planResult.value : null
-  const analyses = plan?.date
-    ? await Promise.allSettled(PILLAR_IDS.map(pillar => generatePillarAnalysis({ pillar, date: plan.date, plan, currentMember, force: true })))
-    : []
   const calendar = await calendarPromise
+  const calendarAwarePlan = plan?.date && !calendar?.error ? mergeCalendarEventsIntoPlan(plan, calendar.events) : plan
+  const analyses = calendarAwarePlan?.date
+    ? await Promise.allSettled(PILLAR_IDS.map(pillar => generatePillarAnalysis({ pillar, date: calendarAwarePlan.date, plan:calendarAwarePlan, currentMember, force: true })))
+    : []
 
   const detail = {
     date,
     finance: financeResult.status === 'fulfilled' ? financeResult.value : null,
-    plan,
+    plan: calendarAwarePlan,
     analyses,
     calendar,
     refreshedAt: new Date().toISOString(),

@@ -1,6 +1,6 @@
 # Brevity Household OS
 
-Brevity is the household source of truth. Apple/iCloud Calendar is the timed alert layer. Messages and future push channels are communication surfaces, not alternate sources of truth.
+Brevity is the household source of truth. Apple/iCloud Calendar is both the timed alert layer and a read-only source of live commitments for Today. Messages and future push channels are communication surfaces, not alternate sources of truth.
 
 ## Implemented operating loop
 
@@ -26,6 +26,7 @@ Brevity is the household source of truth. Apple/iCloud Calendar is the timed ale
 - `netlify/functions/household-data.js` — strong-consistency Netlify Blob persistence.
 - `netlify/functions/icloud-calendar.mjs` — Brevity-owned iCloud CalDAV service migrated from Malbec Estate.
 - `src/family/calendarSync.js` — idempotent Brevity → iCloud reconciliation.
+- `src/family/calendarOverlay.js` — read-only iCloud → Today projection with date filtering and duplicate prevention.
 - `src/family/FamilyCalendar.jsx` — unified Brevity + iCloud calendar view.
 - `netlify/functions/daily-proposal.mjs` — optional server-side OpenAI proposal generation.
 
@@ -70,7 +71,7 @@ The proposal function uses the Responses API with structured output and `store: 
 
 ## Calendar policy
 
-Brevity remains authoritative. An item is eligible for Apple/iCloud Calendar only when `calendarSync: true` and it has a meaningful date/time. The reconciliation layer stores a Brevity source ID in Brevity-owned calendar events, making later synchronization idempotent and leaving unrelated iCloud events untouched.
+Brevity remains authoritative. An item is eligible for Apple/iCloud Calendar only when `calendarSync: true` and it has a meaningful date/time. The reconciliation layer stores a Brevity source ID in Brevity-owned calendar events, making later synchronization idempotent and leaving unrelated iCloud events untouched. Independently created Apple Family Calendar events are projected into Today as read-only commitments and supplied to pillar analysis; they are never silently copied into or allowed to overwrite the saved Brevity daily plan.
 
 Normally sync:
 - medical appointments

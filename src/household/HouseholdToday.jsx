@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { reconcilePlanWithICloud } from '../family/calendarSync.js'
+import { calendarAppointmentsForPlan, mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import EveningRecap from './EveningRecap.jsx'
 import MorningAlignment from './MorningAlignment.jsx'
@@ -9,16 +10,23 @@ import TomorrowProposal from './TomorrowProposal.jsx'
 import { generateDailyPlan } from './dailyPlanGeneratorApi.js'
 import { clearPillarAnalyses } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
+import { ICLOUD_CACHE_KEY } from './appRefresh.js'
 import './HouseholdOS.css'
 
-export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, onOpenMealPlan }) {
+const cachedCalendar = () => {
+  try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
+  catch { return null }
+}
+
+export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, onOpenMealPlan, onOpenCalendar }) {
   const { plan, state, error, reload, savePlan } = useDailyPlan()
   const mealPlan = useRollingMealPlan()
   const [mode, setMode] = useState('today')
   const [calendarMessage, setCalendarMessage] = useState('')
   const [generationState, setGenerationState] = useState('idle')
   const [generationMessage, setGenerationMessage] = useState('')
-  const displayedPlan = useMemo(() => {
+  const [calendarData, setCalendarData] = useState(cachedCalendar)
+  const planWithMeals = useMemo(() => {
     const mealDay = mealPlan.data?.days?.find(day => day.date === plan.date)
     if (!mealDay) return plan
     return {
@@ -33,6 +41,20 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
       },
     }
   }, [mealPlan.data, plan])
+  const calendarAppointments = useMemo(
+    () => calendarAppointmentsForPlan(planWithMeals, calendarData?.events),
+    [calendarData?.events, planWithMeals],
+  )
+  const signalPlan = useMemo(
+    () => mergeCalendarEventsIntoPlan(planWithMeals, calendarData?.events),
+    [calendarData?.events, planWithMeals],
+  )
+
+  useEffect(() => {
+    const receiveCalendar = event => setCalendarData(event.detail || null)
+    window.addEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
+    return () => window.removeEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
+  }, [])
 
   const persistAndSync = async nextPlan => {
     const saved = await savePlan(nextPlan)
@@ -71,8 +93,8 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     setMode('today')
   }
 
-  if (mode === 'alignment') return <MorningAlignment plan={displayedPlan} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
-  if (mode === 'recap') return <EveningRecap plan={displayedPlan} onCancel={() => setMode('today')} onComplete={completeRecap} />
+  if (mode === 'alignment') return <MorningAlignment plan={planWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
+  if (mode === 'recap') return <EveningRecap plan={planWithMeals} onCancel={() => setMode('today')} onComplete={completeRecap} />
 
   return <div className="household-today-workspace">
     {error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Household sync needs attention</strong><span>{error}</span></div><button onClick={reload}>Retry</button></div>}
@@ -81,8 +103,8 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    <TodayDashboard plan={displayedPlan} currentMember={currentMember} onOpenPillar={onOpenPillar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
-    <NotificationCenter plan={displayedPlan} member={currentMember} />
-    <TomorrowProposal plan={displayedPlan} />
+    <TodayDashboard plan={planWithMeals} calendarAppointments={calendarAppointments} calendarConnected={Boolean(calendarData)} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
+    <NotificationCenter plan={signalPlan} member={currentMember} />
+    <TomorrowProposal plan={planWithMeals} />
   </div>
 }
