@@ -143,6 +143,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
   const exiting = useRef(false)
   const saveChain = useRef(Promise.resolve())
   const saveDraftRef = useRef(onSaveDraft)
+  const versionRef = useRef(Number(plan?.version || 0))
   const [id, label, icon] = STEPS[stepIndex]
   const Step = STEP_COMPONENTS[id]
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100)
@@ -163,8 +164,8 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
       setDraftSaveState('saving')
       saveChain.current = saveChain.current
         .catch(() => undefined)
-        .then(() => saveDraftRef.current(snapshot))
-        .then(() => setDraftSaveState('saved'))
+        .then(() => saveDraftRef.current({ ...snapshot, version: versionRef.current }))
+        .then(saved => { versionRef.current = Number(saved?.version || versionRef.current); setDraftSaveState('saved') })
         .catch(err => { setDraftSaveState('error'); setError(err.message || 'Draft autosave failed.') })
     }, 900)
     return () => clearTimeout(timer)
@@ -176,7 +177,8 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
     setSaving(true); setError('')
     try {
       await saveChain.current.catch(() => undefined)
-      await saveDraftRef.current(draft)
+      const saved = await saveDraftRef.current({ ...draft, version: versionRef.current })
+      versionRef.current = Number(saved?.version || versionRef.current)
       onCancel()
     } catch (err) {
       exiting.current = false
@@ -191,7 +193,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
     try {
       await saveChain.current.catch(() => undefined)
       const cleanedDraft = cleanLineLists(draft)
-      await onComplete({ ...cleanedDraft, morningAlignment: { ...cleanedDraft.morningAlignment, completedAt: new Date().toISOString() } })
+      await onComplete({ ...cleanedDraft, version: versionRef.current, morningAlignment: { ...cleanedDraft.morningAlignment, completedAt: new Date().toISOString() } })
     } catch (err) {
       exiting.current = false
       setError(err.message || 'Could not complete household alignment.')

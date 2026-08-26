@@ -5,11 +5,12 @@ const ENDPOINT = '/.netlify/functions/daily-household-plan-background'
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 export async function generateDailyPlan(date, { overwrite = false, timeoutMs = 90000 } = {}) {
+  const requestId = globalThis.crypto?.randomUUID?.() || `daily-plan-${Date.now()}-${Math.random().toString(36).slice(2)}`
   const response = await fetch(ENDPOINT, {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ date, overwrite }),
+    body: JSON.stringify({ date, overwrite, requestId }),
   })
 
   if (!response.ok && response.status !== 202) {
@@ -21,7 +22,7 @@ export async function generateDailyPlan(date, { overwrite = false, timeoutMs = 9
   while (Date.now() - started < timeoutMs) {
     await wait(2500)
     const plan = await fetchDailyPlan(date)
-    if (plan?.generatedBy === 'brevity-daily-household-plan') return plan
+    if (plan?.generationRequestId === requestId) return plan
   }
 
   throw new Error('Brevity is still preparing the daily plan. Refresh Today in a moment.')

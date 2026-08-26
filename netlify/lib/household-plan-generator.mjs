@@ -227,7 +227,7 @@ function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = null) {
   };
 }
 
-export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, overwrite = false } = {}) {
+export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, overwrite = false, requestId = '' } = {}) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured.');
   const local = localDateParts();
   const date = targetDate || local.date;
@@ -258,6 +258,9 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   if (!response.ok) throw new Error(payload.error?.message || 'OpenAI daily-plan generation failed.');
   const generated = JSON.parse(outputText(payload));
   const plan = hydrateGeneratedPlan(generated, date, mealDay, activeSermon);
+  plan.createdAt = existing?.createdAt || plan.createdAt;
+  plan.version = Number(existing?.version || 0) + 1;
+  plan.generationRequestId = requestId;
   if (await getOneDriveConnection()) {
     try {
       const pdf = await buildDailyDevotionPdf(plan);
