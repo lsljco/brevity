@@ -94,6 +94,14 @@ export function sanitizeSourceInspection(value) {
     sourceChecksum: safeText(file?.sourceChecksum, 120),
     status: 'pending-document-import',
   })).filter(file => file.id && file.path) : []
+  const sourceExports = Array.isArray(value.sourceExports) ? value.sourceExports.slice(0, 20).map(source => ({
+    sourceFileName: safeText(source?.sourceFileName, 240),
+    sourceExportedAt: safeText(source?.sourceExportedAt, 60),
+    sourceChecksum: safeText(source?.sourceChecksum, 120),
+    sourceRecordCount: Math.max(0, Number(source?.sourceRecordCount || 0)),
+    importableRecordCount: Math.max(0, Number(source?.importableRecordCount || 0)),
+    fileCount: Math.max(0, Number(source?.fileCount || 0)),
+  })).filter(source => source.sourceChecksum) : []
   return {
     sourceFileName: safeText(value.sourceFileName, 240),
     sourceExportedAt: safeText(value.sourceExportedAt, 60),
@@ -106,6 +114,13 @@ export function sanitizeSourceInspection(value) {
     fileCount: files.length,
     embeddedFileBytes: files.reduce((total, file) => total + file.byteEstimate, 0),
     files,
+    sourceExports,
+    comparison: value.comparison && typeof value.comparison === 'object' ? {
+      sourceCount: Math.max(0, Number(value.comparison.sourceCount || sourceExports.length)),
+      propertyRecordsAgree: Boolean(value.comparison.propertyRecordsAgree),
+      propertyConflictCount: Math.max(0, Number(value.comparison.propertyConflictCount || 0)),
+      deferredDifferenceCount: Math.max(0, Number(value.comparison.deferredDifferenceCount || 0)),
+    } : null,
     blockingIssues: Array.isArray(value.blockingIssues) ? value.blockingIssues.slice(0, 20).map(issue => safeText(issue, 500)).filter(Boolean) : [],
   }
 }
@@ -192,6 +207,8 @@ export function transformMalbecBackup(backup, {
     sourceRecordCount: Number(sourceInspection.sourceRecordCount || 0),
     importedAt: now,
     pendingFiles: Array.isArray(sourceInspection.files) ? sourceInspection.files : [],
+    sourceExports: Array.isArray(sourceInspection.sourceExports) ? sourceInspection.sourceExports : [],
+    comparison: sourceInspection.comparison || null,
   } : null
 
   const recognizedKeys = ['maintenance_maintenance', 'maintenance_projects']
@@ -224,6 +241,9 @@ export function transformMalbecBackup(backup, {
         embeddedFileBytes: Number(sourceInspection.embeddedFileBytes || 0),
         keyCount: Number(sourceInspection.keyCount || 0),
         blockingIssues: Array.isArray(sourceInspection.blockingIssues) ? sourceInspection.blockingIssues : [],
+        sourceCount: Number(sourceInspection.comparison?.sourceCount || sourceInspection.sourceExports?.length || 1),
+        propertyRecordsAgree: sourceInspection.comparison?.propertyRecordsAgree ?? true,
+        deferredDifferenceCount: Number(sourceInspection.comparison?.deferredDifferenceCount || 0),
       } : null,
     },
   }

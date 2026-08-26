@@ -14,10 +14,11 @@ This procedure is non-destructive. It does not change Malbec browser storage, fi
 
 1. Sign into Brevity as the household administrator.
 2. Open **Household Management → Malbec Estate**.
-3. In **Administrator migration console**, choose one original JSON backup.
-4. Review storage-key count, source-record count, duplicate IDs, deferred keys and embedded-file totals.
-5. Run the safe migration preview. This sends only the structured copy after embedded file bytes have been removed locally.
-6. Save the displayed source checksum and counts in the reconciliation log.
+3. In **Administrator migration console**, choose all available original JSON backups together, or add them one at a time.
+4. Review each source export and the cross-device comparison. Brevity blocks import when a maintenance/project ID is missing from one source or has divergent content.
+5. Review storage-key count, source-record count, duplicate IDs, deferred keys and embedded-file totals for the selected candidate.
+6. Run the safe migration preview. This sends only the selected structured copy after embedded file bytes have been removed locally, plus the sanitized comparison manifest.
+7. Save the displayed source checksums and counts in the reconciliation log.
 
 ## Compare multiple devices
 
@@ -31,7 +32,7 @@ Do not commit the first backup until all known device exports are inspected. Com
 - duplicate IDs;
 - records with the same ID but different source checksums.
 
-Choose or create one reconciled source export. Never assume the largest or newest file is complete.
+When property records agree, Brevity recommends the newest export as the candidate while retaining every compared source checksum. When they do not agree, import remains blocked until the source records are reconciled. Never assume the largest or newest file is complete.
 
 ## Initial structured import
 

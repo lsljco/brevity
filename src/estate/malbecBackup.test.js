@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { prepareMalbecBackup } from './malbecBackup.js'
+import { compareMalbecExports, prepareMalbecBackup, reconciliationInspection } from './malbecBackup.js'
 
 const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
 
@@ -50,4 +50,50 @@ test('a backup with no importable property records cannot create an empty worksp
   const result = prepareMalbecBackup({ malbecHOS_spiritual_prayers: [{ id: 1 }] })
   assert.equal(result.inspection.importableRecordCount, 0)
   assert.ok(result.inspection.blockingIssues.some(issue => /At least one maintenance or project/.test(issue)))
+})
+
+function deviceExport(fileName, exportedAt, maintenance, projects = [], extra = {}) {
+  return prepareMalbecBackup({ exportedAt, appVersion: 'MalbecEstateHOS', data: {
+    malbecHOS_maintenance_maintenance: JSON.stringify(maintenance),
+    malbecHOS_maintenance_projects: JSON.stringify(projects),
+    ...extra,
+  } }, { sourceFileName: fileName })
+}
+
+test('matching device exports recommend the newest export and retain both sources', () => {
+  const first = deviceExport('iphone.json', '2026-08-25T10:00:00Z', [{ id: 1, title: 'HVAC service' }])
+  const second = deviceExport('desktop.json', '2026-08-26T10:00:00Z', [{ id: 1, title: 'HVAC service' }])
+  const comparison = compareMalbecExports([first, second])
+  assert.equal(comparison.propertyRecordsAgree, true)
+  assert.equal(comparison.recommendedSourceIndex, 1)
+  const inspection = reconciliationInspection([first, second], comparison)
+  assert.equal(inspection.sourceFileName, 'desktop.json')
+  assert.equal(inspection.sourceExports.length, 2)
+  assert.equal(inspection.blockingIssues.length, 0)
+})
+
+test('records missing from one device block initial import', () => {
+  const first = deviceExport('iphone.json', '2026-08-25T10:00:00Z', [{ id: 1, title: 'HVAC service' }, { id: 2, title: 'Pool service' }])
+  const second = deviceExport('desktop.json', '2026-08-26T10:00:00Z', [{ id: 1, title: 'HVAC service' }])
+  const comparison = compareMalbecExports([first, second])
+  assert.equal(comparison.propertyConflicts[0].type, 'missing-record')
+  assert.equal(comparison.recommendedSourceIndex, null)
+  assert.ok(comparison.blockingIssues.some(issue => issue.includes('record 2')))
+})
+
+test('different versions of one legacy record block initial import', () => {
+  const first = deviceExport('iphone.json', '2026-08-25T10:00:00Z', [{ id: 1, title: 'HVAC service', stage: 'Scheduled' }])
+  const second = deviceExport('desktop.json', '2026-08-26T10:00:00Z', [{ id: 1, title: 'HVAC service', stage: 'Completed' }])
+  const comparison = compareMalbecExports([first, second])
+  assert.equal(comparison.propertyConflicts[0].type, 'divergent-record')
+  assert.equal(comparison.propertyRecordsAgree, false)
+})
+
+test('differences in deferred domains are reported but do not block the property import', () => {
+  const first = deviceExport('iphone.json', '2026-08-25T10:00:00Z', [{ id: 1 }], [], { malbecHOS_calendar_evs: JSON.stringify([{ id: 'a' }]) })
+  const second = deviceExport('desktop.json', '2026-08-26T10:00:00Z', [{ id: 1 }], [], { malbecHOS_calendar_evs: JSON.stringify([{ id: 'b' }]) })
+  const comparison = compareMalbecExports([first, second])
+  assert.equal(comparison.deferredDifferences[0].key, 'calendar_evs')
+  assert.equal(comparison.blockingIssues.length, 0)
+  assert.equal(comparison.recommendedSourceIndex, 1)
 })
