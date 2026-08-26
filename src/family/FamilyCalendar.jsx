@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
 import { calendarSnapshotHealth, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+import { dedupeCalendarEvents } from './calendarOverlay.js'
 import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
 import { resolveTimeframe } from '../finance/financeTimeframe.js'
@@ -83,7 +84,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
 
   const allEvents=useMemo(()=>{
     const cloudSources=new Set(icloudEvents.map(event=>event.sourceId).filter(Boolean))
-    return [...legacyEvents.filter(event=>!cloudSources.has(event.id)),...icloudEvents]
+    return dedupeCalendarEvents([...legacyEvents.filter(event=>!cloudSources.has(event.id)),...icloudEvents])
   },[legacyEvents,icloudEvents])
   const filtered=useMemo(()=>allEvents.filter(event=>{
     const eventDate=event.date||event.start

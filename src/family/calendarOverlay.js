@@ -19,8 +19,31 @@ const appointmentSignature = (item, fallbackDate = '') => [
   timeMinutes(item?.startTime || item?.time),
 ].join('|')
 
+const calendarEventSignature = event => [
+  normalizeText(event?.title),
+  clean(event?.date || event?.start),
+  timeMinutes(event?.startTime || event?.time),
+  normalizeText(event?.owner || 'Family'),
+].join('|')
+
+const eventAuthority = event => (
+  (event?.source === 'icloud' ? 2 : 0)
+  + (clean(event?.sourceId) ? 1 : 0)
+)
+
+export function dedupeCalendarEvents(events) {
+  const unique = new Map()
+  arrayOrEmpty(events).forEach(event => {
+    if (!clean(event?.title) || !clean(event?.date || event?.start)) return
+    const signature = calendarEventSignature(event)
+    const current = unique.get(signature)
+    if (!current || eventAuthority(event) > eventAuthority(current)) unique.set(signature, event)
+  })
+  return [...unique.values()]
+}
+
 export function calendarEventsForDate(events, date) {
-  return arrayOrEmpty(events).filter(event => clean(event?.date) === date && clean(event?.title))
+  return dedupeCalendarEvents(events).filter(event => clean(event?.date) === date)
 }
 
 export function calendarAppointmentFromEvent(event) {
