@@ -21,6 +21,20 @@ export const ITEM_STATUS = {
   deferred: 'deferred',
 }
 
+export const DECISION_STATUS = {
+  needsDecision: 'needs-decision',
+  determined: 'determined',
+  complete: 'complete',
+  deferred: 'deferred',
+}
+
+export const DECISION_STATUS_OPTIONS = [
+  { value: DECISION_STATUS.needsDecision, label: 'Needs Decision' },
+  { value: DECISION_STATUS.determined, label: 'Determined' },
+  { value: DECISION_STATUS.complete, label: 'Complete' },
+  { value: DECISION_STATUS.deferred, label: 'Deferred' },
+]
+
 export const NOTIFICATION_LEVEL = {
   awareness: 'awareness',
   action: 'action',
@@ -31,6 +45,18 @@ const arrayOrEmpty = value => Array.isArray(value) ? value : []
 const objectOrEmpty = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 const makeId = () => globalThis.crypto?.randomUUID?.() || `brevity-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const localDateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+export function normalizeDecisionStatus(value) {
+  const status = String(value || '').trim().toLowerCase()
+  if (status === DECISION_STATUS.complete) return DECISION_STATUS.complete
+  if (status === DECISION_STATUS.deferred) return DECISION_STATUS.deferred
+  if (status === DECISION_STATUS.determined || status === ITEM_STATUS.ready || status === ITEM_STATUS.inProgress) return DECISION_STATUS.determined
+  return DECISION_STATUS.needsDecision
+}
+
+const normalizeDecision = decision => decision && typeof decision === 'object' && !Array.isArray(decision)
+  ? { ...decision, status: normalizeDecisionStatus(decision.status) }
+  : decision
 
 export function createPlanItem(overrides = {}) {
   return {
@@ -165,7 +191,7 @@ export function normalizeDailyPlan(input = {}) {
     date,
     topPriorities: arrayOrEmpty(plan.topPriorities),
     assignments: arrayOrEmpty(plan.assignments),
-    decisions: arrayOrEmpty(plan.decisions),
+    decisions: arrayOrEmpty(plan.decisions).map(normalizeDecision),
     morningAlignment: { ...base.morningAlignment, ...morningAlignment },
     spiritual: {
       ...base.spiritual,
@@ -229,7 +255,7 @@ export function normalizeDailyPlan(input = {}) {
 
 export function countOpenDecisions(plan) {
   const normalized = normalizeDailyPlan(plan)
-  return normalized.decisions.filter(decision => decision?.status !== ITEM_STATUS.complete && decision?.status !== ITEM_STATUS.deferred).length
+  return normalized.decisions.filter(decision => decision?.status !== DECISION_STATUS.complete && decision?.status !== DECISION_STATUS.deferred).length
 }
 
 export function assignmentsForMember(plan, member) {
