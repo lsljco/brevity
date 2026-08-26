@@ -18,7 +18,8 @@ This procedure is non-destructive. It does not change Malbec browser storage, fi
 4. Review each source export and the cross-device comparison. Brevity blocks import when a maintenance/project ID is missing from one source or has divergent content.
 5. Review storage-key count, source-record count, duplicate IDs, deferred keys and embedded-file totals for the selected candidate.
 6. Run the safe migration preview. This sends only the selected structured copy after embedded file bytes have been removed locally, plus the sanitized comparison manifest.
-7. Save the displayed source checksums and counts in the reconciliation log.
+7. Confirm that both **Payload integrity** and **Record counts reconcile** pass.
+8. Download the reconciliation report and retain it beside the untouched source exports. The report contains manifests and checksums, not embedded file bytes.
 
 ## Compare multiple devices
 
@@ -40,6 +41,8 @@ The console permits one initial import only. It requires:
 
 - administrator authentication;
 - a successful server dry run;
+- server verification that the inspected structured payload was not changed before transformation;
+- exact agreement between inspected importable records and transformed work orders/projects;
 - no duplicate-ID blocking issues;
 - an explicit confirmation;
 - no existing durable Malbec Estate workspace.
@@ -55,6 +58,7 @@ Do not commit when any of the following is true:
 - the structured payload exceeds the safe limit;
 - expected maintenance/project counts are missing;
 - source files were manually edited without a reconciliation record;
+- payload-integrity or record-count validation fails;
 - the Estate workspace already exists;
 - the preview contains unexplained warnings.
 

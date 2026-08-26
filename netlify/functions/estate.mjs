@@ -38,6 +38,8 @@ export function createEstateHandler({
       const transformed = transform(body.backup, { propertyId, sourceInspection: body.sourceInspection })
       if (body.commit !== true) return response(200, { dryRun: true, ...transformed })
       if (!transformed.report.sourceInspection?.sourceChecksum) return response(400, { error: 'A verified source export checksum is required before import.' })
+      if (transformed.report.sourceInspection?.preparedChecksumVerified !== true) return response(400, { error: 'The structured migration payload must pass checksum verification before import.' })
+      if (transformed.report.validation?.recordCountMatches !== true) return response(400, { error: 'The inspected and transformed property record counts must reconcile before import.' })
       if (Number(transformed.report.counts.workOrders || 0) + Number(transformed.report.counts.projects || 0) === 0) return response(400, { error: 'At least one maintenance or project record is required for the initial import.' })
       if (transformed.report.sourceInspection?.blockingIssues?.length) return response(400, { error: transformed.report.sourceInspection.blockingIssues.join(' ') })
       if (await repository.getWorkspace(propertyId)) return response(409, { error: 'Malbec Estate already has a durable workspace. Use reconciliation instead of replacing the existing import.' })

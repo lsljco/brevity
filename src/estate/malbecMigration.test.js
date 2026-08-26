@@ -40,6 +40,8 @@ test('retains export reconciliation metadata and pending file manifests', () => 
     sourceChecksum: 'source-hash',
     sourceBytes: 15000000,
     sourceRecordCount: 12,
+    importableRecordCount: 3,
+    preparedChecksum: 'not-the-payload-checksum',
     keyCount: 60,
     fileCount: 1,
     embeddedFileBytes: 9000,
@@ -50,6 +52,8 @@ test('retains export reconciliation metadata and pending file manifests', () => 
   assert.equal(result.workspace.migration.sourceChecksum, 'source-hash')
   assert.equal(result.workspace.migration.pendingFiles[0].id, 'legacy-file-1')
   assert.equal(result.report.sourceInspection.keyCount, 60)
+  assert.equal(result.report.validation.transformedRecordCount, 3)
+  assert.equal(result.report.validation.recordCountMatches, true)
 })
 
 test('sanitizes client-supplied file manifests before durable storage', () => {
