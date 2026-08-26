@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { commitMalbecBackup, previewMalbecBackup } from './estateApi.js'
 import { compareMalbecExports, formatBytes, prepareMalbecBackup, reconciliationInspection } from './malbecBackup.js'
+import { buildMalbecReconciliationReport, downloadReconciliationReport } from './malbecReconciliationReport.js'
 
 export default function MalbecMigrationConsole({ role, workspace, onCommitted }) {
   const inputRef = useRef(null)
@@ -13,6 +14,9 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
   const comparison = useMemo(() => sources.length ? compareMalbecExports(sources) : null, [sources])
   const selectedSource = selectedIndex == null ? null : sources[selectedIndex]
   const inspection = selectedSource && comparison ? reconciliationInspection(sources, comparison, selectedIndex) : null
+  const reconciliationReport = useMemo(() => preview?.dryRun && comparison && inspection
+    ? buildMalbecReconciliationReport({ preview, comparison, inspection, selectedIndex })
+    : null, [preview, comparison, inspection, selectedIndex])
 
   if (role !== 'admin') return null
 
@@ -109,7 +113,12 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
     {preview && <div className={`estate-preview-result${previewBlocks.length ? ' has-blockers' : ''}`}>
       <div><i className={`ti ${previewBlocks.length ? 'ti-alert-triangle' : 'ti-circle-check'}`}/><span><strong>{previewBlocks.length ? 'Preview complete — action required' : 'Dry run passed'}</strong><small>No Estate or Malbec records were changed.</small></span></div>
       <dl><div><dt>Systems</dt><dd>{preview.report.counts.systems}</dd></div><div><dt>Work orders</dt><dd>{preview.report.counts.workOrders}</dd></div><div><dt>Projects</dt><dd>{preview.report.counts.projects}</dd></div><div><dt>Deferred keys</dt><dd>{preview.report.deferredKeys.length}</dd></div></dl>
+      <div className="estate-validation-checks">
+        <span className={preview.report.validation?.preparedChecksumVerified ? 'is-pass' : 'is-fail'}><i className={`ti ${preview.report.validation?.preparedChecksumVerified ? 'ti-shield-check' : 'ti-shield-x'}`}/> Payload integrity</span>
+        <span className={preview.report.validation?.recordCountMatches ? 'is-pass' : 'is-fail'}><i className={`ti ${preview.report.validation?.recordCountMatches ? 'ti-list-check' : 'ti-alert-triangle'}`}/> Record counts reconcile</span>
+      </div>
       {previewBlocks.length > 0 && <ul className="estate-preview-blockers">{previewBlocks.map(issue => <li key={issue}>{issue}</li>)}</ul>}
+      {reconciliationReport && <button className="estate-report-button" type="button" onClick={() => downloadReconciliationReport(reconciliationReport)}><i className="ti ti-download"/> Download reconciliation report</button>}
       {!workspace && <label className="estate-import-confirm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/><span>I inspected every known Malbec device export and understand this creates Brevity's initial durable Estate workspace. Malbec remains active and its source data will not be modified.</span></label>}
       <button className="estate-commit-button" type="button" onClick={commit} disabled={!confirmed || blocked || Boolean(busy)}>{busy === 'commit' ? 'Creating durable workspace…' : workspace ? 'Initial import already protected' : blocked ? 'Resolve comparison issues before import' : 'Commit initial structured import'}</button>
     </div>}
