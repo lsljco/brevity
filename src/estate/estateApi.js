@@ -54,3 +54,19 @@ export async function importEstateVaultFile({ propertyId = MALBEC_PROPERTY_ID, f
 }
 
 export const estateDocumentUrl = (documentId, propertyId = MALBEC_PROPERTY_ID) => `/.netlify/functions/estate-vault?propertyId=${encodeURIComponent(propertyId)}&documentId=${encodeURIComponent(documentId)}`
+
+export async function mutateEstateMaintenance({ propertyId = MALBEC_PROPERTY_ID, ...body }) {
+  const response = await fetch(`/.netlify/functions/estate-maintenance?propertyId=${encodeURIComponent(propertyId)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ propertyId, ...body }),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const error = new Error(payload.error || 'Estate maintenance could not be updated.')
+    error.status = response.status
+    throw error
+  }
+  return payload
+}

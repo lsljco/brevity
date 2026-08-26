@@ -104,10 +104,24 @@ export function validateEstateWorkspace(value) {
       if (!ids.has(relatedId)) errors.push(`documents[${index}] references missing Estate entity ${relatedId}.`)
     })
   })
+  ;(value.maintenancePlans || []).forEach((plan, index) => {
+    if (!ids.has(plan.systemId)) errors.push(`maintenancePlans[${index}] references missing property system ${plan.systemId}.`)
+    if (plan.assetId && !ids.has(plan.assetId)) errors.push(`maintenancePlans[${index}] references missing asset ${plan.assetId}.`)
+    if (plan.preferredVendorId && !ids.has(plan.preferredVendorId)) errors.push(`maintenancePlans[${index}] references missing vendor ${plan.preferredVendorId}.`)
+    if (!plan.recurrence?.interval || !plan.recurrence?.unit) errors.push(`maintenancePlans[${index}] requires recurrence metadata.`)
+  })
+  ;(value.maintenanceEvents || []).forEach((event, index) => {
+    if (!ids.has(event.maintenancePlanId)) errors.push(`maintenanceEvents[${index}] references missing maintenance plan ${event.maintenancePlanId}.`)
+    if (!ids.has(event.workOrderId)) errors.push(`maintenanceEvents[${index}] references missing work order ${event.workOrderId}.`)
+  })
+  ;(value.workOrders || []).forEach((workOrder, index) => {
+    if (workOrder.maintenancePlanId && !ids.has(workOrder.maintenancePlanId)) errors.push(`workOrders[${index}] references missing maintenance plan ${workOrder.maintenancePlanId}.`)
+    if (workOrder.maintenanceEventId && !ids.has(workOrder.maintenanceEventId)) errors.push(`workOrders[${index}] references missing maintenance event ${workOrder.maintenanceEventId}.`)
+  })
   return errors
 }
 
-export function estateWorkspaceSummary(workspace) {
+export function estateWorkspaceSummary(workspace, { today = new Date().toISOString().slice(0, 10) } = {}) {
   const value = normalizeEstateWorkspace(workspace)
   const openWorkOrders = value.workOrders.filter(record => !['completed', 'cost_recorded', 'cancelled'].includes(record.status))
   const activeProjects = value.projects.filter(record => !['completed', 'cancelled'].includes(record.status))
@@ -117,8 +131,10 @@ export function estateWorkspaceSummary(workspace) {
     version: value.version,
     systems: value.systems.length,
     assets: value.assets.length,
+    maintenancePlans: value.maintenancePlans.filter(record => record.status === 'active').length,
+    upcomingMaintenance: value.maintenanceEvents.filter(record => !['completed', 'cost_recorded'].includes(record.status) && record.scheduledFor >= today).length,
     openWorkOrders: openWorkOrders.length,
-    overdueMaintenance: openWorkOrders.filter(record => record.dueDate && record.dueDate < new Date().toISOString().slice(0, 10)).length,
+    overdueMaintenance: openWorkOrders.filter(record => record.dueDate && record.dueDate < today).length,
     activeProjects: activeProjects.length,
     vendors: value.vendors.length,
     documents: value.documents.length,
