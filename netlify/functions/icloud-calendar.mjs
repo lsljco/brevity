@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import householdAuth from "./household-auth.js";
+import { fetchCalendarReport } from "../lib/icloud-calendar-report.mjs";
 
 const { readSession } = householdAuth;
 
@@ -36,7 +37,7 @@ const authHeader = () => {
   return `Basic ${Buffer.from(`${email}:${password.replace(/-/g, "")}`).toString("base64")}`;
 };
 
-async function caldav(url, method, body = "", extraHeaders = {}) {
+async function caldav(url, method, body = "", extraHeaders = {}, operation = "calendar request") {
   const response = await fetch(url, {
     method,
     headers: {
@@ -49,7 +50,7 @@ async function caldav(url, method, body = "", extraHeaders = {}) {
   });
   const text = await response.text();
   if (!response.ok && response.status !== 207) {
-    const err = new Error(`iCloud returned ${response.status}.`);
+    const err = new Error(`Apple rejected the ${operation} (${response.status}).`);
     err.status = response.status;
     err.detail = text.slice(0, 300);
     throw err;
@@ -59,17 +60,17 @@ async function caldav(url, method, body = "", extraHeaders = {}) {
 
 async function discoverCalendar() {
   const principalReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
-  const principalXml = (await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" })).text;
+  const principalXml = (await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" }, "account discovery request")).text;
   const principal = firstTag(principalXml, "href");
   if (!principal) throw new Error("Could not find the iCloud Calendar account.");
 
   const homeReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
-  const homeXml = (await caldav(new URL(principal, CALDAV_ROOT).href, "PROPFIND", homeReq, { depth: "0" })).text;
+  const homeXml = (await caldav(new URL(principal, CALDAV_ROOT).href, "PROPFIND", homeReq, { depth: "0" }, "calendar-home discovery request")).text;
   const home = firstTag(homeXml, "href");
   if (!home) throw new Error("Could not find the iCloud calendar collection.");
 
   const listReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/></d:prop></d:propfind>`;
-  const listXml = (await caldav(new URL(home, CALDAV_ROOT).href, "PROPFIND", listReq, { depth: "1" })).text;
+  const listXml = (await caldav(new URL(home, CALDAV_ROOT).href, "PROPFIND", listReq, { depth: "1" }, "calendar-list discovery request")).text;
   const candidates = blocks(listXml, "response").map(block => ({
     href: firstTag(block, "href"),
     name: firstTag(block, "displayname"),
@@ -160,12 +161,8 @@ function makeIcs(item, uid) {
 }
 
 async function listEvents(calendar) {
-  const now = new Date();
-  const start = `${now.getFullYear() - 1}0101T000000Z`;
-  const end = `${now.getFullYear() + 3}1231T235959Z`;
-  const report = `<?xml version="1.0"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data><c:expand start="${start}" end="${end}"/></c:calendar-data></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${start}" end="${end}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
-  const xml = (await caldav(calendar.url, "REPORT", report, { depth: "1" })).text;
-  return blocks(xml, "response").flatMap(block => {
+  const report = await fetchCalendarReport({ calendarUrl:calendar.url, request:caldav });
+  const events = blocks(report.text, "response").flatMap(block => {
     const href = firstTag(block, "href");
     const etag = firstTag(block, "getetag");
     const raw = block.match(/<(?:\w+:)?calendar-data[^>]*>([\s\S]*?)<\/(?:\w+:)?calendar-data>/i)?.[1] || "";
@@ -174,6 +171,7 @@ async function listEvents(calendar) {
     const records = occurrences.length ? occurrences : [decoded];
     return records.map(record => parseEvent(record, href, etag, records.length > 1)).filter(Boolean);
   }).filter(Boolean);
+  return { events, recurrenceMode:report.recurrenceMode };
 }
 
 export const handler = async event => {
@@ -184,7 +182,10 @@ export const handler = async event => {
 
   try {
     const calendar = await discoverCalendar();
-    if (event.httpMethod === "GET") return json(200, { calendar: calendar.name, syncMode: "two-way", events: await listEvents(calendar) });
+    if (event.httpMethod === "GET") {
+      const result = await listEvents(calendar);
+      return json(200, { calendar:calendar.name, syncMode:"two-way", recurrenceMode:result.recurrenceMode, events:result.events });
+    }
     const item = event.body ? JSON.parse(event.body) : {};
 
     if (event.httpMethod === "POST") {
