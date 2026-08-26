@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { estateWorkspaceSummary } from './estateModel.js'
 import { estateDocumentUrl, fetchEstateWorkspace } from './estateApi.js'
+import EstateMaintenance from './EstateMaintenance.jsx'
 import MalbecMigrationConsole from './MalbecMigrationConsole.jsx'
 import './EstateWorkspace.css'
 
 const cards = summary => [
   ['Property systems', summary.systems, 'ti-adjustments-cog'],
   ['Registered assets', summary.assets, 'ti-engine'],
+  ['Maintenance plans', summary.maintenancePlans, 'ti-calendar-cog', 'estate-maintenance'],
+  ['Upcoming maintenance', summary.upcomingMaintenance, 'ti-calendar-time', 'estate-maintenance'],
   ['Open work orders', summary.openWorkOrders, 'ti-tool'],
   ['Overdue maintenance', summary.overdueMaintenance, 'ti-alert-triangle'],
   ['Active projects', summary.activeProjects, 'ti-timeline-event'],
@@ -40,11 +43,14 @@ export default function EstateWorkspace({ role = 'member' }) {
       <i className="ti ti-building-estate"/>
       <div><h2>Estate foundation is ready</h2><p>No legacy records have been committed. Malbec remains active while its structured data, files, and relationships are extracted and reconciled.</p></div>
     </div> : <>
-      <div className="estate-command-grid">{cards(summary).map(([label, value, icon]) => <article key={label}><i className={`ti ${icon}`}/><strong>{value}</strong><span>{label}</span></article>)}</div>
+      <div className="estate-command-grid">{cards(summary).map(([label, value, icon, target]) => target
+        ? <button key={label} type="button" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' })}><i className={`ti ${icon}`}/><strong>{value}</strong><span>{label}</span></button>
+        : <article key={label}><i className={`ti ${icon}`}/><strong>{value}</strong><span>{label}</span></article>)}</div>
       <div className="estate-sections">
         <article><p>Needs attention</p><h2>{summary.openWorkOrders ? `${summary.openWorkOrders} open work order${summary.openWorkOrders === 1 ? '' : 's'}` : 'No open work orders'}</h2><span>{summary.overdueMaintenance ? `${summary.overdueMaintenance} overdue` : 'Nothing overdue'}</span></article>
         <article><p>Portfolio activity</p><h2>{summary.activeProjects ? `${summary.activeProjects} active project${summary.activeProjects === 1 ? '' : 's'}` : 'No active projects'}</h2><span>{summary.systems} systems · {summary.assets} assets</span></article>
       </div>
+      <EstateMaintenance role={role} workspace={workspace} onWorkspaceChange={setWorkspace}/>
       {workspace.documents.length > 0 && <section className="estate-vault-list">
         <header><div><p>Estate Vault</p><h2>Verified property documents</h2></div><span>{workspace.documents.length} file{workspace.documents.length === 1 ? '' : 's'}</span></header>
         {workspace.documents.map(document => <a key={document.id} href={estateDocumentUrl(document.id, workspace.propertyId)}>

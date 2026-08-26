@@ -49,12 +49,14 @@ The first implementation uses a repository abstraction backed by strong-consiste
 
 All API access requires Brevity household authentication. Reads are available to signed-in household members. Legacy import commits require the administrator role. Optimistic `expectedVersion` checks prevent stale-device overwrite. A dry run is the default; committing requires `commit: true`.
 
+Preventive maintenance is an operating workflow, not another project engine. Administrators create a normalized MaintenancePlan against a PropertySystem and optional Asset/Vendor. The server atomically generates the first MaintenanceEvent and WorkOrder. Household members advance the event through `due → scheduled → in_progress → completed → cost_recorded`; states cannot be skipped. Recording actual cost closes that occurrence and atomically generates the next recurrence. Month-end and leap-year dates are clamped to valid local calendar dates. Each active event has a stable source ID that projects into the existing Family Calendar service, where matching events update instead of duplicating.
+
 This aggregate design gives the current deployment an atomic property-level import and a stable repository boundary. If record volume or querying later requires Postgres, the repository can move without changing Estate UI/domain contracts.
 
-## Deliberate exclusions from the first increment
+## Deliberate exclusions still in effect
 
-- No binary document import through JSON.
 - No automatic HomeHQ overwrite or project duplication.
-- No automatic Finance or Calendar writes.
+- No second financial ledger; recorded maintenance costs still require a later canonical Finance transaction relationship.
+- No silent calendar writes; an authenticated household user explicitly publishes eligible maintenance occurrences into the shared Family Calendar.
 - No AI write access.
 - No Malbec read-only switch or infrastructure change.
