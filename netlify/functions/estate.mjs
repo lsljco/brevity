@@ -35,8 +35,12 @@ export function createEstateHandler({
       if (Buffer.byteLength(event.body || '', 'utf8') > 5_000_000) return response(413, { error: 'This structured-data import is too large. Embedded files must be migrated through the Estate document pipeline.' })
       let body
       try { body = JSON.parse(event.body || '{}') } catch { return response(400, { error: 'Invalid JSON body.' }) }
-      const transformed = transform(body.backup, { propertyId })
+      const transformed = transform(body.backup, { propertyId, sourceInspection: body.sourceInspection })
       if (body.commit !== true) return response(200, { dryRun: true, ...transformed })
+      if (!transformed.report.sourceInspection?.sourceChecksum) return response(400, { error: 'A verified source export checksum is required before import.' })
+      if (Number(transformed.report.counts.workOrders || 0) + Number(transformed.report.counts.projects || 0) === 0) return response(400, { error: 'At least one maintenance or project record is required for the initial import.' })
+      if (transformed.report.sourceInspection?.blockingIssues?.length) return response(400, { error: transformed.report.sourceInspection.blockingIssues.join(' ') })
+      if (await repository.getWorkspace(propertyId)) return response(409, { error: 'Malbec Estate already has a durable workspace. Use reconciliation instead of replacing the existing import.' })
       const saved = await repository.saveWorkspace({
         workspace: transformed.workspace,
         expectedVersion: body.expectedVersion,

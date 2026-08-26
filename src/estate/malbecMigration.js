@@ -80,12 +80,44 @@ function projectStatus(value) {
   return 'planned'
 }
 
+function safeText(value, length = 240) {
+  return String(value || '').replace(/[\u0000-\u001f]/g, '').slice(0, length)
+}
+
+export function sanitizeSourceInspection(value) {
+  if (!value || typeof value !== 'object') return null
+  const files = Array.isArray(value.files) ? value.files.slice(0, 2000).map(file => ({
+    id: safeText(file?.id, 120),
+    path: safeText(file?.path, 500),
+    mimeType: safeText(file?.mimeType, 120),
+    byteEstimate: Math.max(0, Number(file?.byteEstimate || 0)),
+    sourceChecksum: safeText(file?.sourceChecksum, 120),
+    status: 'pending-document-import',
+  })).filter(file => file.id && file.path) : []
+  return {
+    sourceFileName: safeText(value.sourceFileName, 240),
+    sourceExportedAt: safeText(value.sourceExportedAt, 60),
+    sourceAppVersion: safeText(value.sourceAppVersion, 120),
+    sourceChecksum: safeText(value.sourceChecksum, 120),
+    sourceBytes: Math.max(0, Number(value.sourceBytes || 0)),
+    sourceRecordCount: Math.max(0, Number(value.sourceRecordCount || 0)),
+    preparedBytes: Math.max(0, Number(value.preparedBytes || 0)),
+    keyCount: Math.max(0, Number(value.keyCount || 0)),
+    fileCount: files.length,
+    embeddedFileBytes: files.reduce((total, file) => total + file.byteEstimate, 0),
+    files,
+    blockingIssues: Array.isArray(value.blockingIssues) ? value.blockingIssues.slice(0, 20).map(issue => safeText(issue, 500)).filter(Boolean) : [],
+  }
+}
+
 export function transformMalbecBackup(backup, {
   householdId = 'lslj-family',
   propertyId = MALBEC_PROPERTY_ID,
   now = new Date().toISOString(),
+  sourceInspection = null,
 } = {}) {
   if (!backup || typeof backup !== 'object') throw new Error('A Malbec JSON backup is required.')
+  sourceInspection = sanitizeSourceInspection(sourceInspection)
   const maintenance = valueFromBackup(backup, 'maintenance_maintenance')
   const projects = valueFromBackup(backup, 'maintenance_projects')
   const warnings = []
@@ -150,6 +182,17 @@ export function transformMalbecBackup(backup, {
     updatedBy: record.updatedBy || null,
     legacySource: sourceMetadata('maintenance_projects', record, index),
   }))
+  workspace.migration = sourceInspection ? {
+    sourceSystem: MALBEC_SOURCE_SYSTEM,
+    sourceFileName: sourceInspection.sourceFileName || null,
+    sourceExportedAt: sourceInspection.sourceExportedAt || null,
+    sourceAppVersion: sourceInspection.sourceAppVersion || null,
+    sourceChecksum: sourceInspection.sourceChecksum || null,
+    sourceBytes: Number(sourceInspection.sourceBytes || 0),
+    sourceRecordCount: Number(sourceInspection.sourceRecordCount || 0),
+    importedAt: now,
+    pendingFiles: Array.isArray(sourceInspection.files) ? sourceInspection.files : [],
+  } : null
 
   const recognizedKeys = ['maintenance_maintenance', 'maintenance_projects']
   const deferredKeys = ['supplies_inv', 'supplies_purch', 'calendar_evs']
@@ -172,6 +215,16 @@ export function transformMalbecBackup(backup, {
         projects: workspace.projects.length,
       },
       warnings,
+      sourceInspection: sourceInspection ? {
+        sourceFileName: sourceInspection.sourceFileName || null,
+        sourceExportedAt: sourceInspection.sourceExportedAt || null,
+        sourceChecksum: sourceInspection.sourceChecksum || null,
+        sourceRecordCount: Number(sourceInspection.sourceRecordCount || 0),
+        fileCount: Number(sourceInspection.fileCount || 0),
+        embeddedFileBytes: Number(sourceInspection.embeddedFileBytes || 0),
+        keyCount: Number(sourceInspection.keyCount || 0),
+        blockingIssues: Array.isArray(sourceInspection.blockingIssues) ? sourceInspection.blockingIssues : [],
+      } : null,
     },
   }
 }

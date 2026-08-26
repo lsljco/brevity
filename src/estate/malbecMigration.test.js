@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { transformMalbecBackup } from './malbecMigration.js'
+import { sanitizeSourceInspection, transformMalbecBackup } from './malbecMigration.js'
 
 const backup = {
   records: {
@@ -32,4 +32,35 @@ test('produces deterministic ids so repeated imports can reconcile', () => {
   const second = transformMalbecBackup(backup, { now: '2026-08-27T00:00:00.000Z' })
   assert.equal(first.workspace.workOrders[0].id, second.workspace.workOrders[0].id)
   assert.equal(first.workspace.projects[0].id, second.workspace.projects[0].id)
+})
+
+test('retains export reconciliation metadata and pending file manifests', () => {
+  const sourceInspection = {
+    sourceFileName: 'malbec-2026-08-26.json',
+    sourceChecksum: 'source-hash',
+    sourceBytes: 15000000,
+    sourceRecordCount: 12,
+    keyCount: 60,
+    fileCount: 1,
+    embeddedFileBytes: 9000,
+    files: [{ id: 'legacy-file-1', path: 'maintenance[0].photo', status: 'pending-document-import' }],
+    blockingIssues: [],
+  }
+  const result = transformMalbecBackup(backup, { now: '2026-08-26T00:00:00.000Z', sourceInspection })
+  assert.equal(result.workspace.migration.sourceChecksum, 'source-hash')
+  assert.equal(result.workspace.migration.pendingFiles[0].id, 'legacy-file-1')
+  assert.equal(result.report.sourceInspection.keyCount, 60)
+})
+
+test('sanitizes client-supplied file manifests before durable storage', () => {
+  const result = sanitizeSourceInspection({
+    sourceFileName: `malbec\u0000${'x'.repeat(300)}.json`,
+    files: [{ id: 'file-1', path: 'records.photo', mimeType: 'image/png', byteEstimate: -10, status: 'complete' }, { id: '', path: '' }],
+    blockingIssues: ['Review this record.'],
+  })
+  assert.ok(!result.sourceFileName.includes('\u0000'))
+  assert.equal(result.sourceFileName.length, 240)
+  assert.equal(result.files.length, 1)
+  assert.equal(result.files[0].byteEstimate, 0)
+  assert.equal(result.files[0].status, 'pending-document-import')
 })

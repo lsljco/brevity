@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { estateWorkspaceSummary } from './estateModel.js'
 import { fetchEstateWorkspace } from './estateApi.js'
+import MalbecMigrationConsole from './MalbecMigrationConsole.jsx'
 import './EstateWorkspace.css'
 
 const cards = summary => [
@@ -12,7 +13,7 @@ const cards = summary => [
   ['Vendors', summary.vendors, 'ti-address-book'],
 ]
 
-export default function EstateWorkspace() {
+export default function EstateWorkspace({ role = 'member' }) {
   const [workspace, setWorkspace] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -44,6 +45,7 @@ export default function EstateWorkspace() {
         <article><p>Portfolio activity</p><h2>{summary.activeProjects ? `${summary.activeProjects} active project${summary.activeProjects === 1 ? '' : 's'}` : 'No active projects'}</h2><span>{summary.systems} systems · {summary.assets} assets</span></article>
       </div>
     </>}
+    <MalbecMigrationConsole role={role} workspace={workspace} onCommitted={setWorkspace}/>
     <footer className="estate-safety"><i className="ti ti-lock"/><span>Read-only migration view. Legacy Malbec writes and infrastructure remain unchanged until reconciliation and acceptance are complete.</span></footer>
   </section>
 }
