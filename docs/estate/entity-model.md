@@ -41,6 +41,8 @@ Documents use polymorphic relation descriptors so one document can be linked to 
 
 Every migrated record carries `legacySource.system`, `storageKey`, `legacyId`, `sourceIndex`, and `sourceChecksum`. Target IDs are deterministic from type and legacy ID so repeated extract/transform runs reconcile rather than duplicate.
 
+PropertyDocument binaries are stored outside the aggregate workspace in the dedicated Estate Vault blob store. The workspace retains only authenticated retrieval metadata, MIME type, byte size, SHA-256 hash, related Estate entity IDs, and legacy file provenance. Migration file payloads are uploaded in resumable chunks and are finalized only after their legacy checksum and byte count match the pending manifest.
+
 ## Persistence contract
 
 The first implementation uses a repository abstraction backed by strong-consistency Netlify Blobs, consistent with Brevity's current server strategy. Each property workspace is a versioned normalized aggregate under a household-scoped key. Each committed version is written to an immutable backup key, the canonical workspace is updated, and an audit record is appended. The canonical workspace also embeds `lastChange`, preserving minimum audit evidence if a later audit write is interrupted.

@@ -21,3 +21,36 @@ async function sendMalbecBackup({ backup, sourceInspection, commit = false, expe
 
 export const previewMalbecBackup = input => sendMalbecBackup({ ...input, commit: false })
 export const commitMalbecBackup = input => sendMalbecBackup({ ...input, commit: true })
+
+const VAULT_CHUNK_SIZE = 800_000
+
+async function sendVaultAction(body) {
+  const propertyId = body.propertyId || MALBEC_PROPERTY_ID
+  const response = await fetch(`/.netlify/functions/estate-vault?propertyId=${encodeURIComponent(propertyId)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || 'The Estate document could not be imported.')
+  return payload
+}
+
+export async function importEstateVaultFile({ propertyId = MALBEC_PROPERTY_ID, file, expectedVersion, onProgress }) {
+  if (!file?.base64 || !file.id || !file.path || !file.sourceChecksum) throw new Error('The original Malbec file payload is unavailable.')
+  const chunks = Array.from({ length: Math.ceil(file.base64.length / VAULT_CHUNK_SIZE) }, (_, index) => file.base64.slice(index * VAULT_CHUNK_SIZE, (index + 1) * VAULT_CHUNK_SIZE))
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+    await sendVaultAction({
+      action: 'chunk', propertyId, fileId: file.id, sourcePath: file.path, sourceChecksum: file.sourceChecksum,
+      chunkIndex, totalChunks: chunks.length, base64: chunks[chunkIndex],
+    })
+    onProgress?.({ chunkIndex: chunkIndex + 1, totalChunks: chunks.length })
+  }
+  return sendVaultAction({
+    action: 'finalize', propertyId, fileId: file.id, sourcePath: file.path, sourceChecksum: file.sourceChecksum,
+    totalChunks: chunks.length, expectedVersion,
+  })
+}
+
+export const estateDocumentUrl = (documentId, propertyId = MALBEC_PROPERTY_ID) => `/.netlify/functions/estate-vault?propertyId=${encodeURIComponent(propertyId)}&documentId=${encodeURIComponent(documentId)}`

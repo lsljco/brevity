@@ -18,6 +18,15 @@ test('rejects duplicate entity ids and cross-property records', () => {
   assert.ok(errors.some(error => error.includes('different property')))
 })
 
+test('requires durable hashes and valid relationships for Estate documents', () => {
+  const workspace = createEstateWorkspace()
+  workspace.documents = [{ id: 'document-1', propertyId: workspace.propertyId, relatedEntityIds: ['missing-work-order'] }]
+  const errors = validateEstateWorkspace(workspace)
+  assert.ok(errors.some(error => /durable storage metadata/.test(error)))
+  assert.ok(errors.some(error => /SHA-256/.test(error)))
+  assert.ok(errors.some(error => /missing Estate entity/.test(error)))
+})
+
 test('summarizes actionable work instead of raw record volume', () => {
   const workspace = createEstateWorkspace()
   workspace.workOrders = [

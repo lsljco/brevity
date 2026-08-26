@@ -55,19 +55,21 @@ function missingIds(value) {
   return value.flatMap((record, index) => record?.id == null || String(record.id).trim() === '' ? [{ index, title: String(record?.title || record?.name || 'Untitled record') }] : [])
 }
 
-function stripFiles(value, path, files) {
+function stripFiles(value, path, files, filePayloads) {
   if (typeof value === 'string') {
     const match = value.match(DATA_URL)
     if (!match) return value
-    const id = `legacy-file-${checksum(`${path}:${match[2].slice(0, 256)}:${match[2].length}`)}`
+    const base64 = match[2].replace(/\s/g, '')
+    const id = `legacy-file-${checksum(`${path}:${base64.slice(0, 256)}:${base64.length}`)}`
     const mimeType = match[1] || 'application/octet-stream'
-    const byteEstimate = Math.floor(match[2].replace(/=+$/, '').length * 3 / 4)
-    files.push({ id, path, mimeType, byteEstimate, sourceChecksum: checksum(match[2]), status: 'pending-document-import' })
+    const byteEstimate = Math.floor(base64.replace(/=+$/, '').length * 3 / 4)
+    files.push({ id, path, mimeType, byteEstimate, sourceChecksum: checksum(base64), status: 'pending-document-import' })
+    filePayloads.push({ id, path, mimeType, byteEstimate, sourceChecksum: checksum(base64), base64 })
     return { legacyFileRef: id, status: 'pending-document-import' }
   }
-  if (Array.isArray(value)) return value.map((item, index) => stripFiles(item, `${path}[${index}]`, files))
+  if (Array.isArray(value)) return value.map((item, index) => stripFiles(item, `${path}[${index}]`, files, filePayloads))
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stripFiles(item, `${path}.${key}`, files)]))
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stripFiles(item, `${path}.${key}`, files, filePayloads)]))
   }
   return value
 }
@@ -75,9 +77,10 @@ function stripFiles(value, path, files) {
 export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.json', sourceBytes = 0 } = {}) {
   const records = sourceRecords(backup)
   const files = []
+  const filePayloads = []
   const preparedRecords = Object.fromEntries(Object.entries(records).map(([key, value]) => [
     `malbecHOS_${key}`,
-    stripFiles(value, `malbecHOS_${key}`, files),
+    stripFiles(value, `malbecHOS_${key}`, files, filePayloads),
   ]))
   const keys = Object.keys(records).sort()
   const keyInventory = keys.map(key => ({
@@ -112,6 +115,7 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
 
   return {
     prepared,
+    filePayloads,
     inspection: {
       sourceSystem: MALBEC_SOURCE_SYSTEM,
       sourceFileName,

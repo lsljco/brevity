@@ -97,6 +97,13 @@ export function validateEstateWorkspace(value) {
       if (record?.propertyId && record.propertyId !== value.propertyId) errors.push(`${collection}[${index}] references a different property.`)
     })
   })
+  ;(value.documents || []).forEach((document, index) => {
+    if (!document.storage?.key) errors.push(`documents[${index}] requires durable storage metadata.`)
+    if (!document.sha256) errors.push(`documents[${index}] requires a SHA-256 hash.`)
+    ;(document.relatedEntityIds || []).forEach(relatedId => {
+      if (!ids.has(relatedId)) errors.push(`documents[${index}] references missing Estate entity ${relatedId}.`)
+    })
+  })
   return errors
 }
 
