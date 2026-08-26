@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import householdAuth from "./household-auth.js";
-import { fetchCalendarReport } from "../lib/icloud-calendar-report.mjs";
+import { fetchCalendarList, fetchCalendarReport } from "../lib/icloud-calendar-report.mjs";
 
 const { readSession } = householdAuth;
 
@@ -69,8 +69,8 @@ async function discoverCalendar() {
   const home = firstTag(homeXml, "href");
   if (!home) throw new Error("Could not find the iCloud calendar collection.");
 
-  const listReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/></d:prop></d:propfind>`;
-  const listXml = (await caldav(new URL(home, CALDAV_ROOT).href, "PROPFIND", listReq, { depth: "1" }, "calendar-list discovery request")).text;
+  const listResult = await fetchCalendarList({ homeUrl:new URL(home, CALDAV_ROOT).href, request:caldav });
+  const listXml = listResult.text;
   const candidates = blocks(listXml, "response").map(block => ({
     href: firstTag(block, "href"),
     name: firstTag(block, "displayname"),
@@ -85,7 +85,7 @@ async function discoverCalendar() {
   const wanted = targetName.toLocaleLowerCase();
   const chosen = candidates.find(item => item.name.trim().toLocaleLowerCase() === wanted);
   if (!chosen) throw new Error(`The shared Apple calendar named “${targetName}” was not found. Set ICLOUD_CALENDAR_NAME to its exact name.`);
-  return { url: new URL(chosen.href, CALDAV_ROOT).href, name: chosen.name || "iCloud Calendar" };
+  return { url:new URL(chosen.href, CALDAV_ROOT).href, name:chosen.name || "iCloud Calendar", discoveryMode:listResult.discoveryMode };
 }
 
 const unfold = ics => String(ics).replace(/\r?\n[ \t]/g, "");
@@ -184,7 +184,7 @@ export const handler = async event => {
     const calendar = await discoverCalendar();
     if (event.httpMethod === "GET") {
       const result = await listEvents(calendar);
-      return json(200, { calendar:calendar.name, syncMode:"two-way", recurrenceMode:result.recurrenceMode, events:result.events });
+      return json(200, { calendar:calendar.name, syncMode:"two-way", discoveryMode:calendar.discoveryMode, recurrenceMode:result.recurrenceMode, events:result.events });
     }
     const item = event.body ? JSON.parse(event.body) : {};
 

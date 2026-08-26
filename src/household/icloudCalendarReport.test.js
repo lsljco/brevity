@@ -1,6 +1,32 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calendarQueryReport, calendarQueryWindow, fetchCalendarReport } from '../../netlify/lib/icloud-calendar-report.mjs'
+import { calendarListPropfind, calendarQueryReport, calendarQueryWindow, fetchCalendarList, fetchCalendarReport } from '../../netlify/lib/icloud-calendar-report.mjs'
+
+test('iCloud calendar discovery falls back to a minimal property request after 400', async () => {
+  const calls = []
+  const result = await fetchCalendarList({
+    homeUrl:'https://caldav.icloud.com/home/',
+    request:async (...args) => {
+      calls.push(args)
+      if (calls.length === 1) throw Object.assign(new Error('rejected'), { status:400 })
+      return { text:'<multistatus />' }
+    },
+  })
+
+  assert.equal(calls.length, 2)
+  assert.match(calls[0][2], /supported-calendar-component-set/)
+  assert.doesNotMatch(calls[1][2], /supported-calendar-component-set/)
+  assert.match(calls[1][2], /displayname/)
+  assert.match(calls[1][2], /resourcetype/)
+  assert.equal(result.discoveryMode, 'minimal')
+})
+
+test('minimal calendar discovery remains valid CalDAV XML', () => {
+  const request = calendarListPropfind({ includeComponents:false })
+  assert.match(request, /^<\?xml version="1\.0" encoding="UTF-8"\?>/)
+  assert.match(request, /xmlns:c="urn:ietf:params:xml:ns:caldav"/)
+  assert.doesNotMatch(request, /supported-calendar-component-set/)
+})
 
 test('iCloud event queries use a bounded window instead of multi-year recurrence expansion', () => {
   const window = calendarQueryWindow(new Date('2026-08-26T12:00:00Z'))

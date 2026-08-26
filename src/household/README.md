@@ -64,6 +64,8 @@ Calendar credentials remain server-side and are never returned to the browser. C
 
 Event reads use a bounded Apple CalDAV query. Brevity requests expanded recurring instances first and automatically falls back to Apple's standard filtered event response when Apple rejects recurrence expansion, ensuring ordinary appointments remain available instead of failing the entire calendar.
 
+Calendar discovery likewise falls back from Apple's component-capability query to a minimal standards-compatible calendar listing when the account rejects the extended property request.
+
 ### Brevity AI
 
 - `OPENAI_API_KEY` — server-side only
