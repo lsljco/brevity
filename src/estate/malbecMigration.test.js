@@ -57,10 +57,14 @@ test('sanitizes client-supplied file manifests before durable storage', () => {
     sourceFileName: `malbec\u0000${'x'.repeat(300)}.json`,
     files: [{ id: 'file-1', path: 'records.photo', mimeType: 'image/png', byteEstimate: -10, status: 'complete' }, { id: '', path: '' }],
     blockingIssues: ['Review this record.'],
+    sourceExports: [{ sourceFileName: 'device.json', sourceChecksum: 'hash-1', sourceRecordCount: 4 }],
+    comparison: { sourceCount: 1, propertyRecordsAgree: true },
   })
   assert.ok(!result.sourceFileName.includes('\u0000'))
   assert.equal(result.sourceFileName.length, 240)
   assert.equal(result.files.length, 1)
   assert.equal(result.files[0].byteEstimate, 0)
   assert.equal(result.files[0].status, 'pending-document-import')
+  assert.equal(result.sourceExports[0].sourceChecksum, 'hash-1')
+  assert.equal(result.comparison.propertyRecordsAgree, true)
 })

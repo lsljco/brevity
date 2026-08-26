@@ -135,6 +135,92 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
   }
 }
 
+function preparedValue(source, key) {
+  return source?.prepared?.records?.[`malbecHOS_${key}`]
+}
+
+function sourceLabel(source) {
+  return source?.inspection?.sourceFileName || 'Unnamed export'
+}
+
+function propertyRecordConflicts(sources) {
+  return [...IMPORT_KEYS].flatMap(key => {
+    const recordsBySource = sources.map(source => Array.isArray(preparedValue(source, key)) ? preparedValue(source, key) : [])
+    const ids = [...new Set(recordsBySource.flatMap(records => records.map(record => String(record?.id ?? ''))).filter(Boolean))]
+    return ids.flatMap(legacyId => {
+      const versions = recordsBySource.map(records => records.find(record => String(record?.id ?? '') === legacyId) || null)
+      const present = versions.map((record, index) => record ? index : -1).filter(index => index >= 0)
+      const missing = versions.map((record, index) => !record ? index : -1).filter(index => index >= 0)
+      const fingerprints = [...new Set(versions.filter(Boolean).map(record => checksum(JSON.stringify(record))))]
+      if (missing.length) return [{ type: 'missing-record', key, legacyId, presentIn: present.map(index => sourceLabel(sources[index])), missingFrom: missing.map(index => sourceLabel(sources[index])) }]
+      if (fingerprints.length > 1) return [{ type: 'divergent-record', key, legacyId, presentIn: present.map(index => sourceLabel(sources[index])) }]
+      return []
+    })
+  })
+}
+
+function otherKeyDifferences(sources) {
+  const keys = [...new Set(sources.flatMap(source => source.inspection.keyInventory.map(item => item.key)))].filter(key => !IMPORT_KEYS.has(key)).sort()
+  return keys.flatMap(key => {
+    const versions = sources.map(source => preparedValue(source, key))
+    const present = versions.map((value, index) => value !== undefined ? index : -1).filter(index => index >= 0)
+    const missing = versions.map((value, index) => value === undefined ? index : -1).filter(index => index >= 0)
+    const fingerprints = [...new Set(versions.filter(value => value !== undefined).map(value => checksum(JSON.stringify(value))))]
+    if (!missing.length && fingerprints.length <= 1) return []
+    const disposition = sources.flatMap(source => source.inspection.keyInventory).find(item => item.key === key)?.disposition || 'manual-review'
+    return [{ key, disposition, type: missing.length ? 'missing-key' : 'divergent-key', presentIn: present.map(index => sourceLabel(sources[index])), missingFrom: missing.map(index => sourceLabel(sources[index])) }]
+  })
+}
+
+export function compareMalbecExports(sources) {
+  if (!Array.isArray(sources) || !sources.length) throw new Error('At least one inspected Malbec export is required.')
+  const propertyConflicts = sources.length > 1 ? propertyRecordConflicts(sources) : []
+  const deferredDifferences = sources.length > 1 ? otherKeyDifferences(sources) : []
+  const sourceBlockingIssues = sources.flatMap(source => source.inspection.blockingIssues.map(issue => `${sourceLabel(source)}: ${issue}`))
+  const blockingIssues = [
+    ...sourceBlockingIssues,
+    ...propertyConflicts.map(conflict => conflict.type === 'missing-record'
+      ? `${conflict.key} record ${conflict.legacyId} is missing from ${conflict.missingFrom.join(', ')}.`
+      : `${conflict.key} record ${conflict.legacyId} differs between device exports.`),
+  ]
+  const recommendedSourceIndex = blockingIssues.length ? null : sources
+    .map((source, index) => ({ index, time: Date.parse(source.inspection.sourceExportedAt || '') || 0 }))
+    .sort((a, b) => b.time - a.time || b.index - a.index)[0].index
+  return {
+    sourceCount: sources.length,
+    sources: sources.map((source, index) => ({
+      index,
+      sourceFileName: source.inspection.sourceFileName,
+      sourceExportedAt: source.inspection.sourceExportedAt,
+      sourceChecksum: source.inspection.sourceChecksum,
+      sourceRecordCount: source.inspection.sourceRecordCount,
+      importableRecordCount: source.inspection.importableRecordCount,
+      fileCount: source.inspection.fileCount,
+    })),
+    propertyConflicts,
+    deferredDifferences,
+    blockingIssues,
+    recommendedSourceIndex,
+    propertyRecordsAgree: propertyConflicts.length === 0,
+  }
+}
+
+export function reconciliationInspection(sources, comparison, selectedIndex = comparison?.recommendedSourceIndex) {
+  const selected = sources?.[selectedIndex]
+  if (!selected) throw new Error('Choose a valid source export for reconciliation.')
+  return {
+    ...selected.inspection,
+    blockingIssues: [...new Set([...(selected.inspection.blockingIssues || []), ...(comparison.blockingIssues || [])])],
+    sourceExports: comparison.sources,
+    comparison: {
+      sourceCount: comparison.sourceCount,
+      propertyRecordsAgree: comparison.propertyRecordsAgree,
+      propertyConflictCount: comparison.propertyConflicts.length,
+      deferredDifferenceCount: comparison.deferredDifferences.length,
+    },
+  }
+}
+
 export function formatBytes(value) {
   const bytes = Number(value || 0)
   if (bytes < 1024) return `${bytes} B`
