@@ -1,6 +1,28 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calendarListPropfind, calendarQueryReport, calendarQueryWindow, fetchCalendarList, fetchCalendarReport } from '../../netlify/lib/icloud-calendar-report.mjs'
+import { calendarListPropfind, calendarQueryReport, calendarQueryWindow, fetchCalendarList, fetchCalendarReport, resolveAppleDavHref } from '../../netlify/lib/icloud-calendar-report.mjs'
+
+test('iCloud discovery resolves relative DAV hrefs against the server that returned them', () => {
+  assert.equal(
+    resolveAppleDavHref('/123456/calendars/', 'https://p123-caldav.icloud.com/123456/principal/'),
+    'https://p123-caldav.icloud.com/123456/calendars/',
+  )
+  assert.equal(
+    resolveAppleDavHref('https://p123-caldav.icloud.com/123456/calendars/family/', 'https://caldav.icloud.com/'),
+    'https://p123-caldav.icloud.com/123456/calendars/family/',
+  )
+})
+
+test('iCloud discovery never forwards credentials to a non-Apple DAV host', () => {
+  assert.throws(
+    () => resolveAppleDavHref('https://calendar.example.com/steal/', 'https://caldav.icloud.com/'),
+    /invalid CalDAV resource URL/,
+  )
+  assert.throws(
+    () => resolveAppleDavHref('http://caldav.icloud.com/insecure/', 'https://caldav.icloud.com/'),
+    /invalid CalDAV resource URL/,
+  )
+})
 
 test('iCloud calendar discovery falls back to a minimal property request after 400', async () => {
   const calls = []
