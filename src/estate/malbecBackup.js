@@ -1,4 +1,5 @@
 import { MALBEC_SOURCE_SYSTEM } from './malbecMigration.js'
+import { findExactMalbecSeedCandidates } from './malbecDefaults.js'
 
 const IMPORT_KEYS = new Set(['maintenance_maintenance', 'maintenance_projects'])
 const DEFERRED_KEYS = new Set(['supplies_inv', 'supplies_purch', 'calendar_evs'])
@@ -88,6 +89,7 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
   const missingLegacyIds = [...IMPORT_KEYS].flatMap(key => missingIds(records[key]).map(issue => ({ key, ...issue })))
   const sourceRecordCount = keyInventory.reduce((total, item) => total + item.count, 0)
   const importableRecordCount = [...IMPORT_KEYS].reduce((total, key) => total + recordCount(records[key]), 0)
+  const seedCandidates = findExactMalbecSeedCandidates(records)
   const prepared = {
     format: 'brevity-malbec-structured-export',
     schemaVersion: 1,
@@ -106,6 +108,7 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
   if (files.length) warnings.push(`${files.length} embedded file${files.length === 1 ? '' : 's'} were catalogued and removed from the structured upload; their bytes remain in the untouched source backup.`)
   if (duplicates.length) warnings.push(`${duplicates.length} duplicate legacy ID group${duplicates.length === 1 ? '' : 's'} require reconciliation before commit.`)
   if (missingLegacyIds.length) warnings.push(`${missingLegacyIds.length} maintenance or project record${missingLegacyIds.length === 1 ? '' : 's'} have no legacy ID.`)
+  if (seedCandidates.length) warnings.push(`${seedCandidates.length} record${seedCandidates.length === 1 ? '' : 's'} exactly match Malbec code defaults and require an import-or-exclude decision.`)
 
   return {
     prepared,
@@ -127,6 +130,7 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
       embeddedFileBytes: files.reduce((total, file) => total + file.byteEstimate, 0),
       duplicates,
       missingLegacyIds,
+      seedCandidates,
       warnings,
       blockingIssues: [
         ...(importableRecordCount === 0 ? ['At least one maintenance or project record is required for the initial import.'] : []),
@@ -207,12 +211,24 @@ export function compareMalbecExports(sources) {
   }
 }
 
-export function reconciliationInspection(sources, comparison, selectedIndex = comparison?.recommendedSourceIndex) {
+export function reconciliationInspection(sources, comparison, selectedIndex = comparison?.recommendedSourceIndex, seedResolutions = []) {
   const selected = sources?.[selectedIndex]
   if (!selected) throw new Error('Choose a valid source export for reconciliation.')
+  const candidates = selected.inspection.seedCandidates || []
+  const resolved = candidates.flatMap(candidate => {
+    const resolution = seedResolutions.find(item => item.key === candidate.key && item.legacyId === candidate.legacyId && item.sourceFingerprint === candidate.sourceFingerprint)
+    return resolution && ['import', 'exclude'].includes(resolution.action) ? [{ ...candidate, action: resolution.action }] : []
+  })
+  const unresolvedCount = candidates.length - resolved.length
   return {
     ...selected.inspection,
-    blockingIssues: [...new Set([...(selected.inspection.blockingIssues || []), ...(comparison.blockingIssues || [])])],
+    blockingIssues: [...new Set([
+      ...(selected.inspection.blockingIssues || []),
+      ...(comparison.blockingIssues || []),
+      ...(unresolvedCount ? [`${unresolvedCount} exact Malbec code-default record${unresolvedCount === 1 ? '' : 's'} require an import-or-exclude decision.`] : []),
+    ])],
+    seedCandidates: candidates,
+    seedResolutions: resolved,
     sourceExports: comparison.sources,
     comparison: {
       sourceCount: comparison.sourceCount,

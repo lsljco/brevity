@@ -17,9 +17,10 @@ This procedure is non-destructive. It does not change Malbec browser storage, fi
 3. In **Administrator migration console**, choose all available original JSON backups together, or add them one at a time.
 4. Review each source export and the cross-device comparison. Brevity blocks import when a maintenance/project ID is missing from one source or has divergent content.
 5. Review storage-key count, source-record count, duplicate IDs, deferred keys and embedded-file totals for the selected candidate.
-6. Run the safe migration preview. This sends only the selected structured copy after embedded file bytes have been removed locally, plus the sanitized comparison manifest.
-7. Confirm that both **Payload integrity** and **Record counts reconcile** pass.
-8. Download the reconciliation report and retain it beside the untouched source exports. The report contains manifests and checksums, not embedded file bytes.
+6. Review every exact match to Malbec's built-in maintenance/project examples. Mark each one **Exclude sample** or **Keep as real**; Brevity never guesses.
+7. Run the safe migration preview. This sends only the selected structured copy after embedded file bytes have been removed locally, plus the sanitized comparison and seed-review manifests.
+8. Confirm that both **Payload integrity** and **Record counts reconcile** pass and that no seed decision remains unresolved.
+9. Download the reconciliation report and retain it beside the untouched source exports. The report contains manifests, seed decisions and checksums, not embedded file bytes.
 
 ## Compare multiple devices
 
@@ -43,6 +44,7 @@ The console permits one initial import only. It requires:
 - a successful server dry run;
 - server verification that the inspected structured payload was not changed before transformation;
 - exact agreement between inspected importable records and transformed work orders/projects;
+- an explicit import-or-exclude decision for every record that exactly matches a source-code default;
 - no duplicate-ID blocking issues;
 - an explicit confirmation;
 - no existing durable Malbec Estate workspace.
@@ -59,6 +61,7 @@ Do not commit when any of the following is true:
 - expected maintenance/project counts are missing;
 - source files were manually edited without a reconciliation record;
 - payload-integrity or record-count validation fails;
+- any exact code-default match remains unresolved;
 - the Estate workspace already exists;
 - the preview contains unexplained warnings.
 

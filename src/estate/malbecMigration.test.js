@@ -63,6 +63,7 @@ test('sanitizes client-supplied file manifests before durable storage', () => {
     blockingIssues: ['Review this record.'],
     sourceExports: [{ sourceFileName: 'device.json', sourceChecksum: 'hash-1', sourceRecordCount: 4 }],
     comparison: { sourceCount: 1, propertyRecordsAgree: true },
+    seedResolutions: [{ key: 'maintenance_projects', legacyId: '1', sourceFingerprint: 'seed-1', sourceCodeSha: 'source-sha', action: 'exclude' }],
   })
   assert.ok(!result.sourceFileName.includes('\u0000'))
   assert.equal(result.sourceFileName.length, 240)
@@ -71,4 +72,5 @@ test('sanitizes client-supplied file manifests before durable storage', () => {
   assert.equal(result.files[0].status, 'pending-document-import')
   assert.equal(result.sourceExports[0].sourceChecksum, 'hash-1')
   assert.equal(result.comparison.propertyRecordsAgree, true)
+  assert.equal(result.seedResolutions[0].action, 'exclude')
 })

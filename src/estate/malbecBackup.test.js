@@ -53,6 +53,19 @@ test('a backup with no importable property records cannot create an empty worksp
   assert.ok(result.inspection.blockingIssues.some(issue => /At least one maintenance or project/.test(issue)))
 })
 
+test('exact code defaults require an explicit import-or-exclude decision', () => {
+  const exactDefault = { id: 6, title: 'Gutter Cleaning', desc: 'Spring cleaning', cat: 'Exterior', owner: 'Larry', stage: 'Completed', scheduledDate: null, updated: '2026-06-15', updatedBy: 'Larry' }
+  const source = prepareMalbecBackup({ records: { malbecHOS_maintenance_maintenance: [exactDefault] } }, { sourceFileName: 'device.json' })
+  assert.equal(source.inspection.seedCandidates.length, 1)
+  const comparison = compareMalbecExports([source])
+  const unresolved = reconciliationInspection([source], comparison, 0)
+  assert.match(unresolved.blockingIssues.at(-1), /code-default record/)
+  const candidate = source.inspection.seedCandidates[0]
+  const resolved = reconciliationInspection([source], comparison, 0, [{ ...candidate, action: 'exclude' }])
+  assert.equal(resolved.blockingIssues.length, 0)
+  assert.equal(resolved.seedResolutions[0].action, 'exclude')
+})
+
 function deviceExport(fileName, exportedAt, maintenance, projects = [], extra = {}) {
   return prepareMalbecBackup({ exportedAt, appVersion: 'MalbecEstateHOS', data: {
     malbecHOS_maintenance_maintenance: JSON.stringify(maintenance),
