@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import './TodayDashboard.css'
-import { HOUSEHOLD_MEMBERS, ITEM_STATUS, countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
+import { DECISION_STATUS, DECISION_STATUS_OPTIONS, HOUSEHOLD_MEMBERS, countOpenDecisions, assignmentsForMember, normalizeDailyPlan } from './dailyPlan.js'
 import DailyCommandSchedule from './DailyCommandSchedule.jsx'
 
 const PILLARS = [
@@ -47,7 +47,7 @@ function TodayCalendarAgenda({ appointments, connected, onOpenCalendar }) {
 }
 
 function DecisionEditor({ decision, number, onSave }) {
-  const [draft, setDraft] = useState(() => ({ ...decision, owner: decision.owner || 'Family', status: decision.status || ITEM_STATUS.needsDecision }))
+  const [draft, setDraft] = useState(() => ({ ...decision, owner: decision.owner || 'Family', status: decision.status || DECISION_STATUS.needsDecision }))
   const [saveState, setSaveState] = useState('idle')
   const [error, setError] = useState('')
   const update = (field, value) => setDraft(current => ({ ...current, [field]: value }))
@@ -63,7 +63,7 @@ function DecisionEditor({ decision, number, onSave }) {
     }
   }
 
-  return <article className="today-decision-editor"><div className="today-decision-editor-heading"><span>{String(number).padStart(2, '0')}</span><label><span>Decision</span><input value={draft.title || ''} onChange={event => update('title', event.target.value)} /></label></div><label><span>Update / resolution</span><textarea value={draft.notes || ''} onChange={event => update('notes', event.target.value)} placeholder="Enter the decision, answer, or update needed…" /></label><div className="today-decision-editor-fields"><label><span>Owner</span><select value={draft.owner} onChange={event => update('owner', event.target.value)}><option>Family</option>{HOUSEHOLD_MEMBERS.map(member => <option key={member}>{member}</option>)}</select></label><label><span>Status</span><select value={draft.status} onChange={event => update('status', event.target.value)}><option value={ITEM_STATUS.needsDecision}>Needs decision</option><option value={ITEM_STATUS.pending}>Open</option><option value={ITEM_STATUS.ready}>Ready</option><option value={ITEM_STATUS.inProgress}>In progress</option><option value={ITEM_STATUS.complete}>Complete</option><option value={ITEM_STATUS.deferred}>Deferred</option></select></label></div>{error && <p className="today-decision-save-error">{error}</p>}<footer><small>{saveState === 'saved' ? 'Update saved' : 'Changes save to the shared household plan.'}</small><button type="button" onClick={save} disabled={saveState === 'saving' || !draft.title?.trim()}><i className={`ti ${saveState === 'saved' ? 'ti-check' : 'ti-device-floppy'}`} /> {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save update'}</button></footer></article>
+  return <article className="today-decision-editor"><div className="today-decision-editor-heading"><span>{String(number).padStart(2, '0')}</span><label><span>Decision</span><input value={draft.title || ''} onChange={event => update('title', event.target.value)} /></label></div><label><span>Update / resolution</span><textarea value={draft.notes || ''} onChange={event => update('notes', event.target.value)} placeholder="Enter the decision, answer, or update needed…" /></label><div className="today-decision-editor-fields"><label><span>Owner</span><select value={draft.owner} onChange={event => update('owner', event.target.value)}><option>Family</option>{HOUSEHOLD_MEMBERS.map(member => <option key={member}>{member}</option>)}</select></label><label><span>Status</span><select value={draft.status} onChange={event => update('status', event.target.value)}>{DECISION_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>{error && <p className="today-decision-save-error">{error}</p>}<footer><small>{saveState === 'saved' ? 'Update saved' : 'Changes save to the shared household plan.'}</small><button type="button" onClick={save} disabled={saveState === 'saving' || !draft.title?.trim()}><i className={`ti ${saveState === 'saved' ? 'ti-check' : 'ti-device-floppy'}`} /> {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save update'}</button></footer></article>
 }
 
 export default function TodayDashboard({ plan, calendarAppointments = [], calendarConnected = false, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onGeneratePlan, onSavePlan, generationState = 'idle' }) {
