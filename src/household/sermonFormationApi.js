@@ -66,3 +66,15 @@ export const oneDriveConnectUrl=folderUrl=>`/.netlify/functions/onedrive-oauth-s
 
 export async function generateSermonSlides({id,notes,source}){const response=await fetch('/.netlify/functions/sermon-slides-background',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({id,notes,source})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Slide generation returned ${response.status}.`);return payload}
 export async function getSermonSlideStatus(id){const response=await fetch(`/.netlify/functions/sermon-slides?id=${encodeURIComponent(id)}`,{credentials:'include'});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Slide status returned ${response.status}.`);return payload}
+
+export async function getSermonDeviceRescues(){
+  const response=await fetch('/.netlify/functions/sermon-device-rescue',{credentials:'include'})
+  return parse(response)
+}
+
+export async function importSermonDeviceRescue(deviceExport){
+  const response=await fetch('/.netlify/functions/sermon-device-rescue',{
+    method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({export:deviceExport})
+  })
+  return parse(response)
+}
