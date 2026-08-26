@@ -47,6 +47,18 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     }
   }
 
+  const getWindowReadOnly = async ({ startDate = mealDateInTimeZone(now(), timeZone), count = 7 } = {}) => {
+    const dates = rollingMealDates(startDate, count)
+    const days = await Promise.all(dates.map(async date => (await getDay(date)) || createDay(date)))
+    return {
+      householdId,
+      timeZone,
+      startDate,
+      days: days.map(resolveMealDay),
+      librarySummary: mealLibrarySummary(),
+    }
+  }
+
   const substitute = async ({ date, mealType, mealId, expectedVersion, actor = 'Household member' }) => {
     const errors = validateMealSubstitution({ date, mealType, mealId })
     if (errors.length) {
@@ -95,7 +107,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     return resolveMealDay(next)
   }
 
-  return { ensureDay, getWindow, substitute }
+  return { ensureDay, getWindow, getWindowReadOnly, substitute }
 }
 
 export async function productionMealPlanRepository(options = {}) {

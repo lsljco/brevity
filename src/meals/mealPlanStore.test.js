@@ -23,6 +23,17 @@ test('repository persists and returns a seven-day household plan', async () => {
   assert.deepEqual(second.days, first.days)
 })
 
+test('read-only meal windows never create missing records', async () => {
+  const memory = new Map()
+  const store = { get: async key => memory.get(key) || null, setJSON: async (key, value) => memory.set(key, value) }
+  const repository = createMealPlanRepository({ store, now: () => new Date('2026-08-24T12:00:00Z') })
+
+  const plan = await repository.getWindowReadOnly({ startDate: '2026-08-24' })
+
+  assert.equal(plan.days.length, 7)
+  assert.equal(memory.size, 0)
+})
+
 test('substitution is category-safe, versioned and audited', async () => {
   const store = memoryStore()
   const repository = createMealPlanRepository({
