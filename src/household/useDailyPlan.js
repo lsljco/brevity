@@ -29,6 +29,7 @@ export function useDailyPlan(date = localDateKey()) {
   useEffect(() => { reload() }, [reload])
 
   const persist = useCallback(async next => {
+    const previous = plan
     const candidate = normalizeDailyPlan(typeof next === 'function' ? next(plan) : next)
     setPlan(candidate)
     setState('saving')
@@ -39,6 +40,7 @@ export function useDailyPlan(date = localDateKey()) {
       setState('ready')
       return saved
     } catch (err) {
+      setPlan(err.currentPlan ? normalizeDailyPlan(err.currentPlan) : previous)
       setError(err.message || 'Could not save the household plan.')
       setState('error')
       throw err

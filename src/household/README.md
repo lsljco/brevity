@@ -18,7 +18,7 @@ Brevity is the household source of truth. Apple/iCloud Calendar is both the time
 - `TodayDashboard.jsx` — household command surface.
 - `MorningAlignment.jsx` — guided Seven Pillars alignment.
 - `TimedCommitmentsEditor.jsx` — structured appointments/meetings with Calendar opt-in.
-- `NotificationCenter.jsx` / `notifications.js` — Brevity signal model.
+- `operatingModel.js` — canonical Action, Decision, Commitment, Outcome, and Signal read model for Today.
 - `EveningRecap.jsx` — daily close workflow.
 - `TomorrowProposal.jsx` — human-approved AI proposal workflow.
 - `memberProfile.js` / `MemberSwitcher.jsx` — per-device household identity.

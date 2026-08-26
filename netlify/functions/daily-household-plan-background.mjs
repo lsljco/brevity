@@ -26,6 +26,7 @@ export default async function handler(request) {
       targetDate: body.date,
       targetWeekday: body.weekday,
       overwrite: Boolean(body.overwrite),
+      requestId: String(body.requestId || ''),
     });
     return new Response(JSON.stringify({ accepted: true }), { status: 202, headers: { 'content-type': 'application/json' } });
   } catch (error) {

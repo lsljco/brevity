@@ -1,0 +1,53 @@
+.today-attention {
+  overflow: hidden;
+  border: 1px solid rgba(197, 164, 109, .32);
+  border-radius: 18px;
+  background: linear-gradient(120deg, rgba(197, 164, 109, .12), rgba(255, 255, 255, .02));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .22);
+}
+.today-attention > header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+.today-attention > header span { display: block; color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.today-attention > header h2 { margin: 4px 0 0; font: 400 24px/1.1 var(--font-serif); }
+.today-attention > header > strong { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: rgba(197, 164, 109, .16); color: var(--gold); font: 600 17px var(--font-serif); }
+.today-attention-list { display: grid; }
+.today-attention-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 18px; border-top: 1px solid rgba(255, 255, 255, .055); }
+.today-attention-item:first-child { border-top: 0; }
+.today-attention-item > i { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: rgba(197, 164, 109, .12); color: var(--gold); font-size: 17px; }
+.today-attention-item > div > strong,
+.today-attention-item > div > span,
+.today-attention-item > div > small { display: block; }
+.today-attention-item > div > strong { font-size: 12px; }
+.today-attention-item > div > span { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.today-attention-item > div > small { margin-top: 5px; color: rgba(247, 243, 234, .34); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.today-attention-item > button { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid rgba(197, 164, 109, .28); border-radius: 9px; background: rgba(197, 164, 109, .08); color: var(--gold); font: 600 9px var(--font); cursor: pointer; }
+.today-attention-item--critical { background: rgba(177, 85, 69, .07); }
+.today-attention-item--critical > i { background: rgba(177, 85, 69, .14); color: #e4a093; }
+.today-attention--clear { display: flex; align-items: center; gap: 12px; padding: 13px 17px; border-color: rgba(127, 186, 138, .2); background: rgba(127, 186, 138, .055); }
+.today-attention--clear > i { color: #9acc9f; font-size: 22px; }
+.today-attention--clear strong,
+.today-attention--clear span { display: block; }
+.today-attention--clear strong { font-size: 11px; }
+.today-attention--clear span { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.today-calendar-health { display: flex; align-items: center; gap: 8px; margin: -3px 0 13px; padding: 8px 10px; border-radius: 9px; background: rgba(255, 255, 255, .035); color: var(--muted); font-size: 9px; line-height: 1.45; }
+.today-calendar-health > i { font-size: 15px; }
+.today-calendar-health--ready { background: rgba(127, 186, 138, .06); color: #9acc9f; }
+.today-calendar-health--stale,
+.today-calendar-health--error,
+.today-calendar-health--locked,
+.today-calendar-health--unconfigured { background: rgba(197, 164, 109, .08); color: #d8b77d; }
+.today-calendar-item--next { border-color: rgba(197, 164, 109, .34); background: rgba(197, 164, 109, .065); }
+.today-top-three li > span { display: block; margin-top: 6px; color: var(--gold); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.today-top-three--empty { color: var(--muted); border-style: dashed !important; }
+.today-pillar-card > em,
+.today-pillar-card > i { margin-left: auto; font-style: normal; }
+.today-pillar-card > em { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; background: rgba(197, 164, 109, .16); color: var(--gold); font-size: 10px; font-weight: 700; }
+.today-pillar-card > i { color: #9acc9f; font-size: 15px; }
+.today-pillar-card--attention { border-color: rgba(197, 164, 109, .22); }
+
+@media (max-width: 640px) {
+  .today-attention-item { grid-template-columns: 32px minmax(0, 1fr); }
+  .today-attention-item > button { grid-column: 2; width: 100%; justify-content: center; }
+  .today-attention--clear,
+  .today-calendar-health { align-items: flex-start; }
+  .today-calendar-health > i { margin-top: 1px; }
+}

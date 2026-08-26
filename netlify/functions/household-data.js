@@ -7,7 +7,6 @@ const STORE_NAME = 'brevity-household'
 const headers = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
-  'access-control-allow-origin': '*',
   'access-control-allow-headers': 'content-type',
   'access-control-allow-methods': 'GET,PUT,OPTIONS',
 }
@@ -35,7 +34,11 @@ async function getPlan(date) {
   return value || null
 }
 
-async function putPlan(date, plan) {
+async function putPlan(date, plan, expectedVersion) {
+  const dataStore = store()
+  const current = await dataStore.get(planKey(date), { type: 'json' }).catch(() => null)
+  const currentVersion = Number(current?.version || 0)
+  if (Number(expectedVersion || 0) !== currentVersion) return { conflict: true, current }
   const now = new Date().toISOString()
   const normalized = {
     ...plan,
@@ -44,10 +47,10 @@ async function putPlan(date, plan) {
     householdId: HOUSEHOLD_ID,
     createdAt: plan.createdAt || now,
     updatedAt: now,
-    version: Number(plan.version || 0) + 1,
+    version: currentVersion + 1,
   }
-  await store().setJSON(planKey(date), normalized)
-  return normalized
+  await dataStore.setJSON(planKey(date), normalized)
+  return { conflict: false, plan: normalized }
 }
 
 exports.handler = async event => {
@@ -66,8 +69,10 @@ exports.handler = async event => {
     if (event.httpMethod === 'PUT') {
       let body
       try { body = JSON.parse(event.body || '{}') } catch { return response(400, { error: 'Invalid JSON body.' }) }
-      const plan = await putPlan(date || body.date, body.plan || body)
-      return response(200, { householdId: HOUSEHOLD_ID, plan })
+      const candidate = body.plan || body
+      const result = await putPlan(date || body.date, candidate, body.expectedVersion ?? candidate.version ?? 0)
+      if (result.conflict) return response(409, { error: 'Another device updated this household plan. Brevity loaded the latest version so you can review it before saving again.', householdId: HOUSEHOLD_ID, plan: result.current })
+      return response(200, { householdId: HOUSEHOLD_ID, plan: result.plan })
     }
 
     return response(405, { error: 'Method not allowed.' })

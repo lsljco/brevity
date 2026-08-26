@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
+import { calendarSnapshotHealth, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+import { dedupeCalendarEvents } from './calendarOverlay.js'
 import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
 import { resolveTimeframe } from '../finance/financeTimeframe.js'
@@ -24,7 +26,7 @@ const normalizeLegacy = event => ({
   owner: event.owner || 'Family',
 })
 
-export default function FamilyCalendar({ currentMember = 'Family', includeFamily = false, lockMember = false, title = 'Family Calendar', subtitle = 'Two-way sync with the shared Apple Family Calendar' }){
+export default function FamilyCalendar({ currentMember = 'Family', includeFamily = false, lockMember = false, title = 'Family Calendar', subtitle = 'Shared Apple Family Calendar commitments and Brevity-published events' }){
   const today = new Date()
   const [month,setMonth]=useState(today.getMonth())
   const [year,setYear]=useState(today.getFullYear())
@@ -33,8 +35,9 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [legacyEvents,setLegacyEvents]=useState(()=>readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
   const cachedCalendar=useMemo(()=>readJson(localStorage,ICLOUD_CACHE_KEY,null),[])
   const [icloudEvents,setIcloudEvents]=useState(()=>(cachedCalendar?.events||[]).map(event=>({ ...event,source:'icloud',owner:event.owner||'Family' })))
-  const [icloudState,setIcloudState]=useState(cachedCalendar?'ready':'loading')
-  const [icloudError,setIcloudError]=useState('')
+  const [calendarHealth,setCalendarHealth]=useState(()=>calendarSnapshotHealth(cachedCalendar))
+  const [icloudState,setIcloudState]=useState(()=>calendarSnapshotHealth(cachedCalendar).state)
+  const [icloudError,setIcloudError]=useState(cachedCalendar?.error||'')
   const [calendarName,setCalendarName]=useState(cachedCalendar?.calendar||'Apple/iCloud Calendar')
 
   const loadIcloud = async () => {
@@ -42,25 +45,36 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     setIcloudError('')
     try {
       const result = await fetchICloudCalendarEvents()
-      const events=(result.events || []).map(event => ({ ...event, source: 'icloud', owner: event.owner || 'Family' }))
-      setIcloudEvents(events)
-      setCalendarName(result.calendar || 'Apple/iCloud Calendar')
-      try{localStorage.setItem(ICLOUD_CACHE_KEY,JSON.stringify(result))}catch{}
-      setIcloudState('ready')
+      const snapshot=stampCalendarSuccess(result)
+      setIcloudEvents((snapshot.events || []).map(event => ({ ...event, source: 'icloud', owner: event.owner || 'Family' })))
+      setCalendarName(snapshot.calendar || 'Apple/iCloud Calendar')
+      try{localStorage.setItem(ICLOUD_CACHE_KEY,JSON.stringify(snapshot))}catch{}
+      const health=calendarSnapshotHealth(snapshot)
+      setCalendarHealth(health)
+      setIcloudState(health.state)
     } catch (error) {
-      setIcloudError(error.message || 'The shared Apple Family Calendar could not be reached.')
-      setIcloudState(error.status === 401 ? 'locked' : error.status === 503 ? 'unconfigured' : 'error')
+      const previous=readJson(localStorage,ICLOUD_CACHE_KEY,cachedCalendar||{})
+      const snapshot=stampCalendarFailure(previous,error)
+      try{localStorage.setItem(ICLOUD_CACHE_KEY,JSON.stringify(snapshot))}catch{}
+      setIcloudEvents((snapshot.events||[]).map(item=>({ ...item,source:'icloud',owner:item.owner||'Family' })))
+      setIcloudError(snapshot.error)
+      const health=calendarSnapshotHealth(snapshot)
+      setCalendarHealth(health)
+      setIcloudState(health.state)
     }
   }
 
   useEffect(()=>{
-    if(!cachedCalendar)loadIcloud()
+    if(!cachedCalendar||calendarSnapshotHealth(cachedCalendar).stale)loadIcloud()
     const refresh=()=>setLegacyEvents(readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
     const receiveIcloud=event=>{
       const result=event.detail||{}
       setIcloudEvents((result.events||[]).map(item=>({ ...item,source:'icloud',owner:item.owner||'Family' })))
       setCalendarName(result.calendar||'Apple/iCloud Calendar')
-      setIcloudState('ready')
+      setIcloudError(result.error||'')
+      const health=calendarSnapshotHealth(result)
+      setCalendarHealth(health)
+      setIcloudState(health.state)
     }
     window.addEventListener('storage',refresh)
     window.addEventListener('brevity-family-calendar-updated',refresh)
@@ -70,7 +84,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
 
   const allEvents=useMemo(()=>{
     const cloudSources=new Set(icloudEvents.map(event=>event.sourceId).filter(Boolean))
-    return [...legacyEvents.filter(event=>!cloudSources.has(event.id)),...icloudEvents]
+    return dedupeCalendarEvents([...legacyEvents.filter(event=>!cloudSources.has(event.id)),...icloudEvents])
   },[legacyEvents,icloudEvents])
   const filtered=useMemo(()=>allEvents.filter(event=>{
     const eventDate=event.date||event.start
@@ -88,6 +102,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     Object.values(map).forEach(items=>items.sort((a,b)=>(a.time||'').localeCompare(b.time||'')))
     return map
   },[filtered])
+  const agendaDays=useMemo(()=>Object.entries(byDate).sort(([left],[right])=>left.localeCompare(right)),[byDate])
   const first=new Date(year,month,1).getDay()
   const days=new Date(year,month+1,0).getDate()
   const cells=[...Array(first).fill(null),...Array.from({length:days},(_,i)=>i+1)]
@@ -96,10 +111,11 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
 
   const stateCopy={
     loading:'Checking secure iCloud calendar…',
-    ready:`Two-way sync connected to ${calendarName}`,
-    locked:'iCloud calendar is secure and currently locked on this device.',
-    unconfigured:'iCloud calendar credentials are not configured in Brevity yet.',
-    error:icloudError || 'iCloud calendar could not be reached. Brevity events remain available.',
+    ready:`Connected to ${calendarName}. ${calendarHealth.message}`,
+    stale:calendarHealth.message,
+    locked:calendarHealth.message || 'iCloud calendar is secure and currently locked.',
+    unconfigured:calendarHealth.message || 'iCloud calendar credentials are not configured in Brevity yet.',
+    error:calendarHealth.message || icloudError || 'iCloud calendar could not be reached. Cached Brevity events remain available.',
   }
 
   return <div className="family-calendar" style={{minHeight:'100vh',background:'#000',padding:'28px 32px',color:soft,fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -110,7 +126,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       </div>}
     </div>
     <div className="family-calendar-status" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:20,padding:'10px 12px',border:`1px solid ${border}`,borderRadius:10,background:'rgba(255,255,255,.025)'}}>
-      <span style={{fontSize:10,color:icloudState==='ready'?gold:muted}}>{stateCopy[icloudState]}</span>
+      <span style={{fontSize:10,color:icloudState==='ready'?gold:icloudState==='loading'?muted:'#d8a16f'}}>{stateCopy[icloudState]}</span>
       <button onClick={loadIcloud} style={{border:`1px solid ${border}`,background:'rgba(255,255,255,.04)',color:soft,borderRadius:8,padding:'6px 10px',fontSize:10,cursor:'pointer'}}>Sync Family Calendar</button>
     </div>
     <FinanceTimeframe value={range} onChange={next=>{const calendarDates=calendarRange(next);setRange(calendarDates);const focus=new Date(`${calendarDates.from}T12:00:00`);if(!Number.isNaN(focus.getTime())){setYear(focus.getFullYear());setMonth(focus.getMonth())}}} label="Planner dates" />
@@ -128,11 +144,20 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
           <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
           {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
             <div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>
-            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{event.source==='icloud'?'Apple alert':event.source==='project'?'Project':'Brevity'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
+            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{event.source==='icloud'?'Apple Family Calendar':event.source==='project'?'Project':'Brevity'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
       })}
     </div></div>
+    <div className="family-calendar-mobile-agenda">
+      {agendaDays.map(([date,events])=><section key={date} className="family-calendar-agenda-day">
+        <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span></header>
+        {events.map(event=><article key={`${event.source}-${event.id}`}>
+          <time>{event.time||'All day'}</time>
+          <div><strong>{event.title}</strong><span>{event.source==='icloud'?'Apple Family Calendar':'Brevity'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
+        </article>)}
+      </section>)}
+    </div>
     {filtered.length===0&&<div style={{textAlign:'center',padding:'42px 20px',color:muted}}>{icloudState==='error'||icloudState==='locked'||icloudState==='unconfigured'?'No Apple events can appear until the Family Calendar connection above is restored. Brevity events will still appear here when they are created with Calendar enabled.':'No calendar commitments for this view. Add timed commitments in Morning Alignment and enable Calendar when an Apple alert is useful.'}</div>}
   </div>
 }
