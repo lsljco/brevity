@@ -107,8 +107,10 @@ export function sanitizeSourceInspection(value) {
     sourceExportedAt: safeText(value.sourceExportedAt, 60),
     sourceAppVersion: safeText(value.sourceAppVersion, 120),
     sourceChecksum: safeText(value.sourceChecksum, 120),
+    preparedChecksum: safeText(value.preparedChecksum, 120),
     sourceBytes: Math.max(0, Number(value.sourceBytes || 0)),
     sourceRecordCount: Math.max(0, Number(value.sourceRecordCount || 0)),
+    importableRecordCount: Math.max(0, Number(value.importableRecordCount || 0)),
     preparedBytes: Math.max(0, Number(value.preparedBytes || 0)),
     keyCount: Math.max(0, Number(value.keyCount || 0)),
     fileCount: files.length,
@@ -133,6 +135,16 @@ export function transformMalbecBackup(backup, {
 } = {}) {
   if (!backup || typeof backup !== 'object') throw new Error('A Malbec JSON backup is required.')
   sourceInspection = sanitizeSourceInspection(sourceInspection)
+  const actualPreparedChecksum = checksum(JSON.stringify(backup))
+  const preparedChecksumVerified = Boolean(sourceInspection?.preparedChecksum) && sourceInspection.preparedChecksum === actualPreparedChecksum
+  if (sourceInspection && !preparedChecksumVerified) {
+    sourceInspection.blockingIssues = [...new Set([
+      ...sourceInspection.blockingIssues,
+      sourceInspection.preparedChecksum
+        ? 'The structured migration payload changed after local inspection.'
+        : 'The structured migration payload checksum could not be verified.',
+    ])]
+  }
   const maintenance = valueFromBackup(backup, 'maintenance_maintenance')
   const projects = valueFromBackup(backup, 'maintenance_projects')
   const warnings = []
@@ -203,6 +215,8 @@ export function transformMalbecBackup(backup, {
     sourceExportedAt: sourceInspection.sourceExportedAt || null,
     sourceAppVersion: sourceInspection.sourceAppVersion || null,
     sourceChecksum: sourceInspection.sourceChecksum || null,
+    preparedChecksum: sourceInspection.preparedChecksum || null,
+    preparedChecksumVerified,
     sourceBytes: Number(sourceInspection.sourceBytes || 0),
     sourceRecordCount: Number(sourceInspection.sourceRecordCount || 0),
     importedAt: now,
@@ -217,6 +231,15 @@ export function transformMalbecBackup(backup, {
   if (deferredKeys.length) warnings.push(`Preserved but not imported in this increment: ${deferredKeys.join(', ')}.`)
   const validationErrors = validateEstateWorkspace(workspace)
   if (validationErrors.length) throw new Error(`Transformed Estate data is invalid: ${validationErrors.join(' ')}`)
+  const transformedRecordCount = workspace.workOrders.length + workspace.projects.length
+  const inspectedImportableRecordCount = Number(sourceInspection?.importableRecordCount || 0)
+  const recordCountMatches = Boolean(sourceInspection) && transformedRecordCount === inspectedImportableRecordCount
+  if (sourceInspection && !recordCountMatches) {
+    sourceInspection.blockingIssues = [...new Set([
+      ...sourceInspection.blockingIssues,
+      `Inspected importable record count (${inspectedImportableRecordCount}) does not match the transformed record count (${transformedRecordCount}).`,
+    ])]
+  }
 
   return {
     workspace,
@@ -231,12 +254,22 @@ export function transformMalbecBackup(backup, {
         workOrders: workspace.workOrders.length,
         projects: workspace.projects.length,
       },
+      validation: {
+        preparedChecksumVerified,
+        inspectedImportableRecordCount,
+        transformedRecordCount,
+        recordCountMatches,
+        readyForImport: preparedChecksumVerified && recordCountMatches && transformedRecordCount > 0 && !(sourceInspection?.blockingIssues?.length),
+      },
       warnings,
       sourceInspection: sourceInspection ? {
         sourceFileName: sourceInspection.sourceFileName || null,
         sourceExportedAt: sourceInspection.sourceExportedAt || null,
         sourceChecksum: sourceInspection.sourceChecksum || null,
+        preparedChecksum: sourceInspection.preparedChecksum || null,
+        preparedChecksumVerified,
         sourceRecordCount: Number(sourceInspection.sourceRecordCount || 0),
+        importableRecordCount: inspectedImportableRecordCount,
         fileCount: Number(sourceInspection.fileCount || 0),
         embeddedFileBytes: Number(sourceInspection.embeddedFileBytes || 0),
         keyCount: Number(sourceInspection.keyCount || 0),

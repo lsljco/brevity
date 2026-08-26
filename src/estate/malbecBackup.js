@@ -99,6 +99,7 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
     records: preparedRecords,
   }
   const preparedBytes = new TextEncoder().encode(JSON.stringify(prepared)).length
+  const preparedChecksum = checksum(JSON.stringify(prepared))
   const warnings = []
   if (!keys.length) warnings.push('No Malbec storage keys were found.')
   if (![...IMPORT_KEYS].some(key => keys.includes(key))) warnings.push('No maintenance or project records were found for the initial Estate import.')
@@ -115,6 +116,7 @@ export function prepareMalbecBackup(backup, { sourceFileName = 'malbec-backup.js
       sourceAppVersion: typeof backup.appVersion === 'string' ? backup.appVersion : null,
       sourceBytes,
       sourceChecksum: checksum(JSON.stringify(backup)),
+      preparedChecksum,
       preparedBytes,
       keyCount: keys.length,
       sourceRecordCount,

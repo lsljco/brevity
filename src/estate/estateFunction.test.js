@@ -30,7 +30,7 @@ test('Estate reads are household-authenticated and do not create data', async ()
 })
 
 test('legacy import is dry-run by default and commit is admin-only', async () => {
-  const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1, projects: 0 }, sourceInspection: { sourceChecksum: 'verified-source', blockingIssues: [] } } }
+  const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1, projects: 0 }, validation: { recordCountMatches: true }, sourceInspection: { sourceChecksum: 'verified-source', preparedChecksumVerified: true, blockingIssues: [] } } }
   let saves = 0
   const repository = { getWorkspace: async () => null, saveWorkspace: async input => { saves += 1; return { ...input.workspace, version: 1 } } }
   const memberHandler = createEstateHandler({
@@ -57,7 +57,7 @@ test('legacy import is dry-run by default and commit is admin-only', async () =>
 })
 
 test('initial import cannot overwrite an existing Estate workspace', async () => {
-  const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1 }, sourceInspection: { sourceChecksum: 'verified-source', blockingIssues: [] } } }
+  const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1 }, validation: { recordCountMatches: true }, sourceInspection: { sourceChecksum: 'verified-source', preparedChecksumVerified: true, blockingIssues: [] } } }
   const handler = createEstateHandler({
     authenticate: async () => ({ member: 'Larry', role: 'admin' }),
     repositoryFactory: async () => ({ getWorkspace: async () => ({ version: 1 }), saveWorkspace: async () => { throw new Error('must not overwrite') } }),
@@ -116,4 +116,21 @@ test('actual Malbec export shape completes inspect, preview, commit and read-bac
   assert.equal(workspace.version, 1)
   assert.equal(workspace.migration.sourceExportedAt, source.exportedAt)
   assert.equal(workspace.projects[0].title, 'Terrace repair')
+})
+
+test('payload changes after inspection fail checksum and count reconciliation gates', async () => {
+  const handler = createEstateHandler({
+    authenticate: async () => ({ member: 'Larry', role: 'admin' }),
+    repositoryFactory: async () => ({ getWorkspace: async () => null, saveWorkspace: async () => { throw new Error('must not save') } }),
+  })
+  const { prepared, inspection } = prepareMalbecBackup({ records: {
+    malbecHOS_maintenance_maintenance: [{ id: 1, title: 'Original service' }],
+  } })
+  prepared.records.malbecHOS_maintenance_maintenance.push({ id: 2, title: 'Added after inspection' })
+  const preview = await handler(event({ method: 'POST', body: { backup: prepared, sourceInspection: inspection } }))
+  const previewBody = JSON.parse(preview.body)
+  assert.equal(previewBody.report.validation.preparedChecksumVerified, false)
+  assert.equal(previewBody.report.validation.recordCountMatches, false)
+  const committed = await handler(event({ method: 'POST', body: { backup: prepared, sourceInspection: inspection, commit: true, expectedVersion: 0 } }))
+  assert.equal(committed.statusCode, 400)
 })
