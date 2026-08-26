@@ -62,6 +62,8 @@ Household settings:
 
 Calendar credentials remain server-side and are never returned to the browser. Calendar access uses the signed-in Brevity household session; the obsolete shared PIN is no longer used.
 
+Event reads use a bounded Apple CalDAV query. Brevity requests expanded recurring instances first and automatically falls back to Apple's standard filtered event response when Apple rejects recurrence expansion, ensuring ordinary appointments remain available instead of failing the entire calendar.
+
 ### Brevity AI
 
 - `OPENAI_API_KEY` — server-side only
