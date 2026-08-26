@@ -1,9 +1,8 @@
 import { fetchICloudCalendarEvents } from '../family/icloudCalendarApi.js'
 import { mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
+import { stampCalendarFailure, stampCalendarSuccess } from '../family/calendarSnapshot.js'
 import { refreshFinanceData } from '../finance/financeRefresh.js'
-import { PILLAR_IDS } from './dailyPlan.js'
 import { fetchDailyPlan } from './householdApi.js'
-import { generatePillarAnalysis } from './pillarAnalysisApi.js'
 
 export const APP_REFRESH_EVENT = 'brevity-app-refreshed'
 export const ICLOUD_CACHE_KEY = 'brevity_icloud_calendar_cache_v1'
@@ -15,31 +14,35 @@ const todayKey = () => {
 
 let activeRefresh = null
 
+const readCalendarCache = () => {
+  try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
+  catch { return null }
+}
+
+const publishCalendarSnapshot = snapshot => {
+  localStorage.setItem(ICLOUD_CACHE_KEY, JSON.stringify(snapshot))
+  window.dispatchEvent(new CustomEvent('brevity-icloud-calendar-refreshed', { detail: snapshot }))
+  return snapshot
+}
+
 async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
   const date = todayKey()
   const financePromise = refreshFinanceData()
   const planPromise = fetchDailyPlan(date)
   const calendarPromise = fetchICloudCalendarEvents()
-    .then(calendar => {
-      localStorage.setItem(ICLOUD_CACHE_KEY, JSON.stringify(calendar))
-      window.dispatchEvent(new CustomEvent('brevity-icloud-calendar-refreshed', { detail: calendar }))
-      return calendar
-    })
-    .catch(error => ({ error: error.message, status: error.status }))
+    .then(calendar => publishCalendarSnapshot(stampCalendarSuccess(calendar)))
+    .catch(error => publishCalendarSnapshot(stampCalendarFailure(readCalendarCache(), error)))
 
   const [financeResult, planResult] = await Promise.allSettled([financePromise, planPromise])
   const plan = planResult.status === 'fulfilled' ? planResult.value : null
   const calendar = await calendarPromise
   const calendarAwarePlan = plan?.date && !calendar?.error ? mergeCalendarEventsIntoPlan(plan, calendar.events) : plan
-  const analyses = calendarAwarePlan?.date
-    ? await Promise.allSettled(PILLAR_IDS.map(pillar => generatePillarAnalysis({ pillar, date: calendarAwarePlan.date, plan:calendarAwarePlan, currentMember, force: true })))
-    : []
 
   const detail = {
     date,
     finance: financeResult.status === 'fulfilled' ? financeResult.value : null,
     plan: calendarAwarePlan,
-    analyses,
+    analyses: [],
     calendar,
     refreshedAt: new Date().toISOString(),
   }

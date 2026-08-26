@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { reconcilePlanWithICloud } from '../family/calendarSync.js'
-import { calendarAppointmentsForPlan, mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
+import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
+import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import EveningRecap from './EveningRecap.jsx'
 import MorningAlignment from './MorningAlignment.jsx'
-import NotificationCenter from './NotificationCenter.jsx'
 import TodayDashboard from './TodayDashboard.jsx'
 import TomorrowProposal from './TomorrowProposal.jsx'
 import { generateDailyPlan } from './dailyPlanGeneratorApi.js'
@@ -45,10 +45,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     () => calendarAppointmentsForPlan(planWithMeals, calendarData?.events),
     [calendarData?.events, planWithMeals],
   )
-  const signalPlan = useMemo(
-    () => mergeCalendarEventsIntoPlan(planWithMeals, calendarData?.events),
-    [calendarData?.events, planWithMeals],
-  )
+  const calendarHealth = useMemo(() => calendarSnapshotHealth(calendarData), [calendarData])
 
   useEffect(() => {
     const receiveCalendar = event => setCalendarData(event.detail || null)
@@ -90,11 +87,12 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
   const completeRecap = async nextPlan => {
     const saved = await savePlan(nextPlan)
     clearPillarAnalyses(saved.date)
-    setMode('today')
+    setMode('tomorrow')
   }
 
   if (mode === 'alignment') return <MorningAlignment plan={planWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
   if (mode === 'recap') return <EveningRecap plan={planWithMeals} onCancel={() => setMode('today')} onComplete={completeRecap} />
+  if (mode === 'tomorrow') return <div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header><TomorrowProposal plan={planWithMeals} /></div>
 
   return <div className="household-today-workspace">
     {error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Household sync needs attention</strong><span>{error}</span></div><button onClick={reload}>Retry</button></div>}
@@ -103,8 +101,6 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    <TodayDashboard plan={planWithMeals} calendarAppointments={calendarAppointments} calendarConnected={Boolean(calendarData)} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
-    <NotificationCenter plan={signalPlan} member={currentMember} />
-    <TomorrowProposal plan={planWithMeals} />
+    <TodayDashboard plan={planWithMeals} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
   </div>
 }

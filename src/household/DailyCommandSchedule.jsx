@@ -2,11 +2,11 @@ const DAYPART_ORDER = ['anchor','focus','flex','wind-down']
 
 const statusLabel = value => String(value || 'pending').replace(/-/g, ' ')
 
-export default function DailyCommandSchedule({ plan }) {
+export default function DailyCommandSchedule({ plan, showDecisions = true }) {
   const dayparts = Array.isArray(plan?.dayparts) ? [...plan.dayparts].sort((a, b) => DAYPART_ORDER.indexOf(a.id) - DAYPART_ORDER.indexOf(b.id)) : []
   const decisions = Array.isArray(plan?.decisions) ? plan.decisions : []
 
-  if (!dayparts.length && !decisions.length) return null
+  if (!dayparts.length && (!showDecisions || !decisions.length)) return null
 
   return <>
     {dayparts.length > 0 && <section className="today-section command-schedule">
@@ -23,7 +23,7 @@ export default function DailyCommandSchedule({ plan }) {
       </div>
     </section>}
 
-    {decisions.length > 0 && <section className="today-section command-decisions">
+    {showDecisions && decisions.length > 0 && <section className="today-section command-decisions">
       <div className="today-section-heading"><div><span>Decision Board</span><h2>Confirm / Decide / Execute</h2></div><small>Nothing important remains mentally open without an owner and state.</small></div>
       <div className="command-decision-list">
         {decisions.map(item => <div className="command-decision-row" key={item.id || item.title}><div><strong>{item.title}</strong>{item.notes && <span>{item.notes}</span>}</div><div><span>{item.owner || 'Family'}</span><em>{statusLabel(item.status)}</em></div></div>)}
