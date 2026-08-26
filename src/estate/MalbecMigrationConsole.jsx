@@ -9,11 +9,12 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
   const [selectedIndex, setSelectedIndex] = useState(null)
   const [preview, setPreview] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [seedResolutions, setSeedResolutions] = useState({})
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const comparison = useMemo(() => sources.length ? compareMalbecExports(sources) : null, [sources])
   const selectedSource = selectedIndex == null ? null : sources[selectedIndex]
-  const inspection = selectedSource && comparison ? reconciliationInspection(sources, comparison, selectedIndex) : null
+  const inspection = selectedSource && comparison ? reconciliationInspection(sources, comparison, selectedIndex, Object.values(seedResolutions)) : null
   const reconciliationReport = useMemo(() => preview?.dryRun && comparison && inspection
     ? buildMalbecReconciliationReport({ preview, comparison, inspection, selectedIndex })
     : null, [preview, comparison, inspection, selectedIndex])
@@ -27,7 +28,7 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
     event.target.value = ''
     if (!files.length) return
     setBusy('inspect')
-    setError(''); resetValidation()
+    setError(''); setSeedResolutions({}); resetValidation()
     const additions = []
     const failures = []
     for (const file of files) {
@@ -52,13 +53,19 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
 
   const removeSource = index => {
     const nextSources = sources.filter((_, sourceIndex) => sourceIndex !== index)
-    setSources(nextSources); resetValidation(); setError('')
+    setSources(nextSources); setSeedResolutions({}); resetValidation(); setError('')
     if (!nextSources.length) return setSelectedIndex(null)
     const nextComparison = compareMalbecExports(nextSources)
     setSelectedIndex(nextComparison.recommendedSourceIndex ?? Math.min(index, nextSources.length - 1))
   }
 
-  const chooseSource = index => { setSelectedIndex(index); resetValidation() }
+  const chooseSource = index => { setSelectedIndex(index); setSeedResolutions({}); resetValidation() }
+
+  const resolveSeedCandidate = (candidate, action) => {
+    const key = `${candidate.key}:${candidate.legacyId}:${candidate.sourceFingerprint}`
+    setSeedResolutions(current => ({ ...current, [key]: { ...candidate, action } }))
+    resetValidation()
+  }
 
   const runPreview = async () => {
     setBusy('preview'); setError(''); setPreview(null)
@@ -96,6 +103,19 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
         {comparison.blockingIssues.length > 0 && <ul>{comparison.blockingIssues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
         {comparison.deferredDifferences.length > 0 && <p>Deferred differences are recorded for later Calendar, Household, or Supplies migration and do not alter this property import.</p>}
       </div>
+      {selectedSource.inspection.seedCandidates?.length > 0 && <div className="estate-seed-review">
+        <h3>Review exact code-default matches</h3>
+        <p>These records exactly match Malbec's built-in demonstration data. Decide whether each became a real household record or should be excluded as a sample.</p>
+        {selectedSource.inspection.seedCandidates.map(candidate => {
+          const key = `${candidate.key}:${candidate.legacyId}:${candidate.sourceFingerprint}`
+          const action = seedResolutions[key]?.action || ''
+          return <div className="estate-seed-item" key={key}>
+            <span><strong>{candidate.title}</strong><small>{candidate.key.replace('maintenance_', '').replaceAll('_', ' ')} · legacy ID {candidate.legacyId}</small></span>
+            <label><input type="radio" name={`seed-${key}`} checked={action === 'exclude'} onChange={() => resolveSeedCandidate(candidate, 'exclude')}/> Exclude sample</label>
+            <label><input type="radio" name={`seed-${key}`} checked={action === 'import'} onChange={() => resolveSeedCandidate(candidate, 'import')}/> Keep as real</label>
+          </div>
+        })}
+      </div>}
     </>}
     {inspection && <>
       <div className="estate-migration-stats">
@@ -117,6 +137,7 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
         <span className={preview.report.validation?.preparedChecksumVerified ? 'is-pass' : 'is-fail'}><i className={`ti ${preview.report.validation?.preparedChecksumVerified ? 'ti-shield-check' : 'ti-shield-x'}`}/> Payload integrity</span>
         <span className={preview.report.validation?.recordCountMatches ? 'is-pass' : 'is-fail'}><i className={`ti ${preview.report.validation?.recordCountMatches ? 'ti-list-check' : 'ti-alert-triangle'}`}/> Record counts reconcile</span>
       </div>
+      {preview.report.seedReview?.candidateCount > 0 && <p className="estate-seed-summary">Seed review: {preview.report.seedReview.excludedCount} excluded · {preview.report.seedReview.importedCount} retained · {preview.report.seedReview.unresolvedCount} unresolved</p>}
       {previewBlocks.length > 0 && <ul className="estate-preview-blockers">{previewBlocks.map(issue => <li key={issue}>{issue}</li>)}</ul>}
       {reconciliationReport && <button className="estate-report-button" type="button" onClick={() => downloadReconciliationReport(reconciliationReport)}><i className="ti ti-download"/> Download reconciliation report</button>}
       {!workspace && <label className="estate-import-confirm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/><span>I inspected every known Malbec device export and understand this creates Brevity's initial durable Estate workspace. Malbec remains active and its source data will not be modified.</span></label>}

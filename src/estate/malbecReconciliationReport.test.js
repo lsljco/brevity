@@ -24,6 +24,7 @@ const preview = {
     warnings: ['Calendar remains deferred.'],
     sourceInspection: { blockingIssues: [] },
     validation: { preparedChecksumVerified: true, inspectedImportableRecordCount: 2, transformedRecordCount: 2, recordCountMatches: true, readyForImport: true },
+    seedReview: { candidateCount: 1, unresolvedCount: 0, excludedCount: 1, importedCount: 0, resolutions: [{ legacyId: '6', action: 'exclude' }] },
   },
 }
 
@@ -34,6 +35,7 @@ test('builds a complete ready-for-import report from a server dry run', () => {
   assert.equal(report.validation.recordCountMatches, true)
   assert.equal(report.comparison.deferredDifferences[0].key, 'calendar_evs')
   assert.equal(report.pendingFiles[0].status, 'pending-document-import')
+  assert.equal(report.seedReview.excludedCount, 1)
   assert.equal(report.safeguards.sourceModified, false)
   const download = reconciliationReportDownload(report)
   assert.match(download.fileName, /^2026-08-26-malbec-estate-reconciliation-/)
