@@ -6,6 +6,7 @@ import { initialsForMember } from './household/memberProfile.js'
 import { refreshApplicationData } from './household/appRefresh.js'
 import { startSharedStateSync, syncSharedState } from './household/sharedState.js'
 import BrevityAssistant from './assistant/BrevityAssistant.jsx'
+import SermonDeviceRescue from './household/SermonDeviceRescue.jsx'
 import './household/Readability.css'
 import './AppDeferred.css'
 import './MobileShell.css'
@@ -83,6 +84,7 @@ function SettingsPage({ currentMember, role }) {
     <div style={card}><div className="settings-card-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20,marginBottom:18}}><div><p style={title}>Signed in as {currentMember}</p><p style={sub}>Your authenticated identity controls My Day and member-specific views on every device.</p></div><span style={badge}>{role === 'admin' ? 'Administrator' : 'Member'}</span></div><HouseholdAccounts sessionMember={currentMember} role={role}/></div>
     <span style={label}>Data</span>
     <div style={card}><div className="settings-card-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}><div><p style={title}>Browser Data Export</p><p style={sub}>Export or restore local Finance and HomeHQ records from this browser. Server-held daily plans, meals, sermons, health records, and account data are protected separately and are not included in this file.</p></div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button onClick={handleExport} style={{padding:'9px 18px',borderRadius:10,background:'rgba(197,164,109,.1)',border:'1px solid rgba(197,164,109,.25)',color:'var(--gold)',fontSize:13,cursor:'pointer'}}>Export Browser Data</button><button onClick={()=>importRef.current?.click()} style={{padding:'9px 18px',borderRadius:10,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.12)',color:'var(--soft-white)',fontSize:13,cursor:'pointer'}}>Restore Browser Data</button><input ref={importRef} type="file" accept="application/json,.json" onChange={handleImport} style={{display:'none'}}/></div></div></div>
+    <SermonDeviceRescue/>
     <span style={label}>Integrations</span>
     <div style={card}><p style={title}>Brevity AI + Apple Calendar</p><p style={sub}>AI analysis and calendar credentials remain server-protected. Household sign-in is separate from Apple/OpenAI credentials.</p></div>
   </div>

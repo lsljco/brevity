@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { archiveSermonDocuments, getOneDriveStatus, listSermonDocuments, oneDriveConnectUrl } from './sermonFormationApi.js'
+import { archiveSermonDocuments, getOneDriveStatus, getSermonDeviceRescues, listSermonDocuments, oneDriveConnectUrl } from './sermonFormationApi.js'
 import SermonNotesView from './SermonNotesView.jsx'
 import './SpiritualFormationStudio.css'
 
 export default function SermonRepository({notes,source}){
   const [documents,setDocuments]=useState([])
+  const [recovered,setRecovered]=useState([])
   const [state,setState]=useState('loading')
   const [error,setError]=useState('')
   const [oneDrive,setOneDrive]=useState({loading:true,configured:false,connected:false,connection:null,error:''})
@@ -13,11 +14,12 @@ export default function SermonRepository({notes,source}){
 
   useEffect(()=>{
     let live=true
-    Promise.allSettled([listSermonDocuments(),getOneDriveStatus()]).then(([repository,cloud])=>{
+    Promise.allSettled([listSermonDocuments(),getOneDriveStatus(),getSermonDeviceRescues()]).then(([repository,cloud,rescues])=>{
       if(!live)return
       if(repository.status==='fulfilled'){setDocuments(repository.value.documents||[]);setState('ready')}else{setError(repository.reason?.message||'Could not load the sermon repository.');setState('error')}
       if(cloud.status==='fulfilled')setOneDrive({...cloud.value,loading:false,error:''})
       else setOneDrive(current=>({...current,loading:false,error:cloud.reason?.message||'Could not check OneDrive.'}))
+      if(rescues.status==='fulfilled')setRecovered(rescues.value.sermons||[])
     })
     return()=>{live=false}
   },[])
@@ -46,5 +48,6 @@ export default function SermonRepository({notes,source}){
     {source?.document&&<div className="sermon-current-downloads"><strong>{source.document.title}</strong><span><a href={source.document.files.docx}>Download Word</a><a href={source.document.files.pdf}>Download PDF</a></span></div>}
     {notes?<details className="sermon-notes-panel" open><summary><span>{notes.documentTitle||notes.title||'Current Teaching'}</span><small>Read detailed notes</small></summary><SermonNotesView notes={notes}/></details>:<p className="pillar-analysis-empty">Upload a sermon transcript during Morning Alignment to create the first detailed teaching document.</p>}
     <div className="sermon-library-list"><h3>Repository Files</h3>{state==='loading'&&<p>Loading documents…</p>}{error&&<p className="sermon-library-error">{error}</p>}{state==='ready'&&!documents.length&&<p>No archived documents yet.</p>}{documents.map(document=><article key={document.id}><div><strong>{document.title}</strong><small>{[document.serviceType,document.sermonDate,document.preacherTeacher].filter(Boolean).join(' · ')}</small>{document.oneDrive?.state==='published'&&<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> OneDrive</small>}</div><span><a href={document.files.docx}>Word</a><a href={document.files.pdf}>PDF</a></span></article>)}</div>
+    {recovered.length>0&&<div className="sermon-library-list sermon-recovered-list"><h3>Recovered Device Records</h3><p>Exact legacy sermon versions preserved from Apostolic Sermon Builder devices.</p>{recovered.map(record=><article key={record.id}><div><strong>{record.title}</strong><small>{[record.dateLabel,record.hasNotes?'Notes included':null,record.quoteCount?`${record.quoteCount} quotes`:null,record.infographicCount?`${record.infographicCount} infographics`:null].filter(Boolean).join(' · ')}</small>{record.conflictGroup&&<small className="sermon-recovered-conflict"><i className="ti ti-git-compare"/> Conflicting device version preserved</small>}</div><span><a href={record.recordDownload||`/.netlify/functions/sermon-device-rescue?fingerprint=${encodeURIComponent(record.fingerprint)}`}>Original JSON</a></span></article>)}</div>}
   </section>
 }
