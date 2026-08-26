@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import householdAuth from "./household-auth.js";
-import { fetchCalendarList, fetchCalendarReport, resolveAppleDavHref } from "../lib/icloud-calendar-report.mjs";
+import { fetchCalendarList, fetchCalendarReport, firstDavPropertyHref, resolveAppleDavHref } from "../lib/icloud-calendar-report.mjs";
 
 const { readSession } = householdAuth;
 
@@ -62,14 +62,14 @@ async function discoverCalendar() {
   const principalReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
   const principalResult = await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" }, "account discovery request");
   const principalXml = principalResult.text;
-  const principal = firstTag(principalXml, "href");
+  const principal = firstDavPropertyHref(principalXml, "current-user-principal");
   if (!principal) throw new Error("Could not find the iCloud Calendar account.");
 
   const homeReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
   const principalUrl = resolveAppleDavHref(principal, principalResult.response.url || CALDAV_ROOT);
   const homeResult = await caldav(principalUrl, "PROPFIND", homeReq, { depth: "0" }, "calendar-home discovery request");
   const homeXml = homeResult.text;
-  const home = firstTag(homeXml, "href");
+  const home = firstDavPropertyHref(homeXml, "calendar-home-set");
   if (!home) throw new Error("Could not find the iCloud calendar collection.");
 
   const homeUrl = resolveAppleDavHref(home, homeResult.response.url || principalUrl);

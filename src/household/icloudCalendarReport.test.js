@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calendarListPropfind, calendarQueryReport, calendarQueryWindow, fetchCalendarList, fetchCalendarReport, resolveAppleDavHref } from '../../netlify/lib/icloud-calendar-report.mjs'
+import { calendarListPropfind, calendarQueryReport, calendarQueryWindow, fetchCalendarList, fetchCalendarReport, firstDavPropertyHref, resolveAppleDavHref } from '../../netlify/lib/icloud-calendar-report.mjs'
+
+test('iCloud discovery reads the href nested in the requested DAV property', () => {
+  const xml = `<?xml version="1.0"?>
+    <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+      <d:response>
+        <d:href>/</d:href>
+        <d:propstat><d:prop>
+          <d:current-user-principal><d:href>/123456/principal/</d:href></d:current-user-principal>
+          <c:calendar-home-set><d:href>/123456/calendars/</d:href></c:calendar-home-set>
+        </d:prop></d:propstat>
+      </d:response>
+    </d:multistatus>`
+
+  assert.equal(firstDavPropertyHref(xml, 'current-user-principal'), '/123456/principal/')
+  assert.equal(firstDavPropertyHref(xml, 'calendar-home-set'), '/123456/calendars/')
+  assert.equal(firstDavPropertyHref(xml, 'missing-property'), '')
+})
 
 test('iCloud discovery resolves relative DAV hrefs against the server that returned them', () => {
   assert.equal(
