@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { commitMalbecBackup, previewMalbecBackup } from './estateApi.js'
+import { commitMalbecBackup, importEstateVaultFile, previewMalbecBackup } from './estateApi.js'
 import { compareMalbecExports, formatBytes, prepareMalbecBackup, reconciliationInspection } from './malbecBackup.js'
 import { buildMalbecReconciliationReport, downloadReconciliationReport } from './malbecReconciliationReport.js'
 
@@ -11,6 +11,7 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
   const [confirmed, setConfirmed] = useState(false)
   const [seedResolutions, setSeedResolutions] = useState({})
   const [busy, setBusy] = useState('')
+  const [vaultProgress, setVaultProgress] = useState('')
   const [error, setError] = useState('')
   const comparison = useMemo(() => sources.length ? compareMalbecExports(sources) : null, [sources])
   const selectedSource = selectedIndex == null ? null : sources[selectedIndex]
@@ -18,6 +19,11 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
   const reconciliationReport = useMemo(() => preview?.dryRun && comparison && inspection
     ? buildMalbecReconciliationReport({ preview, comparison, inspection, selectedIndex })
     : null, [preview, comparison, inspection, selectedIndex])
+  const pendingFiles = (workspace?.migration?.pendingFiles || []).filter(file => file.status === 'pending-document-import')
+  const sourceMatchesWorkspace = Boolean(workspace && selectedSource && workspace.migration?.sourceChecksum === selectedSource.inspection.sourceChecksum)
+  const availableFilePayloads = sourceMatchesWorkspace
+    ? (selectedSource.filePayloads || []).filter(payload => pendingFiles.some(file => file.id === payload.id && file.path === payload.path && file.sourceChecksum === payload.sourceChecksum))
+    : []
 
   if (role !== 'admin') return null
 
@@ -85,6 +91,28 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
     finally { setBusy('') }
   }
 
+  const importPendingFiles = async () => {
+    if (!workspace || !availableFilePayloads.length) return
+    setBusy('files'); setError('')
+    let currentWorkspace = workspace
+    try {
+      for (let fileIndex = 0; fileIndex < availableFilePayloads.length; fileIndex += 1) {
+        const file = availableFilePayloads[fileIndex]
+        setVaultProgress(`File ${fileIndex + 1} of ${availableFilePayloads.length} · preparing`)
+        const result = await importEstateVaultFile({
+          propertyId: currentWorkspace.propertyId,
+          file,
+          expectedVersion: currentWorkspace.version,
+          onProgress: ({ chunkIndex, totalChunks }) => setVaultProgress(`File ${fileIndex + 1} of ${availableFilePayloads.length} · chunk ${chunkIndex} of ${totalChunks}`),
+        })
+        currentWorkspace = result.workspace
+        onCommitted?.(currentWorkspace)
+      }
+      setVaultProgress(`${availableFilePayloads.length} file${availableFilePayloads.length === 1 ? '' : 's'} imported and verified`)
+    } catch (reason) { setError(reason.message) }
+    finally { setBusy('') }
+  }
+
   const blocked = Boolean(inspection?.blockingIssues?.length || workspace)
   const previewBlocks = preview?.report?.sourceInspection?.blockingIssues || []
   return <section className="estate-migration-console">
@@ -130,6 +158,14 @@ export default function MalbecMigrationConsole({ role, workspace, onCommitted })
       </div>
       {!preview && <button className="estate-preview-button" type="button" onClick={runPreview} disabled={Boolean(busy)}>{busy === 'preview' ? 'Running validation…' : 'Run safe migration preview'}</button>}
     </>}
+    {workspace && pendingFiles.length > 0 && <div className="estate-vault-import">
+      <div><i className="ti ti-shield-upload"/><span><strong>Estate Vault migration</strong><small>{pendingFiles.length} file{pendingFiles.length === 1 ? '' : 's'} remain pending durable import</small></span></div>
+      {!selectedSource && <p>Choose the original Malbec backup again to make its file bytes available locally. Brevity does not retain source bytes during structured preview.</p>}
+      {selectedSource && !sourceMatchesWorkspace && <p>The selected backup checksum does not match the export used to create this Estate workspace.</p>}
+      {sourceMatchesWorkspace && <p>{availableFilePayloads.length} matching file payload{availableFilePayloads.length === 1 ? '' : 's'} available. Each file is uploaded in resumable chunks, verified, hashed, related, and audited.</p>}
+      {vaultProgress && <p className="estate-vault-progress" role="status">{vaultProgress}</p>}
+      <button type="button" onClick={importPendingFiles} disabled={!availableFilePayloads.length || Boolean(busy)}>{busy === 'files' ? 'Importing and verifying…' : 'Import matching files to Estate Vault'}</button>
+    </div>}
     {preview && <div className={`estate-preview-result${previewBlocks.length ? ' has-blockers' : ''}`}>
       <div><i className={`ti ${previewBlocks.length ? 'ti-alert-triangle' : 'ti-circle-check'}`}/><span><strong>{previewBlocks.length ? 'Preview complete — action required' : 'Dry run passed'}</strong><small>No Estate or Malbec records were changed.</small></span></div>
       <dl><div><dt>Systems</dt><dd>{preview.report.counts.systems}</dd></div><div><dt>Work orders</dt><dd>{preview.report.counts.workOrders}</dd></div><div><dt>Projects</dt><dd>{preview.report.counts.projects}</dd></div><div><dt>Deferred keys</dt><dd>{preview.report.deferredKeys.length}</dd></div></dl>

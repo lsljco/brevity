@@ -14,6 +14,9 @@ test('catalogues embedded files without modifying the source backup', () => {
 
   assert.deepEqual(backup, original)
   assert.equal(result.inspection.fileCount, 2)
+  assert.equal(result.filePayloads.length, 2)
+  assert.ok(result.filePayloads[0].base64)
+  assert.equal('base64' in result.inspection.files[0], false)
   assert.equal(result.inspection.sourceFileName, 'malbec.json')
   assert.equal(result.inspection.sourceExportedAt, '2026-08-26T12:00:00.000Z')
   assert.equal(result.inspection.sourceAppVersion, 'MalbecEstateHOS')

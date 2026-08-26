@@ -51,6 +51,19 @@ The console permits one initial import only. It requires:
 
 The import creates version 1, an immutable backup and an audit record. Malbec remains operational. Embedded files remain listed as `pending-document-import`; supplies and calendar keys remain deferred.
 
+## Import pending Estate Vault files
+
+1. After the structured workspace exists, choose the same untouched Malbec backup again. Its checksum must match the export recorded on the workspace.
+2. Brevity reconstructs embedded file payloads only in the current browser session; structured preview and migration metadata never retain those bytes.
+3. Select **Import matching files to Estate Vault**. Each file is uploaded in resumable base64 chunks no larger than 800,000 characters.
+4. The server confirms the file id, source path and legacy checksum against the pending workspace manifest before accepting it.
+5. On finalization, Brevity reconstructs the bytes, verifies the legacy source checksum and byte count, generates a SHA-256 hash, and writes the binary to the dedicated durable Vault store.
+6. When the source path identifies a migrated maintenance item or project, the resulting PropertyDocument is related to that Estate record. Otherwise, it remains a property-level document for later review.
+7. The Estate workspace is versioned and audited for every finalized file. Successful documents become available in **Estate Vault → Verified property documents**.
+8. Keep the original Malbec backup unchanged until file counts, SHA-256 hashes, relationships and downloads have been accepted.
+
+Interrupted uploads can safely restart from the same source backup. Finalized files are idempotent, and content-addressed SHA-256 storage prevents duplicate binary copies.
+
 ## Stop conditions
 
 Do not commit when any of the following is true:
@@ -62,6 +75,8 @@ Do not commit when any of the following is true:
 - source files were manually edited without a reconciliation record;
 - payload-integrity or record-count validation fails;
 - any exact code-default match remains unresolved;
+- the selected backup checksum does not match the workspace migration source;
+- any reconstructed file fails its source checksum or byte-count validation;
 - the Estate workspace already exists;
 - the preview contains unexplained warnings.
 
