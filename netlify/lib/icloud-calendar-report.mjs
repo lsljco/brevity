@@ -21,6 +21,22 @@ export function calendarQueryReport(start, end, { expand = true } = {}) {
   return `<?xml version="1.0" encoding="UTF-8"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/>${calendarData}</d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${start}" end="${end}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`
 }
 
+export function calendarListPropfind({ includeComponents = true } = {}) {
+  const componentProperty = includeComponents ? '<c:supported-calendar-component-set/>' : ''
+  return `<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/>${componentProperty}</d:prop></d:propfind>`
+}
+
+export async function fetchCalendarList({ homeUrl, request }) {
+  try {
+    const result = await request(homeUrl, 'PROPFIND', calendarListPropfind(), { depth:'1' }, 'calendar-list discovery request')
+    return { ...result, discoveryMode:'capabilities' }
+  } catch (error) {
+    if (error?.status !== 400) throw error
+    const result = await request(homeUrl, 'PROPFIND', calendarListPropfind({ includeComponents:false }), { depth:'1' }, 'minimal calendar-list discovery request')
+    return { ...result, discoveryMode:'minimal' }
+  }
+}
+
 export async function fetchCalendarReport({ calendarUrl, request, now = new Date() }) {
   const { start, end } = calendarQueryWindow(now)
   try {
