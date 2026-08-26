@@ -3,7 +3,7 @@ import test from 'node:test'
 import { createEstateHandler } from '../../netlify/functions/estate.mjs'
 import { createEstateRepository } from '../../netlify/lib/estate-store.mjs'
 import { createEstateWorkspace } from './estateModel.js'
-import { prepareMalbecBackup } from './malbecBackup.js'
+import { compareMalbecExports, prepareMalbecBackup, reconciliationInspection } from './malbecBackup.js'
 
 const event = ({ method = 'GET', body, propertyId } = {}) => ({
   httpMethod: method,
@@ -133,4 +133,26 @@ test('payload changes after inspection fail checksum and count reconciliation ga
   assert.equal(previewBody.report.validation.recordCountMatches, false)
   const committed = await handler(event({ method: 'POST', body: { backup: prepared, sourceInspection: inspection, commit: true, expectedVersion: 0 } }))
   assert.equal(committed.statusCode, 400)
+})
+
+test('exact Malbec code defaults stay blocked until reviewed and can be excluded without shifting source indexes', async () => {
+  const handler = createEstateHandler({
+    authenticate: async () => ({ member: 'Larry', role: 'admin' }),
+    repositoryFactory: async () => ({ getWorkspace: async () => null, saveWorkspace: async () => { throw new Error('preview only') } }),
+  })
+  const exactDefault = { id: 6, title: 'Gutter Cleaning', desc: 'Spring cleaning', cat: 'Exterior', owner: 'Larry', stage: 'Completed', scheduledDate: null, updated: '2026-06-15', updatedBy: 'Larry' }
+  const source = prepareMalbecBackup({ records: { malbecHOS_maintenance_maintenance: [exactDefault, { id: 77, title: 'Real pool repair', cat: 'Pool' }] } }, { sourceFileName: 'malbec.json' })
+  const comparison = compareMalbecExports([source])
+  const unresolvedInspection = reconciliationInspection([source], comparison, 0)
+  const unresolved = JSON.parse((await handler(event({ method: 'POST', body: { backup: source.prepared, sourceInspection: unresolvedInspection } }))).body)
+  assert.equal(unresolved.report.seedReview.unresolvedCount, 1)
+  assert.equal(unresolved.report.validation.readyForImport, false)
+
+  const resolvedInspection = reconciliationInspection([source], comparison, 0, [{ ...source.inspection.seedCandidates[0], action: 'exclude' }])
+  const resolved = JSON.parse((await handler(event({ method: 'POST', body: { backup: source.prepared, sourceInspection: resolvedInspection } }))).body)
+  assert.equal(resolved.report.counts.workOrders, 1)
+  assert.equal(resolved.report.validation.excludedSeedCount, 1)
+  assert.equal(resolved.report.validation.recordCountMatches, true)
+  assert.equal(resolved.report.validation.readyForImport, true)
+  assert.equal(resolved.workspace.workOrders[0].legacySource.sourceIndex, 1)
 })

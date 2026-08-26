@@ -76,7 +76,7 @@ HomeHQ currently stores its canonical project payload in `homehq_items_v1` brows
 |---|---:|---|
 | Browser-only legacy data can differ by device | Critical | Collect exports from every used device; hash and compare before transform. |
 | Embedded files can exceed function request limits | Critical | Extract a file manifest and upload binaries through a dedicated document pipeline; never embed them in Estate JSON. |
-| Malbec seed values may appear to be user history | High | Distinguish code defaults from exported live records during reconciliation. |
+| Malbec seed values may appear to be user history | High | Exact source-default fingerprints are surfaced for explicit import-or-exclude review; edited records are never auto-classified as seeds. |
 | Repeated import can duplicate records | High | Deterministic target IDs plus legacy source ID/checksum. |
 | HomeHQ local data could be overwritten | Critical | Estate import never writes `homehq_items_v1`; use a later reviewed bridge with explicit reconciliation. |
 | Calendar duplication | High | Match by legacy ID, dates, title and source metadata before publishing. |

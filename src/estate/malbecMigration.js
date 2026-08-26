@@ -1,4 +1,5 @@
 import { createEstateWorkspace, MALBEC_PROPERTY_ID, validateEstateWorkspace } from './estateModel.js'
+import { findExactMalbecSeedCandidates, malbecRecordFingerprint } from './malbecDefaults.js'
 
 export const MALBEC_SOURCE_SYSTEM = 'malbec-estate-household-os'
 
@@ -102,6 +103,13 @@ export function sanitizeSourceInspection(value) {
     importableRecordCount: Math.max(0, Number(source?.importableRecordCount || 0)),
     fileCount: Math.max(0, Number(source?.fileCount || 0)),
   })).filter(source => source.sourceChecksum) : []
+  const seedResolutions = Array.isArray(value.seedResolutions) ? value.seedResolutions.slice(0, 100).map(resolution => ({
+    key: safeText(resolution?.key, 120),
+    legacyId: safeText(resolution?.legacyId, 120),
+    sourceFingerprint: safeText(resolution?.sourceFingerprint, 120),
+    sourceCodeSha: safeText(resolution?.sourceCodeSha, 120),
+    action: resolution?.action === 'exclude' ? 'exclude' : resolution?.action === 'import' ? 'import' : '',
+  })).filter(resolution => resolution.key && resolution.legacyId && resolution.sourceFingerprint && resolution.action) : []
   return {
     sourceFileName: safeText(value.sourceFileName, 240),
     sourceExportedAt: safeText(value.sourceExportedAt, 60),
@@ -117,6 +125,7 @@ export function sanitizeSourceInspection(value) {
     embeddedFileBytes: files.reduce((total, file) => total + file.byteEstimate, 0),
     files,
     sourceExports,
+    seedResolutions,
     comparison: value.comparison && typeof value.comparison === 'object' ? {
       sourceCount: Math.max(0, Number(value.comparison.sourceCount || sourceExports.length)),
       propertyRecordsAgree: Boolean(value.comparison.propertyRecordsAgree),
@@ -153,7 +162,27 @@ export function transformMalbecBackup(backup, {
 
   const maintenanceRows = Array.isArray(maintenance) ? maintenance : []
   const projectRows = Array.isArray(projects) ? projects : []
-  const categories = [...new Set([...maintenanceRows, ...projectRows].map(row => systemName(row.cat || row.category)))]
+  const seedCandidates = findExactMalbecSeedCandidates({ maintenance_maintenance: maintenanceRows, maintenance_projects: projectRows })
+  const seedResolution = candidate => sourceInspection?.seedResolutions?.find(resolution =>
+    resolution.key === candidate.key
+    && resolution.legacyId === candidate.legacyId
+    && resolution.sourceFingerprint === candidate.sourceFingerprint)
+  const resolvedSeedCandidates = seedCandidates.flatMap(candidate => {
+    const resolution = seedResolution(candidate)
+    return resolution ? [{ ...candidate, action: resolution.action }] : []
+  })
+  const unresolvedSeedCount = seedCandidates.length - resolvedSeedCandidates.length
+  if (sourceInspection && unresolvedSeedCount) {
+    sourceInspection.blockingIssues = [...new Set([
+      ...sourceInspection.blockingIssues,
+      `${unresolvedSeedCount} exact Malbec code-default record${unresolvedSeedCount === 1 ? '' : 's'} require an import-or-exclude decision.`,
+    ])]
+  }
+  const excludedSeedKeys = new Set(resolvedSeedCandidates.filter(candidate => candidate.action === 'exclude').map(candidate => `${candidate.key}:${candidate.legacyId}:${candidate.sourceFingerprint}`))
+  const shouldImport = (key, record) => !excludedSeedKeys.has(`${key}:${String(record?.id ?? '')}:${malbecRecordFingerprint(record)}`)
+  const importedMaintenanceRows = maintenanceRows.map((record, sourceIndex) => ({ record, sourceIndex })).filter(({ record }) => shouldImport('maintenance_maintenance', record))
+  const importedProjectRows = projectRows.map((record, sourceIndex) => ({ record, sourceIndex })).filter(({ record }) => shouldImport('maintenance_projects', record))
+  const categories = [...new Set([...importedMaintenanceRows, ...importedProjectRows].map(({ record }) => systemName(record.cat || record.category)))]
   const systems = categories.map(name => ({
     id: `system-${slug(name)}`,
     propertyId,
@@ -168,8 +197,8 @@ export function transformMalbecBackup(backup, {
 
   const workspace = createEstateWorkspace({ householdId, propertyId, propertyName: 'Malbec Estate', now })
   workspace.systems = systems
-  workspace.workOrders = maintenanceRows.map((record, index) => ({
-    id: legacyId('work-order', record, index),
+  workspace.workOrders = importedMaintenanceRows.map(({ record, sourceIndex }) => ({
+    id: legacyId('work-order', record, sourceIndex),
     propertyId,
     systemId: systemId(record.cat || record.category),
     assetId: null,
@@ -188,10 +217,10 @@ export function transformMalbecBackup(backup, {
     createdAt: record.createdAt || now,
     updatedAt: record.updated || now,
     updatedBy: record.updatedBy || null,
-    legacySource: sourceMetadata('maintenance_maintenance', record, index),
+    legacySource: sourceMetadata('maintenance_maintenance', record, sourceIndex),
   }))
-  workspace.projects = projectRows.map((record, index) => ({
-    id: legacyId('property-project', record, index),
+  workspace.projects = importedProjectRows.map(({ record, sourceIndex }) => ({
+    id: legacyId('property-project', record, sourceIndex),
     propertyId,
     systemId: systemId(record.cat || record.category),
     assetIds: [],
@@ -207,7 +236,7 @@ export function transformMalbecBackup(backup, {
     createdAt: record.createdAt || now,
     updatedAt: record.updated || now,
     updatedBy: record.updatedBy || null,
-    legacySource: sourceMetadata('maintenance_projects', record, index),
+    legacySource: sourceMetadata('maintenance_projects', record, sourceIndex),
   }))
   workspace.migration = sourceInspection ? {
     sourceSystem: MALBEC_SOURCE_SYSTEM,
@@ -223,6 +252,12 @@ export function transformMalbecBackup(backup, {
     pendingFiles: Array.isArray(sourceInspection.files) ? sourceInspection.files : [],
     sourceExports: Array.isArray(sourceInspection.sourceExports) ? sourceInspection.sourceExports : [],
     comparison: sourceInspection.comparison || null,
+    seedReview: {
+      candidateCount: seedCandidates.length,
+      excludedCount: resolvedSeedCandidates.filter(candidate => candidate.action === 'exclude').length,
+      importedCount: resolvedSeedCandidates.filter(candidate => candidate.action === 'import').length,
+      resolutions: resolvedSeedCandidates,
+    },
   } : null
 
   const recognizedKeys = ['maintenance_maintenance', 'maintenance_projects']
@@ -233,11 +268,13 @@ export function transformMalbecBackup(backup, {
   if (validationErrors.length) throw new Error(`Transformed Estate data is invalid: ${validationErrors.join(' ')}`)
   const transformedRecordCount = workspace.workOrders.length + workspace.projects.length
   const inspectedImportableRecordCount = Number(sourceInspection?.importableRecordCount || 0)
-  const recordCountMatches = Boolean(sourceInspection) && transformedRecordCount === inspectedImportableRecordCount
+  const excludedSeedCount = resolvedSeedCandidates.filter(candidate => candidate.action === 'exclude').length
+  const expectedTransformedRecordCount = Math.max(0, inspectedImportableRecordCount - excludedSeedCount)
+  const recordCountMatches = Boolean(sourceInspection) && transformedRecordCount === expectedTransformedRecordCount
   if (sourceInspection && !recordCountMatches) {
     sourceInspection.blockingIssues = [...new Set([
       ...sourceInspection.blockingIssues,
-      `Inspected importable record count (${inspectedImportableRecordCount}) does not match the transformed record count (${transformedRecordCount}).`,
+      `Expected transformed record count (${expectedTransformedRecordCount}) does not match the transformed record count (${transformedRecordCount}).`,
     ])]
   }
 
@@ -257,11 +294,20 @@ export function transformMalbecBackup(backup, {
       validation: {
         preparedChecksumVerified,
         inspectedImportableRecordCount,
+        excludedSeedCount,
+        expectedTransformedRecordCount,
         transformedRecordCount,
         recordCountMatches,
         readyForImport: preparedChecksumVerified && recordCountMatches && transformedRecordCount > 0 && !(sourceInspection?.blockingIssues?.length),
       },
       warnings,
+      seedReview: {
+        candidateCount: seedCandidates.length,
+        unresolvedCount: unresolvedSeedCount,
+        excludedCount: excludedSeedCount,
+        importedCount: resolvedSeedCandidates.filter(candidate => candidate.action === 'import').length,
+        resolutions: resolvedSeedCandidates,
+      },
       sourceInspection: sourceInspection ? {
         sourceFileName: sourceInspection.sourceFileName || null,
         sourceExportedAt: sourceInspection.sourceExportedAt || null,
