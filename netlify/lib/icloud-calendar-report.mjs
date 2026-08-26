@@ -1,5 +1,16 @@
 const DAY_MS = 24 * 60 * 60 * 1000
 
+const decodeXmlText = value => String(value || '')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+  .replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+
+export function firstDavPropertyHref(xml, propertyName) {
+  const property = String(xml).match(new RegExp(`<(?:\\w+:)?${propertyName}\\b[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${propertyName}>`, 'i'))
+  if (!property) return ''
+  const href = property[1].match(/<(?:\w+:)?href\b[^>]*>([\s\S]*?)<\/(?:\w+:)?href>/i)
+  return href ? decodeXmlText(href[1].replace(/<[^>]+>/g, '').trim()) : ''
+}
+
 export function resolveAppleDavHref(href, requestUrl) {
   if (!href) throw new Error('Apple returned an empty CalDAV resource URL.')
   const resolved = new URL(href, requestUrl)
