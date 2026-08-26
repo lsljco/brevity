@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import householdAuth from "./household-auth.js";
-import { fetchCalendarList, fetchCalendarReport } from "../lib/icloud-calendar-report.mjs";
+import { fetchCalendarList, fetchCalendarReport, resolveAppleDavHref } from "../lib/icloud-calendar-report.mjs";
 
 const { readSession } = householdAuth;
 
@@ -60,16 +60,20 @@ async function caldav(url, method, body = "", extraHeaders = {}, operation = "ca
 
 async function discoverCalendar() {
   const principalReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
-  const principalXml = (await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" }, "account discovery request")).text;
+  const principalResult = await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" }, "account discovery request");
+  const principalXml = principalResult.text;
   const principal = firstTag(principalXml, "href");
   if (!principal) throw new Error("Could not find the iCloud Calendar account.");
 
   const homeReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
-  const homeXml = (await caldav(new URL(principal, CALDAV_ROOT).href, "PROPFIND", homeReq, { depth: "0" }, "calendar-home discovery request")).text;
+  const principalUrl = resolveAppleDavHref(principal, principalResult.response.url || CALDAV_ROOT);
+  const homeResult = await caldav(principalUrl, "PROPFIND", homeReq, { depth: "0" }, "calendar-home discovery request");
+  const homeXml = homeResult.text;
   const home = firstTag(homeXml, "href");
   if (!home) throw new Error("Could not find the iCloud calendar collection.");
 
-  const listResult = await fetchCalendarList({ homeUrl:new URL(home, CALDAV_ROOT).href, request:caldav });
+  const homeUrl = resolveAppleDavHref(home, homeResult.response.url || principalUrl);
+  const listResult = await fetchCalendarList({ homeUrl, request:caldav });
   const listXml = listResult.text;
   const candidates = blocks(listXml, "response").map(block => ({
     href: firstTag(block, "href"),
@@ -85,7 +89,11 @@ async function discoverCalendar() {
   const wanted = targetName.toLocaleLowerCase();
   const chosen = candidates.find(item => item.name.trim().toLocaleLowerCase() === wanted);
   if (!chosen) throw new Error(`The shared Apple calendar named “${targetName}” was not found. Set ICLOUD_CALENDAR_NAME to its exact name.`);
-  return { url:new URL(chosen.href, CALDAV_ROOT).href, name:chosen.name || "iCloud Calendar", discoveryMode:listResult.discoveryMode };
+  return {
+    url:resolveAppleDavHref(chosen.href, listResult.response.url || homeUrl),
+    name:chosen.name || "iCloud Calendar",
+    discoveryMode:listResult.discoveryMode,
+  };
 }
 
 const unfold = ics => String(ics).replace(/\r?\n[ \t]/g, "");

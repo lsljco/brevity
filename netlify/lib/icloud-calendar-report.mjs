@@ -1,5 +1,15 @@
 const DAY_MS = 24 * 60 * 60 * 1000
 
+export function resolveAppleDavHref(href, requestUrl) {
+  if (!href) throw new Error('Apple returned an empty CalDAV resource URL.')
+  const resolved = new URL(href, requestUrl)
+  const appleHost = resolved.hostname === 'icloud.com' || resolved.hostname.endsWith('.icloud.com')
+  if (resolved.protocol !== 'https:' || !appleHost) {
+    throw new Error('Apple returned an invalid CalDAV resource URL.')
+  }
+  return resolved.href
+}
+
 const utcStamp = (date, endOfDay = false) => [
   date.getUTCFullYear(),
   String(date.getUTCMonth() + 1).padStart(2, '0'),
