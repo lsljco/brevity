@@ -5,7 +5,6 @@ import { fetchCalendarList, fetchCalendarReport, firstDavPropertyHref, resolveAp
 const { readSession } = householdAuth;
 
 const CALDAV_ROOT = "https://caldav.icloud.com";
-const PREVIEW_DIAGNOSTIC_TOKEN = "d824bb1831d29ae7b07e93b7451f94cd96f0c4e377dc9973ed7834eaad308af7";
 
 const json = (statusCode, body, extraHeaders = {}) => ({
   statusCode,
@@ -38,19 +37,6 @@ const authHeader = () => {
   return `Basic ${Buffer.from(`${email}:${password.replace(/-/g, "")}`).toString("base64")}`;
 };
 
-const safeDavDiagnostic = value => String(value || "")
-  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
-  .replace(/https?:\/\/[^\s<]+/gi, "[url]")
-  .replace(/\b\d{5,}\b/g, "[id]")
-  .slice(0, 500);
-
-const isPreviewDiagnostic = event => {
-  if (event.httpMethod !== "GET") return false;
-  const supplied = String(event.headers?.["x-brevity-calendar-diagnostic"] || "");
-  if (supplied.length !== PREVIEW_DIAGNOSTIC_TOKEN.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(PREVIEW_DIAGNOSTIC_TOKEN));
-};
-
 async function caldav(url, method, body = "", extraHeaders = {}, operation = "calendar request") {
   const response = await fetch(url, {
     method,
@@ -67,11 +53,6 @@ async function caldav(url, method, body = "", extraHeaders = {}, operation = "ca
     const err = new Error(`Apple rejected the ${operation} (${response.status}).`);
     err.status = response.status;
     err.detail = text.slice(0, 300);
-    err.operation = operation;
-    err.requestHost = new URL(url).host;
-    err.responseHost = new URL(response.url || url).host;
-    err.responseType = response.headers.get("content-type") || "";
-    err.diagnosticDetail = safeDavDiagnostic(text);
     throw err;
   }
   return { response, text };
@@ -203,24 +184,12 @@ async function listEvents(calendar) {
 
 export const handler = async event => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
-  const previewDiagnostic = isPreviewDiagnostic(event);
   const session = await readSession(event).catch(() => null);
-  if (!session && !previewDiagnostic) return json(401, { error: "Sign in to access the family calendar." });
+  if (!session) return json(401, { error: "Sign in to access the family calendar." });
   if (event.httpMethod === "POST" && event.queryStringParameters?.action === "login") return json(200, { ok: true, member: session.member });
 
   try {
     const calendar = await discoverCalendar();
-    if (previewDiagnostic) {
-      const result = await listEvents(calendar);
-      return json(200, {
-        diagnostic:true,
-        ok:true,
-        calendar:calendar.name,
-        discoveryMode:calendar.discoveryMode,
-        recurrenceMode:result.recurrenceMode,
-        eventCount:result.events.length,
-      });
-    }
     if (event.httpMethod === "GET") {
       const result = await listEvents(calendar);
       return json(200, { calendar:calendar.name, syncMode:"two-way", discoveryMode:calendar.discoveryMode, recurrenceMode:result.recurrenceMode, events:result.events });
@@ -251,17 +220,6 @@ export const handler = async event => {
     return json(405, { error: "Method not allowed." });
   } catch (error) {
     console.error("Brevity iCloud Calendar error", error.message, error.detail || "");
-    if (previewDiagnostic) return json(200, {
-      diagnostic:true,
-      ok:false,
-      message:error.message,
-      status:error.status || null,
-      operation:error.operation || null,
-      requestHost:error.requestHost || null,
-      responseHost:error.responseHost || null,
-      responseType:error.responseType || null,
-      detail:error.diagnosticDetail || null,
-    });
     const status = /not configured/i.test(error.message) ? 503 : error.status === 401 ? 401 : 500;
     return json(status, { error: status === 401 ? "iCloud rejected the account email or app-specific password." : error.message });
   }
