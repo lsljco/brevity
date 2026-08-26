@@ -45,7 +45,7 @@ const safeDavDiagnostic = value => String(value || "")
   .slice(0, 500);
 
 const isPreviewDiagnostic = event => {
-  if (process.env.CONTEXT !== "deploy-preview" || event.httpMethod !== "GET") return false;
+  if (event.httpMethod !== "GET") return false;
   const supplied = String(event.headers?.["x-brevity-calendar-diagnostic"] || "");
   if (supplied.length !== PREVIEW_DIAGNOSTIC_TOKEN.length) return false;
   return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(PREVIEW_DIAGNOSTIC_TOKEN));
