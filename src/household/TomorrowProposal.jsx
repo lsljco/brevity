@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createEmptyDailyPlan, createPlanItem, normalizeDailyPlan } from './dailyPlan.js'
+import { createEmptyDailyPlan, createPlanItem, isStandingRoutineDecision, normalizeDailyPlan } from './dailyPlan.js'
 import { generateDailyProposal } from './dailyProposalApi.js'
 import { saveDailyPlan } from './householdApi.js'
 
@@ -46,7 +46,7 @@ export default function TomorrowProposal({ plan }) {
       next.spiritual.devotionFocus = proposal.spiritualFocus
       next.education.thinkTankTopic = proposal.thinkTankTopic
       next.ministry.contentFocus = proposal.ministryFocus
-      next.decisions = proposal.decisionPrompts.map((title, index) => createPlanItem({ id: `ai-decision-${targetDate}-${index}`, title, owner: 'Family', status: 'needs-decision', requiresDecision: true, notificationLevel: 'action' }))
+      next.decisions = proposal.decisionPrompts.filter(title => !isStandingRoutineDecision(title)).map((title, index) => createPlanItem({ id: `ai-decision-${targetDate}-${index}`, title, owner: 'Family', status: 'needs-decision', requiresDecision: true, notificationLevel: 'action' }))
       await saveDailyPlan(next)
       setState('saved'); setMessage(`Tomorrow’s proposed plan was saved for ${targetDate}. Review it during Morning Alignment before it becomes authoritative.`)
     } catch (error) {

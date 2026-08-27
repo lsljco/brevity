@@ -11,6 +11,8 @@ export const PILLAR_IDS = [
 ]
 
 export const DAILY_PLAN_STORAGE_KEY = 'brevity_daily_plans_v1'
+export const DEFAULT_FITNESS_LOCATION = 'Lifetime Gym'
+export const DEFAULT_EDUCATION_OWNER = 'Family'
 
 export const ITEM_STATUS = {
   pending: 'pending',
@@ -57,6 +59,19 @@ export function normalizeDecisionStatus(value) {
 const normalizeDecision = decision => decision && typeof decision === 'object' && !Array.isArray(decision)
   ? { ...decision, status: normalizeDecisionStatus(decision.status) }
   : decision
+
+export function isStandingRoutineDecision(decision) {
+  const text = String(typeof decision === 'string' ? decision : decision?.title || '').trim().toLowerCase()
+  const gymLocationDecision = /(gym|life\s*time|lifetime|workout)/.test(text) && /(where|which|location)/.test(text)
+  const educationOwnerDecision = /(isaiah|education block|learning block)/.test(text) && /(who|owner|accountable|responsib|supervis)/.test(text)
+  return gymLocationDecision || educationOwnerDecision
+}
+
+const normalizeFitnessLocation = value => {
+  const location = String(value || '').trim()
+  if (!location || /^life\s*time\b|^lifetime\b/i.test(location)) return DEFAULT_FITNESS_LOCATION
+  return location
+}
 
 export function createPlanItem(overrides = {}) {
   return {
@@ -111,7 +126,7 @@ export function createEmptyDailyPlan(date) {
     },
     fitness: {
       owner: 'Larry',
-      location: '',
+      location: DEFAULT_FITNESS_LOCATION,
       participants: [],
       workout: '',
       objective: '',
@@ -119,7 +134,7 @@ export function createEmptyDailyPlan(date) {
       returnTime: '',
       stepGoal: 12000,
       recovery: '',
-      requiresDecision: true,
+      requiresDecision: false,
     },
     household: {
       owner: 'Larry',
@@ -133,7 +148,7 @@ export function createEmptyDailyPlan(date) {
       thinkTankTopic: '',
       thinkTankDeliverable: '',
       isaiah: {
-        owner: '',
+        owner: DEFAULT_EDUCATION_OWNER,
         readingMinutes: 20,
         sightWordsMinutes: 10,
         comprehensionMinutes: 10,
@@ -191,7 +206,7 @@ export function normalizeDailyPlan(input = {}) {
     date,
     topPriorities: arrayOrEmpty(plan.topPriorities),
     assignments: arrayOrEmpty(plan.assignments),
-    decisions: arrayOrEmpty(plan.decisions).map(normalizeDecision),
+    decisions: arrayOrEmpty(plan.decisions).filter(decision => !isStandingRoutineDecision(decision)).map(normalizeDecision),
     morningAlignment: { ...base.morningAlignment, ...morningAlignment },
     spiritual: {
       ...base.spiritual,
@@ -209,6 +224,8 @@ export function normalizeDailyPlan(input = {}) {
     fitness: {
       ...base.fitness,
       ...fitness,
+      location: normalizeFitnessLocation(fitness.location),
+      requiresDecision: false,
       participants: arrayOrEmpty(fitness.participants),
     },
     household: {
@@ -222,7 +239,7 @@ export function normalizeDailyPlan(input = {}) {
     education: {
       ...base.education,
       ...education,
-      isaiah: { ...base.education.isaiah, ...objectOrEmpty(education.isaiah) },
+      isaiah: { ...base.education.isaiah, ...objectOrEmpty(education.isaiah), owner: DEFAULT_EDUCATION_OWNER },
     },
     finance: {
       ...base.finance,

@@ -9,6 +9,8 @@ const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
 const planKey = date => `${HOUSEHOLD_ID}/daily-plans/${date}`;
 const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`;
+const DEFAULT_FITNESS_LOCATION = 'Lifetime Gym';
+const DEFAULT_EDUCATION_OWNER = 'Family';
 
 function store() {
   return getStore({
@@ -165,11 +167,11 @@ Household operating rhythm:
 - Brevity's rolling meal plan is the source of truth for breakfast, lunch and dinner. Lunch and dinner are simple animal protein plus vegetables; breakfast excludes bacon, sausage, pancakes, waffles and heavy American breakfast platters.
 - Health ownership covers snacks, hydration, groceries and next-day preparation; the three planned meals do not depend on manual communication.
 - Lorenzo also shares ministry/fellowship responsibility and leadership participation.
-- Isaiah is 8 and entering third grade; daily education should include oral reading, sight words/vocabulary, comprehension and math/homework with a supervising adult marked CONFIRM unless established.
+- Isaiah is 8 and entering third grade; his education block is a standing household commitment that includes oral reading, sight words/vocabulary, comprehension and math/homework. Use Family as its operational owner. Never create a daily decision, confirmation or discussion prompt about who is accountable for or supervises this block.
 - Devotion and prayer happen before food, gym, errands, shopping or outside activity.
 - Preferred dayparts: ANCHOR 4:00–8:00 AM; FOCUS 8:00 AM–12:00 PM; FLEX 12:00–4:00 PM; WIND DOWN 4:00–8:00 PM+.
 - Protect prime morning hours for income-producing career actions.
-- Fitness target is generally 10,000–12,000 steps with location/participants/workout decided before departure.
+- Fitness location is the standing label Lifetime Gym and never requires a daily location decision. Operationally, Monday is Lifetime Buckhead for chest and triceps; every other day is Lifetime Perimeter. Keep the displayed location as Lifetime Gym. Fitness target is generally 10,000–12,000 steps; the workout and participants may still be planned when useful.
 - Wednesday Night Connect is 7:00–8:30 PM. Sunday service is 1:30 PM. Do not invent any other appointment.
 - Unknown calendar-specific commitments must be labeled CONFIRM.
 - Use concrete execution language, owners, decision states, deadlines and evidence of completion. Avoid generic motivational filler.
@@ -189,7 +191,13 @@ function itemWithId(item, prefix, index, date) {
   return { id: `${prefix}-${date}-${index}`, ...item };
 }
 
-function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = null) {
+const isStandingRoutineDecision = item => {
+  const text = String(typeof item === 'string' ? item : item?.title || '').trim().toLowerCase();
+  return (/(gym|life\s*time|lifetime|workout)/.test(text) && /(where|which|location)/.test(text))
+    || (/(isaiah|education block|learning block)/.test(text) && /(who|owner|accountable|responsib|supervis)/.test(text));
+};
+
+export function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = null) {
   const now = new Date().toISOString();
   return {
     id: `daily-plan-${date}`,
@@ -212,13 +220,13 @@ function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = null) {
       mealPlanSource: 'rolling',
       mealPlanVersion: mealDay.version,
     },
-    fitness: { owner: 'Larry', ...generated.fitness },
+    fitness: { owner: 'Larry', ...generated.fitness, location: DEFAULT_FITNESS_LOCATION, requiresDecision: false },
     household: { owner: 'Larry', ...generated.household, appointments: generated.household.appointments.map((item, index) => itemWithId(item, 'appointment', index, date)), priorities: generated.household.priorities.map((item, index) => itemWithId(item, 'household-priority', index, date)) },
-    education: { owner: 'Larry', ...generated.education },
+    education: { owner: 'Larry', ...generated.education, isaiah: { ...generated.education.isaiah, owner: DEFAULT_EDUCATION_OWNER } },
     finance: { owner: 'Larry', ...generated.finance, bills: generated.finance.bills.map((item, index) => itemWithId(item, 'bill', index, date)), purchases: generated.finance.purchases.map((item, index) => itemWithId(item, 'purchase', index, date)), transfers: generated.finance.transfers.map((item, index) => itemWithId(item, 'transfer', index, date)), accountsToFund: generated.finance.accountsToFund.map((item, index) => itemWithId(item, 'fund', index, date)) },
     ministry: { owners: ['Larry','Lorenzo'], ...generated.ministry, meetings: generated.ministry.meetings.map((item, index) => itemWithId(item, 'ministry-meeting', index, date)), fellowshipFollowUps: generated.ministry.fellowshipFollowUps.map((item, index) => itemWithId(item, 'fellowship', index, date)) },
     assignments: [],
-    decisions: generated.decisions.map((item, index) => itemWithId(item, 'decision', index, date)),
+    decisions: generated.decisions.filter(item => !isStandingRoutineDecision(item)).map((item, index) => itemWithId(item, 'decision', index, date)),
     recap: { wins: [], carryovers: [], lessons: [], completedAt: '', ...generated.recap },
     createdAt: now,
     updatedAt: now,
@@ -247,7 +255,7 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   const mealDay = mealWindow.days[0];
   const scheduledMeals = Object.fromEntries(Object.entries(mealDay.resolvedMeals).map(([mealType, meal]) => [mealType, meal.name]));
 
-  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nBrevity's already-selected meals for this date are authoritative and must be copied exactly into the health fields:\n${JSON.stringify(scheduledMeals)}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. ${activeSermon?'The ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until it is replaced by a new successful transcript upload. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No active sermon transcript is stored. Keep Spiritual Maturity clearly marked for Lorenzo to confirm rather than inventing a sermon source.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics.\n\nACTIVE SERMON SOURCE, retained until replaced:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
+  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nBrevity's already-selected meals for this date are authoritative and must be copied exactly into the health fields:\n${JSON.stringify(scheduledMeals)}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article. Never put the Lifetime Gym location or Isaiah's education-block accountability on the decision board; both are established standing commitments.\n\nSpiritual Maturity owner is Lorenzo. Do not assign that pillar to Larry. ${activeSermon?'The ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until it is replaced by a new successful transcript upload. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No active sermon transcript is stored. Keep Spiritual Maturity clearly marked for Lorenzo to confirm rather than inventing a sermon source.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics.\n\nACTIVE SERMON SOURCE, retained until replaced:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',

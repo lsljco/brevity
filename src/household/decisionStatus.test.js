@@ -43,3 +43,22 @@ test('saved daily plans normalize legacy decisions and keep determined decisions
   ])
   assert.equal(countOpenDecisions(plan), 3)
 })
+
+test('standing education and gym routines never become daily decisions', () => {
+  const plan = normalizeDailyPlan({
+    date: '2026-08-27',
+    fitness: { location: 'Lifetime Buckhead', requiresDecision: true },
+    education: { isaiah: { owner: '' } },
+    decisions: [
+      { id: 'gym', title: 'Which Lifetime gym location are we using?', status: 'needs-decision' },
+      { id: 'education', title: 'Who is accountable for Isaiah’s education block?', status: 'needs-decision' },
+      { id: 'real', title: 'Approve the contractor proposal', status: 'needs-decision' },
+    ],
+  })
+
+  assert.equal(plan.fitness.location, 'Lifetime Gym')
+  assert.equal(plan.fitness.requiresDecision, false)
+  assert.equal(plan.education.isaiah.owner, 'Family')
+  assert.deepEqual(plan.decisions.map(item => item.id), ['real'])
+  assert.equal(countOpenDecisions(plan), 1)
+})

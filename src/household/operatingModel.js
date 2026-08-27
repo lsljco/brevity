@@ -139,16 +139,6 @@ const planSignals = plan => [
     detail: 'Choose tonight’s dinner before the household day becomes busy.', owner: 'Family', priority: 'high',
     state: 'needs-attention', source: source(OPERATING_SOURCE.dailyPlan, 'health-plan', plan.id), pillar: 'health',
   }),
-  !plan.fitness.location && createOperatingRecord({
-    id: 'signal-fitness-location', kind: OPERATING_KIND.signal, title: 'Workout location is not determined',
-    detail: 'Confirm where the household workout will happen.', owner: 'Larry', priority: 'high',
-    state: 'needs-attention', source: source(OPERATING_SOURCE.dailyPlan, 'fitness-plan', plan.id), pillar: 'fitness',
-  }),
-  !plan.education.isaiah.owner && createOperatingRecord({
-    id: 'signal-education-owner', kind: OPERATING_KIND.signal, title: 'Isaiah’s education block has no owner',
-    detail: 'Assign the adult responsible for today’s learning block.', owner: 'Family', priority: 'high',
-    state: 'needs-attention', source: source(OPERATING_SOURCE.dailyPlan, 'education-plan', plan.id), pillar: 'education',
-  }),
 ].filter(Boolean)
 
 const pillarPulse = (plan, commitments, signals) => {
@@ -158,7 +148,7 @@ const pillarPulse = (plan, commitments, signals) => {
     health: plan.health.dinner ? 'Meals are planned' : 'Dinner needs attention',
     fitness: plan.fitness.location ? `Workout: ${plan.fitness.location}` : 'Workout location needs attention',
     household: commitments.length ? `${commitments.length} calendar commitment${commitments.length === 1 ? '' : 's'}` : 'No verified commitments today',
-    education: plan.education.isaiah.owner ? `Learning owner: ${plan.education.isaiah.owner}` : 'Learning owner needs attention',
+    education: 'Isaiah’s education block is a standing commitment',
     finance: plan.finance.accountsToFund.length ? `${plan.finance.accountsToFund.length} funding action${plan.finance.accountsToFund.length === 1 ? '' : 's'}` : 'No funding exceptions in today’s plan',
     ministry: plan.ministry.meetings.length ? `${plan.ministry.meetings.length} ministry commitment${plan.ministry.meetings.length === 1 ? '' : 's'}` : 'No ministry exception in today’s plan',
   }

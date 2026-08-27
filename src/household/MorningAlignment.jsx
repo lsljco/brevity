@@ -74,7 +74,7 @@ function HealthStep({ draft, update, onOpenMealPlan }) {
 function FitnessStep({ draft, update }) {
   const value = draft.fitness
   return <div className="alignment-form-grid alignment-form-grid--two">
-    <Field label="Location"><input value={value.location} onChange={e => update('fitness', { location: e.target.value, requiresDecision: !e.target.value })} placeholder="Life Time Johns Creek, Buckhead, walk…" /></Field>
+    <Field label="Location"><input value={value.location} onChange={e => update('fitness', { location: e.target.value, requiresDecision: false })} placeholder="Lifetime Gym" /></Field>
     <Field label="Workout"><input value={value.workout} onChange={e => update('fitness', { workout: e.target.value })} /></Field>
     <Field label="Objective"><input value={value.objective} onChange={e => update('fitness', { objective: e.target.value })} /></Field>
     <Field label="Step goal"><input type="number" value={value.stepGoal} onChange={e => update('fitness', { stepGoal: Number(e.target.value) || 0 })} /></Field>
@@ -103,7 +103,7 @@ function EducationStep({ draft, update }) {
     <Field label="Think Tank topic"><input value={value.thinkTankTopic} onChange={e => update('education', { thinkTankTopic: e.target.value })} /></Field>
     <Field label="Required deliverable"><input value={value.thinkTankDeliverable} onChange={e => update('education', { thinkTankDeliverable: e.target.value })} /></Field>
     <Field label="Isaiah reading minutes"><input type="number" value={value.isaiah.readingMinutes} onChange={e => update('education', { isaiah: { ...value.isaiah, readingMinutes: Number(e.target.value) || 0 } })} /></Field>
-    <Field label="Isaiah supervising adult"><select value={value.isaiah.owner} onChange={e => update('education', { isaiah: { ...value.isaiah, owner: e.target.value } })}><option value="">Confirm owner</option>{HOUSEHOLD_MEMBERS.filter(m => m !== 'Isaiah').map(member => <option key={member}>{member}</option>)}</select></Field>
+    <Field label="Isaiah education block"><input readOnly value="Standing household commitment" /></Field>
     <Field label="Isaiah notes"><textarea value={value.isaiah.notes} onChange={e => update('education', { isaiah: { ...value.isaiah, notes: e.target.value } })} /></Field>
   </div>
 }
@@ -149,7 +149,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100)
 
   const update = (section, patch) => setDraft(current => ({ ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }))
-  const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner', !draft.fitness.location && 'Gym/location', !draft.education.isaiah.owner && 'Isaiah education owner'].filter(Boolean), [draft])
+  const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner'].filter(Boolean), [draft])
 
   useEffect(() => { saveDraftRef.current = onSaveDraft }, [onSaveDraft])
 
