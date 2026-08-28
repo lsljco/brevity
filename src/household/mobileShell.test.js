@@ -35,3 +35,7 @@ test('mobile Menu button identifies the navigation drawer it controls', () => {
   assert.match(appSource, /id="primary-navigation-drawer"/)
   assert.match(appSource, /aria-controls="primary-navigation-drawer"/)
 })
+
+test('mobile refresh status stays in the page flow instead of covering page controls', () => {
+  assert.match(mobileShellSource, /\.app-refresh-status\s*\{[^}]*position:\s*relative;[^}]*width:\s*calc\(100% - 24px\);[^}]*margin:\s*10px 12px 0;/s)
+})

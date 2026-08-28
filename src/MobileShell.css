@@ -73,9 +73,14 @@
   .mobile-app-nav button.active { background: rgba(197, 164, 109, .13); color: var(--gold); }
   .app-main { width: 100%; padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
   .app-refresh-status {
-    top: 10px;
-    left: 12px;
-    right: 12px;
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: calc(100% - 24px);
     max-width: none;
+    margin: 10px 12px 0;
+    box-sizing: border-box;
+    flex: 0 0 auto;
   }
 }
