@@ -69,6 +69,8 @@ export default function DailyAlignment({ accounts, scheduled, cashFlowScheduled,
   const selectedLabel = selectedDateObject.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const monthlyVision = Number(store.settings.monthlySurplusVision) || 0
   const visionPct = monthlyVision > 0 ? Math.min(Math.max((snapshot.monthlyCashFlow / monthlyVision) * 100, 0), 100) : 0
+  const visionGap = Math.max(monthlyVision - snapshot.monthlyCashFlow, 0)
+  const cashFlowLabel = snapshot.monthlyCashFlowSource === 'actual' ? 'Posted / pending net cash flow' : 'Scheduled net cash flow'
 
   const persist = next => {
     setStore(next)
@@ -127,9 +129,16 @@ export default function DailyAlignment({ accounts, scheduled, cashFlowScheduled,
           </label>
         </div>
         <div className="alignment-vision-progress">
-          <div><span>Scheduled cash flow</span><strong>{fmtMoney(snapshot.monthlyCashFlow)}</strong></div>
+          <div><span>{cashFlowLabel}</span><strong>{fmtMoney(snapshot.monthlyCashFlow)}</strong></div>
+          <div className="alignment-vision-breakdown">
+            <small>Income {fmtMoney(snapshot.monthlyIncome)}</small>
+            <small>Expenses {fmtMoney(snapshot.monthlyExpenses)}</small>
+          </div>
           <div className="alignment-progress-track"><span style={{ width: `${visionPct}%` }} /></div>
-          <small>{monthlyVision ? `${Math.round(visionPct)}% of ${fmtMoney(monthlyVision)} goal` : 'Set a monthly cash flow goal'}</small>
+          <div className="alignment-vision-status">
+            <small>{monthlyVision ? `${visionPct.toFixed(1)}% of ${fmtMoney(monthlyVision)} net goal` : 'Set a monthly net cash flow goal'}</small>
+            {monthlyVision > 0 && <strong>{fmtMoney(visionGap)} short of goal</strong>}
+          </div>
         </div>
         <p>Today’s alignment protects the next step.</p>
       </section>
