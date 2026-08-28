@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDailyAlignmentSnapshot, emptyDailyAlignmentRecord, normalizeDailyAlignmentRecord } from './dailyAlignmentData.js'
+import { buildDailyAlignmentSnapshot, calculateActualMonthToDateCashFlow, emptyDailyAlignmentRecord, normalizeDailyAlignmentRecord } from './dailyAlignmentData.js'
 
 const accounts = [{ id: 'operating', name: 'Operating', balance: 1000 }]
 const scheduled = [
@@ -47,6 +47,35 @@ test('monthly cash flow can use operating transactions while daily activity foll
   assert.equal(snapshot.monthlyIncome, 500)
   assert.equal(snapshot.monthlyExpenses, 200)
   assert.equal(snapshot.monthlyCashFlow, 300)
+  assert.equal(snapshot.monthlyCashFlowSource, 'scheduled')
+})
+
+test('monthly goal progress uses posted and pending net cash flow instead of scheduled income', () => {
+  const actuals = [
+    { id: 'income', name: 'Deposits', amount: -26159.53, date: '2026-08-20', pending: false },
+    { id: 'expenses', name: 'Monthly expenses', amount: 24265.32, date: '2026-08-27', pending: true },
+    { id: 'transfer', name: 'Transfer to savings', category: 'TRANSFER_OUT', amount: 5000, date: '2026-08-27', pending: true },
+    { id: 'future', name: 'Future expense', amount: 500, date: '2026-08-29', pending: true },
+  ]
+
+  const totals = calculateActualMonthToDateCashFlow(actuals, '2026-08-28')
+  assert.equal(totals.income, 26159.53)
+  assert.equal(totals.expenses, 24265.32)
+  assert.ok(Math.abs(totals.cashFlow - 1894.21) < 0.001)
+  assert.equal(totals.transactionCount, 2)
+
+  const snapshot = buildDailyAlignmentSnapshot({
+    date: '2026-08-28',
+    accounts,
+    scheduled: [],
+    monthlyScheduled: [{ id: 'scheduled-income', amount: 50000, type: 'income', freq: 'monthly', start: '2026-08-01' }],
+    actuals,
+  })
+
+  assert.equal(snapshot.monthlyIncome, 26159.53)
+  assert.equal(snapshot.monthlyExpenses, 24265.32)
+  assert.ok(Math.abs(snapshot.monthlyCashFlow - 1894.21) < 0.001)
+  assert.equal(snapshot.monthlyCashFlowSource, 'actual')
 })
 
 test('daily records retain the four named owners and normalize partial saves', () => {
