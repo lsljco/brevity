@@ -1,5 +1,6 @@
 import { addDays, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { calculateMonthlyCashFlow, calculateTransactionAmountForMonth } from './monthlyCashFlow.js'
+import { transactionDirection } from './reportingData.js'
 
 export const ALIGNMENT_PEOPLE = ['Larry', 'Lorenzo', 'Terica', 'Nyla']
 export const DEFAULT_MONTHLY_SURPLUS_VISION = 50000
@@ -66,6 +67,25 @@ function actualsForDate(actuals, date) {
   return actuals.filter(transaction => transaction.date === dateKey)
 }
 
+export function calculateActualMonthToDateCashFlow(actuals = [], date = new Date()) {
+  const selectedDate = parseISODate(date) || new Date(date)
+  const dateKey = toISO(selectedDate)
+  const monthPrefix = dateKey.slice(0, 7)
+
+  return actuals.reduce((totals, transaction) => {
+    if (!transaction.date?.startsWith(monthPrefix) || transaction.date > dateKey) return totals
+    const direction = transactionDirection(transaction)
+    if (direction === 'transfer') return totals
+
+    const amount = money(transaction.amount)
+    if (direction === 'income') totals.income += amount
+    if (direction === 'expense') totals.expenses += amount
+    totals.transactionCount += 1
+    totals.cashFlow = totals.income - totals.expenses
+    return totals
+  }, { income: 0, expenses: 0, cashFlow: 0, transactionCount: 0 })
+}
+
 function outstandingForDate(transactions, actuals, date) {
   const scheduled = scheduledForDate(transactions, date)
   const actual = actualsForDate(actuals, date)
@@ -112,9 +132,18 @@ export function buildDailyAlignmentSnapshot({
     .filter(transaction => transaction.type === 'expense')
     .reduce((total, transaction) => total + money(transaction.amount), 0)
 
-  const monthlyTotals = calculateMonthlyCashFlow(monthlyScheduled, selectedDate)
+  const scheduledMonthlyTotals = calculateMonthlyCashFlow(monthlyScheduled, selectedDate)
+  const actualMonthlyTotals = calculateActualMonthToDateCashFlow(actuals, selectedDate)
+  const usesActualMonthlyCashFlow = actualMonthlyTotals.transactionCount > 0
+  const monthlyTotals = usesActualMonthlyCashFlow
+    ? actualMonthlyTotals
+    : {
+        income: scheduledMonthlyTotals.income,
+        expenses: scheduledMonthlyTotals.recurringExpenses,
+        cashFlow: scheduledMonthlyTotals.cashFlow,
+      }
   const monthlyIncome = monthlyTotals.income
-  const monthlyExpenses = monthlyTotals.recurringExpenses
+  const monthlyExpenses = monthlyTotals.expenses
 
   const monthPrefix = dateKey.slice(0, 7)
   const actualMonthToDate = actuals.filter(transaction => transaction.date?.startsWith(monthPrefix) && transaction.date <= dateKey)
@@ -165,6 +194,7 @@ export function buildDailyAlignmentSnapshot({
     monthlyIncome,
     monthlyExpenses,
     monthlyCashFlow: monthlyTotals.cashFlow,
+    monthlyCashFlowSource: usesActualMonthlyCashFlow ? 'actual' : 'scheduled',
     // Retain the legacy field so previously shipped consumers remain compatible.
     monthlySurplus: monthlyTotals.cashFlow,
     movements,
