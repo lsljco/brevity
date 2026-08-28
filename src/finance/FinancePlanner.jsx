@@ -656,7 +656,6 @@ const LUXURY_CSS = `
    image as an atmospheric background panel like the reference. */
 
 :where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) {
-  position: relative !important;
   overflow: hidden !important;
   background:
     linear-gradient(180deg, rgba(0,0,0,.98) 0%, rgba(0,0,0,.88) 48%, rgba(0,0,0,.98) 100%),
