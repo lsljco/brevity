@@ -1,0 +1,187 @@
+/* Final theme layer. Component styles intentionally load first; this file makes
+   the user's shell-level theme choice authoritative across every native view. */
+
+[data-theme="light"] {
+  color-scheme: light;
+  --theme-page: #faf9f6;
+  --theme-surface: rgba(255, 253, 248, .94);
+  --theme-surface-subtle: rgba(238, 234, 224, .78);
+  --theme-border: rgba(35, 30, 20, .12);
+  --theme-control: #f2eee5;
+  --theme-text: #1c1b18;
+  --theme-muted: #5d5a53;
+  --theme-shadow: 0 10px 34px rgba(48, 39, 22, .08), inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+
+[data-theme="light"] :is(
+  .app-main,
+  .household-today-workspace,
+  .today-dashboard,
+  .morning-alignment,
+  .evening-recap,
+  .pillar-analysis-page,
+  .spiritual-studio,
+  .daily-alignment,
+  .household-maintenance,
+  .family-calendar,
+  .finance-root,
+  .dash-body,
+  .scenario-page,
+  .meal-planner,
+  .home-hq,
+  .estate-workspace,
+  .estate-state,
+  .settings-page
+) {
+  background: var(--theme-page) !important;
+  color: var(--theme-text) !important;
+}
+
+[data-theme="light"] :is(
+  .today-section,
+  .today-focus-card,
+  .today-attention,
+  .today-calendar-item,
+  .today-pillar-card,
+  .today-top-three > li,
+  .today-decision-dialog,
+  .today-decision-editor,
+  .morning-alignment-section,
+  .evening-recap-section,
+  .pillar-analysis-command,
+  .pillar-analysis-section,
+  .pillar-analysis-grid > article,
+  .pillar-owner-grid > article,
+  .spiritual-studio section,
+  .alignment-vision,
+  .alignment-section,
+  .alignment-metric,
+  .alignment-movement-list,
+  .alignment-watch,
+  .alignment-commitments > div,
+  .maintenance-stat,
+  .maintenance-operating-rule > div,
+  .maintenance-day,
+  .maintenance-task,
+  .family-calendar-status,
+  .family-calendar-day,
+  .family-calendar-agenda-day,
+  .finance-card,
+  .finance-inner,
+  .dash-card,
+  .kpi-card,
+  .cal-cell,
+  .meal-day,
+  .meal-library > section,
+  .meal-dialog,
+  .hq-card,
+  .hq-stat-card,
+  .estate-empty,
+  .estate-safety,
+  .estate-sections article,
+  .estate-command-grid article,
+  .estate-command-grid > button,
+  .estate-maintenance,
+  .estate-migration-console,
+  .estate-vault-list,
+  .settings-card
+) {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+  box-shadow: var(--theme-shadow) !important;
+}
+
+[data-theme="light"] :is(
+  .today-assignment,
+  .today-calendar-empty,
+  .alignment-date-control,
+  .alignment-table-head,
+  .alignment-action-head,
+  .maintenance-summary,
+  .maintenance-toolbar,
+  .meal-planner-controls nav,
+  .meal-macros span,
+  .estate-maintenance-form,
+  .estate-maintenance-metrics div,
+  .estate-migration-stats > div,
+  .estate-preview-result dl div,
+  .estate-source-item
+) {
+  background: var(--theme-surface-subtle) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+[data-theme="light"] :is(
+  .today-dashboard,
+  .morning-alignment,
+  .evening-recap,
+  .pillar-analysis-page,
+  .spiritual-studio,
+  .daily-alignment,
+  .household-maintenance,
+  .family-calendar,
+  .finance-root,
+  .meal-planner,
+  .home-hq,
+  .estate-workspace,
+  .settings-page
+) :is(input, select, textarea) {
+  background: #fffdfa !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+[data-theme="light"] :is(
+  .family-calendar-title,
+  .family-calendar-event-title,
+  .family-calendar-agenda-day strong,
+  .home-hq h1,
+  .home-hq h2,
+  .home-hq h3
+) {
+  color: var(--theme-text) !important;
+}
+
+[data-theme="light"] :is(
+  .family-calendar-subtitle,
+  .family-calendar-weekday,
+  .family-calendar-event-meta,
+  .family-calendar-agenda-day span
+) {
+  color: var(--theme-muted) !important;
+}
+
+[data-theme="light"] .finance-root {
+  --brevity-black: #faf9f6;
+  --brevity-charcoal: #f2eee5;
+  --brevity-graphite: #e9e4da;
+  --brevity-white: #1c1b18;
+  --brevity-soft-white: #2d2a25;
+  --brevity-muted: #5d5a53;
+  --brevity-glass: var(--theme-surface);
+  --brevity-glass-strong: #f1ece2;
+  --brevity-border: var(--theme-border);
+}
+
+[data-theme="light"] .meal-dialog-backdrop,
+[data-theme="light"] .today-decision-overlay {
+  background: rgba(38, 32, 23, .42) !important;
+}
+
+[data-theme="light"] .mobile-app-nav {
+  background: rgba(250, 248, 242, .96);
+  border-color: var(--theme-border);
+  box-shadow: 0 14px 38px rgba(48, 39, 22, .18);
+}
+
+[data-theme="light"] .app-refresh-status {
+  background: rgba(250, 248, 242, .96);
+  border-color: rgba(138, 106, 30, .32);
+  color: var(--theme-text);
+}
+
+[data-theme="light"] .sidebar-footer {
+  background: #f0ede5 !important;
+}
