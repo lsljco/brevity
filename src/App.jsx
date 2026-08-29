@@ -15,6 +15,7 @@ const FinancePlanner = lazy(() => import('./finance/FinancePlanner.jsx'))
 const HomeHQ = lazy(() => import('./homehq/HomeHQ.jsx'))
 const MealPlanner = lazy(() => import('./meals/MealPlanner.jsx'))
 const EstateWorkspace = lazy(() => import('./estate/EstateWorkspace.jsx'))
+const HouseholdMaintenance = lazy(() => import('./household/HouseholdMaintenance.jsx'))
 
 const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
@@ -24,6 +25,7 @@ const PILLARS = [
   { id:'fitness', label:'Physical Fitness', icon:'ti-run', layer:2, description:'Strength, discipline, and physical stewardship.', items:[] },
   { id:'household', label:'Household Management', icon:'ti-home', layer:3, description:'The heartbeat of the home — operations, property, and daily life.', items:[
     { id:'property', label:'Projects', icon:'ti-building-estate' },
+    { id:'household-maintenance', label:'Household Maintenance', icon:'ti-broom' },
     { id:'my-planner', label:'My Planner', icon:'ti-calendar-user' },
     { id:'family-calendar', label:'Family Calendar', icon:'ti-calendar-event' },
     { id:'malbec-estate', label:'Malbec Estate', icon:'ti-building-community' },
@@ -73,7 +75,7 @@ function SettingsPage({ currentMember, role }) {
   const badge={fontSize:11,padding:'4px 10px',borderRadius:10,background:'rgba(197,164,109,.12)',border:'1px solid rgba(197,164,109,.22)',color:'var(--gold)'}
   const label={fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',margin:'28px 0 14px',display:'block',fontWeight:600}
   const importRef=useRef(null)
-  const backupKeys=['lslj_finance_v9','plaid_actuals_cache','lslj_budget_v1','lslj_actuals_v1','lslj_bal_overrides_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','brevity_finance_categories_v1','brevity_finance_scenarios_v1','fp_goals','homehq_items_v1','family_calendar_events_v1','brevity_daily_financial_alignment_v1']
+  const backupKeys=['lslj_finance_v9','plaid_actuals_cache','lslj_budget_v1','lslj_actuals_v1','lslj_bal_overrides_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','brevity_finance_categories_v1','brevity_finance_scenarios_v1','fp_goals','homehq_items_v1','family_calendar_events_v1','brevity_daily_financial_alignment_v1','brevity_household_maintenance_v1']
   const handleExport=()=>{const data={format:'brevity-browser-data',schemaVersion:1,scope:'browser-records',exportedAt:new Date().toISOString(),records:{}};backupKeys.forEach(k=>{const raw=localStorage.getItem(k);if(raw!=null){try{data.records[k]=JSON.parse(raw)}catch{data.records[k]=raw}}});const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`brevity-browser-data-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
   const handleImport=event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);const records=parsed.records||parsed;const valid=backupKeys.filter(key=>Object.prototype.hasOwnProperty.call(records,key));if(!valid.length)throw new Error('No recognized Brevity records were found.');if(!window.confirm(`Restore ${valid.length} Brevity record${valid.length===1?'':'s'} from this backup?`))return;valid.forEach(key=>localStorage.setItem(key,JSON.stringify(records[key])));window.location.reload()}catch(error){window.alert(error.message||'This is not a valid Brevity backup.')}};reader.readAsText(file)}
   return <div className="settings-page" style={{maxWidth:820,margin:'0 auto',padding:'48px 32px'}}>
@@ -160,6 +162,7 @@ export default function App() {
     if(activeView==='today')return <HouseholdToday currentMember={currentMember} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')}/>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ/></Suspense>
+    if(activeView==='household-maintenance')return <Suspense fallback={<div className="app-view-loading">Loading Household Maintenance…</div>}><HouseholdMaintenance currentMember={currentMember}/></Suspense>
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>
     if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily lockMember title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-published updates"/></Suspense>
