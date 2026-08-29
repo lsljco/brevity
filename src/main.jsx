@@ -4,6 +4,7 @@ import App from './App.jsx'
 import AppErrorBoundary from './AppErrorBoundary.jsx'
 import './App.css'
 import './MobileShell.css'
+import './ThemeCoverage.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
