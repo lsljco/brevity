@@ -182,6 +182,14 @@
   color: var(--theme-text);
 }
 
+[data-theme="light"] .app-refresh-issues article {
+  background: var(--theme-surface-subtle);
+}
+
+[data-theme="light"] .app-refresh-issues span {
+  color: var(--theme-text);
+}
+
 [data-theme="light"] .sidebar-footer {
   background: #f0ede5 !important;
 }
