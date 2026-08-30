@@ -51,13 +51,13 @@ const PILLARS = [
 const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','budget','recurring','reporting'])
 const EXTERNAL_SITES = {
   'live-intentional': { title:'Live Intentional', description:'Intentional living and household planning', url:'https://liveintentional.netlify.app/', icon:'ti-compass', embed:true },
-  'apostolic-sermon-builder': { title:'Apostolic Sermon Builder', description:'Sermon preparation and ministry resources', url:'https://apostolicsermonbuilderlseay.netlify.app/', icon:'ti-book-2', embed:true },
+  'apostolic-sermon-builder': { title:'Apostolic Sermon Builder', description:'Account-synchronized sermon preparation and ministry resources', url:'/apostolic-builder/', icon:'ti-book-2', embed:true },
 }
 const DIVIDER_BEFORE = new Set([1,3,4,6])
 
 function ExternalSiteView({ title, description, url, icon, embed, currentMember }) {
   const frameRef=useRef(null)
-  const targetOrigin=useMemo(()=>{try{return new URL(url).origin}catch{return''}},[url])
+  const targetOrigin=useMemo(()=>{try{return new URL(url,window.location.href).origin}catch{return''}},[url])
   const sendMember=()=>{if(embed&&currentMember&&targetOrigin)frameRef.current?.contentWindow?.postMessage({type:'brevity-authenticated-member',member:currentMember},targetOrigin)}
   useEffect(()=>{
     if(!embed||!currentMember||!targetOrigin)return

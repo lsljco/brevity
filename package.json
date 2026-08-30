@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare:apostolic-builder": "node scripts/prepare-apostolic-builder.mjs",
+    "predev": "npm run prepare:apostolic-builder",
     "dev": "vite",
+    "prebuild": "npm run prepare:apostolic-builder",
     "build": "vite build",
+    "pretest": "npm run prepare:apostolic-builder",
     "test": "node --test src/assistant/*.test.js src/estate/*.test.js src/family/*.test.js src/finance/*.test.js src/homehq/*.test.js src/household/*.test.js src/meals/*.test.js",
     "preview": "vite preview"
   },
