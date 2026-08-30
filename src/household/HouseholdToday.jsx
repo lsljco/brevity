@@ -11,6 +11,7 @@ import { generateDailyPlan } from './dailyPlanGeneratorApi.js'
 import { clearPillarAnalyses } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
 import { ICLOUD_CACHE_KEY } from './appRefresh.js'
+import { nextDailyPlanDate } from './alignmentDate.js'
 import './HouseholdOS.css'
 
 const cachedCalendar = () => {
@@ -18,29 +19,40 @@ const cachedCalendar = () => {
   catch { return null }
 }
 
+const applyRollingMeals = (plan, rollingPlan) => {
+  const mealDay = rollingPlan?.days?.find(day => day.date === plan.date)
+  if (!mealDay) return plan
+  return {
+    ...plan,
+    health: {
+      ...plan.health,
+      breakfast: mealDay.resolvedMeals.breakfast?.name || plan.health.breakfast,
+      lunch: mealDay.resolvedMeals.lunch?.name || plan.health.lunch,
+      dinner: mealDay.resolvedMeals.dinner?.name || plan.health.dinner,
+      mealPlanSource: 'rolling',
+      mealPlanVersion: mealDay.version,
+    },
+  }
+}
+
 export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, onOpenMealPlan, onOpenCalendar }) {
   const { plan, state, error, reload, savePlan } = useDailyPlan()
+  const alignmentDate = nextDailyPlanDate(plan.date)
+  const {
+    plan: alignmentPlan,
+    state: alignmentState,
+    error: alignmentError,
+    reload: reloadAlignment,
+    savePlan: saveAlignmentPlan,
+  } = useDailyPlan(alignmentDate)
   const mealPlan = useRollingMealPlan()
   const [mode, setMode] = useState('today')
   const [calendarMessage, setCalendarMessage] = useState('')
   const [generationState, setGenerationState] = useState('idle')
   const [generationMessage, setGenerationMessage] = useState('')
   const [calendarData, setCalendarData] = useState(cachedCalendar)
-  const planWithMeals = useMemo(() => {
-    const mealDay = mealPlan.data?.days?.find(day => day.date === plan.date)
-    if (!mealDay) return plan
-    return {
-      ...plan,
-      health: {
-        ...plan.health,
-        breakfast: mealDay.resolvedMeals.breakfast?.name || plan.health.breakfast,
-        lunch: mealDay.resolvedMeals.lunch?.name || plan.health.lunch,
-        dinner: mealDay.resolvedMeals.dinner?.name || plan.health.dinner,
-        mealPlanSource: 'rolling',
-        mealPlanVersion: mealDay.version,
-      },
-    }
-  }, [mealPlan.data, plan])
+  const planWithMeals = useMemo(() => applyRollingMeals(plan, mealPlan.data), [mealPlan.data, plan])
+  const alignmentPlanWithMeals = useMemo(() => applyRollingMeals(alignmentPlan, mealPlan.data), [alignmentPlan, mealPlan.data])
   const calendarAppointments = useMemo(
     () => calendarAppointmentsForPlan(planWithMeals, calendarData?.events),
     [calendarData?.events, planWithMeals],
@@ -53,8 +65,8 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     return () => window.removeEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
   }, [])
 
-  const persistAndSync = async nextPlan => {
-    const saved = await savePlan(nextPlan)
+  const persistAndSync = async (nextPlan, persist = savePlan) => {
+    const saved = await persist(nextPlan)
     clearPillarAnalyses(saved.date)
     try {
       const summary = await reconcilePlanWithICloud(saved)
@@ -83,14 +95,19 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     }
   }
 
-  const completeAlignment = async nextPlan => { await persistAndSync(nextPlan); setMode('today') }
+  const completeAlignment = async nextPlan => {
+    await persistAndSync(nextPlan, saveAlignmentPlan)
+    setMode('today')
+  }
   const completeRecap = async nextPlan => {
     const saved = await savePlan(nextPlan)
     clearPillarAnalyses(saved.date)
     setMode('tomorrow')
   }
 
-  if (mode === 'alignment') return <MorningAlignment plan={planWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
+  if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
+  if (mode === 'alignment' && alignmentError) return <div className="household-today-workspace"><div className="today-sync-banner today-sync-banner--error"><div><strong>Tomorrow’s plan could not be loaded</strong><span>{alignmentError}</span></div><button onClick={reloadAlignment}>Retry</button><button onClick={() => setMode('today')}>Return to Today</button></div></div>
+  if (mode === 'alignment') return <MorningAlignment plan={alignmentPlanWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={saveAlignmentPlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
   if (mode === 'recap') return <EveningRecap plan={planWithMeals} onCancel={() => setMode('today')} onComplete={completeRecap} />
   if (mode === 'tomorrow') return <div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header><TomorrowProposal plan={planWithMeals} /></div>
 
@@ -101,6 +118,6 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    <TodayDashboard plan={planWithMeals} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
+    <TodayDashboard plan={planWithMeals} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
   </div>
 }

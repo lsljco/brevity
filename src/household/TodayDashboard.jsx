@@ -80,11 +80,10 @@ function PillarPulse({ items, onOpenPillar }) {
   })}</div></section>
 }
 
-export default function TodayDashboard({ plan, calendarAppointments = [], calendarHealth, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onGeneratePlan, onSavePlan, generationState = 'idle' }) {
+export default function TodayDashboard({ plan, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, currentMember = 'Larry', onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onGeneratePlan, onSavePlan, generationState = 'idle' }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
   const readModel = useMemo(() => buildTodayReadModel({ plan: dailyPlan, calendarAppointments, calendarHealth, currentMember }), [calendarAppointments, calendarHealth, currentMember, dailyPlan])
   const [showDecisions, setShowDecisions] = useState(false)
-  const aligned = Boolean(dailyPlan.morningAlignment?.completedAt)
   const closed = Boolean(dailyPlan.recap?.completedAt)
   const generated = dailyPlan.generatedBy === 'brevity-daily-household-plan'
 
@@ -109,7 +108,7 @@ export default function TodayDashboard({ plan, calendarAppointments = [], calend
       <div><p className="today-kicker">Household Command Center</p><h1>Today</h1><p>{formatDate(dailyPlan.date)}</p></div>
       <div className="today-hero-actions">
         <button className="today-alignment-button" onClick={onGeneratePlan} disabled={generationState === 'generating'}><i className="ti ti-sparkles" /> {generationState === 'generating' ? 'Generating…' : generated ? 'Refresh Daily Plan' : 'Generate Daily Plan'}</button>
-        <button className="today-alignment-button" onClick={onStartAlignment}><i className="ti ti-target-arrow" /> {aligned ? 'Review Alignment' : 'Start Alignment'}</button>
+        <button className="today-alignment-button" onClick={onStartAlignment} disabled={alignmentLoading} title={alignmentDate ? `Alignment for ${formatDate(alignmentDate)}` : undefined}><i className="ti ti-target-arrow" /> {alignmentLoading ? 'Loading Tomorrow…' : alignmentCompleted ? 'Review Tomorrow’s Alignment' : 'Start Tomorrow’s Alignment'}</button>
         <button className="today-alignment-button today-alignment-button--secondary" onClick={onStartRecap}><i className="ti ti-clipboard-check" /> {closed ? 'Review Recap' : 'Close Today'}</button>
       </div>
     </header>
