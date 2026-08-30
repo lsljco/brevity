@@ -14,6 +14,9 @@ exports.handler = async (event) => {
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json' }
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
 
+  const params = new URLSearchParams(event.rawQuery || '')
+  const liveBalance = params.get('live') === '1'
+
   try {
     const session = await readSession(event)
     if (!session) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Sign in to view financial accounts.' }) }
@@ -28,7 +31,12 @@ exports.handler = async (event) => {
 
     for (const { access_token, item_id, institution } of tokens) {
       try {
-        const res = await plaidClient.accountsBalanceGet({ access_token })
+        // Automatic application refreshes use Plaid's cached account endpoint,
+        // which is fast and reliable. Only an explicit "Sync now" requests the
+        // slower institution-facing live balance call.
+        const res = liveBalance
+          ? await plaidClient.accountsBalanceGet({ access_token })
+          : await plaidClient.accountsGet({ access_token })
         res.data.accounts.forEach(a => allAccounts.push({
           accountId: a.account_id, itemId: item_id,
           name: a.name, officialName: a.official_name,
@@ -75,6 +83,7 @@ exports.handler = async (event) => {
         requiresUpdate,  // non-empty = show "Re-connect [bank]" prompt
         errors: syncErrors,
         syncedAt: new Date().toISOString(),
+        balanceMode: liveBalance ? 'live' : 'cached',
       }),
     }
   } catch (err) {
