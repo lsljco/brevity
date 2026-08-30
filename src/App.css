@@ -567,9 +567,7 @@ html, body {
   top: 14px;
   right: 18px;
   max-width: min(520px, calc(100vw - 110px));
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: block;
   padding: 10px 13px;
   border: 1px solid rgba(197,164,109,.28);
   border-radius: 11px;
@@ -580,10 +578,18 @@ html, body {
   line-height: 1.4;
   backdrop-filter: blur(18px);
 }
-.app-refresh-status--loading::before { content: ''; width: 13px; height: 13px; flex: 0 0 13px; border: 2px solid rgba(197,164,109,.25); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+.app-refresh-status-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.app-refresh-status-row>div { display: flex; align-items: center; gap: 10px; }
+.app-refresh-status--loading .app-refresh-status-row::before { content: ''; width: 13px; height: 13px; flex: 0 0 13px; border: 2px solid rgba(197,164,109,.25); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+.app-refresh-status--loading .app-refresh-status-row>span { flex: 1; }
 .app-refresh-status--warning { border-color: rgba(232,168,96,.48); }
 .app-refresh-status--error { border-color: rgba(232,120,96,.52); }
 .app-refresh-status button { border: 0; background: transparent; color: var(--gold); font: 600 12px/1 var(--font); cursor: pointer; white-space: nowrap; }
+.app-refresh-issues { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(197,164,109,.18); }
+.app-refresh-issues article { display: grid; gap: 3px; padding: 9px 10px; border-radius: 8px; background: rgba(255,255,255,.035); }
+.app-refresh-issues strong { color: var(--gold-light); font-size: 12px; }
+.app-refresh-issues span { color: var(--soft-white); }
+.app-refresh-issues small { color: var(--muted); font-size: 11px; }
 
 /* ── No background image — pure black ── */
 .app-main::before,
