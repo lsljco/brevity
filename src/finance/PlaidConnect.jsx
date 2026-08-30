@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 
 const API = '/.netlify/functions'
-const REQUEST_TIMEOUT_MS = 15000
+const REQUEST_TIMEOUT_MS = 45000
 
 async function apiFetch(path, options = {}) {
   const controller = options.signal ? null : new AbortController()
@@ -88,7 +88,7 @@ export default function PlaidConnect({ onAccountsSync }) {
     setSyncing(true)
     setError(null)
     try {
-      const data = await apiFetch('/plaid-accounts')
+      const data = await apiFetch('/plaid-accounts?live=1')
       if (data.connected) {
         setSyncedAt(data.syncedAt)
         localStorage.setItem('plaid_synced_at', data.syncedAt)
