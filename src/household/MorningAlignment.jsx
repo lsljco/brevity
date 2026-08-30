@@ -4,6 +4,7 @@ import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
 import SpiritualFormationStudio from './SpiritualFormationStudio.jsx'
 import HealthAlertBanner from './HealthAlertBanner.jsx'
 import { compactEditableLines, compactTitledItems, joinEditableLines, splitEditableLines } from './lineEditing.js'
+import { formatDailyPlanDate } from './alignmentDate.js'
 import './MorningAlignment.css'
 import './MorningAlignmentAutosave.css'
 
@@ -203,7 +204,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
 
   return <div className="morning-alignment">
     <header className="morning-alignment-header">
-      <div><span>Seven Pillars</span><h1>Morning Alignment</h1><p>Resolve the household's direction before food, fitness, errands, or outside activity.</p></div>
+      <div><span>Seven Pillars · {formatDailyPlanDate(draft.date)}</span><h1>Next-Day Alignment</h1><p>Set tomorrow’s direction the day before—before food, fitness, errands, or outside activity begins.</p></div>
       <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${draftSaveState}`}>{draftSaveState==='pending'?'Changes pending':draftSaveState==='saving'?'Saving…':draftSaveState==='error'?'Save needs attention':'Draft saved'}</span><button type="button" disabled={saving} onClick={saveAndExit}>Save &amp; Exit</button></div>
     </header>
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
