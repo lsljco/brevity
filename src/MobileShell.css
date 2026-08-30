@@ -99,6 +99,9 @@
     box-sizing: border-box;
     flex: 0 0 auto;
   }
+  .app-refresh-status-row { align-items: flex-start; }
+  .app-refresh-status-row > span { flex: 1; }
+  .app-refresh-status-row > div { flex-wrap: wrap; justify-content: flex-end; }
 }
 
 @supports not (height: 100dvh) {
