@@ -1333,8 +1333,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     finally { setActualsLoading(false) }
   }, [])
 
-  // Auto-fetch on mount so historical balances populate without needing to click Actuals toggle
-  useEffect(() => { fetchActuals() }, [fetchActuals])
+  // The shared application refresh owns automatic Plaid synchronization and
+  // updates this screen through FINANCE_REFRESH_EVENT. Do not start a second
+  // full-history transaction request every time Finance mounts.
 
   const toggleActuals = () => { setTransactionFilter(null); setShowActuals(v => !v) }
 
