@@ -25,6 +25,15 @@ const publishCalendarSnapshot = snapshot => {
   return snapshot
 }
 
+export function buildRefreshIssues({ financeResult, planResult, calendar }) {
+  const issues = []
+  ;(financeResult.status === 'fulfilled' ? financeResult.value?.errors || [] : [financeResult.reason?.message || 'Finance data could not be refreshed.'])
+    .forEach(message => issues.push({ id:`finance-${issues.length}`, source:'Finance & Plaid', message:String(message), action:'Retry the refresh or open Finance > Accounts to review the connection.' }))
+  if (planResult.status === 'rejected') issues.push({ id:'today-plan', source:'Today', message:planResult.reason?.message || 'Today’s household plan could not be refreshed.', action:'Retry the refresh. Your previously saved plan remains available.' })
+  if (calendar?.error) issues.push({ id:'family-calendar', source:'Family Calendar', message:String(calendar.error), action:'Retry the refresh or open Family Calendar to review its connection status.' })
+  return issues
+}
+
 async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
   const date = todayKey()
   const financePromise = refreshFinanceData()
@@ -37,6 +46,7 @@ async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
   const plan = planResult.status === 'fulfilled' ? planResult.value : null
   const calendar = await calendarPromise
   const calendarAwarePlan = plan?.date && !calendar?.error ? mergeCalendarEventsIntoPlan(plan, calendar.events) : plan
+  const issues = buildRefreshIssues({ financeResult, planResult, calendar })
 
   const detail = {
     date,
@@ -44,6 +54,7 @@ async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
     plan: calendarAwarePlan,
     analyses: [],
     calendar,
+    issues,
     refreshedAt: new Date().toISOString(),
   }
   window.dispatchEvent(new CustomEvent(APP_REFRESH_EVENT, { detail }))
