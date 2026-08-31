@@ -19,3 +19,14 @@ test('the dashboard and alignment screen identify tomorrow as the target', () =>
   assert.match(alignmentSource, /Next-Day Alignment/)
   assert.match(alignmentSource, /formatDailyPlanDate\(draft\.date\)/)
 })
+
+test('today alignment is a separate action that saves only today’s plan', () => {
+  assert.match(dashboardSource, /Start Today’s Alignment/)
+  assert.match(dashboardSource, /Adjust Today’s Alignment/)
+  assert.match(householdTodaySource, /mode === 'today-alignment'/)
+  assert.match(householdTodaySource, /timing="today" plan=\{planWithMeals\}/)
+  assert.match(householdTodaySource, /onSaveDraft=\{savePlan\}/)
+  assert.match(householdTodaySource, /onComplete=\{completeTodayAlignment\}/)
+  assert.match(alignmentSource, /Today’s Alignment/)
+  assert.match(alignmentSource, /These updates apply only to today/)
+})
