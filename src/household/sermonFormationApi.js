@@ -1,6 +1,7 @@
 const BACKGROUND_ENDPOINT='/.netlify/functions/sermon-formation-background'
 const STATUS_ENDPOINT='/.netlify/functions/sermon-formation-status'
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))
+export const ONEDRIVE_REPOSITORY_SHARE_URL='https://1drv.ms/f/c/0675525c56f14fef/IgDc-iXzsiwjSLJBV5ifMvBfASYUCca6MBtroniveZWUJhU'
 
 async function parse(response){
   const body=await response.json().catch(()=>({}))
