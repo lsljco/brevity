@@ -95,6 +95,10 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     }
   }
 
+  const completeTodayAlignment = async nextPlan => {
+    await persistAndSync(nextPlan)
+    setMode('today')
+  }
   const completeAlignment = async nextPlan => {
     await persistAndSync(nextPlan, saveAlignmentPlan)
     setMode('today')
@@ -105,6 +109,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     setMode('tomorrow')
   }
 
+  if (mode === 'today-alignment') return <MorningAlignment timing="today" plan={planWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} />
   if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
   if (mode === 'alignment' && alignmentError) return <div className="household-today-workspace"><div className="today-sync-banner today-sync-banner--error"><div><strong>Tomorrow’s plan could not be loaded</strong><span>{alignmentError}</span></div><button onClick={reloadAlignment}>Retry</button><button onClick={() => setMode('today')}>Return to Today</button></div></div>
   if (mode === 'alignment') return <MorningAlignment plan={alignmentPlanWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={saveAlignmentPlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
@@ -118,6 +123,6 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    <TodayDashboard plan={planWithMeals} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
+    <TodayDashboard plan={planWithMeals} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
   </div>
 }

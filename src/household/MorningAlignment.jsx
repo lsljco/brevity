@@ -134,7 +134,7 @@ function MinistryStep({ draft, update }) {
 
 const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
-export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComplete, onOpenMealPlan }) {
+export default function MorningAlignment({ plan, timing = 'tomorrow', onSaveDraft, onCancel, onComplete, onOpenMealPlan }) {
   const [draft, setDraft] = useState(() => normalizeDailyPlan(plan))
   const [stepIndex, setStepIndex] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -148,6 +148,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
   const [id, label, icon] = STEPS[stepIndex]
   const Step = STEP_COMPONENTS[id]
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100)
+  const isToday = timing === 'today'
 
   const update = (section, patch) => setDraft(current => ({ ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }))
   const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner'].filter(Boolean), [draft])
@@ -204,7 +205,7 @@ export default function MorningAlignment({ plan, onSaveDraft, onCancel, onComple
 
   return <div className="morning-alignment">
     <header className="morning-alignment-header">
-      <div><span>Seven Pillars · {formatDailyPlanDate(draft.date)}</span><h1>Next-Day Alignment</h1><p>Set tomorrow’s direction the day before—before food, fitness, errands, or outside activity begins.</p></div>
+      <div><span>Seven Pillars · {formatDailyPlanDate(draft.date)}</span><h1>{isToday ? 'Today’s Alignment' : 'Next-Day Alignment'}</h1><p>{isToday ? 'Adjust today’s direction as circumstances change. These updates apply only to today.' : 'Set tomorrow’s direction the day before—before food, fitness, errands, or outside activity begins.'}</p></div>
       <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${draftSaveState}`}>{draftSaveState==='pending'?'Changes pending':draftSaveState==='saving'?'Saving…':draftSaveState==='error'?'Save needs attention':'Draft saved'}</span><button type="button" disabled={saving} onClick={saveAndExit}>Save &amp; Exit</button></div>
     </header>
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
