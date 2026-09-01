@@ -9,7 +9,12 @@ export const DEFAULT_TRANSACTION_LIST_OPTIONS = Object.freeze({
 })
 
 export const transactionDescription = transaction => String(
-  transaction?.name || transaction?.description || transaction?.merchant_name || '',
+  transaction?.originalStatement
+    || transaction?.original_description
+    || transaction?.description
+    || transaction?.name
+    || transaction?.merchant_name
+    || '',
 ).trim()
 
 export const transactionAmount = transaction => Math.abs(Number(transaction?.amount) || 0)
