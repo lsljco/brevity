@@ -53,6 +53,22 @@ test('mobile Menu button identifies the navigation drawer it controls', () => {
   assert.match(appSource, /aria-controls="primary-navigation-drawer"/)
 })
 
+test('desktop sidebar state is explicit, persistent, and unaffected by module navigation', () => {
+  assert.match(appSource, /useState\(initialSidebarExpanded\)/)
+  assert.match(appSource, /const closeSidebarAfterNavigation=\(\)=>\{if\(isCompactNavigation\(\)\)setSidebarExpanded\(false\)\}/)
+  assert.match(appSource, /const navigateTo=.*closeSidebarAfterNavigation\(\)/)
+  assert.doesNotMatch(appSource, /<aside[^>]+onBlur=/)
+  assert.match(appSource, /localStorage\.setItem\(SIDEBAR_STATE_KEY,next\?'expanded':'collapsed'\)/)
+})
+
+test('collapsed desktop rail keeps its toggle, brand, and navigation icons visible', () => {
+  const appCssSource = readFileSync(new URL('../App.css', import.meta.url), 'utf8')
+  assert.match(appCssSource, /\.sidebar-collapse-toggle\s*\{[^}]*z-index:\s*10;[^}]*visibility:\s*visible;/s)
+  assert.match(appCssSource, /\.app-sidebar:not\(\.is-expanded\) \.sidebar-collapse-toggle\s*\{[^}]*bottom:\s*8px;[^}]*transform:\s*translateX\(50%\);/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar:not\(\.is-expanded\) \.sidebar-brand-logo\s*\{[^}]*width:\s*40px\s*!important;/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar:not\(\.is-expanded\) :is\([^}]+> i:first-child\s*\{[^}]*opacity:\s*1\s*!important;[^}]*visibility:\s*visible\s*!important;/s)
+})
+
 test('mobile refresh status stays in the page flow instead of covering page controls', () => {
   assert.match(mobileShellSource, /\.app-refresh-status\s*\{[^}]*position:\s*relative;[^}]*width:\s*calc\(100% - 24px\);[^}]*margin:\s*10px 12px 0;/s)
 })
