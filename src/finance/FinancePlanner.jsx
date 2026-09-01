@@ -101,7 +101,7 @@ function Sparkline({ data = [], color = '#C5A46D', height = 40, fullWidth = fals
 const LUXURY_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
 
-:root {
+.finance-root {
   --font-display: "Cormorant Garamond", "Bodoni Moda", Georgia, serif;
   --font-ui: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 
@@ -591,7 +591,7 @@ const LUXURY_CSS = `
 
 
 /* ── User-provided side-panel image + project image upload controls ── */
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"])::before {
+#primary-navigation-drawer.app-sidebar::before {
   background:
     linear-gradient(180deg, rgba(0,0,0,.98) 0%, rgba(0,0,0,.06) 29%, rgba(0,0,0,.16) 68%, rgba(0,0,0,.98) 100%),
     linear-gradient(90deg, rgba(0,0,0,.62) 0%, rgba(0,0,0,.08) 48%, rgba(0,0,0,.74) 100%),
@@ -655,7 +655,7 @@ const LUXURY_CSS = `
    Removes the small EST. NET WORTH photo tile and uses the sidebar
    image as an atmospheric background panel like the reference. */
 
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) {
+#primary-navigation-drawer.app-sidebar {
   overflow: hidden !important;
   background:
     linear-gradient(180deg, rgba(0,0,0,.98) 0%, rgba(0,0,0,.88) 48%, rgba(0,0,0,.98) 100%),
@@ -663,12 +663,12 @@ const LUXURY_CSS = `
 }
 
 /* Hide misc image cards in the side panel — but keep the brand logo */
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) img:not(.sidebar-brand-logo),
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) picture,
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) [style*="background-image"] {
+#primary-navigation-drawer.app-sidebar img:not(.sidebar-brand-logo),
+#primary-navigation-drawer.app-sidebar picture,
+#primary-navigation-drawer.app-sidebar [style*="background-image"] {
   display: none !important;
 }
-.sidebar-brand-logo {
+#primary-navigation-drawer.app-sidebar .sidebar-brand-logo {
   display: block !important;
   width: 100% !important;
   max-width: 160px !important;
@@ -677,14 +677,14 @@ const LUXURY_CSS = `
 }
 
 /* Remove the standalone net-worth photo/card block if it is built with text. */
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) [class*="net"],
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) [class*="Net"],
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) [class*="worth"],
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) [class*="Worth"] {
+#primary-navigation-drawer.app-sidebar [class*="net"],
+#primary-navigation-drawer.app-sidebar [class*="Net"],
+#primary-navigation-drawer.app-sidebar [class*="worth"],
+#primary-navigation-drawer.app-sidebar [class*="Worth"] {
   display: none !important;
 }
 
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"])::before {
+#primary-navigation-drawer.app-sidebar::before {
   content: "" !important;
   position: absolute !important;
   left: 0 !important;
@@ -704,7 +704,7 @@ const LUXURY_CSS = `
   border-bottom: 1px solid rgba(197,164,109,.10) !important;
 }
 
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"])::after {
+#primary-navigation-drawer.app-sidebar::after {
   content: "" !important;
   position: absolute !important;
   inset: 0 !important;
@@ -715,7 +715,7 @@ const LUXURY_CSS = `
     linear-gradient(90deg, rgba(255,255,255,.03), transparent 32%) !important;
 }
 
-:where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) > * {
+#primary-navigation-drawer.app-sidebar > * {
   position: relative !important;
   z-index: 1 !important;
 }

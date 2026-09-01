@@ -315,9 +315,31 @@ html, body {
   gap: 2px;
 }
 
-/* Finance injects broad sidebar appearance rules. Keep the compact rail's
-   controls and iconography usable regardless of which module is active. */
+/* Keep the shared navigation readable regardless of which module is active. */
 @media (min-width: 641px) {
+  #primary-navigation-drawer.app-sidebar .sidebar-collapse-toggle,
+  #primary-navigation-drawer.app-sidebar .sidebar-collapse-toggle > i {
+    display: grid !important;
+    color: var(--gold) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  #primary-navigation-drawer.app-sidebar .sidebar-collapse-toggle > i {
+    place-items: center;
+    font-size: 18px !important;
+  }
+  #primary-navigation-drawer.app-sidebar .sidebar-nav-item,
+  #primary-navigation-drawer.app-sidebar .sidebar-footer-item {
+    color: var(--white) !important;
+    opacity: 1 !important;
+  }
+  #primary-navigation-drawer.app-sidebar .pillar-header {
+    color: var(--soft-white) !important;
+    opacity: 1 !important;
+  }
+  #primary-navigation-drawer.app-sidebar :is(.sidebar-nav-item.active, .pillar-header--active) {
+    color: var(--gold) !important;
+  }
   #primary-navigation-drawer.app-sidebar:not(.is-expanded) .sidebar-brand-logo {
     width: 40px !important;
     max-width: 40px !important;
