@@ -26,6 +26,7 @@ import { FINANCE_REFRESH_EVENT, mergePlaidBalances } from './financeRefresh.js'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from './recurrenceEditing.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
+import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions } from './transactionList.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1141,6 +1142,28 @@ function AcctForm({ acct, onSave, onCancel }) {
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────────
+function TransactionListControls({ options, onChange, showDateFilters = true, compact = false }) {
+  const set = (key, value) => onChange(current => ({ ...current, [key]: value }))
+  const directionLabels = options.sortBy === 'description'
+    ? [['asc', 'A to Z'], ['desc', 'Z to A']]
+    : options.sortBy === 'date'
+      ? [['desc', 'Newest first'], ['asc', 'Oldest first']]
+      : [['desc', 'Greatest to least'], ['asc', 'Least to greatest']]
+  const inputStyle = { minHeight: 38, borderRadius: 9, border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,.04)', color: 'var(--white)', padding: '7px 10px', fontSize: 12, minWidth: 0 }
+  return (
+    <section className="transaction-list-controls" aria-label="Sort and filter transactions" style={{ display: 'grid', gridTemplateColumns: compact ? 'minmax(150px,1fr) repeat(4,minmax(105px,.55fr))' : 'minmax(180px,1.4fr) repeat(6,minmax(110px,.7fr)) auto', gap: 8, marginBottom: 16, alignItems: 'end' }}>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Description</span><input aria-label="Filter by description" type="search" placeholder="Search description" value={options.description} onChange={event => set('description', event.target.value)} style={inputStyle}/></label>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Minimum amount</span><input aria-label="Minimum amount" type="number" min="0" step="0.01" placeholder="$0" value={options.minAmount} onChange={event => set('minAmount', event.target.value)} style={inputStyle}/></label>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Maximum amount</span><input aria-label="Maximum amount" type="number" min="0" step="0.01" placeholder="Any" value={options.maxAmount} onChange={event => set('maxAmount', event.target.value)} style={inputStyle}/></label>
+      {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">From date</span><input aria-label="Filter from date" type="date" value={options.dateFrom} onChange={event => set('dateFrom', event.target.value)} style={inputStyle}/></label>}
+      {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">To date</span><input aria-label="Filter to date" type="date" value={options.dateTo} onChange={event => set('dateTo', event.target.value)} style={inputStyle}/></label>}
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="amount">Amount</option><option value="date">Date</option></select></label>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Order</span><select aria-label="Transaction sort order" value={options.sortDirection} onChange={event => set('sortDirection', event.target.value)} style={inputStyle}>{directionLabels.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+      <button type="button" onClick={()=>onChange({ ...DEFAULT_TRANSACTION_LIST_OPTIONS })} style={{ ...inputStyle, cursor: 'pointer', color: 'var(--gold)', whiteSpace: 'nowrap' }}>Reset</button>
+    </section>
+  )
+}
+
 export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [data, setData]         = useState(loadData)
   const dataRef                 = useRef(data)
@@ -1157,6 +1180,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [balanceOverrides, setBalanceOverrides] = useState(() => loadSavedValue('lslj_bal_overrides_v1', {}))
   const [financeRange, setFinanceRange] = useState(() => loadSavedValue('brevity_finance_timeframe_v1', resolveTimeframe('last-12-months')))
   const [transactionFilter, setTransactionFilter] = useState(null)
+  const [transactionListOptions, setTransactionListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
   const [dashboardSearch, setDashboardSearch] = useState('')
 
   useEffect(() => { try { localStorage.setItem('brevity_finance_timeframe_v1', JSON.stringify(financeRange)) } catch {} }, [financeRange])
@@ -1361,10 +1385,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   }, [plaidActuals, plaidIdToLocal, activeAcctIds, data.accounts, txOverrides, txRules])
 
   const timeframeActuals = useMemo(() => filterTransactionsByTimeframe(filteredActuals, financeRange), [filteredActuals, financeRange])
-  const transactionViewActuals = useMemo(() => {
+  const filteredTransactionViewActuals = useMemo(() => {
     const source = transactionFilter?.dateFrom || transactionFilter?.dateTo ? filteredActuals : timeframeActuals
     return source.filter(tx => matchesTransactionFilter(tx, transactionFilter || {}))
   }, [filteredActuals, timeframeActuals, transactionFilter])
+  const transactionViewActuals = useMemo(
+    () => sortAndFilterTransactions(filteredTransactionViewActuals, transactionListOptions),
+    [filteredTransactionViewActuals, transactionListOptions],
+  )
   const transactionViewStats = useMemo(() => transactionViewActuals.reduce((stats, tx) => {
     const amount = Math.abs(Number(tx.amount) || 0)
     if (transactionDirection(tx) === 'income') stats.income += amount
@@ -1378,13 +1406,17 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     months[month].total += Math.abs(Number(tx.amount) || 0)
     return months
   }, {})).sort(([a], [b]) => b.localeCompare(a)), [transactionViewActuals])
-  const scheduledViewTransactions = useMemo(() => fd.transactions.filter(tx => {
+  const filteredScheduledViewTransactions = useMemo(() => fd.transactions.filter(tx => {
     if (!transactionFilter?.scheduled) return true
     if (transactionFilter.ids?.length && !transactionFilter.ids.includes(tx.id)) return false
     if (transactionFilter.direction && tx.type !== transactionFilter.direction) return false
     if (transactionFilter.value && transactionFilter.displayBy === 'category' && tx.cat !== transactionFilter.value) return false
     return true
   }), [fd.transactions, transactionFilter])
+  const scheduledViewTransactions = useMemo(
+    () => sortAndFilterTransactions(filteredScheduledViewTransactions, transactionListOptions),
+    [filteredScheduledViewTransactions, transactionListOptions],
+  )
 
   const openFilteredTransactions = (filter = null) => {
     setTransactionFilter(filter)
@@ -2214,7 +2246,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                   // Actuals: last 14 days of real posted/pending transactions
                   timeframeActuals.length === 0
                     ? <p style={{ fontSize: 14, color: 'var(--muted)' }}>{plaidActuals ? 'No recent transactions found.' : 'Connect a bank to see actuals.'}</p>
-                    : timeframeActuals.slice(0, 14).map((tx, i) => {
+                    : sortAndFilterTransactions(timeframeActuals).slice(0, 14).map((tx, i) => {
                         const isIncome = tx.amount < 0 // Plaid: negative = money in
                         return (
                           <div key={i}
@@ -2243,7 +2275,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                   // Projected: next 7 days
                   upcoming.length === 0
                     ? <p style={{ fontSize: 14, color: 'var(--muted)' }}>Nothing due this week.</p>
-                    : upcoming.map((tx, i) => (
+                    : sortAndFilterTransactions(upcoming).map((tx, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.14)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }} />
@@ -2317,7 +2349,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', maxHeight: 260 }}>
                 {recent14.length === 0 && <p style={{ fontSize: 14, color: 'var(--muted)' }}>Nothing in the next 14 days.</p>}
-                {recent14.slice(0, 12).map((tx, i) => (
+                {sortAndFilterTransactions(recent14).slice(0, 12).map((tx, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: i < Math.min(recent14.length, 12) - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'var(--gold)' : 'var(--expense-color)' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -2511,7 +2543,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                        insightModal.type === 'category-subs' ? `${insightModal.category} Subscriptions` : 'Transactions'}
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {insightModal.transactions.map((tx, idx) => {
+                      {sortAndFilterTransactions(insightModal.transactions).map((tx, idx) => {
                         const isPlaid = tx.date !== undefined && typeof tx.pending !== 'undefined'
                         const isIncome = isPlaid ? tx.amount < 0 : tx.type === 'income'
                         const amt = isPlaid ? Math.abs(tx.amount) : parseFloat(tx.amount)
@@ -2669,6 +2701,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             </div>
           )}
 
+          <TransactionListControls options={transactionListOptions} onChange={setTransactionListOptions}/>
+
           {/* ── Monthly totals summary ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'income', label: 'Income' }):openScheduledTransactions({ direction:'income', label:'Scheduled income' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
@@ -2728,9 +2762,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                   })
             ) : (
               // ── Projected mode: scheduled recurring transactions ──
-              [...scheduledViewTransactions]
-                .sort((a, b) => a.type !== b.type ? (a.type === 'income' ? -1 : 1) : a.name.localeCompare(b.name))
-                .map(tx => {
+              scheduledViewTransactions.map(tx => {
                   const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
                   return (
                     <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, transition: 'background 0.15s' }}>
@@ -2739,7 +2771,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}{tx.start ? ` · Starts ${new Date(`${tx.start}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
                       </div>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
                         {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
@@ -3799,7 +3831,7 @@ function ReportingView({ data, proj, plaidActuals = [], onOpenTransactions, onOp
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
             {sectionTitle('Revenue')}
-            {data.transactions.filter(t => t.type === 'income').map(t => statRow(t.name, fmtMoney(calculateTransactionAmountForMonth(t, new Date(yr, mo, 1))), 'var(--gold)', true))}
+            {sortAndFilterTransactions(data.transactions.filter(t => t.type === 'income')).map(t => statRow(t.name, fmtMoney(calculateTransactionAmountForMonth(t, new Date(yr, mo, 1))), 'var(--gold)', true))}
             {statRow('Total Revenue', fmtMoney(totalIncome), 'var(--gold)', false, true)}
           </div>
           <div className="finance-card" style={{ padding: '20px 24px', marginBottom: 14 }}>
@@ -3984,6 +4016,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
   const [pendingMove, setPendingMove]= useState(null)   // { tx, fromDate, toDate }
   const [pendingScope, setPendingScope] = useState(null) // { action, original, updated?, occurrenceDate }
   const [editBal,     setEditBal]    = useState(null)   // { key, draft } inline balance edit
+  const [dayListOptions, setDayListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
 
   const t = today0()
   const todayStr = toISO(t)
@@ -4013,6 +4046,14 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
   const nextMonth = () => { let m = calMonth + 1, y = calYear; if (m > 11) { m = 0; y++ }; setCalMonth(m); setCalYear(y) }
 
   const selPt = selDay ? proj.get(selDay) : null
+  const selectedPlannedTransactions = useMemo(
+    () => sortAndFilterTransactions(selPt?.txns || [], dayListOptions),
+    [selPt, dayListOptions],
+  )
+  const selectedActualTransactions = useMemo(
+    () => sortAndFilterTransactions(selDay ? actualsByDate?.[selDay] || [] : [], dayListOptions),
+    [actualsByDate, selDay, dayListOptions],
+  )
   const fmtDateLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   const handleSave = tx => {
@@ -4211,7 +4252,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
               {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
               {hasTxns && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
-                  {pt.txns.slice(0, maxBudget).map((tx, j) => (
+                  {sortAndFilterTransactions(pt.txns).slice(0, maxBudget).map((tx, j) => (
                     <div className="finance-calendar-event" key={j}
                       draggable
                       onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx, fromDate: key }) }}
@@ -4239,7 +4280,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
               {/* Actual (Plaid) transaction pills (teal/blue) */}
               {showActualPills && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginTop: hasTxns ? 2 : 0 }}>
-                  {dayActuals.slice(0, 3).map((tx, j) => {
+                  {sortAndFilterTransactions(dayActuals).slice(0, 3).map((tx, j) => {
                     const isIncome = tx.amount < 0 // Plaid: negative = credit
                     return (
                       <div className="finance-calendar-event finance-calendar-event--actual" key={`a${j}`} style={{
@@ -4361,6 +4402,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
             </div>
           </div>
 
+          <TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/>
+
           {/* Planned transactions */}
           {selPt.txns.length > 0 && (
             <div>
@@ -4368,7 +4411,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Planned</p>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {selPt.txns.map((tx, idx2) => (
+                {selectedPlannedTransactions.map((tx, idx2) => (
                   <div key={idx2}
                     onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
@@ -4392,7 +4435,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                       {tx.type === 'income' ? '+' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? '→' : '+') : '-'}{fmtMoney(tx.amount)}
                     </p>
                   </div>
-                ))}
+                  ))}
+                {selectedPlannedTransactions.length===0&&<p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>No planned transactions match these filters.</p>}
               </div>
             </div>
           )}
@@ -4419,7 +4463,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                   )}
                   {hasActuals && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {dayActs.map((tx, idx3) => {
+                      {selectedActualTransactions.map((tx, idx3) => {
                         const isIncome = tx.amount < 0
                         return (
                           <div key={idx3}
@@ -4445,6 +4489,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                           </div>
                         )
                       })}
+                      {selectedActualTransactions.length===0&&<p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>No actual transactions match these filters.</p>}
                     </div>
                   )}
                 </div>

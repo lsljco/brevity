@@ -1254,7 +1254,11 @@ select option { background: var(--graphite); color: var(--white); }
 .dash-left-col { display: flex; flex-direction: column; gap: 14px; }
 
 /* ── Responsive ─────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .transaction-list-controls { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
 @media (max-width: 900px) {
+  .transaction-list-controls { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
   .app-sidebar { width: 60px; min-width: 60px; }
   .app-sidebar.is-expanded { width: 240px; min-width: 240px; }
   .sidebar-nav-item span, .sidebar-footer-item span,
@@ -1272,6 +1276,7 @@ select option { background: var(--graphite); color: var(--white); }
   .app-main::before { left: 60px; }
 }
 @media (max-width: 640px) {
+  .transaction-list-controls { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .metric-value { font-size: 20px; }
   .external-site-toolbar { align-items: flex-start; padding: 14px; }
   .external-site-toolbar h1 { font-size: 21px; }
