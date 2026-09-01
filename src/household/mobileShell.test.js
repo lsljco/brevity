@@ -40,12 +40,19 @@ test('app-wide theme coverage loads last and includes every native tab family', 
 })
 
 test('Finance appearance overrides do not replace the app drawer positioning', () => {
-  const selector = ':where(aside, .sidebar, .app-sidebar, .side-nav, .left-nav, .navigation-panel, [class*="Sidebar"], [class*="sidebar"]) {'
+  const selector = '#primary-navigation-drawer.app-sidebar {'
   const blockStart = financePlannerSource.indexOf(selector)
   const blockEnd = financePlannerSource.indexOf('}', blockStart)
 
   assert.ok(blockStart >= 0, 'Finance sidebar appearance block must remain identifiable')
   assert.doesNotMatch(financePlannerSource.slice(blockStart, blockEnd), /position:\s*relative\s*!important/)
+})
+
+test('Finance appearance styles cannot target every sidebar descendant or replace app theme variables', () => {
+  assert.doesNotMatch(financePlannerSource, /:where\(aside,[^)]+\)/)
+  assert.doesNotMatch(financePlannerSource, /\[class\*="sidebar"\]/)
+  assert.doesNotMatch(financePlannerSource, /const LUXURY_CSS = `\s*:root\s*\{/)
+  assert.match(financePlannerSource, /#primary-navigation-drawer\.app-sidebar::before/)
 })
 
 test('mobile Menu button identifies the navigation drawer it controls', () => {
@@ -67,6 +74,13 @@ test('collapsed desktop rail keeps its toggle, brand, and navigation icons visib
   assert.match(appCssSource, /\.app-sidebar:not\(\.is-expanded\) \.sidebar-collapse-toggle\s*\{[^}]*bottom:\s*8px;[^}]*transform:\s*translateX\(50%\);/s)
   assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar:not\(\.is-expanded\) \.sidebar-brand-logo\s*\{[^}]*width:\s*40px\s*!important;/s)
   assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar:not\(\.is-expanded\) :is\([^}]+> i:first-child\s*\{[^}]*opacity:\s*1\s*!important;[^}]*visibility:\s*visible\s*!important;/s)
+})
+
+test('expanded desktop navigation protects readable labels and a visible toggle icon', () => {
+  const appCssSource = readFileSync(new URL('../App.css', import.meta.url), 'utf8')
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar \.sidebar-collapse-toggle > i\s*\{[^}]*font-size:\s*18px\s*!important;/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar \.sidebar-nav-item,[^}]+color:\s*var\(--white\)\s*!important;[^}]+opacity:\s*1\s*!important;/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar \.pillar-header\s*\{[^}]*color:\s*var\(--soft-white\)\s*!important;[^}]+opacity:\s*1\s*!important;/s)
 })
 
 test('mobile refresh status stays in the page flow instead of covering page controls', () => {
