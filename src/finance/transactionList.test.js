@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions } from './transactionList.js'
+import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 
 const transactions = [
   { id: 'amazon', name: 'Amazon', amount: 35, date: '2026-08-31' },
@@ -24,4 +24,15 @@ test('description, amount, and date filters compose', () => {
   assert.deepEqual(sortAndFilterTransactions(transactions, { description: 'pay' }).map(item => item.id), ['payroll', 'discover'])
   assert.deepEqual(sortAndFilterTransactions(transactions, { minAmount: 100, maxAmount: 1100 }).map(item => item.id), ['discover', 'groceries'])
   assert.deepEqual(sortAndFilterTransactions(transactions, { dateFrom: '2026-08-30', dateTo: '2026-08-31' }).map(item => item.id), ['discover', 'amazon'])
+})
+
+test('full bank statement descriptions remain searchable and take display priority', () => {
+  const bankTransaction = {
+    name: 'Amazon',
+    originalStatement: 'AMZN Mktp US*2A4H19 Seattle WA Card 607',
+    amount: 59.21,
+    date: '2026-08-31',
+  }
+  assert.equal(transactionDescription(bankTransaction), 'AMZN Mktp US*2A4H19 Seattle WA Card 607')
+  assert.deepEqual(sortAndFilterTransactions([bankTransaction], { description: 'card 607' }), [bankTransaction])
 })

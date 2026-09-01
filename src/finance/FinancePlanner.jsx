@@ -26,7 +26,7 @@ import { FINANCE_REFRESH_EVENT, mergePlaidBalances } from './financeRefresh.js'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from './recurrenceEditing.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
-import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions } from './transactionList.js'
+import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -4266,7 +4266,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                         overflow: 'hidden', cursor: 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
+                      <span title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
                       <span style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
                       </span>
@@ -4289,7 +4289,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                         color: isIncome ? '#7DCBA4' : '#90AADE',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
                       }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{tx.name}</span>
+                        <span title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
                         <span style={{ flexShrink: 0, fontWeight: 600 }}>
                           {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
                         </span>
@@ -4414,13 +4414,13 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                 {selectedPlannedTransactions.map((tx, idx2) => (
                   <div key={idx2}
                     onClick={e => { e.stopPropagation(); setSelTx({ ...tx }) }}
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '9px 12px',
                       background: 'rgba(255,255,255,0.04)', borderRadius: 10, cursor: 'pointer',
                       border: '1px solid transparent', transition: 'all .15s' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(197,164,109,0.22)' }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'transparent' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{transactionDescription(tx)}</p>
                       <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
                         {tx.type === 'transfer'
                           ? (acctIdSet.has(tx.acct)
@@ -4468,14 +4468,14 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                         return (
                           <div key={idx3}
                             onClick={e => { e.stopPropagation(); onActualTxClick?.(tx) }}
-                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px',
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '9px 12px',
                               background: 'rgba(100,140,220,0.06)', borderRadius: 10, cursor: 'pointer',
                               border: `1px solid ${tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)'}`,
                               transition: 'all .15s' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(100,140,220,0.13)'; e.currentTarget.style.borderColor = 'rgba(100,140,220,0.4)' }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(100,140,220,0.06)'; e.currentTarget.style.borderColor = tx.pending ? 'rgba(197,164,109,0.22)' : 'rgba(100,140,220,0.18)' }}>
-                            <div style={{ minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.name}</p>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{transactionDescription(tx)}</p>
                               <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--muted)' }}>
                                 {tx.pending ? '⏳ Pending' : '✓ Posted'}
                                 {tx.category ? ` · ${tx.category}` : ''}
