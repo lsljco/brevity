@@ -571,6 +571,29 @@ const LUXURY_CSS = `
   box-shadow: 0 0 0 2px rgba(197,164,109,.30) !important;
 }
 
+/* iPad calendar entries need the description and amount on separate lines.
+   This preserves the complete statement text instead of collapsing it to an ellipsis. */
+@media (max-width: 1366px) {
+  .finance-calendar-event {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    overflow: visible !important;
+    padding: 4px 5px !important;
+    line-height: 1.25 !important;
+  }
+  .finance-calendar-description {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+  }
+  .finance-calendar-amount {
+    align-self: flex-end !important;
+    white-space: nowrap !important;
+  }
+  .cal-cell { min-height: 160px !important; }
+}
+
 /* Scrollbars */
 .finance-root *::-webkit-scrollbar { width: 8px; height: 8px; }
 .finance-root *::-webkit-scrollbar-thumb { background: rgba(197,164,109,.22); border-radius: 999px; }
@@ -4266,8 +4289,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                         overflow: 'hidden', cursor: 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
-                      <span title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
-                      <span style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                      <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
+                      <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
                       </span>
                     </div>
@@ -4289,8 +4312,8 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
                         color: isIncome ? '#7DCBA4' : '#90AADE',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
                       }}>
-                        <span title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
-                        <span style={{ flexShrink: 0, fontWeight: 600 }}>
+                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
+                        <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600 }}>
                           {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
                         </span>
                       </div>
