@@ -22,9 +22,14 @@ export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlow
   },[today,accounts,scheduled,cashFlowScheduled,actuals,budget,projection])
 
   useEffect(()=>{
-    const current=readMeetingStore(),snapshot={...(current.snapshot||{})};let changed=false
-    Object.entries(auto).forEach(([key,value])=>{if(snapshot[key]!==''&&snapshot[key]!=null)return;snapshot[key]=Number.isFinite(Number(value))?Number(value):'';changed=true})
-    if(changed){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({...current,snapshot}))}catch{}}
+    const current=readMeetingStore(),snapshot={...(current.snapshot||{})},previousAuto=current.autoSnapshot||{}
+    Object.entries(auto).forEach(([key,value])=>{
+      const next=Number.isFinite(Number(value))?Number(value):''
+      const currentValue=snapshot[key]
+      const wasAutomatic=currentValue===''||currentValue==null||Object.prototype.hasOwnProperty.call(previousAuto,key)&&Number(currentValue)===Number(previousAuto[key])
+      if(wasAutomatic)snapshot[key]=next
+    })
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify({...current,snapshot,autoSnapshot:auto}))}catch{}
     setReady(true)
   },[auto])
 
