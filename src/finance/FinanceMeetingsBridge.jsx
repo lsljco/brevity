@@ -1,0 +1,31 @@
+import { useEffect, useMemo } from 'react'
+import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
+import { calculateMonthlyCashFlow } from './monthlyCashFlow.js'
+import { addDays, toISO, txOccursOnDate } from './projection.js'
+import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
+
+const STORAGE_KEY='brevity_finance_meetings_v1'
+const money=value=>Math.abs(Number(value)||0)
+
+function readMeetingStore(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch{return{}}}
+function sumWindow(transactions=[],startDate,days=7){let inflows=0,obligations=0;for(let offset=0;offset<days;offset+=1){const date=addDays(startDate,offset);transactions.forEach(transaction=>{if(transaction.type==='transfer'||!txOccursOnDate(transaction,date))return;if(transaction.type==='income')inflows+=money(transaction.amount);if(transaction.type==='expense')obligations+=money(transaction.amount)})}return{inflows,obligations}}
+
+export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},projection}){
+  const today=useMemo(()=>new Date(),[])
+  const auto=useMemo(()=>{
+    const dateKey=toISO(today)
+    const daily=buildDailyAlignmentSnapshot({date:dateKey,accounts,scheduled,monthlyScheduled:cashFlowScheduled||scheduled,actuals,budget,projectedBalance:projection?.get?.(dateKey)?.bal})
+    const weekly=sumWindow(scheduled,today,7)
+    const monthly=calculateMonthlyCashFlow(cashFlowScheduled||scheduled,today)
+    return{currentMonthlyNet:daily.monthlyCashFlow,operatingBalance:daily.availableOperatingCash,operatingAvailable:daily.availableOperatingCash,weekInflows:weekly.inflows,weekObligations:weekly.obligations,monthForecast:monthly.cashFlow}
+  },[today,accounts,scheduled,cashFlowScheduled,actuals,budget,projection])
+
+  useEffect(()=>{
+    const current=readMeetingStore(),snapshot={...(current.snapshot||{})};let changed=false
+    Object.entries(auto).forEach(([key,value])=>{if(snapshot[key]!==''&&snapshot[key]!=null)return;snapshot[key]=Number.isFinite(Number(value))?Number(value):'';changed=true})
+    if(!changed)return
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify({...current,snapshot}))}catch{}
+  },[auto])
+
+  return <FinanceMeetingsWorkspace initialFinanceSnapshot={auto}/>
+}
