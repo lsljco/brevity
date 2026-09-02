@@ -34,7 +34,7 @@ const PILLARS = [
   { id:'education', label:'Education', icon:'ti-book', layer:4, description:'Knowledge and growth — learning across every member of the family.', items:[] },
   { id:'finance', label:'Finance', icon:'ti-building-bank', layer:4, description:'Governance, stewardship, and financial planning for the family.', items:[
     { id:'dashboard', label:'Dashboard', icon:'ti-layout-dashboard' },
-    { id:'daily-alignment', label:'Daily Alignment', icon:'ti-target-arrow' },
+    { id:'daily-alignment', label:'Meetings', icon:'ti-users-group' },
     { id:'scenario-modeling', label:'Scenario Modeling', icon:'ti-chart-arrows' },
     { id:'transactions', label:'Transactions', icon:'ti-list' },
     { id:'calendar', label:'Cash Forecast', icon:'ti-calendar-dollar' },
@@ -80,7 +80,7 @@ function SettingsPage({ currentMember, role }) {
   const badge={fontSize:11,padding:'4px 10px',borderRadius:10,background:'rgba(197,164,109,.12)',border:'1px solid rgba(197,164,109,.22)',color:'var(--gold)'}
   const label={fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--gold)',margin:'28px 0 14px',display:'block',fontWeight:600}
   const importRef=useRef(null)
-  const backupKeys=['lslj_finance_v9','plaid_actuals_cache','lslj_budget_v1','lslj_actuals_v1','lslj_bal_overrides_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','brevity_finance_categories_v1','brevity_finance_scenarios_v1','fp_goals','homehq_items_v1','family_calendar_events_v1','brevity_daily_financial_alignment_v1','brevity_household_maintenance_v1']
+  const backupKeys=['lslj_finance_v9','plaid_actuals_cache','lslj_budget_v1','lslj_actuals_v1','lslj_bal_overrides_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','brevity_finance_categories_v1','brevity_finance_scenarios_v1','fp_goals','homehq_items_v1','family_calendar_events_v1','brevity_daily_financial_alignment_v1','brevity_finance_meetings_v1','brevity_household_maintenance_v1']
   const handleExport=()=>{const data={format:'brevity-browser-data',schemaVersion:1,scope:'browser-records',exportedAt:new Date().toISOString(),records:{}};backupKeys.forEach(k=>{const raw=localStorage.getItem(k);if(raw!=null){try{data.records[k]=JSON.parse(raw)}catch{data.records[k]=raw}}});const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`brevity-browser-data-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
   const handleImport=event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);const records=parsed.records||parsed;const valid=backupKeys.filter(key=>Object.prototype.hasOwnProperty.call(records,key));if(!valid.length)throw new Error('No recognized Brevity records were found.');if(!window.confirm(`Restore ${valid.length} Brevity record${valid.length===1?'':'s'} from this backup?`))return;valid.forEach(key=>localStorage.setItem(key,JSON.stringify(records[key])));window.location.reload()}catch(error){window.alert(error.message||'This is not a valid Brevity backup.')}};reader.readAsText(file)}
   return <div className="settings-page" style={{maxWidth:820,margin:'0 auto',padding:'48px 32px'}}>
