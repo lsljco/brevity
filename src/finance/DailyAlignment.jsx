@@ -1,8 +1,7 @@
-import FinanceMeetings from './FinanceMeetings.jsx'
+import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
 
-// Finance meetings now own the household financial cadence. The former Daily
-// Alignment route is preserved as the stable navigation entry so existing
-// links keep working while Daily becomes one cadence inside Meetings.
+// Keep the historic route stable while Finance Meetings becomes the household
+// financial operating rhythm. Daily is now one cadence inside Meetings.
 export default function DailyAlignment() {
-  return <FinanceMeetings />
+  return <FinanceMeetingsWorkspace />
 }
