@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 import { calculateMonthlyCashFlow } from './monthlyCashFlow.js'
 import { addDays, toISO, txOccursOnDate } from './projection.js'
@@ -11,6 +11,7 @@ function readMeetingStore(){try{return JSON.parse(localStorage.getItem(STORAGE_K
 function sumWindow(transactions=[],startDate,days=7){let inflows=0,obligations=0;for(let offset=0;offset<days;offset+=1){const date=addDays(startDate,offset);transactions.forEach(transaction=>{if(transaction.type==='transfer'||!txOccursOnDate(transaction,date))return;if(transaction.type==='income')inflows+=money(transaction.amount);if(transaction.type==='expense')obligations+=money(transaction.amount)})}return{inflows,obligations}}
 
 export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},projection}){
+  const[ready,setReady]=useState(false)
   const today=useMemo(()=>new Date(),[])
   const auto=useMemo(()=>{
     const dateKey=toISO(today)
@@ -23,9 +24,10 @@ export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlow
   useEffect(()=>{
     const current=readMeetingStore(),snapshot={...(current.snapshot||{})};let changed=false
     Object.entries(auto).forEach(([key,value])=>{if(snapshot[key]!==''&&snapshot[key]!=null)return;snapshot[key]=Number.isFinite(Number(value))?Number(value):'';changed=true})
-    if(!changed)return
-    try{localStorage.setItem(STORAGE_KEY,JSON.stringify({...current,snapshot}))}catch{}
+    if(changed){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({...current,snapshot}))}catch{}}
+    setReady(true)
   },[auto])
 
-  return <FinanceMeetingsWorkspace initialFinanceSnapshot={auto}/>
+  if(!ready)return <div className="app-view-loading">Preparing Finance Meetings…</div>
+  return <FinanceMeetingsWorkspace/>
 }
