@@ -17,6 +17,7 @@ async function pngDimensions(relativePath) {
 test('publishes installable Brevity web-app metadata', async () => {
   const html = await readFile(projectFile('index.html'), 'utf8')
   const manifest = JSON.parse(await readFile(projectFile('public/manifest.webmanifest'), 'utf8'))
+  const headers = await readFile(projectFile('public/_headers'), 'utf8')
 
   assert.match(html, /rel="manifest" href="\/manifest\.webmanifest"/)
   assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/icons\/apple-touch-icon-180x180\.png"/)
@@ -33,6 +34,7 @@ test('publishes installable Brevity web-app metadata', async () => {
   assert.ok(manifest.icons.some((icon) => icon.sizes === '1024x1024' && icon.purpose === 'any'))
   assert.ok(manifest.icons.some((icon) => icon.sizes === '192x192' && icon.purpose === 'maskable'))
   assert.ok(manifest.icons.some((icon) => icon.sizes === '512x512' && icon.purpose === 'maskable'))
+  assert.match(headers, /\/manifest\.webmanifest[\s\S]*?Content-Type: application\/manifest\+json; charset=utf-8/)
 })
 
 test('ships correctly sized app icons', async () => {

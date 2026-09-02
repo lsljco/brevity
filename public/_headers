@@ -8,6 +8,10 @@
 /
   Cache-Control: no-cache, no-store, must-revalidate
 
+/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: no-cache, no-store, must-revalidate
+
 # Static assets with content hashes can be cached aggressively
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
