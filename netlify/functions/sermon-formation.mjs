@@ -12,135 +12,17 @@ const TRANSCRIPT_CHUNK_SIZE = 90000
 const json = (statusCode, body) => ({ statusCode, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}, body:JSON.stringify(body) })
 const outputText = response => (response.output||[]).flatMap(item=>item.content||[]).map(part=>part.text||'').join('').trim()
 const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
-
-const splitTranscript=(text,size=TRANSCRIPT_CHUNK_SIZE)=>{
-  const chunks=[]
-  let remaining=text.trim()
-  while(remaining.length>size){
-    const window=remaining.slice(0,size)
-    const paragraph=window.lastIndexOf('\n\n')
-    const line=window.lastIndexOf('\n')
-    const sentence=Math.max(window.lastIndexOf('. '),window.lastIndexOf('? '),window.lastIndexOf('! '))
-    const boundary=Math.max(paragraph,line,sentence)
-    const cut=boundary>size*.6?boundary+(boundary===sentence?1:0):size
-    chunks.push(remaining.slice(0,cut).trim())
-    remaining=remaining.slice(cut).trim()
-  }
-  if(remaining)chunks.push(remaining)
-  return chunks
-}
-
-const requestOpenAI=async body=>{
-  const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'content-type':'application/json'},body:JSON.stringify({model:MODEL,store:false,...body})})
-  const payload=await response.json().catch(()=>({}))
-  if(!response.ok){
-    const message=payload.error?.message||'OpenAI sermon analysis failed.'
-    const code=payload.error?.code||payload.error?.type||''
-    const error=new Error(response.status===429&&/quota|billing|insufficient/i.test(`${message} ${code}`)?'Brevity AI reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.':message)
-    error.status=response.status
-    throw error
-  }
-  return payload
-}
-
-const analyzeTranscriptChunks=async transcript=>{
-  const chunks=splitTranscript(transcript)
-  const analyses=await Promise.all(chunks.map(async(chunk,index)=>{
-    const prompt=`You are preparing source-faithful notes for section ${index+1} of ${chunks.length} of one sermon transcript. Produce a detailed ordered source digest for a later synthesis. Preserve every teaching movement, doctrinal claim, Scripture reference and its stated use, illustration, definition, framework, application, congregational response, prayer element, and distinctive phrase. Include a small number of exact quotations only when traceable to this section. Do not summarize into generic themes, invent content, or write the final sermon document. Clearly mark where a thought begins or ends mid-section.\n\nTRANSCRIPT SECTION ${index+1} OF ${chunks.length}:\n${chunk}`
-    const payload=await requestOpenAI({input:prompt,max_output_tokens:8000})
-    return `SECTION ${index+1} OF ${chunks.length}\n${outputText(payload)}`
-  }))
-  return analyses.join('\n\n')
-}
-
+const splitTranscript=(text,size=TRANSCRIPT_CHUNK_SIZE)=>{const chunks=[];let remaining=text.trim();while(remaining.length>size){const window=remaining.slice(0,size),paragraph=window.lastIndexOf('\n\n'),line=window.lastIndexOf('\n'),sentence=Math.max(window.lastIndexOf('. '),window.lastIndexOf('? '),window.lastIndexOf('! ')),boundary=Math.max(paragraph,line,sentence),cut=boundary>size*.6?boundary+(boundary===sentence?1:0):size;chunks.push(remaining.slice(0,cut).trim());remaining=remaining.slice(cut).trim()}if(remaining)chunks.push(remaining);return chunks}
+const requestOpenAI=async body=>{const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'content-type':'application/json'},body:JSON.stringify({model:MODEL,store:false,...body})});const payload=await response.json().catch(()=>({}));if(!response.ok){const message=payload.error?.message||'OpenAI sermon analysis failed.',code=payload.error?.code||payload.error?.type||'',error=new Error(response.status===429&&/quota|billing|insufficient/i.test(`${message} ${code}`)?'Brevity AI reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.':message);error.status=response.status;throw error}return payload}
+const analyzeTranscriptChunks=async transcript=>{const chunks=splitTranscript(transcript),analyses=await Promise.all(chunks.map(async(chunk,index)=>{const prompt=`You are preparing source-faithful notes for section ${index+1} of ${chunks.length} of one sermon transcript. Produce a detailed ordered source digest for a later synthesis. Preserve every teaching movement, doctrinal claim, Scripture reference and its stated use, illustration, definition, framework, application, congregational response, prayer element, and distinctive phrase. Do not summarize into generic themes, invent content, or write the final sermon document.\n\nTRANSCRIPT SECTION ${index+1} OF ${chunks.length}:\n${chunk}`;const payload=await requestOpenAI({input:prompt,max_output_tokens:8000});return `SECTION ${index+1} OF ${chunks.length}\n${outputText(payload)}`}));return analyses.join('\n\n')}
 const scriptureItem={type:'object',additionalProperties:false,properties:{reference:{type:'string'},explanation:{type:'string'}},required:['reference','explanation']}
 const teachingSection={type:'object',additionalProperties:false,properties:{title:{type:'string'},paragraphs:{type:'array',items:{type:'string'}},quotes:{type:'array',items:{type:'string'}}},required:['title','paragraphs','quotes']}
 const frameworkSection={type:'object',additionalProperties:false,properties:{title:{type:'string'},description:{type:'string'},items:{type:'array',items:{type:'object',additionalProperties:false,properties:{label:{type:'string'},detail:{type:'string'}},required:['label','detail']}}},required:['title','description','items']}
 const applicationSection={type:'object',additionalProperties:false,properties:{title:{type:'string'},paragraphs:{type:'array',items:{type:'string'}},steps:{type:'array',items:{type:'string'}}},required:['title','paragraphs','steps']}
-const schema={
-  type:'object',additionalProperties:false,
-  properties:{
-    sermonNotes:{type:'object',additionalProperties:false,properties:{
-      documentTitle:{type:'string'},series:{type:'string'},part:{type:'string'},subtitle:{type:'string'},preacherTeacher:{type:'string'},service:{type:'string'},sermonDate:{type:'string'},preparedFor:{type:'string'},leadQuote:{type:'string'},teachingObjectives:{type:'array',items:{type:'string'}},anchorDeclaration:{type:'string'},aim:{type:'string'},thesis:{type:'string'},openingExhortation:{type:'array',items:{type:'string'}},primaryScriptures:{type:'array',items:scriptureItem},supportingBiblicalWitnesses:{type:'array',items:scriptureItem},governingQuestion:{type:'string'},workingDefinitions:{type:'array',items:frameworkSection},historicalBiblicalContext:{type:'array',items:teachingSection},detailedExposition:{type:'array',items:teachingSection},kingdomPrinciples:{type:'array',items:{type:'string'}},architecturalFrameworks:{type:'array',items:frameworkSection},memorableLines:{type:'array',items:{type:'string'}},practicalApplication:{type:'array',items:applicationSection},diagnosticWorksheets:{type:'array',items:applicationSection},pastoralGuardrails:{type:'array',items:{type:'string'}},reflectionQuestions:{type:'array',items:{type:'string'}},sevenDayFormationPlan:{type:'array',items:applicationSection},smallGroupTeachingPlan:applicationSection,contributorInsights:{type:'array',items:frameworkSection},weeklyCharge:{type:'object',additionalProperties:false,properties:{title:{type:'string'},paragraphs:{type:'array',items:{type:'string'}},actions:{type:'array',items:{type:'string'}},quote:{type:'string'}},required:['title','paragraphs','actions','quote']},congregationalResponse:{type:'array',items:{type:'string'}},prayer:{type:'array',items:{type:'string'}},closingCommission:{type:'string'},personalResponseQuestions:{type:'array',items:{type:'string'}},scriptureIndex:{type:'array',items:{type:'object',additionalProperties:false,properties:{reference:{type:'string'},teachingEmphasis:{type:'string'}},required:['reference','teachingEmphasis']}}
-    },required:['documentTitle','series','part','subtitle','preacherTeacher','service','sermonDate','preparedFor','leadQuote','teachingObjectives','anchorDeclaration','aim','thesis','openingExhortation','primaryScriptures','supportingBiblicalWitnesses','governingQuestion','workingDefinitions','historicalBiblicalContext','detailedExposition','kingdomPrinciples','architecturalFrameworks','memorableLines','practicalApplication','diagnosticWorksheets','pastoralGuardrails','reflectionQuestions','sevenDayFormationPlan','smallGroupTeachingPlan','contributorInsights','weeklyCharge','congregationalResponse','prayer','closingCommission','personalResponseQuestions','scriptureIndex']},
-    formation:{type:'object',additionalProperties:false,properties:{
-      scripture:{type:'array',items:{type:'string'}},devotionFocus:{type:'string'},prayerFocus:{type:'array',items:{type:'string'}},discussionPrompts:{type:'array',items:{type:'string'}},obedienceAction:{type:'string'},todayFocus:{type:'string'},keyPrinciple:{type:'string'},formationEmphasis:{type:'string'},weeklyAssignment:{type:'string'}
-    },required:['scripture','devotionFocus','prayerFocus','discussionPrompts','obedienceAction','todayFocus','keyPrinciple','formationEmphasis','weeklyAssignment']}
-  },required:['sermonNotes','formation']
-}
-
+const formationDay={type:'object',additionalProperties:false,properties:{title:{type:'string'},scripture:{type:'string'},paragraphs:{type:'array',items:{type:'string'}},steps:{type:'array',items:{type:'string'}}},required:['title','scripture','paragraphs','steps']}
+const schema={type:'object',additionalProperties:false,properties:{sermonNotes:{type:'object',additionalProperties:false,properties:{documentTitle:{type:'string'},series:{type:'string'},part:{type:'string'},subtitle:{type:'string'},preacherTeacher:{type:'string'},service:{type:'string'},sermonDate:{type:'string'},preparedFor:{type:'string'},leadQuote:{type:'string'},teachingObjectives:{type:'array',items:{type:'string'}},anchorDeclaration:{type:'string'},aim:{type:'string'},thesis:{type:'string'},openingExhortation:{type:'array',items:{type:'string'}},primaryScriptures:{type:'array',items:scriptureItem},supportingBiblicalWitnesses:{type:'array',items:scriptureItem},governingQuestion:{type:'string'},workingDefinitions:{type:'array',items:frameworkSection},historicalBiblicalContext:{type:'array',items:teachingSection},detailedExposition:{type:'array',items:teachingSection},kingdomPrinciples:{type:'array',items:{type:'string'}},architecturalFrameworks:{type:'array',items:frameworkSection},memorableLines:{type:'array',items:{type:'string'}},practicalApplication:{type:'array',items:applicationSection},diagnosticWorksheets:{type:'array',items:applicationSection},pastoralGuardrails:{type:'array',items:{type:'string'}},reflectionQuestions:{type:'array',items:{type:'string'}},sevenDayFormationPlan:{type:'array',items:formationDay},smallGroupTeachingPlan:applicationSection,contributorInsights:{type:'array',items:frameworkSection},weeklyCharge:{type:'object',additionalProperties:false,properties:{title:{type:'string'},paragraphs:{type:'array',items:{type:'string'}},actions:{type:'array',items:{type:'string'}},quote:{type:'string'}},required:['title','paragraphs','actions','quote']},congregationalResponse:{type:'array',items:{type:'string'}},prayer:{type:'array',items:{type:'string'}},closingCommission:{type:'string'},personalResponseQuestions:{type:'array',items:{type:'string'}},scriptureIndex:{type:'array',items:{type:'object',additionalProperties:false,properties:{reference:{type:'string'},teachingEmphasis:{type:'string'}},required:['reference','teachingEmphasis']}}},required:['documentTitle','series','part','subtitle','preacherTeacher','service','sermonDate','preparedFor','leadQuote','teachingObjectives','anchorDeclaration','aim','thesis','openingExhortation','primaryScriptures','supportingBiblicalWitnesses','governingQuestion','workingDefinitions','historicalBiblicalContext','detailedExposition','kingdomPrinciples','architecturalFrameworks','memorableLines','practicalApplication','diagnosticWorksheets','pastoralGuardrails','reflectionQuestions','sevenDayFormationPlan','smallGroupTeachingPlan','contributorInsights','weeklyCharge','congregationalResponse','prayer','closingCommission','personalResponseQuestions','scriptureIndex']},formation:{type:'object',additionalProperties:false,properties:{scripture:{type:'array',items:{type:'string'}},devotionFocus:{type:'string'},prayerFocus:{type:'array',items:{type:'string'}},discussionPrompts:{type:'array',items:{type:'string'}},obedienceAction:{type:'string'},todayFocus:{type:'string'},keyPrinciple:{type:'string'},formationEmphasis:{type:'string'},weeklyAssignment:{type:'string'}},required:['scripture','devotionFocus','prayerFocus','discussionPrompts','obedienceAction','todayFocus','keyPrinciple','formationEmphasis','weeklyAssignment']}},required:['sermonNotes','formation']}
 export const handler=async event=>{
-  if(event.httpMethod!=='POST') return json(405,{error:'Method not allowed.'})
-  if(!process.env.OPENAI_API_KEY) return json(503,{error:'Brevity AI is not configured yet. OPENAI_API_KEY must be available to Netlify Functions.'})
-  const session=await readSession(event).catch(()=>null)
-  if(!session) return json(401,{error:'Sign in to generate sermon notes and formation.'})
-
-  let body={}
-  try{body=JSON.parse(event.body||'{}')}catch{return json(400,{error:'Invalid request body.'})}
-  const transcript=String(body.transcript||'').trim()
-  const sermonDate=String(body.sermonDate||'').trim()
-  const serviceType=String(body.serviceType||'').trim()
-  const suppliedTitle=String(body.title||'').trim()
-  const targetDate=String(body.targetDate||'').trim()
-  const sourceKind=body.sourceKind==='notes'?'notes':'transcript'
-  if(!transcript) return json(400,{error:'A sermon transcript or existing sermon-notes document is required.'})
-  if(transcript.length>MAX_TRANSCRIPT_LENGTH) return json(413,{error:'This sermon source exceeds Brevity’s 600,000-character capacity. Please remove duplicate or non-sermon material.'})
-
-  let analysisSource=transcript
-  let sourceLabel=sourceKind==='notes'?'EXISTING SERMON NOTES':'TRANSCRIPT'
-  if(transcript.length>SINGLE_ANALYSIS_LIMIT){
-    try{analysisSource=await analyzeTranscriptChunks(transcript);sourceLabel=sourceKind==='notes'?'ORDERED SOURCE DIGESTS FROM THE COMPLETE EXISTING SERMON NOTES':'ORDERED SOURCE DIGESTS FROM THE COMPLETE TRANSCRIPT'}
-    catch(error){return json(error.status||502,{error:error.message||'Brevity could not analyze the transcript sections.'})}
-  }
-
-  const prompt=`You are Brevity's Spiritual Maturity formation engine. Lorenzo owns Spiritual Maturity.
-
-SOURCE:
-Service: ${serviceType||'Unspecified'}
-Sermon date: ${sermonDate||'Unspecified'}
-Target daily formation date: ${targetDate||'Today'}
-Supplied title: ${suppliedTitle||'None'}
-Source type: ${sourceKind==='notes'?'Existing sermon notes supplied by the user':'Sermon transcript'}
-
-${sourceKind==='notes'?'Treat the supplied notes as the authoritative sermon record. Preserve their established title, headings, sequence, theological claims, Scripture treatment, named frameworks, applications, and distinctive wording. Map existing material into every appropriate Brevity field. Fill missing organizational fields only by faithful synthesis from the supplied notes; do not pretend the notes are a verbatim transcript and do not manufacture quotations.':'Treat the transcript as the authoritative sermon record and preserve the preacher’s sequence and wording.'}
-
-SERMON-NOTE STANDARD — create a permanent Church Triumphant teaching document with the depth and organization of the household's approved reference, "The Architecture of Wisdom — The Breakdown Point Between Hearing and Doing". Use every structured section in the schema:
-- Complete title-page metadata and one lead quotation only when the source contains exact quoted wording.
-- A Teaching Guide at a Glance with concrete teaching objectives and a strong anchor declaration.
-- Aim and thesis written as substantive, precise paragraphs.
-- Opening exhortation with multiple developed paragraphs.
-- Primary Scriptures and supporting biblical witnesses, each with an explanation of its role in the teaching.
-- A governing question.
-- Historical and biblical context divided into titled, developed subsections.
-- Detailed exposition divided into sequentially numbered teaching movements. Capture every major movement in the transcript; do not compress a full sermon into a short generic summary. Each movement needs developed paragraphs and any exact supporting quotations.
-- Kingdom principles as complete propositions.
-- Architectural frameworks that name the model and explain each stage or component.
-- Working definitions that explain important sermon language in biblically responsible terms without importing unsupported psychology or doctrine.
-- Memorable lines that preserve the sermon’s strongest governing statements; quote only what is traceable and otherwise paraphrase faithfully.
-- Practical application plus reusable diagnostic worksheets with prompts, truth tests, replacement practices, accountability, and evidence of fruit.
-- Pastoral guardrails wherever the sermon touches trauma, mental health, medical concerns, spiritual warfare, abuse, safety, or other sensitive matters. Do not diagnose or overstate.
-- A seven-day meditation and formation plan, with a distinct Scripture/focus and concrete practice for each day, drawn only from the sermon.
-- A timed small-group teaching plan with facilitator questions and guardrails.
-- Named contributor insights only when the source identifies the speaker; never guess an identity.
-- Reflection questions, weekly charge, congregational response, full prayer, closing commission, personal response prompts, and Scripture index with teaching emphasis.
-
-Match the intelligence and usefulness of the approved Church Triumphant “Sermon Teaching Guide” pattern: this must serve the preacher, learner, small-group facilitator, and household formation process. Do not merely make the document longer. Develop the sermon’s own conceptual architecture, distinctions, analogies, diagnostics, practices, and movement from hearing to sustained fruit.
-
-Preserve the preacher's wording, doctrinal weight, sequence, emphases, illustrations, bullet logic, and Scripture references as faithfully as the supplied source allows. Notes must be detailed enough to function as the permanent teaching record—not an outline, synopsis, or collection of generic cards. Do not invent quotations, doctrines, stories, Scriptures, definitions, or claims. Only place text in quotation fields when it is traceable to the supplied source. Normalize transcription noise only where meaning is clear. Do not add a Greeting section.
-
-After establishing the notes, derive the household's daily Spiritual Maturity content from this sermon: Scripture, Devotion Focus, Prayer Focus, Discussion Prompts, Act of Obedience, Today's Focus, Key Principle, Formation Emphasis, and Weekly Assignment. Make every element traceable to the sermon. The formation goal is revelation → responsibility → preparation → execution → fruit → review. Brevity proposes; the household may edit before saving.
-
-${sourceLabel}:
-${analysisSource}`
-
-  let payload
-  try{payload=await requestOpenAI({input:prompt,max_output_tokens:50000,text:{format:{type:'json_schema',name:'brevity_sermon_formation',strict:true,schema}}})}
-  catch(error){return json(error.status||502,{error:error.message||'OpenAI sermon analysis failed.'})}
-  let result
-  try{result=JSON.parse(outputText(payload))}catch{return json(502,{error:'Brevity AI returned unreadable sermon formation data.'})}
-  const generatedAt=new Date().toISOString()
-  const source={sermonDate,serviceType,title:suppliedTitle||result.sermonNotes?.documentTitle||'',targetDate,sourceKind,sourceSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1}
-  try{await store().setJSON(ACTIVE_SERMON_KEY,{householdId:HOUSEHOLD_ID,activatedAt:generatedAt,model:MODEL,source,sermonNotes:result.sermonNotes})}
-  catch(error){console.error('[sermon-formation active source]',error);return json(502,{error:'The sermon was analyzed, but Brevity could not make it the active household devotion source. Please try again.'})}
-  return json(200,{generatedAt,model:MODEL,source,...result})
+ if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'});if(!process.env.OPENAI_API_KEY)return json(503,{error:'Brevity AI is not configured yet. OPENAI_API_KEY must be available to Netlify Functions.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to generate sermon notes and formation.'});let body={};try{body=JSON.parse(event.body||'{}')}catch{return json(400,{error:'Invalid request body.'})};const transcript=String(body.transcript||'').trim(),sermonDate=String(body.sermonDate||'').trim(),serviceType=String(body.serviceType||'').trim(),suppliedTitle=String(body.title||'').trim(),targetDate=String(body.targetDate||'').trim(),sourceKind=body.sourceKind==='notes'?'notes':'transcript';if(!transcript)return json(400,{error:'A sermon transcript or existing sermon-notes document is required.'});if(transcript.length>MAX_TRANSCRIPT_LENGTH)return json(413,{error:'This sermon source exceeds Brevity’s 600,000-character capacity.'});let analysisSource=transcript,sourceLabel=sourceKind==='notes'?'EXISTING SERMON NOTES':'TRANSCRIPT';if(transcript.length>SINGLE_ANALYSIS_LIMIT){try{analysisSource=await analyzeTranscriptChunks(transcript);sourceLabel='ORDERED SOURCE DIGESTS FROM THE COMPLETE SERMON SOURCE'}catch(error){return json(error.status||502,{error:error.message})}}
+ const prompt=`You are Brevity's Spiritual Maturity formation engine. Spiritual Maturity is a shared household devotion: every household member receives the same sermon-derived devotion. Do not assign ownership of this pillar to Lorenzo or require Lorenzo to lead another member's devotion. Personal assignments may be member-specific only when explicitly supported by the source or household data.\n\nSOURCE:\nService: ${serviceType||'Unspecified'}\nSermon date: ${sermonDate||'Unspecified'}\nTarget daily formation date: ${targetDate||'Today'}\nSupplied title: ${suppliedTitle||'None'}\nSource type: ${sourceKind==='notes'?'Existing sermon notes':'Sermon transcript'}\n\nCreate the permanent Church Triumphant sermon teaching document using the complete structured schema and preserve the source faithfully. The sevenDayFormationPlan MUST contain seven distinct days. CRITICAL: every day MUST have a non-empty Scripture reference in its scripture field. Use a Scripture explicitly taught or cited in the sermon; choose the passage most directly connected to that day's focus. Never leave a day's Scripture blank. Do not invent a Bible passage that is absent from the sermon source. Each day must also contain developed paragraphs and concrete steps. Derive the shared household daily formation from the sermon with Scripture, Devotion Focus, Prayer Focus, Discussion Prompts, Act of Obedience, Today's Focus, Key Principle, Formation Emphasis, and Weekly Assignment.\n\n${sourceLabel}:\n${analysisSource}`
+ let payload;try{payload=await requestOpenAI({input:prompt,max_output_tokens:50000,text:{format:{type:'json_schema',name:'brevity_sermon_formation',strict:true,schema}}})}catch(error){return json(error.status||502,{error:error.message})};let result;try{result=JSON.parse(outputText(payload))}catch{return json(502,{error:'Brevity AI returned unreadable sermon formation data.'})};const generatedAt=new Date().toISOString(),source={sermonDate,serviceType,title:suppliedTitle||result.sermonNotes?.documentTitle||'',targetDate,sourceKind,sourceSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1};try{await store().setJSON(ACTIVE_SERMON_KEY,{householdId:HOUSEHOLD_ID,activatedAt:generatedAt,model:MODEL,source,sermonNotes:result.sermonNotes})}catch(error){return json(502,{error:'The sermon was analyzed, but Brevity could not make it the active household devotion source.'})}return json(200,{generatedAt,model:MODEL,source,...result})
 }
