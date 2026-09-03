@@ -5,6 +5,8 @@ import AppErrorBoundary from './AppErrorBoundary.jsx'
 import './App.css'
 import './MobileShell.css'
 import './ThemeCoverage.css'
+import './household/SpiritualLayoutFixes.css'
+import './household/spiritualMetadataEnhancer.js'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
