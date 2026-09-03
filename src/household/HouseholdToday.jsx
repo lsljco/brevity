@@ -4,7 +4,6 @@ import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import EveningRecap from './EveningRecap.jsx'
-import HouseholdIntelligencePanel from './HouseholdIntelligencePanel.jsx'
 import MorningAlignment from './MorningAlignment.jsx'
 import TodayDashboard from './TodayDashboard.jsx'
 import TomorrowProposal from './TomorrowProposal.jsx'
@@ -114,7 +113,6 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    <HouseholdIntelligencePanel currentMember={currentMember} onOpenPillar={onOpenPillar} />
     <TodayDashboard plan={planWithMeals} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
   </div>
 }
