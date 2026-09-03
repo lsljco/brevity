@@ -35,8 +35,8 @@ export function resolveTimeframe(preset = 'last-12-months', now = new Date(), cu
     to = add(from, 6)
   } else if (preset === 'this-month') {
     from = new Date(today.getFullYear(), today.getMonth(), 1)
-  }
-  else if (preset === 'last-month') {
+    to = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  } else if (preset === 'last-month') {
     from = new Date(today.getFullYear(), today.getMonth() - 1, 1)
     to = new Date(today.getFullYear(), today.getMonth(), 0)
   } else if (preset === 'next-month') {
