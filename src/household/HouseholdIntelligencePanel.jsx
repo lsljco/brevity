@@ -22,9 +22,10 @@ export default function HouseholdIntelligencePanel({ currentMember = 'Family', o
     }
   }, [])
   const open = action => onOpenPillar?.(action === 'finance' ? 'finance' : 'household')
+  const canNavigate = typeof onOpenPillar === 'function'
 
   return <section className={`household-intelligence${model.allClear ? ' is-clear' : ''}`} aria-label="Household operating intelligence">
-    <header><div><span>Household Operating Intelligence</span><h2>{model.allClear ? 'Household operating normally' : `${model.signals.length} item${model.signals.length === 1 ? '' : 's'} need attention`}</h2></div><button type="button" onClick={() => open('household')}>Open Household Management <i className="ti ti-arrow-right" /></button></header>
+    <header><div><span>Household Operating Intelligence</span><h2>{model.allClear ? 'Household operating normally' : `${model.signals.length} item${model.signals.length === 1 ? '' : 's'} need attention`}</h2></div>{canNavigate && <button type="button" onClick={() => open('household')}>Open Household Management <i className="ti ti-arrow-right" /></button>}</header>
     <div className="household-intelligence-metrics">
       <article><span>My responsibilities today</span><strong>{model.metrics.myResponsibilitiesToday}</strong></article>
       <article className={model.metrics.householdOverdue ? 'is-alert' : ''}><span>Household overdue</span><strong>{model.metrics.householdOverdue}</strong></article>
@@ -33,6 +34,6 @@ export default function HouseholdIntelligencePanel({ currentMember = 'Family', o
       <article className={model.metrics.monthlyWaste ? 'is-waste' : ''}><span>Waste this month</span><strong>{money(model.metrics.monthlyWaste)}</strong></article>
       <article><span>Projected obligations</span><strong>{money(model.metrics.projectedObligations)}</strong></article>
     </div>
-    {model.signals.length ? <div className="household-intelligence-signals">{model.signals.slice(0, 6).map(signal => <button type="button" key={signal.id} className={`household-intelligence-signal is-${signal.priority}`} onClick={() => open(signal.action)}><i className={`ti ${signal.icon}`} /><span><strong>{signal.title}</strong><small>{signal.detail}</small></span><i className="ti ti-chevron-right" /></button>)}</div> : <div className="household-intelligence-clear"><i className="ti ti-circle-check"/><span><strong>No household operating exceptions</strong><small>Responsibilities, inventory, Estate obligations, and waste controls are within the current operating thresholds.</small></span></div>}
+    {model.signals.length ? <div className="household-intelligence-signals">{model.signals.slice(0, 6).map(signal => canNavigate ? <button type="button" key={signal.id} className={`household-intelligence-signal is-${signal.priority}`} onClick={() => open(signal.action)}><i className={`ti ${signal.icon}`} /><span><strong>{signal.title}</strong><small>{signal.detail}</small></span><i className="ti ti-chevron-right" /></button> : <article key={signal.id} className={`household-intelligence-signal is-${signal.priority}`}><i className={`ti ${signal.icon}`} /><span><strong>{signal.title}</strong><small>{signal.detail}</small></span></article>)}</div> : <div className="household-intelligence-clear"><i className="ti ti-circle-check"/><span><strong>No household operating exceptions</strong><small>Responsibilities, inventory, Estate obligations, and waste controls are within the current operating thresholds.</small></span></div>}
   </section>
 }
