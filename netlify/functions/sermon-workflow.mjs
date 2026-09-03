@@ -32,8 +32,7 @@ export const handler=async event=>{
     const pdfOnly=source.sourceKind==='notes'
     const [docx,pdf]=await Promise.all([buildTimesSermonDocx(notes,source),buildTimesSermonPdf(notes,source)])
     const dataStore=store()
-    await dataStore.set(fileKey(id,'pdf'),pdf)
-    if(!pdfOnly)await dataStore.set(fileKey(id,'docx'),docx)
+    await Promise.all([dataStore.set(fileKey(id,'pdf'),pdf),dataStore.set(fileKey(id,'docx'),docx)])
 
     let oneDrive={state:'not-connected'}
     let devotions={state:'not-started'}
@@ -48,8 +47,8 @@ export const handler=async event=>{
       oneDrive={state:'error',error:error.message||'OneDrive publishing failed.'}
     }
 
-    const files={pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`,docx:pdfOnly?null:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`}
-    const entry={id,title,baseName,fileNames:{pdf:`${baseName}.pdf`,docx:pdfOnly?null:`${baseName}.docx`},sermonDate,serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),sourceKind:source.sourceKind||'transcript',updatedAt:new Date().toISOString(),updatedBy:session.member,files,oneDrive:{...oneDrive,devotions}}
+    const files={pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`,docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`}
+    const entry={id,title,baseName,fileNames:{pdf:`${baseName}.pdf`,docx:`${baseName}.docx`},sermonDate,serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),sourceKind:source.sourceKind||'transcript',updatedAt:new Date().toISOString(),updatedBy:session.member,files,oneDrive:{...oneDrive,devotions}}
     const prior=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
     await dataStore.setJSON(indexKey,[entry,...(Array.isArray(prior)?prior:[]).filter(item=>item.id!==id)].slice(0,200))
 
