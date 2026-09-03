@@ -1,81 +1,12 @@
 import { getStore } from '@netlify/blobs'
-
-const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
-const STORE_NAME='brevity-household'
-const CONNECTION_KEY=`${HOUSEHOLD_ID}/integrations/onedrive`
-const REDIRECT_URI='https://brevityoflife.netlify.app/.netlify/functions/onedrive-oauth-callback'
-
-export const SERMON_TARGETS={
-  word:'https://1drv.ms/f/c/0675525c56f14fef/IgBAFpOkyOC1TImi4vwdATDAAeeDqDWqd5NdChS4zVEGsyY',
-  pdf:'https://1drv.ms/f/c/0675525c56f14fef/IgARcbb-ZETMTa8oWW81C-AYAbQ-ripTssZ9kc9xmP0aEAM',
-  devotions:'https://1drv.ms/f/c/0675525c56f14fef/IgDXneTEyqhkQbijIB2DSCHgAacxlIATQBYvRb5QeOuZXE0',
-  images:'https://1drv.ms/f/c/0675525c56f14fef/IgAKn3pyfEBaRpkNW37-kbX3ARPmGXAi5ywV3dcn20pQ2qw',
-}
-
-const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
-const shareId=url=>`u!${Buffer.from(url).toString('base64url')}`
-const safeFileName=name=>String(name||'Brevity document').replace(/["*:<>?\\/|]/g,'-').replace(/[. ]+$/g,'').replace(/\s+/g,' ').slice(0,180)
-
-async function tokenRequest(params){
-  const clientId=process.env.MICROSOFT_CLIENT_ID||''
-  const clientSecret=process.env.MICROSOFT_CLIENT_SECRET||''
-  if(!clientId||!clientSecret)throw new Error('OneDrive publishing is not configured.')
-  const response=await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,client_secret:clientSecret,redirect_uri:REDIRECT_URI,...params})})
-  const payload=await response.json().catch(()=>({}))
-  if(!response.ok)throw new Error(payload.error_description||'Microsoft authorization failed.')
-  return payload
-}
-
-async function access(){
-  const dataStore=store()
-  const connection=await dataStore.get(CONNECTION_KEY,{type:'json'}).catch(()=>null)
-  if(!connection?.refreshToken)throw new Error('Connect OneDrive in Brevity before publishing sermon artifacts.')
-  const tokens=await tokenRequest({grant_type:'refresh_token',refresh_token:connection.refreshToken,scope:'offline_access Files.ReadWrite User.Read'})
-  if(tokens.refresh_token&&tokens.refresh_token!==connection.refreshToken)await dataStore.setJSON(CONNECTION_KEY,{...connection,refreshToken:tokens.refresh_token,refreshedAt:new Date().toISOString()})
-  return {token:tokens.access_token,account:connection.account||'Microsoft account'}
-}
-
-async function resolveFolder(token,url){
-  const response=await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId(url)}/driveItem?$select=id,name,webUrl,parentReference`,{headers:{authorization:`Bearer ${token}`,Prefer:'redeemSharingLinkIfNecessary'}})
-  const payload=await response.json().catch(()=>({}))
-  if(!response.ok)throw new Error(payload.error?.message||`Microsoft could not resolve the target folder (${response.status}).`)
-  const driveId=payload.parentReference?.driveId
-  if(!driveId||!payload.id)throw new Error('Microsoft returned an incomplete OneDrive folder reference.')
-  return {id:payload.id,driveId,name:payload.name,webUrl:payload.webUrl||url}
-}
-
-async function upload({token,folder,bytes,name}){
-  const fileName=safeFileName(name)
-  const target=`https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(folder.driveId)}/items/${encodeURIComponent(folder.id)}:/${encodeURIComponent(fileName)}:/content`
-  const response=await fetch(target,{method:'PUT',headers:{authorization:`Bearer ${token}`,'content-type':'application/octet-stream'},body:Buffer.from(bytes)})
-  const payload=await response.json().catch(()=>({}))
-  if(!response.ok)throw new Error(payload.error?.message||`OneDrive upload returned ${response.status}.`)
-  return {id:payload.id,name:payload.name,webUrl:payload.webUrl,folderName:folder.name,folderWebUrl:folder.webUrl}
-}
-
-export async function publishSermonTargetDocuments({docx,pdf,baseName,pdfOnly=false}){
-  const {token,account}=await access()
-  const [pdfFolder,wordFolder]=await Promise.all([resolveFolder(token,SERMON_TARGETS.pdf),pdfOnly?Promise.resolve(null):resolveFolder(token,SERMON_TARGETS.word)])
-  const [pdfFile,wordFile]=await Promise.all([
-    upload({token,folder:pdfFolder,bytes:pdf,name:`${baseName}.pdf`}),
-    pdfOnly?Promise.resolve(null):upload({token,folder:wordFolder,bytes:docx,name:`${baseName}.docx`}),
-  ])
-  return {state:'published',account,publishedAt:new Date().toISOString(),files:{pdf:pdfFile,docx:wordFile},folders:{pdf:pdfFolder,word:wordFolder}}
-}
-
-export async function publishDevotionTarget({pdf,baseName}){
-  const {token,account}=await access()
-  const folder=await resolveFolder(token,SERMON_TARGETS.devotions)
-  const file=await upload({token,folder,bytes:pdf,name:`${baseName} - Seven-Day Devotions.pdf`})
-  return {state:'published',account,publishedAt:new Date().toISOString(),file,folder}
-}
-
-export async function publishVisualTargets({assets=[],baseName}){
-  const {token,account}=await access()
-  const folder=await resolveFolder(token,SERMON_TARGETS.images)
-  const files=[]
-  for(const asset of assets){
-    files.push(await upload({token,folder,bytes:asset.buffer,name:`${baseName} - ${String(asset.index).padStart(2,'0')} - ${asset.title}.png`}))
-  }
-  return {state:'published',account,publishedAt:new Date().toISOString(),files,folder}
-}
+const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',STORE_NAME='brevity-household',CONNECTION_KEY=`${HOUSEHOLD_ID}/integrations/onedrive`,REDIRECT_URI='https://brevityoflife.netlify.app/.netlify/functions/onedrive-oauth-callback'
+export const SERMON_TARGETS={word:'https://1drv.ms/f/c/0675525c56f14fef/IgBAFpOkyOC1TImi4vwdATDAAeeDqDWqd5NdChS4zVEGsyY',pdf:'https://1drv.ms/f/c/0675525c56f14fef/IgARcbb-ZETMTa8oWW81C-AYAbQ-ripTssZ9kc9xmP0aEAM',devotions:'https://1drv.ms/f/c/0675525c56f14fef/IgDXneTEyqhkQbijIB2DSCHgAacxlIATQBYvRb5QeOuZXE0',images:'https://1drv.ms/f/c/0675525c56f14fef/IgAKn3pyfEBaRpkNW37-kbX3ARPmGXAi5ywV3dcn20pQ2qw'}
+const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN}),shareId=url=>`u!${Buffer.from(url).toString('base64url')}`,safeFileName=name=>String(name||'Brevity document').replace(/["*:<>?\\/|]/g,'-').replace(/[. ]+$/g,'').replace(/\s+/g,' ').slice(0,180)
+async function tokenRequest(params){const clientId=process.env.MICROSOFT_CLIENT_ID||'',clientSecret=process.env.MICROSOFT_CLIENT_SECRET||'';if(!clientId||!clientSecret)throw new Error('OneDrive publishing is not configured.');const response=await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,client_secret:clientSecret,redirect_uri:REDIRECT_URI,...params})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error_description||'Microsoft authorization failed.');return payload}
+async function access(){const dataStore=store(),connection=await dataStore.get(CONNECTION_KEY,{type:'json'}).catch(()=>null);if(!connection?.refreshToken)throw new Error('Connect OneDrive in Brevity before publishing sermon artifacts.');const tokens=await tokenRequest({grant_type:'refresh_token',refresh_token:connection.refreshToken,scope:'offline_access Files.ReadWrite User.Read'});if(tokens.refresh_token&&tokens.refresh_token!==connection.refreshToken)await dataStore.setJSON(CONNECTION_KEY,{...connection,refreshToken:tokens.refresh_token,refreshedAt:new Date().toISOString()});return{token:tokens.access_token,account:connection.account||'Microsoft account'}}
+async function resolveFolder(token,url){const response=await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId(url)}/driveItem?$select=id,name,webUrl,parentReference`,{headers:{authorization:`Bearer ${token}`,Prefer:'redeemSharingLinkIfNecessary'}}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?.message||`Microsoft could not resolve the target folder (${response.status}).`);const driveId=payload.parentReference?.driveId;if(!driveId||!payload.id)throw new Error('Microsoft returned an incomplete OneDrive folder reference.');return{id:payload.id,driveId,name:payload.name,webUrl:payload.webUrl||url}}
+async function upload({token,folder,bytes,name}){const fileName=safeFileName(name),target=`https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(folder.driveId)}/items/${encodeURIComponent(folder.id)}:/${encodeURIComponent(fileName)}:/content`,response=await fetch(target,{method:'PUT',headers:{authorization:`Bearer ${token}`,'content-type':'application/octet-stream'},body:Buffer.from(bytes)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?.message||`OneDrive upload returned ${response.status}.`);return{id:payload.id,name:payload.name,webUrl:payload.webUrl,folderName:folder.name,folderWebUrl:folder.webUrl}}
+export async function publishSermonTargetDocuments({docx,pdf,baseName,pdfOnly=false}){const{token,account}=await access(),[pdfFolder,wordFolder]=await Promise.all([resolveFolder(token,SERMON_TARGETS.pdf),pdfOnly?Promise.resolve(null):resolveFolder(token,SERMON_TARGETS.word)]),[pdfFile,wordFile]=await Promise.all([upload({token,folder:pdfFolder,bytes:pdf,name:`${baseName}.pdf`}),pdfOnly?Promise.resolve(null):upload({token,folder:wordFolder,bytes:docx,name:`${baseName}.docx`})]);return{state:'published',account,publishedAt:new Date().toISOString(),files:{pdf:pdfFile,docx:wordFile},folders:{pdf:pdfFolder,word:wordFolder}}}
+export async function publishDevotionTarget({pdf,baseName}){const{token,account}=await access(),folder=await resolveFolder(token,SERMON_TARGETS.devotions),file=await upload({token,folder,bytes:pdf,name:`${baseName} - Seven-Day Devotions.pdf`});return{state:'published',account,publishedAt:new Date().toISOString(),file,folder}}
+export async function publishVisualTargets({assets=[],baseName}){const{token,account}=await access(),folder=await resolveFolder(token,SERMON_TARGETS.images),files=[];for(const asset of assets)files.push(await upload({token,folder,bytes:asset.buffer,name:`${baseName} - ${String(asset.index).padStart(2,'0')} - ${asset.title}.png`}));return{state:'published',account,publishedAt:new Date().toISOString(),files,folder}}
+export async function publishSlideTarget({pptx,fileName}){const{token,account}=await access(),folder=await resolveFolder(token,SERMON_TARGETS.pdf),file=await upload({token,folder,bytes:pptx,name:fileName});return{state:'published',account,publishedAt:new Date().toISOString(),file,folder}}
