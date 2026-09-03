@@ -87,7 +87,18 @@
   .mobile-app-nav button i { font-size: 20px; }
   .mobile-app-nav button.active { background: rgba(197, 164, 109, .13); color: var(--gold); }
   .app-shell { height: 100dvh; min-height: 0; }
-  .app-main { width: 100%; padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .app-main {
+    width: 100%;
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(132px + env(safe-area-inset-bottom));
+  }
+  .app-main::after {
+    content: '';
+    display: block;
+    flex: 0 0 calc(28px + env(safe-area-inset-bottom));
+    width: 100%;
+    pointer-events: none;
+  }
   .app-refresh-status {
     position: relative;
     top: auto;
