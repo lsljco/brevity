@@ -13,6 +13,7 @@ import {
 import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { SHARED_STATE_EVENT } from './sharedState.js'
 import HouseholdInventory from './HouseholdInventory.jsx'
+import HouseholdIntelligencePanel from './HouseholdIntelligencePanel.jsx'
 import './HouseholdMaintenance.css'
 
 function loadState() {
@@ -88,6 +89,7 @@ export default function HouseholdMaintenance({ currentMember }) {
 
   return <div className="household-maintenance household-operations">
     <nav className="household-operations-tabs" aria-label="Household operating areas"><button type="button" className="active" onClick={()=>setWorkspace('operations')}>Operations</button><button type="button" onClick={()=>setWorkspace('inventory')}>Supplies & Inventory</button></nav>
+    <HouseholdIntelligencePanel currentMember={currentMember} />
     <header className="maintenance-hero">
       <div>
         <p className="maintenance-kicker">Household Management · Operations</p>
