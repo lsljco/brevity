@@ -39,6 +39,21 @@ const addDays = (date, count) => {
 }
 const itemText = item => typeof item === 'string' ? clean(item) : clean(item?.detail || item?.description || item?.text || item?.label || item?.stage)
 
+function sharedSpiritualText(value) {
+  if (typeof value !== 'string') return value
+  return value
+    .replace(/Lorenzo owns this pillar and must lead the household/gi, 'This devotion belongs to every household member')
+    .replace(/Lorenzo must/gi, 'Each household member should')
+    .replace(/Lorenzo leads?/gi, 'the household practices')
+    .replace(/Lorenzo/gi, 'each household member')
+}
+
+function sharedSpiritualValue(value) {
+  if (Array.isArray(value)) return value.map(sharedSpiritualValue)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sharedSpiritualValue(item)]))
+  return sharedSpiritualText(value)
+}
+
 function sermonDevotion(activeSermon, date) {
   const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10)
   const rawDays = values(activeSermon?.sermonNotes?.sevenDayFormationPlan).slice(0, 7)
@@ -47,7 +62,7 @@ function sermonDevotion(activeSermon, date) {
     const paragraphs = [...values(day?.description), ...values(day?.paragraphs), ...values(day?.details)].map(itemText).filter(Boolean)
     const practices = [...values(day?.steps), ...values(day?.actions), ...values(day?.items)].map(itemText).filter(Boolean)
     const scripture = clean(day?.scripture || day?.reference || day?.subtitle)
-    return {
+    return sharedSpiritualValue({
       day: index + 1,
       date: addDays(sermonDate, index + 1),
       title: clean(day?.title) || `Day ${index + 1}`,
@@ -57,7 +72,7 @@ function sermonDevotion(activeSermon, date) {
       discussionPrompts: values(day?.discussionPrompts).map(itemText).filter(Boolean),
       obedienceAction: practices[0] || '',
       requiredOutput: practices[1] || practices[0] || '',
-    }
+    })
   })
   const exact = days.find(day => day.date === date)
   if (exact) return exact
@@ -72,25 +87,29 @@ async function getPlan(date) {
   const activeSermon = await dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null)
   const devotion = sermonDevotion(activeSermon, date)
   if (!devotion) return value
+  const existingSpiritual = sharedSpiritualValue(value.spiritual || {})
   return {
     ...value,
     spiritual: {
-      ...value.spiritual,
+      ...existingSpiritual,
+      owner: '',
       scripture: devotion.scripture,
       devotionFocus: devotion.devotionFocus,
       prayerFocus: devotion.prayerFocus,
       discussionPrompts: devotion.discussionPrompts,
       obedienceAction: devotion.obedienceAction,
       requiredOutput: devotion.requiredOutput,
+      todayFocus: devotion.title,
       devotionDay: devotion.day,
       devotionDate: devotion.date,
       devotionTitle: devotion.title,
-      sermonNotes: activeSermon.sermonNotes,
+      sermonNotes: sharedSpiritualValue(activeSermon.sermonNotes),
       sermonSource: {
         ...activeSermon.source,
         generatedAt: activeSermon.activatedAt,
         model: activeSermon.model,
         active: true,
+        sharedHouseholdDevotion: true,
         devotionStartDate: daysStart(activeSermon),
       },
     },
