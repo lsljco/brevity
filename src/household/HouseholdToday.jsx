@@ -4,6 +4,7 @@ import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import EveningRecap from './EveningRecap.jsx'
+import HouseholdIntelligencePanel from './HouseholdIntelligencePanel.jsx'
 import MorningAlignment from './MorningAlignment.jsx'
 import TodayDashboard from './TodayDashboard.jsx'
 import TomorrowProposal from './TomorrowProposal.jsx'
@@ -95,19 +96,9 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     }
   }
 
-  const completeTodayAlignment = async nextPlan => {
-    await persistAndSync(nextPlan)
-    setMode('today')
-  }
-  const completeAlignment = async nextPlan => {
-    await persistAndSync(nextPlan, saveAlignmentPlan)
-    setMode('today')
-  }
-  const completeRecap = async nextPlan => {
-    const saved = await savePlan(nextPlan)
-    clearPillarAnalyses(saved.date)
-    setMode('tomorrow')
-  }
+  const completeTodayAlignment = async nextPlan => { await persistAndSync(nextPlan); setMode('today') }
+  const completeAlignment = async nextPlan => { await persistAndSync(nextPlan, saveAlignmentPlan); setMode('today') }
+  const completeRecap = async nextPlan => { const saved = await savePlan(nextPlan); clearPillarAnalyses(saved.date); setMode('tomorrow') }
 
   if (mode === 'today-alignment') return <MorningAlignment timing="today" plan={planWithMeals} onOpenMealPlan={onOpenMealPlan} onSaveDraft={savePlan} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} />
   if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
@@ -123,6 +114,7 @@ export default function HouseholdToday({ currentMember = 'Larry', onOpenPillar, 
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {calendarMessage && <div className="today-sync-banner"><i className="ti ti-calendar-check" /> {calendarMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
+    <HouseholdIntelligencePanel currentMember={currentMember} onOpenPillar={onOpenPillar} />
     <TodayDashboard plan={planWithMeals} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onSavePlan={persistAndSync} generationState={generationState} />
   </div>
 }
