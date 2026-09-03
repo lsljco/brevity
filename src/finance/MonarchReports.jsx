@@ -88,29 +88,38 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
   </div>
 }
 
+function recurringOccurrences(rows, range, tab, today) {
+  const from = parseISODate(range?.from)
+  const to = parseISODate(range?.to)
+  if (!from || !to) return []
+  const effectiveFrom = tab === 'upcoming' && range.from < today ? parseISODate(today) : from
+  if (!effectiveFrom || effectiveFrom > to) return []
+  return rows.map(row => {
+    const dates = []
+    for (let date = effectiveFrom; date <= to; date = addDays(date, 1)) {
+      if (txOccursOnDate(row, date)) dates.push(toISO(date))
+    }
+    return { row, dates }
+  }).filter(item => item.dates.length)
+}
+
 export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenScheduled }) {
   const [tab, setTab] = useState('upcoming')
   const today = toISO(new Date())
-  const rows = scheduled.filter(row => row.freq !== 'once' && row.type !== 'transfer' && (tab === 'all' || !row.end || row.end >= today))
-  const totals = useMemo(() => {
-    const from = parseISODate(range?.from)
-    const to = parseISODate(range?.to)
-    if (!from || !to) return { income: 0, expense: 0 }
-    let income = 0
-    let expense = 0
-    for (let date = from; date <= to; date = addDays(date, 1)) {
-      rows.forEach(row => {
-        if (!txOccursOnDate(row, date)) return
-        if (row.type === 'income') income += Number(row.amount || 0)
-        if (row.type === 'expense') expense += Number(row.amount || 0)
-      })
-    }
-    return { income, expense }
-  }, [range?.from, range?.to, rows])
+  const recurring = useMemo(() => scheduled.filter(row => row.freq !== 'once' && row.type !== 'transfer'), [scheduled])
+  const occurrences = useMemo(() => recurringOccurrences(recurring, range, tab, today), [recurring, range?.from, range?.to, tab, today])
+  const rows = useMemo(() => occurrences.map(item => ({ ...item.row, occurrenceDate: item.dates[0], occurrenceCount: item.dates.length })), [occurrences])
+  const totals = useMemo(() => occurrences.reduce((sum, item) => {
+    const amount = Number(item.row.amount || 0) * item.dates.length
+    if (item.row.type === 'income') sum.income += amount
+    if (item.row.type === 'expense') sum.expense += amount
+    return sum
+  }, { income: 0, expense: 0 }), [occurrences])
+
   return <div className="recurring-finance">
     <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
     <div className="finance-card" style={{ padding: 20, marginBottom: 16 }}><h2 style={{ margin: '0 0 5px' }}>Recurring cash plan</h2><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{timeframeLabel(range)} · {actuals.length} posted transactions available for matching</p></div>
     <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(totals.income)} onClick={() => onOpenScheduled?.({ direction:'income', label:'Recurring income' })} /><Stat label="Recurring expenses" value={fmtMoney(totals.expense)} onClick={() => onOpenScheduled?.({ direction:'expense', label:'Recurring expenses' })} /><Stat label="Expected net" value={fmtMoney(totals.income-totals.expense)} onClick={() => onOpenScheduled?.({ label:'Recurring cash plan' })} /></div>
-    <div className="finance-card" style={{ padding: 20 }}>{rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.start}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>)}</div>
+    <div className="finance-card" style={{ padding: 20 }}>{rows.length ? rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}{row.occurrenceCount > 1 ? ` · ${row.occurrenceCount} occurrences` : ''}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.occurrenceDate}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>) : <p style={{ color:'var(--muted)', margin:0 }}>No recurring transactions occur in this timeframe.</p>}</div>
   </div>
 }
