@@ -11,3 +11,12 @@
 .pillar-items button[aria-label="My Planner"] {
   display: none;
 }
+
+/* Household Maintenance has expanded into the broader Household Operations workspace. */
+.pillar-items button[aria-label="Household Maintenance"] span {
+  font-size: 0;
+}
+.pillar-items button[aria-label="Household Maintenance"] span::after {
+  content: 'Household Operations';
+  font-size: 12px;
+}
