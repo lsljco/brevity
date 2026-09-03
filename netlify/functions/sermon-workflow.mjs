@@ -52,7 +52,9 @@ export const handler=async event=>{
     const prior=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
     await dataStore.setJSON(indexKey,[entry,...(Array.isArray(prior)?prior:[]).filter(item=>item.id!==id)].slice(0,200))
 
-    const baseUrl=process.env.URL||'https://brevityoflife.netlify.app'
+    const host=String(event.headers['x-forwarded-host']||event.headers.host||'brevityoflife.netlify.app').split(',')[0].trim()
+    const proto=String(event.headers['x-forwarded-proto']||'https').split(',')[0].trim()
+    const baseUrl=`${proto}://${host}`
     let assets={state:'queued'}
     try{
       const response=await fetch(`${baseUrl}/.netlify/functions/sermon-slides-background`,{method:'POST',headers:{'content-type':'application/json',cookie:event.headers.cookie||''},body:JSON.stringify({id,notes,source:{...source,title}})})
