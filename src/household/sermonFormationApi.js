@@ -30,7 +30,7 @@ export async function generateSermonFormation({transcript,sermonDate,serviceType
 }
 
 export async function archiveSermonDocuments({notes,source}){
-  const response=await fetch('/.netlify/functions/sermon-documents',{
+  const response=await fetch('/.netlify/functions/sermon-workflow',{
     method:'POST',credentials:'include',headers:{'content-type':'application/json'},
     body:JSON.stringify({notes,source})
   })
