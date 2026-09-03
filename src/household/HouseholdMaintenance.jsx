@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   HOUSEHOLD_MAINTENANCE_STORAGE_KEY,
+  HOUSEHOLD_OPERATING_PRINCIPLE,
+  HOUSEHOLD_OPERATING_STANDARDS,
   buildHouseholdMaintenanceWeek,
   householdOccurrence,
   householdOperationZones,
@@ -93,8 +95,8 @@ export default function HouseholdMaintenance({ currentMember }) {
     <header className="maintenance-hero">
       <div>
         <p className="maintenance-kicker">Household Management · Operations</p>
-        <h1>Household Operations</h1>
-        <p>Recurring responsibilities, day-specific ownership, coverage, standards, exceptions, and Family Calendar execution in one operating view.</p>
+        <h1>Household Cleaning Plan</h1>
+        <p>{HOUSEHOLD_OPERATING_PRINCIPLE}</p>
       </div>
       <div className="maintenance-week-controls">
         <button type="button" onClick={() => setWeekStart(addWeeks(weekStart, -1))} aria-label="Previous week"><i className="ti ti-chevron-left" /></button>
@@ -113,10 +115,14 @@ export default function HouseholdMaintenance({ currentMember }) {
     </section>
 
     <section className="maintenance-operating-rule operations-principles">
-      <div><i className="ti ti-repeat" /><span><strong>Recurring standard</strong> Template repeats; daily status never changes the template.</span></div>
-      <div><i className="ti ti-user-check" /><span><strong>Coverage</strong> Reassignment applies only to that date.</span></div>
-      <div><i className="ti ti-alert-triangle" /><span><strong>Exception first</strong> Anything blocked is visible instead of silently missed.</span></div>
-      <div><i className="ti ti-calendar-event" /><span><strong>Calendar connected</strong> Six rolling weeks publish to Family Calendar.</span></div>
+      <div><i className="ti ti-clock" /><span><strong>Nyla · 2–4 PM</strong> Primary weekday operator: assigned zone and completion before evening.</span></div>
+      <div><i className="ti ti-moon" /><span><strong>Javin · After work</strong> 20–30 minute closeout: floors, finishing work, or the assigned support task.</span></div>
+      <div><i className="ti ti-calendar-week" /><span><strong>Saturday · Rotation</strong> Light reset plus one heavier maintenance item only when it is actually needed.</span></div>
+      <div><i className="ti ti-home-check" /><span><strong>Sunday · Joint reset</strong> 60–90 minutes together to restore a clean, organized Monday baseline.</span></div>
+    </section>
+
+    <section className="maintenance-operating-rule operations-principles" aria-label="Household cleaning standards">
+      {HOUSEHOLD_OPERATING_STANDARDS.map(item => <div key={item.title}><i className="ti ti-shield-check" /><span><strong>{item.title}</strong> {item.detail}</span></div>)}
     </section>
 
     <div className="maintenance-toolbar operations-toolbar">
