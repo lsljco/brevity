@@ -1,0 +1,95 @@
+import { useEffect, useMemo, useState } from 'react'
+import {
+  HOUSEHOLD_INVENTORY_STORAGE_KEY,
+  INVENTORY_CATEGORIES,
+  INVENTORY_LOCATIONS,
+  addInventoryItem,
+  adjustInventoryQuantity,
+  inventoryIntelligence,
+  normalizeInventoryState,
+  recordInventoryWaste,
+} from './householdInventoryData.js'
+import { SHARED_STATE_EVENT } from './sharedState.js'
+import './HouseholdInventory.css'
+
+const emptyForm = { name:'', category:'Food & Pantry', location:'Pantry', quantity:'1', unit:'units', parLevel:'1', unitCost:'', expiresOn:'', notes:'' }
+
+function loadState(){try{return normalizeInventoryState(JSON.parse(localStorage.getItem(HOUSEHOLD_INVENTORY_STORAGE_KEY)||'{}'))}catch{return normalizeInventoryState()}}
+function money(value){return Number(value||0).toLocaleString('en-US',{style:'currency',currency:'USD'})}
+
+export default function HouseholdInventory({ currentMember }){
+  const [state,setState]=useState(loadState)
+  const [form,setForm]=useState(emptyForm)
+  const [showAdd,setShowAdd]=useState(false)
+  const [search,setSearch]=useState('')
+  const [location,setLocation]=useState('All')
+  const intelligence=useMemo(()=>inventoryIntelligence(state),[state])
+
+  useEffect(()=>{
+    const refresh=event=>{
+      if(event.type==='storage'&&event.key!==HOUSEHOLD_INVENTORY_STORAGE_KEY)return
+      if(event.type===SHARED_STATE_EVENT&&!event.detail?.keys?.includes(HOUSEHOLD_INVENTORY_STORAGE_KEY))return
+      setState(loadState())
+    }
+    window.addEventListener('storage',refresh);window.addEventListener(SHARED_STATE_EVENT,refresh)
+    return()=>{window.removeEventListener('storage',refresh);window.removeEventListener(SHARED_STATE_EVENT,refresh)}
+  },[])
+
+  const persist=next=>{setState(next);localStorage.setItem(HOUSEHOLD_INVENTORY_STORAGE_KEY,JSON.stringify(next))}
+  const addItem=event=>{event.preventDefault();if(!form.name.trim())return;persist(addInventoryItem(state,form,currentMember));setForm(emptyForm);setShowAdd(false)}
+  const logWaste=item=>{
+    const raw=window.prompt(`How many ${item.unit} of ${item.name} were discarded?`,String(Math.min(1,item.quantity)))
+    if(raw==null)return
+    const quantity=Number(raw);if(!Number.isFinite(quantity)||quantity<=0)return
+    const reason=window.prompt('Why was it discarded?','Expired / not used')||'Discarded'
+    persist(recordInventoryWaste(state,{itemId:item.id,quantity,reason,member:currentMember}))
+  }
+  const visible=state.items.filter(item=>(location==='All'||item.location===location)&&(!search||`${item.name} ${item.category} ${item.location}`.toLowerCase().includes(search.toLowerCase())))
+
+  return <section className="household-inventory">
+    <header className="inventory-hero"><div><p>Household Management</p><h1>Supplies & Inventory</h1><span>Know what is on hand, what is running low, and what is being wasted.</span></div><button type="button" onClick={()=>setShowAdd(value=>!value)}><i className={`ti ${showAdd?'ti-x':'ti-plus'}`}/> {showAdd?'Close':'Add item'}</button></header>
+
+    <div className="inventory-metrics">
+      <article><span>Tracked items</span><strong>{state.items.length}</strong></article>
+      <article className={intelligence.lowStock.length?'is-alert':''}><span>Low stock</span><strong>{intelligence.lowStock.length}</strong></article>
+      <article className={(intelligence.expiring.length+intelligence.expired.length)?'is-warning':''}><span>Use soon / expired</span><strong>{intelligence.expiring.length+intelligence.expired.length}</strong></article>
+      <article><span>Waste this month</span><strong>{money(intelligence.monthlyWaste)}</strong></article>
+    </div>
+
+    {(intelligence.lowStock.length||intelligence.expiring.length||intelligence.expired.length) ? <section className="inventory-attention"><header><p>Needs attention</p><h2>Prevent unnecessary spend and waste</h2></header><div>
+      {intelligence.lowStock.slice(0,4).map(item=><article key={`low-${item.id}`}><i className="ti ti-shopping-cart-plus"/><span><strong>{item.name}</strong><small>{item.quantity} {item.unit} on hand · par {item.parLevel}</small></span><em>Buy</em></article>)}
+      {[...intelligence.expired,...intelligence.expiring].slice(0,4).map(item=><article key={`exp-${item.id}`}><i className="ti ti-clock-exclamation"/><span><strong>{item.name}</strong><small>{item.expiresOn < new Date().toISOString().slice(0,10)?'Expired':'Use by'} {item.expiresOn}</small></span><em>Use</em></article>)}
+    </div></section> : null}
+
+    {showAdd&&<form className="inventory-form" onSubmit={addItem}>
+      <label className="wide"><span>Item</span><input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Paper towels"/></label>
+      <label><span>Category</span><select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{INVENTORY_CATEGORIES.map(value=><option key={value}>{value}</option>)}</select></label>
+      <label><span>Location</span><select value={form.location} onChange={e=>setForm({...form,location:e.target.value})}>{INVENTORY_LOCATIONS.map(value=><option key={value}>{value}</option>)}</select></label>
+      <label><span>Quantity</span><input type="number" min="0" step="0.1" value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})}/></label>
+      <label><span>Unit</span><input value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})}/></label>
+      <label><span>Reorder at</span><input type="number" min="0" step="0.1" value={form.parLevel} onChange={e=>setForm({...form,parLevel:e.target.value})}/></label>
+      <label><span>Unit cost</span><input type="number" min="0" step="0.01" value={form.unitCost} onChange={e=>setForm({...form,unitCost:e.target.value})}/></label>
+      <label><span>Use / expire by</span><input type="date" value={form.expiresOn} onChange={e=>setForm({...form,expiresOn:e.target.value})}/></label>
+      <label className="wide"><span>Notes</span><input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Brand, package size, storage note…"/></label>
+      <button className="wide" type="submit">Save inventory item</button>
+    </form>}
+
+    <div className="inventory-toolbar"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search inventory…"/><select value={location} onChange={e=>setLocation(e.target.value)}><option>All</option>{INVENTORY_LOCATIONS.map(value=><option key={value}>{value}</option>)}</select></div>
+
+    <div className="inventory-list">
+      {!visible.length&&<div className="inventory-empty">No inventory items match this view.</div>}
+      {visible.map(item=>{
+        const low=item.parLevel>0&&item.quantity<=item.parLevel
+        const expiring=item.expiresOn&&item.expiresOn<=new Date(Date.now()+3*86400000).toISOString().slice(0,10)
+        return <article key={item.id} className={`${low?'is-low ':''}${expiring?'is-expiring':''}`}>
+          <div className="inventory-item-main"><span>{item.category} · {item.location}</span><h3>{item.name}</h3><p>{item.notes||'No additional notes.'}</p></div>
+          <div className="inventory-quantity"><strong>{item.quantity}</strong><span>{item.unit}</span>{item.parLevel>0&&<small>reorder at {item.parLevel}</small>}</div>
+          <div className="inventory-cost"><strong>{money(item.quantity*item.unitCost)}</strong><span>{item.unitCost?`${money(item.unitCost)} / ${item.unit}`:'cost not set'}</span>{item.expiresOn&&<small>use by {item.expiresOn}</small>}</div>
+          <div className="inventory-actions"><button onClick={()=>persist(adjustInventoryQuantity(state,item.id,-1,currentMember))} disabled={item.quantity<=0}>−</button><button onClick={()=>persist(adjustInventoryQuantity(state,item.id,1,currentMember))}>+</button><button className="waste" onClick={()=>logWaste(item)} disabled={item.quantity<=0}>Log waste</button></div>
+        </article>
+      })}
+    </div>
+
+    <section className="inventory-purchase-list"><header><div><p>Auto purchase list</p><h2>Replenishment generated from par levels</h2></div><strong>{intelligence.purchaseList.length}</strong></header>{intelligence.purchaseList.length?intelligence.purchaseList.map(item=><div key={item.id}><span><strong>{item.name}</strong><small>{item.location}</small></span><em>Buy {item.suggestedQuantity} {item.unit}</em></div>):<p>Nothing needs replenishment.</p>}</section>
+  </section>
+}

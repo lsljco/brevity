@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { estateWorkspaceSummary } from './estateModel.js'
 import { estateDocumentUrl, fetchEstateWorkspace } from './estateApi.js'
 import EstateMaintenance from './EstateMaintenance.jsx'
+import EstateVendorIntelligence from './EstateVendorIntelligence.jsx'
 import MalbecMigrationConsole from './MalbecMigrationConsole.jsx'
 import './EstateWorkspace.css'
 
@@ -13,7 +14,7 @@ const cards = summary => [
   ['Open work orders', summary.openWorkOrders, 'ti-tool'],
   ['Overdue maintenance', summary.overdueMaintenance, 'ti-alert-triangle'],
   ['Active projects', summary.activeProjects, 'ti-timeline-event'],
-  ['Vendors', summary.vendors, 'ti-address-book'],
+  ['Vendors', summary.vendors, 'ti-address-book', 'estate-vendors'],
   ['Documents', summary.documents, 'ti-files'],
 ]
 
@@ -51,6 +52,7 @@ export default function EstateWorkspace({ role = 'member' }) {
         <article><p>Portfolio activity</p><h2>{summary.activeProjects ? `${summary.activeProjects} active project${summary.activeProjects === 1 ? '' : 's'}` : 'No active projects'}</h2><span>{summary.systems} systems · {summary.assets} assets</span></article>
       </div>
       <EstateMaintenance role={role} workspace={workspace} onWorkspaceChange={setWorkspace}/>
+      <div id="estate-vendors"><EstateVendorIntelligence workspace={workspace}/></div>
       {workspace.documents.length > 0 && <section className="estate-vault-list">
         <header><div><p>Estate Vault</p><h2>Verified property documents</h2></div><span>{workspace.documents.length} file{workspace.documents.length === 1 ? '' : 's'}</span></header>
         {workspace.documents.map(document => <a key={document.id} href={estateDocumentUrl(document.id, workspace.propertyId)}>

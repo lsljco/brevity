@@ -10,6 +10,7 @@ const ALLOWED_KEYS = new Set([
   'fp_goals', 'homehq_items_v1', 'family_calendar_events_v1',
   'brevity_daily_financial_alignment_v1', 'brevity_finance_timeframe_v1',
   'brevity_finance_meetings_v1', 'brevity_household_maintenance_v1',
+  'brevity_household_inventory_v1',
 ])
 
 const headers = {
