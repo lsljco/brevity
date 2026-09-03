@@ -6,3 +6,8 @@
   color: var(--muted);
   font-size: 16px;
 }
+
+/* Family Calendar is the single household calendar surface. */
+.pillar-items button[aria-label="My Planner"] {
+  display: none;
+}
