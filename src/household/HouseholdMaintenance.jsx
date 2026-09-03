@@ -12,6 +12,7 @@ import {
 } from './householdMaintenanceData.js'
 import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { SHARED_STATE_EVENT } from './sharedState.js'
+import HouseholdInventory from './HouseholdInventory.jsx'
 import './HouseholdMaintenance.css'
 
 function loadState() {
@@ -23,6 +24,7 @@ function weekLabel(start) { const end = new Date(start); end.setDate(end.getDate
 function Stat({ label, value, tone = '' }) { return <div className={`maintenance-stat${tone ? ` maintenance-stat--${tone}` : ''}`}><span>{label}</span><strong>{value}</strong></div> }
 
 export default function HouseholdMaintenance({ currentMember }) {
+  const [workspace, setWorkspace] = useState('operations')
   const [weekStart, setWeekStart] = useState(() => maintenanceWeekStart(new Date()))
   const [state, setState] = useState(loadState)
   const [ownerFilter, setOwnerFilter] = useState('Mine')
@@ -82,7 +84,10 @@ export default function HouseholdMaintenance({ currentMember }) {
     return task.owners.includes(ownerFilter) || occurrence.coveredBy === ownerFilter
   }
 
+  if (workspace === 'inventory') return <div className="household-operations-shell"><nav className="household-operations-tabs" aria-label="Household operating areas"><button type="button" onClick={()=>setWorkspace('operations')}>Operations</button><button type="button" className="active" onClick={()=>setWorkspace('inventory')}>Supplies & Inventory</button></nav><HouseholdInventory currentMember={currentMember}/></div>
+
   return <div className="household-maintenance household-operations">
+    <nav className="household-operations-tabs" aria-label="Household operating areas"><button type="button" className="active" onClick={()=>setWorkspace('operations')}>Operations</button><button type="button" onClick={()=>setWorkspace('inventory')}>Supplies & Inventory</button></nav>
     <header className="maintenance-hero">
       <div>
         <p className="maintenance-kicker">Household Management · Operations</p>
