@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { resolveTimeframe, filterTransactionsByTimeframe } from './financeTimeframe.js'
 
 const now = new Date(2026, 7, 15)
-test('timeframe presets resolve to inclusive local calendar dates', () => {
-  assert.deepEqual(resolveTimeframe('this-month', now), { preset: 'this-month', from: '2026-08-01', to: '2026-08-15' })
+test('calendar-month presets resolve to complete inclusive local calendar ranges', () => {
+  assert.deepEqual(resolveTimeframe('this-month', now), { preset: 'this-month', from: '2026-08-01', to: '2026-08-31' })
   assert.deepEqual(resolveTimeframe('last-month', now), { preset: 'last-month', from: '2026-07-01', to: '2026-07-31' })
   assert.deepEqual(resolveTimeframe('last-year', now), { preset: 'last-year', from: '2025-01-01', to: '2025-12-31' })
 })
