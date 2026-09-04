@@ -25,8 +25,7 @@ const PILLARS = [
   { id:'fitness', label:'Physical Fitness', icon:'ti-run', layer:2, description:'Strength, discipline, and physical stewardship.', items:[] },
   { id:'household', label:'Household Management', icon:'ti-home', layer:3, description:'The heartbeat of the home — operations, property, and daily life.', items:[
     { id:'property', label:'Projects', icon:'ti-building-estate' },
-    { id:'household-maintenance', label:'Household Maintenance', icon:'ti-broom' },
-    { id:'my-planner', label:'My Planner', icon:'ti-calendar-user' },
+    { id:'household-maintenance', label:'Household Operations', icon:'ti-broom' },
     { id:'family-calendar', label:'Family Calendar', icon:'ti-calendar-event' },
     { id:'malbec-estate', label:'Malbec Estate', icon:'ti-building-community' },
     { id:'live-intentional', label:'Live Intentional', icon:'ti-compass' },
@@ -175,9 +174,8 @@ export default function App() {
     if(activeView==='today')return <HouseholdToday currentMember={currentMember} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')}/>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ/></Suspense>
-    if(activeView==='household-maintenance')return <Suspense fallback={<div className="app-view-loading">Loading Household Maintenance…</div>}><HouseholdMaintenance currentMember={currentMember}/></Suspense>
+    if(activeView==='household-maintenance')return <Suspense fallback={<div className="app-view-loading">Loading Household Operations…</div>}><HouseholdMaintenance currentMember={currentMember}/></Suspense>
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>
-    if(activeView==='my-planner')return <Suspense fallback={<div className="app-view-loading">Loading My Planner…</div>}><FamilyCalendar currentMember={currentMember} includeFamily lockMember title="My Planner" subtitle={`${currentMember}'s commitments plus shared Family events`}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-published updates"/></Suspense>
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
