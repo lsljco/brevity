@@ -11,25 +11,28 @@ test('first cloud sync preserves server data and backs up an untracked local val
   const storage = memoryStorage({ lslj_finance_v9: '{"local":true}' })
   const remoteValue = '{"remote":true}'
   const result = reconcileSharedRecords(storage, {
-    lslj_finance_v9: { value: remoteValue, hash: hashValue(remoteValue), updatedAt: '2026-08-21T10:00:00.000Z' },
+    lslj_finance_v9: { value: remoteValue, hash: hashValue(remoteValue), updatedAt: '2026-08-21T10:00:00.000Z', version:4 },
   }, '2026-08-21T11:00:00.000Z')
   assert.equal(storage.getItem('lslj_finance_v9'), remoteValue)
   assert.equal(storage.getItem('lslj_finance_v9_local_backup_before_cloud'), '{"local":true}')
   assert.deepEqual(result.applied, ['lslj_finance_v9'])
+  const meta = JSON.parse(storage.getItem('brevity_shared_state_meta_v1'))
+  assert.equal(meta.lslj_finance_v9.version, 4)
 })
 
-test('a tracked local edit is uploaded instead of overwritten by older cloud state', () => {
+test('a tracked local edit is uploaded with the last acknowledged server version', () => {
   const old = '{"value":1}'
   const current = '{"value":2}'
   const storage = memoryStorage({
     lslj_finance_v9: current,
-    brevity_shared_state_meta_v1: JSON.stringify({ lslj_finance_v9: { hash: hashValue(old), updatedAt: '2026-08-21T09:00:00.000Z' } }),
+    brevity_shared_state_meta_v1: JSON.stringify({ lslj_finance_v9: { hash: hashValue(old), updatedAt: '2026-08-21T09:00:00.000Z', version:7 } }),
   })
   const result = reconcileSharedRecords(storage, {
-    lslj_finance_v9: { value: old, hash: hashValue(old), updatedAt: '2026-08-21T09:00:00.000Z' },
+    lslj_finance_v9: { value: old, hash: hashValue(old), updatedAt: '2026-08-21T09:00:00.000Z', version:7 },
   }, '2026-08-21T11:00:00.000Z')
   assert.equal(result.uploads[0].value, current)
   assert.equal(result.uploads[0].updatedAt, '2026-08-21T11:00:00.000Z')
+  assert.equal(result.uploads[0].expectedVersion, 7)
 })
 
 test('household schedule is a synchronized server record', () => {
@@ -38,18 +41,20 @@ test('household schedule is a synchronized server record', () => {
   const value = '{"version":1,"blocks":[],"routines":[]}'
   const record = buildSharedRecord(storage, 'brevity_household_schedule_v1', value, '2026-09-04T15:30:00.000Z')
   assert.deepEqual(record, {
-    key: 'brevity_household_schedule_v1',
+    key:'brevity_household_schedule_v1',
     value,
-    hash: hashValue(value),
-    updatedAt: '2026-09-04T15:30:00.000Z',
+    hash:hashValue(value),
+    updatedAt:'2026-09-04T15:30:00.000Z',
+    expectedVersion:0,
   })
 })
 
-test('shared JSON writes keep a local cache, backup, and server metadata', () => {
+test('shared JSON writes keep a local cache and backup while preparing a versioned server write', () => {
   const storage = memoryStorage()
-  const value = { version: 2, items: [{ id: 'paper-towels', quantity: 4 }] }
+  const value = { version:2, items:[{ id:'paper-towels', quantity:4 }] }
   const result = writeSharedJson(storage, 'brevity_household_inventory_v1', value, '2026-09-04T15:31:00.000Z')
   assert.equal(storage.getItem('brevity_household_inventory_v1'), JSON.stringify(value))
   assert.equal(storage.getItem('brevity_household_inventory_v1_backup'), JSON.stringify(value))
   assert.equal(result.record.updatedAt, '2026-09-04T15:31:00.000Z')
+  assert.equal(result.record.expectedVersion, 0)
 })

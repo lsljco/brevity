@@ -33,7 +33,12 @@ async function mockBackend(page) {
     let body = {}
     if (path.endsWith('/household-auth') && action === 'session') body = { authenticated:true, member:'Larry', role:'admin', bootstrapRequired:false }
     else if (path.endsWith('/household-auth') && action === 'members') body = { members:[] }
-    else if (path.endsWith('/household-state')) body = { records:{} }
+    else if (path.endsWith('/household-state')) {
+      if (route.request().method() === 'PUT') {
+        const payload = route.request().postDataJSON()
+        body = { conflict:false, record:{ ...payload, version:Number(payload.expectedVersion || 0)+1, updatedAt:new Date().toISOString(), updatedBy:'Larry' } }
+      } else body = { records:{}, serverTime:new Date().toISOString() }
+    }
     else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan() }
     else if (path.endsWith('/icloud-calendar')) body = { events:[], connected:true, syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
@@ -73,7 +78,7 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
 
-test('shared household writes are pushed to the server immediately', async ({ page }) => {
+test('shared household writes are versioned and pushed to the server immediately', async ({ page }) => {
   const write = page.waitForRequest(request => request.method() === 'PUT' && request.url().includes('/.netlify/functions/household-state'))
   await page.evaluate(() => {
     localStorage.setItem('brevity_household_schedule_v1', JSON.stringify({ version:1, blocks:[], routines:[] }))
@@ -83,7 +88,25 @@ test('shared household writes are pushed to the server immediately', async ({ pa
   expect(payload.key).toBe('brevity_household_schedule_v1')
   expect(payload.value).toContain('"routines":[]')
   expect(payload.hash).toBeTruthy()
+  expect(payload.expectedVersion).toBe(0)
   expect(payload.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+})
+
+test('Settings exposes household synchronization health', async ({ page }, testInfo) => {
+  const pageErrors = []
+  page.on('pageerror', error => pageErrors.push(error.message))
+  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
+  await page.getByRole('button', { name:'Settings' }).click()
+  await page.waitForTimeout(300)
+  if (!(await page.getByRole('heading', { name:'Settings', exact:true }).count())) {
+    console.log('SETTINGS_PAGE_ERRORS', JSON.stringify(pageErrors))
+    console.log('SETTINGS_BODY', (await page.locator('body').innerText()).slice(0,3000))
+  }
+  expect(pageErrors).toEqual([])
+  await expect(page.getByRole('heading', { name:'Settings', exact:true })).toBeVisible()
+  await expect(page.locator('.household-account-admin')).toBeVisible()
+  await expect(page.locator('.household-sync-health')).toBeVisible()
+  await expect(page.getByText('Last verified sync')).toBeVisible()
 })
 
 test('Today renders operating content without a fatal application error', async ({ page }) => {
