@@ -13,6 +13,8 @@ export const PILLAR_IDS = [
 export const DAILY_PLAN_STORAGE_KEY = 'brevity_daily_plans_v1'
 export const DEFAULT_FITNESS_LOCATION = 'Lifetime Gym'
 export const DEFAULT_EDUCATION_OWNER = 'Family'
+export const SHARED_SPIRITUAL_OWNER = 'Family'
+export const SHARED_SPIRITUAL_SCOPE = 'household'
 
 export const ITEM_STATUS = {
   pending: 'pending',
@@ -107,7 +109,8 @@ export function createEmptyDailyPlan(date) {
       notes: '',
     },
     spiritual: {
-      owner: 'Lorenzo',
+      owner: SHARED_SPIRITUAL_OWNER,
+      scope: SHARED_SPIRITUAL_SCOPE,
       scripture: [],
       devotionFocus: '',
       prayerFocus: [],
@@ -211,7 +214,8 @@ export function normalizeDailyPlan(input = {}) {
     spiritual: {
       ...base.spiritual,
       ...spiritual,
-      owner: 'Lorenzo',
+      owner: SHARED_SPIRITUAL_OWNER,
+      scope: SHARED_SPIRITUAL_SCOPE,
       scripture: arrayOrEmpty(spiritual.scripture),
       prayerFocus: arrayOrEmpty(spiritual.prayerFocus),
       discussionPrompts: arrayOrEmpty(spiritual.discussionPrompts),
