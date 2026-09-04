@@ -12,6 +12,7 @@ const ENDPOINT = '/.netlify/functions/household-state'
 const META_KEY = 'brevity_shared_state_meta_v1'
 const REQUEST_TIMEOUT_MS = 20000
 const SHARED_STATE_KEY_SET = new Set(SHARED_STATE_KEYS)
+let suppressWriteThrough = false
 
 export function hashValue(value = '') {
   let hash = 2166136261
@@ -58,15 +59,11 @@ async function request(method, body) {
 }
 
 function dispatchRemoteChange(keys) {
-  if (keys.length && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(SHARED_STATE_EVENT, { detail: { keys } }))
-  }
+  if (keys.length && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SHARED_STATE_EVENT, { detail: { keys } }))
 }
 
 function dispatchSyncError(error, key) {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(SHARED_STATE_SYNC_ERROR_EVENT, { detail: { key, error } }))
-  }
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SHARED_STATE_SYNC_ERROR_EVENT, { detail: { key, error } }))
 }
 
 export function buildSharedRecord(storage, key, serializedValue, now = new Date().toISOString()) {
@@ -85,7 +82,8 @@ function applyServerRecord(storage, record) {
   if (localValue != null) {
     try { storage.setItem(`${record.key}_local_backup_before_cloud`, localValue) } catch {}
   }
-  storage.setItem(record.key, record.value)
+  suppressWriteThrough = true
+  try { storage.setItem(record.key, record.value) } finally { suppressWriteThrough = false }
   const meta = readMeta(storage)
   meta[record.key] = { hash: record.hash || hashValue(record.value), updatedAt: record.updatedAt || new Date().toISOString() }
   writeMeta(storage, meta)
@@ -93,46 +91,56 @@ function applyServerRecord(storage, record) {
   return true
 }
 
+function uploadRecord(storage, record, onError) {
+  return request('PUT', record)
+    .then(result => {
+      if (result?.conflict && result.record) applyServerRecord(storage, result.record)
+      return result
+    })
+    .catch(error => {
+      dispatchSyncError(error, record.key)
+      onError?.(error)
+      return null
+    })
+}
+
 export function writeSharedJson(storage, key, value, now = new Date().toISOString()) {
   const serialized = JSON.stringify(value)
   storage.setItem(key, serialized)
   try { storage.setItem(`${key}_backup`, serialized) } catch {}
-  const record = buildSharedRecord(storage, key, serialized, now)
-  if (record && typeof window !== 'undefined') {
-    request('PUT', record)
-      .then(result => {
-        if (result?.conflict && result.record) applyServerRecord(storage, result.record)
-      })
-      .catch(error => dispatchSyncError(error, key))
-  }
-  return { ok: true, record }
+  return { ok: true, record: buildSharedRecord(storage, key, serialized, now) }
 }
 
 export function reconcileSharedRecords(storage, remoteRecords = {}, now = new Date().toISOString()) {
   const meta = readMeta(storage)
   const uploads = []
   const applied = []
-  SHARED_STATE_KEYS.forEach(key => {
-    const localValue = storage.getItem(key)
-    const localHash = localValue == null ? '' : hashValue(localValue)
-    const prior = meta[key]
-    const remote = remoteRecords[key]
-    const localChanged = Boolean(prior && prior.hash !== localHash)
-    if (remote && (!prior || (!localChanged && remote.updatedAt > (prior.updatedAt || '')))) {
-      if (localValue != null && localValue !== remote.value) {
-        try { storage.setItem(`${key}_local_backup_before_cloud`, localValue) } catch {}
+  suppressWriteThrough = true
+  try {
+    SHARED_STATE_KEYS.forEach(key => {
+      const localValue = storage.getItem(key)
+      const localHash = localValue == null ? '' : hashValue(localValue)
+      const prior = meta[key]
+      const remote = remoteRecords[key]
+      const localChanged = Boolean(prior && prior.hash !== localHash)
+      if (remote && (!prior || (!localChanged && remote.updatedAt > (prior.updatedAt || '')))) {
+        if (localValue != null && localValue !== remote.value) {
+          try { storage.setItem(`${key}_local_backup_before_cloud`, localValue) } catch {}
+        }
+        storage.setItem(key, remote.value)
+        meta[key] = { hash: remote.hash || hashValue(remote.value), updatedAt: remote.updatedAt }
+        if (localValue !== remote.value) applied.push(key)
+        return
       }
-      storage.setItem(key, remote.value)
-      meta[key] = { hash: remote.hash || hashValue(remote.value), updatedAt: remote.updatedAt }
-      if (localValue !== remote.value) applied.push(key)
-      return
-    }
-    if (localValue == null) return
-    const updatedAt = localChanged || !prior ? now : prior.updatedAt
-    meta[key] = { hash: localHash, updatedAt }
-    if (!remote || remote.hash !== localHash || remote.updatedAt < updatedAt) uploads.push({ key, value: localValue, hash: localHash, updatedAt })
-  })
-  writeMeta(storage, meta)
+      if (localValue == null) return
+      const updatedAt = localChanged || !prior ? now : prior.updatedAt
+      meta[key] = { hash: localHash, updatedAt }
+      if (!remote || remote.hash !== localHash || remote.updatedAt < updatedAt) uploads.push({ key, value: localValue, hash: localHash, updatedAt })
+    })
+    writeMeta(storage, meta)
+  } finally {
+    suppressWriteThrough = false
+  }
   return { uploads, applied, meta }
 }
 
@@ -145,9 +153,25 @@ export async function syncSharedState(storage = window.localStorage) {
   return { ...result, rejected }
 }
 
+export function installSharedStateWriteThrough({ storage = window.localStorage, onError } = {}) {
+  if (typeof Storage === 'undefined' || !(storage instanceof Storage)) return () => {}
+  const prototype = Storage.prototype
+  const original = prototype.setItem
+  prototype.setItem = function setItem(key, value) {
+    original.call(this, key, value)
+    if (this !== storage || suppressWriteThrough || !SHARED_STATE_KEY_SET.has(String(key))) return
+    const record = buildSharedRecord(storage, String(key), String(value))
+    if (record) void uploadRecord(storage, record, onError)
+  }
+  return () => {
+    if (prototype.setItem !== original) prototype.setItem = original
+  }
+}
+
 export function startSharedStateSync({ storage = window.localStorage, intervalMs = 10000, onRemoteChange, onError } = {}) {
   let stopped = false
   let running = false
+  const stopWriteThrough = installSharedStateWriteThrough({ storage, onError })
   const run = async () => {
     if (running || stopped) return
     running = true
@@ -166,6 +190,7 @@ export function startSharedStateSync({ storage = window.localStorage, intervalMs
   document.addEventListener('visibilitychange', visibility)
   return () => {
     stopped = true
+    stopWriteThrough()
     clearInterval(timer)
     document.removeEventListener('visibilitychange', visibility)
   }
