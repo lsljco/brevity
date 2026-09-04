@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { HOUSEHOLD_INVENTORY_STORAGE_KEY, INVENTORY_CATEGORIES, INVENTORY_LOCATIONS, addInventoryItem, adjustInventoryQuantity, inventoryIntelligence, normalizeInventoryState, recordInventoryWaste } from './householdInventoryData.js'
 import { publishHouseholdFinanceBridge } from './householdFinanceBridge.js'
-import { SHARED_STATE_EVENT } from './sharedState.js'
+import { SHARED_STATE_EVENT, writeSharedJson } from './sharedState.js'
 import './HouseholdInventory.css'
 const emptyForm={name:'',category:'Food & Pantry',location:'Pantry',quantity:'1',unit:'units',parLevel:'1',unitCost:'',expiresOn:'',notes:''}
 function loadState(){try{return normalizeInventoryState(JSON.parse(localStorage.getItem(HOUSEHOLD_INVENTORY_STORAGE_KEY)||'{}'))}catch{return normalizeInventoryState()}}
@@ -9,7 +9,7 @@ function money(value){return Number(value||0).toLocaleString('en-US',{style:'cur
 export default function HouseholdInventory({currentMember}){
  const[state,setState]=useState(loadState),[form,setForm]=useState(emptyForm),[showAdd,setShowAdd]=useState(false),[search,setSearch]=useState(''),[location,setLocation]=useState('All');const intelligence=useMemo(()=>inventoryIntelligence(state),[state])
  useEffect(()=>{const refresh=event=>{if(event.type==='storage'&&event.key!==HOUSEHOLD_INVENTORY_STORAGE_KEY)return;if(event.type===SHARED_STATE_EVENT&&!event.detail?.keys?.includes(HOUSEHOLD_INVENTORY_STORAGE_KEY))return;setState(loadState())};window.addEventListener('storage',refresh);window.addEventListener(SHARED_STATE_EVENT,refresh);return()=>{window.removeEventListener('storage',refresh);window.removeEventListener(SHARED_STATE_EVENT,refresh)}},[])
- const persist=next=>{setState(next);localStorage.setItem(HOUSEHOLD_INVENTORY_STORAGE_KEY,JSON.stringify(next));publishHouseholdFinanceBridge(localStorage)}
+ const persist=next=>{setState(next);writeSharedJson(localStorage,HOUSEHOLD_INVENTORY_STORAGE_KEY,next);publishHouseholdFinanceBridge(localStorage)}
  const addItem=event=>{event.preventDefault();if(!form.name.trim())return;persist(addInventoryItem(state,form,currentMember));setForm(emptyForm);setShowAdd(false)}
  const logWaste=item=>{const raw=window.prompt(`How many ${item.unit} of ${item.name} were discarded?`,String(Math.min(1,item.quantity)));if(raw==null)return;const quantity=Number(raw);if(!Number.isFinite(quantity)||quantity<=0)return;const reason=window.prompt('Why was it discarded?','Expired / not used')||'Discarded';persist(recordInventoryWaste(state,{itemId:item.id,quantity,reason,member:currentMember}))}
  const visible=state.items.filter(item=>(location==='All'||item.location===location)&&(!search||`${item.name} ${item.category} ${item.location}`.toLowerCase().includes(search.toLowerCase())))
