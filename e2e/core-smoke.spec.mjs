@@ -62,7 +62,11 @@ test('seven pillars remain in the approved order', async ({ page }) => {
   ])
 })
 
-test('deprecated My Planner workspace is not present in navigation', async ({ page }) => {
+test('deprecated My Planner workspace is not present in navigation', async ({ page }, testInfo) => {
+  if (testInfo.project.name === 'iphone') {
+    await page.getByRole('button', { name:'Menu' }).click()
+    await expect(page.locator('#primary-navigation-drawer')).toHaveClass(/is-expanded/)
+  }
   await page.getByRole('button', { name:'Household Management' }).click()
   await expect(page.getByRole('button', { name:'Household Operations' })).toBeVisible()
   await expect(page.getByRole('button', { name:'Family Calendar' })).toBeVisible()
