@@ -62,6 +62,13 @@ test('seven pillars remain in the approved order', async ({ page }) => {
   ])
 })
 
+test('deprecated My Planner workspace is not present in navigation', async ({ page }) => {
+  await page.getByRole('button', { name:'Household Management' }).click()
+  await expect(page.getByRole('button', { name:'Household Operations' })).toBeVisible()
+  await expect(page.getByRole('button', { name:'Family Calendar' })).toBeVisible()
+  await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
+})
+
 test('Today renders operating content without a fatal application error', async ({ page }) => {
   await expect(page.getByRole('button', { name:'Today' }).first()).toBeVisible()
   await expect(page.locator('body')).not.toContainText('Something went wrong')
@@ -70,11 +77,12 @@ test('Today renders operating content without a fatal application error', async 
 
 test('mobile shell keeps fixed navigation inside the viewport without horizontal overflow', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'iphone', 'mobile-only assertion')
-  const dimensions = await page.evaluate(() => ({ width:window.innerWidth, scrollWidth:document.documentElement.scrollWidth }))
+  const dimensions = await page.evaluate(() => ({ width:window.innerWidth, height:window.innerHeight, scrollWidth:document.documentElement.scrollWidth }))
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.width + 1)
   const nav = page.locator('.mobile-app-nav')
   await expect(nav).toBeVisible()
   const box = await nav.boundingBox()
   expect(box).not.toBeNull()
-  expect(box.y + box.height).toBeLessThanOrEqual(dimensions.width * 3)
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y + box.height).toBeLessThanOrEqual(dimensions.height + 1)
 })
