@@ -4,6 +4,7 @@ export const SHARED_STATE_KEYS = [
   'lslj_tx_overrides_v1', 'lslj_tx_rules_v1', 'brevity_finance_categories_v1', 'brevity_finance_scenarios_v1',
   'fp_goals', 'homehq_items_v1', 'family_calendar_events_v1', 'brevity_daily_financial_alignment_v1', 'brevity_finance_timeframe_v1',
   'brevity_finance_meetings_v1', 'brevity_household_maintenance_v1', 'brevity_household_inventory_v1', 'brevity_household_finance_bridge_v1',
+  'brevity_household_schedule_v1',
 ]
 const ENDPOINT='/.netlify/functions/household-state',META_KEY='brevity_shared_state_meta_v1',REQUEST_TIMEOUT_MS=20000
 export function hashValue(value=''){let hash=2166136261;for(let index=0;index<value.length;index+=1){hash^=value.charCodeAt(index);hash=Math.imul(hash,16777619)}return(hash>>>0).toString(16)}
