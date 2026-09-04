@@ -95,6 +95,8 @@ test('shared household writes are versioned and pushed to the server immediately
 test('Settings exposes household synchronization health', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Settings' }).click()
+  await expect(page.getByRole('heading', { name:'Settings', exact:true })).toBeVisible()
+  await expect(page.locator('.household-account-admin')).toBeVisible()
   await expect(page.locator('.household-sync-health')).toBeVisible()
   await expect(page.getByText('Last verified sync')).toBeVisible()
 })
