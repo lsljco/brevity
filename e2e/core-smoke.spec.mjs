@@ -73,6 +73,19 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
 
+test('shared household writes are pushed to the server immediately', async ({ page }) => {
+  const write = page.waitForRequest(request => request.method() === 'PUT' && request.url().includes('/.netlify/functions/household-state'))
+  await page.evaluate(() => {
+    localStorage.setItem('brevity_household_schedule_v1', JSON.stringify({ version:1, blocks:[], routines:[] }))
+  })
+  const request = await write
+  const payload = request.postDataJSON()
+  expect(payload.key).toBe('brevity_household_schedule_v1')
+  expect(payload.value).toContain('"routines":[]')
+  expect(payload.hash).toBeTruthy()
+  expect(payload.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+})
+
 test('Today renders operating content without a fatal application error', async ({ page }) => {
   await expect(page.getByRole('button', { name:'Today' }).first()).toBeVisible()
   await expect(page.locator('body')).not.toContainText('Something went wrong')
