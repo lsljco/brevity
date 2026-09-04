@@ -93,8 +93,16 @@ test('shared household writes are versioned and pushed to the server immediately
 })
 
 test('Settings exposes household synchronization health', async ({ page }, testInfo) => {
+  const pageErrors = []
+  page.on('pageerror', error => pageErrors.push(error.message))
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Settings' }).click()
+  await page.waitForTimeout(300)
+  if (!(await page.getByRole('heading', { name:'Settings', exact:true }).count())) {
+    console.log('SETTINGS_PAGE_ERRORS', JSON.stringify(pageErrors))
+    console.log('SETTINGS_BODY', (await page.locator('body').innerText()).slice(0,3000))
+  }
+  expect(pageErrors).toEqual([])
   await expect(page.getByRole('heading', { name:'Settings', exact:true })).toBeVisible()
   await expect(page.locator('.household-account-admin')).toBeVisible()
   await expect(page.locator('.household-sync-health')).toBeVisible()
