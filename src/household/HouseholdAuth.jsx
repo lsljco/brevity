@@ -8,6 +8,7 @@ import {
   logoutHouseholdMember,
   setHouseholdMemberPassword,
 } from './authApi.js'
+import { getSharedStateHealth, SHARED_STATE_HEALTH_EVENT } from './sharedState.js'
 import './HouseholdAuth.css'
 
 export function useHouseholdAuth() {
@@ -78,6 +79,34 @@ export function HouseholdLogin({ bootstrapRequired, onLogin, onBootstrap, error:
   </div>
 }
 
+function formatSyncTime(value) {
+  if (!value) return 'Not yet verified'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Not yet verified'
+  return date.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+}
+
+function HouseholdSyncHealth() {
+  const [health, setHealth] = useState(() => getSharedStateHealth())
+  useEffect(() => {
+    const refresh = event => setHealth(event.detail || getSharedStateHealth())
+    window.addEventListener(SHARED_STATE_HEALTH_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(SHARED_STATE_HEALTH_EVENT, refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
+  const status = health.status === 'healthy' ? 'Healthy' : health.status === 'syncing' ? 'Syncing' : health.status === 'degraded' ? 'Needs attention' : 'Checking'
+  return <section className={`household-sync-health household-sync-health--${health.status || 'unknown'}`} aria-label="Household data sync health">
+    <div><span>Household data</span><strong>{status}</strong></div>
+    <div><span>Pending writes</span><strong>{Number(health.pendingWrites || 0)}</strong></div>
+    <div><span>Last verified sync</span><strong>{formatSyncTime(health.lastSuccessAt)}</strong></div>
+    {health.lastConflictAt && <p>Most recent edit conflict was reconciled automatically for <strong>{health.lastConflictKey || 'a household record'}</strong> at {formatSyncTime(health.lastConflictAt)}.</p>}
+    {health.lastError && <p className="household-sync-health-error">{health.lastError} Brevity retains the local cache and retries synchronization automatically.</p>}
+  </section>
+}
+
 export function HouseholdAccounts({ sessionMember, role }) {
   const [members, setMembers] = useState([])
   const [selected, setSelected] = useState('Lorenzo')
@@ -91,7 +120,7 @@ export function HouseholdAccounts({ sessionMember, role }) {
   }
   useEffect(() => { load() }, [])
 
-  if (role !== 'admin') return <div className="household-account-summary"><strong>Signed in as {sessionMember}</strong><span>Your identity is attached to this account on every device.</span></div>
+  if (role !== 'admin') return <><div className="household-account-summary"><strong>Signed in as {sessionMember}</strong><span>Your identity is attached to this account on every device.</span></div><HouseholdSyncHealth/></>
 
   const save = async event => {
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
@@ -110,5 +139,6 @@ export function HouseholdAccounts({ sessionMember, role }) {
       <button disabled={busy}>{busy ? 'Saving…' : 'Save Member Account'}</button>
     </form>
     {message && <div className="household-auth-success">{message}</div>}{error && <div className="household-auth-error">{error}</div>}
+    <HouseholdSyncHealth/>
   </div>
 }
