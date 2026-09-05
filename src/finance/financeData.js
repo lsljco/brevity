@@ -30,6 +30,15 @@ export function migrateFinanceData(data) {
 }
 
 export function saveFinanceData(storage,key,data){
+  if(typeof storage?.getItem!=='function'){
+    try{
+      const serialized=JSON.stringify(data)
+      storage.setItem(key,serialized)
+      let backupError=null
+      try{storage.setItem(financeBackupKey(key),serialized)}catch(error){backupError=error}
+      return{ok:true,backupError}
+    }catch(error){return{ok:false,error}}
+  }
   try{const result=writeSharedJson(storage,key,data);return{ok:result.ok,record:result.record,backupError:null}}
   catch(error){return{ok:false,error}}
 }
