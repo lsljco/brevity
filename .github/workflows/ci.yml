@@ -26,6 +26,8 @@ jobs:
         run: node scripts/audit-production.mjs
       - name: Run automated tests
         run: npm test
+      - name: Enforce Finance source budget
+        run: node scripts/check-source-budget.mjs
       - name: Build production application
         run: npm run build
       - name: Enforce production bundle budget
