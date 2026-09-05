@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { actionRisk, defaultActionPermissions, normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../../netlify/lib/assistant-action-contract.mjs'
 import { applyRecordOperation, executeRecordOperations, resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
+import { createEmptyDailyPlan } from '../household/dailyPlan.js'
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
 import { publicAssistantAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
 
@@ -50,6 +51,13 @@ test('record executor updates decisions and preserves a complete before image',(
   assert.equal(result.after.decisions[0].status,'complete')
   assert.equal(result.before.decisions[0].status,'needs-decision')
   assert.equal(original.decisions[0].status,'needs-decision')
+})
+
+test('a first assignment can initialize an otherwise missing dated daily plan',()=>{
+  const date='2026-09-05'
+  const result=applyRecordOperation(createEmptyDailyPlan(date),{type:'assignment.create',targetDate:date,description:'Create Action Mode Test',payload:{title:'Action Mode Test',owner:'Larry'}},()=> 'assignment-1')
+  assert.equal(result.after.date,date)
+  assert.deepEqual(result.after.assignments.map(({id,title,owner,date})=>({id,title,owner,date})),[{id:'assignment-1',title:'Action Mode Test',owner:'Larry',date}])
 })
 
 test('recurring executor applies explicit one versus future scope semantics',()=>{
