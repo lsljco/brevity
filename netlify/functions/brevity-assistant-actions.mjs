@@ -49,6 +49,8 @@ async function executeCalendarOperations({event,operations,session,permissions,e
   return changes
 }
 
+export const unchangedSinceAction=(current,change)=>Number(current?.version)===Number(change?.afterVersion)||JSON.stringify(current?.value)===JSON.stringify(change?.after)
+
 async function undoAudit({event,audit,session,resources}) {
   if(!audit?.undoAvailable||audit.undoneAt)throw new Error('This action is not available to undo.')
   if(session.role!=='admin'&&audit.actor!==session.member)throw Object.assign(new Error('Only the member who completed this action or an administrator can undo it.'),{code:'FORBIDDEN'})
@@ -56,7 +58,7 @@ async function undoAudit({event,audit,session,resources}) {
   for(const change of audit.changes||[]){
     if(change.resource==='calendar:apple-family')continue
     const current=await resources.read(change.resource)
-    if(Number(current.version)!==Number(change.afterVersion))throw Object.assign(new Error('A newer household edit exists, so Undo was stopped to protect it.'),{code:'VERSION_CONFLICT'})
+    if(!unchangedSinceAction(current,change))throw Object.assign(new Error('A newer household edit exists, so Undo was stopped to protect it.'),{code:'VERSION_CONFLICT'})
     preflight.set(change.resource,current)
   }
   const restored=[]

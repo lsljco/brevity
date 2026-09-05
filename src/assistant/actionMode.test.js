@@ -4,7 +4,7 @@ import { actionRisk, defaultActionPermissions, normalizeActionProposal, normaliz
 import { applyRecordOperation, captureExpectedVersions, executeRecordOperations, resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 import { createEmptyDailyPlan } from '../household/dailyPlan.js'
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
-import { publicAssistantAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
+import { publicAssistantAudit, unchangedSinceAction } from '../../netlify/functions/brevity-assistant-actions.mjs'
 
 test('action proposals accept only the explicit Brevity tool allowlist',()=>{
   const proposal=normalizeActionProposal({summary:'Update the decision',operations:[{type:'decision.update',description:'Assign the open decision to Larry',targetId:'d1',targetDate:'2026-09-05',payloadJson:'{"owner":"Larry","status":"determined"}',allowedScopes:['this-item'],defaultScope:'this-item'}]},{member:'Larry',role:'admin',now:new Date('2026-09-05T10:00:00Z'),id:'proposal-1'})
@@ -43,6 +43,12 @@ test('member-facing audit history omits stored before and after snapshots',()=>{
   const visible=publicAssistantAudit({id:'a1',summary:'Updated budget',actor:'Larry',changes:[{before:{salary:1},after:{salary:2}}],operations:[{id:'o1',type:'budget.update',domain:'finance',description:'Update budget',selectedScope:'this-item'}],undoAvailable:true})
   assert.equal('changes' in visible,false)
   assert.deepEqual(visible.operations[0],{id:'o1',type:'budget.update',domain:'finance',description:'Update budget',selectedScope:'this-item'})
+})
+
+test('Undo tolerates a newer sync version only when the saved value is unchanged',()=>{
+  const change={afterVersion:4,after:{transactions:[{id:'r1',notes:'test'}]}}
+  assert.equal(unchangedSinceAction({version:5,value:{transactions:[{id:'r1',notes:'test'}]}},change),true)
+  assert.equal(unchangedSinceAction({version:5,value:{transactions:[{id:'r1',notes:'newer edit'}]}},change),false)
 })
 
 test('record executor updates decisions and preserves a complete before image',()=>{
