@@ -6,7 +6,7 @@ if(!fs.existsSync(assetsDir)){console.error('dist/assets does not exist. Run the
 const files=fs.readdirSync(assetsDir).filter(file=>file.endsWith('.js'))
 const bytes=file=>fs.statSync(path.join(assetsDir,file)).size
 const budgets=[
-  {label:'FinancePlanner',match:file=>file.startsWith('FinancePlanner-'),max:540*1024},
+  {label:'FinancePlanner',match:file=>file.startsWith('FinancePlanner-'),max:525*1024},
   {label:'application shell',match:file=>file.startsWith('index-'),max:250*1024},
 ]
 let failed=false
