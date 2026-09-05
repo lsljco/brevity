@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { getStore } from '@netlify/blobs'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from '../../src/finance/recurrenceEditing.js'
+import { createEmptyDailyPlan } from '../../src/household/dailyPlan.js'
 import { permissionForOperation, selectedOperation } from './assistant-action-contract.mjs'
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
@@ -99,7 +100,10 @@ export function createProductionActionResources({ now = () => new Date() } = {})
   return {
     async read(resource) {
       if (resource.startsWith('shared:')) { const key=resource.slice(7), record=await shared.get(sharedKey(key),{type:'json'}).catch(()=>null); return { value:record?.value ? JSON.parse(record.value) : key===SHARED_KEYS.overrides||key===SHARED_KEYS.budget?{}:[], version:Number(record?.version||0), record } }
-      if (resource.startsWith('plan:')) { const value=await plans.get(planKey(resource.slice(5)),{type:'json'}).catch(()=>null); if(!value)throw new Error('That daily plan is not available.'); return { value, version:Number(value.version||0) } }
+      if (resource.startsWith('plan:')) {
+        const date=resource.slice(5),value=await plans.get(planKey(date),{type:'json'}).catch(()=>null)
+        return { value:value||createEmptyDailyPlan(date), version:Number(value?.version||0), missing:!value }
+      }
       throw new Error(`Cannot read ${resource}.`)
     },
     async write(resource, value, expectedVersion, actor) {
