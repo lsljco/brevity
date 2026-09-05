@@ -1,0 +1,11 @@
+import { getStore } from '@netlify/blobs'
+const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',STORE_NAME='brevity-sermon-workflows'
+const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
+const workflowKey=id=>`${HOUSEHOLD_ID}/workflows/${id}`
+const STAGES=['notes','documents','documentPublishing','slides','visuals','devotions','complete']
+const now=()=>new Date().toISOString()
+export function emptyWorkflow(id,{title='',sermonDate='',member=''}={}){return{id,title,sermonDate,member,state:'running',startedAt:now(),updatedAt:now(),stages:Object.fromEntries(STAGES.map(stage=>[stage,{state:'pending'}])),errors:[]}}
+export async function readSermonWorkflow(id){return store().get(workflowKey(id),{type:'json'}).catch(()=>null)}
+export async function startSermonWorkflow(id,meta={}){const prior=await readSermonWorkflow(id),next=prior?{...prior,...meta,state:'running',updatedAt:now(),errors:Array.isArray(prior.errors)?prior.errors:[]} : emptyWorkflow(id,meta);await store().setJSON(workflowKey(id),next);return next}
+export async function updateSermonWorkflow(id,stage,state,detail={}){const current=await readSermonWorkflow(id)||emptyWorkflow(id),stages={...current.stages,[stage]:{...(current.stages?.[stage]||{}),...detail,state,updatedAt:now()}},failed=Object.values(stages).some(value=>value?.state==='error'),complete=STAGES.filter(value=>value!=='complete').every(value=>['complete','skipped'].includes(stages[value]?.state)),next={...current,stages,state:failed?'needs-attention':complete?'complete':'running',updatedAt:now()};if(stage==='complete'&&state==='complete')next.completedAt=now();if(state==='error')next.errors=[...(current.errors||[]),{stage,message:String(detail.error||'Unknown workflow error'),at:now()}].slice(-20);await store().setJSON(workflowKey(id),next);return next}
+export async function markSermonWorkflowComplete(id){const current=await readSermonWorkflow(id)||emptyWorkflow(id),stages={...current.stages,complete:{state:'complete',updatedAt:now()}},next={...current,stages,state:'complete',completedAt:now(),updatedAt:now()};await store().setJSON(workflowKey(id),next);return next}
