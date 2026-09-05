@@ -3,6 +3,7 @@ import { mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
 import { stampCalendarFailure, stampCalendarSuccess } from '../family/calendarSnapshot.js'
 import { refreshFinanceData } from '../finance/financeRefresh.js'
 import { fetchDailyPlan } from './householdApi.js'
+import { retryRefresh } from './retry.js'
 
 export const APP_REFRESH_EVENT = 'brevity-app-refreshed'
 export const ICLOUD_CACHE_KEY = 'brevity_icloud_calendar_cache_v1'
@@ -28,17 +29,17 @@ const publishCalendarSnapshot = snapshot => {
 export function buildRefreshIssues({ financeResult, planResult, calendar }) {
   const issues = []
   ;(financeResult.status === 'fulfilled' ? financeResult.value?.errors || [] : [financeResult.reason?.message || 'Finance data could not be refreshed.'])
-    .forEach(message => issues.push({ id:`finance-${issues.length}`, source:'Finance & Plaid', message:String(message), action:'Retry the refresh or open Finance > Accounts to review the connection.' }))
-  if (planResult.status === 'rejected') issues.push({ id:'today-plan', source:'Today', message:planResult.reason?.message || 'Today’s household plan could not be refreshed.', action:'Retry the refresh. Your previously saved plan remains available.' })
-  if (calendar?.error) issues.push({ id:'family-calendar', source:'Family Calendar', message:String(calendar.error), action:'Retry the refresh or open Family Calendar to review its connection status.' })
+    .forEach(message => issues.push({ id:`finance-${issues.length}`, source:'Finance & Plaid', message:String(message), action:'Open Finance > Accounts only if this persists after Brevity retries automatically.' }))
+  if (planResult.status === 'rejected') issues.push({ id:'today-plan', source:'Today', message:planResult.reason?.message || 'Today’s household plan could not be refreshed.', action:'Your previously saved plan remains available. Brevity will retry automatically on the next foreground or connectivity event.' })
+  if (calendar?.error) issues.push({ id:'family-calendar', source:'Family Calendar', message:String(calendar.error), action:'Your last verified calendar remains visible. Brevity will retry automatically; review Family Calendar only if the issue persists.' })
   return issues
 }
 
 async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
   const date = todayKey()
-  const financePromise = refreshFinanceData()
-  const planPromise = fetchDailyPlan(date)
-  const calendarPromise = fetchICloudCalendarEvents()
+  const financePromise = retryRefresh(()=>refreshFinanceData())
+  const planPromise = retryRefresh(()=>fetchDailyPlan(date))
+  const calendarPromise = retryRefresh(()=>fetchICloudCalendarEvents())
     .then(calendar => publishCalendarSnapshot(stampCalendarSuccess(calendar)))
     .catch(error => publishCalendarSnapshot(stampCalendarFailure(readCalendarCache(), error)))
 
