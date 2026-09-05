@@ -248,12 +248,18 @@ export function startSharedStateSync({ storage = window.localStorage, intervalMs
     finally { running = false }
   }
   const timer = setInterval(run, intervalMs)
-  const visibility = () => { if (document.visibilityState === 'hidden') run() }
+  const visibility = () => { if (document.visibilityState === 'visible') void run() }
+  const focus = () => { if (document.visibilityState !== 'hidden') void run() }
+  const online = () => void run()
   document.addEventListener('visibilitychange', visibility)
+  window.addEventListener('focus', focus)
+  window.addEventListener('online', online)
   return () => {
     stopped = true
     stopWriteThrough()
     clearInterval(timer)
     document.removeEventListener('visibilitychange', visibility)
+    window.removeEventListener('focus', focus)
+    window.removeEventListener('online', online)
   }
 }

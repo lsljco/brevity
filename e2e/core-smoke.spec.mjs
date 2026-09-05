@@ -92,21 +92,25 @@ test('shared household writes are versioned and pushed to the server immediately
   expect(payload.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
 })
 
-test('Settings exposes household synchronization health', async ({ page }, testInfo) => {
+test('Settings exposes sync health and identifies browser data as a recovery cache', async ({ page }, testInfo) => {
   const pageErrors = []
   page.on('pageerror', error => pageErrors.push(error.message))
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Settings' }).click()
   await page.waitForTimeout(300)
-  if (!(await page.getByRole('heading', { name:'Settings', exact:true }).count())) {
-    console.log('SETTINGS_PAGE_ERRORS', JSON.stringify(pageErrors))
-    console.log('SETTINGS_BODY', (await page.locator('body').innerText()).slice(0,3000))
-  }
   expect(pageErrors).toEqual([])
   await expect(page.getByRole('heading', { name:'Settings', exact:true })).toBeVisible()
   await expect(page.locator('.household-account-admin')).toBeVisible()
   await expect(page.locator('.household-sync-health')).toBeVisible()
   await expect(page.getByText('Last verified sync')).toBeVisible()
+  await expect(page.getByText('Local Recovery Cache')).toBeVisible()
+  await expect(page.getByRole('button', { name:'Export Recovery Cache' })).toBeVisible()
+  await expect(page.getByText('Browser Data Export')).toHaveCount(0)
+})
+
+test('shared-state UI no longer asks users to reload after synchronization', async ({ page }) => {
+  await expect(page.locator('body')).not.toContainText('Refresh this view to display them')
+  await expect(page.getByRole('button', { name:'Reload view' })).toHaveCount(0)
 })
 
 test('Today renders operating content without a fatal application error', async ({ page }) => {
