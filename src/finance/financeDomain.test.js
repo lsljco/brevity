@@ -8,9 +8,9 @@ test('canonical finance model keeps actual and projected monthly truth aligned a
     today,
     accounts:[{id:'a1',name:'Operating Account',available:5000,balance:5200}],
     actuals:[
-      {id:'i1',date:'2026-09-01',amount:-2500,personal_finance_category:{primary:'INCOME'}},
-      {id:'e1',date:'2026-09-02',amount:1000,personal_finance_category:{primary:'GENERAL_MERCHANDISE'}},
-      {id:'t1',date:'2026-09-03',amount:500,personal_finance_category:{primary:'TRANSFER_OUT'}},
+      {id:'i1',date:'2026-09-01',amount:-2500,category:'INCOME'},
+      {id:'e1',date:'2026-09-02',amount:1000,category:'GENERAL_MERCHANDISE'},
+      {id:'t1',date:'2026-09-03',amount:500,category:'TRANSFER_OUT'},
     ],
     scheduled:[
       {id:'pi',name:'Income',type:'income',amount:3000,freq:'once',start:'2026-09-10'},
