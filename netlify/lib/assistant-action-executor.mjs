@@ -9,7 +9,7 @@ const SHARED_STORE = 'brevity-household-state'
 const PLAN_STORE = 'brevity-household'
 const SHARED_KEYS = {
   projects:'homehq_items_v1', calendar:'family_calendar_events_v1', overrides:'lslj_tx_overrides_v1',
-  budget:'lslj_budget_v1', finance:'lslj_finance_v9',
+  rules:'lslj_tx_rules_v1', budget:'lslj_budget_v1', finance:'lslj_finance_v9',
 }
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value))
 const nowIso = now => now().toISOString()
@@ -19,6 +19,7 @@ export function resourceForOperation(operation) {
   if (operation.domain === 'projects') return `shared:${SHARED_KEYS.projects}`
   if (operation.type.startsWith('calendar.')) return 'calendar:apple-family'
   if (operation.type === 'transaction.categorize') return `shared:${SHARED_KEYS.overrides}`
+  if (operation.type === 'transaction.rule.create') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
   throw new Error(`No action resource exists for ${operation.type}.`)
@@ -37,6 +38,10 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 export function applyRecordOperation(value, operation, createId = randomUUID) {
   const before = clone(value)
   const payload = operation.payload || {}
+  if (operation.type === 'decision.create') {
+    const item = { id:createId(), title:payload.title || operation.description, notes:payload.notes || '', owner:payload.owner || 'Family', participants:payload.participants || [], status:payload.status || 'needs-decision', due:payload.date || operation.targetDate || '', createdAt:new Date().toISOString() }
+    return { before, after:{ ...value, decisions:[...(value?.decisions || []), item] }, createdId:item.id }
+  }
   if (operation.type === 'decision.update') {
     let found = false
     const next = { ...value, decisions:(value?.decisions || []).map(item => { if (item.id !== operation.targetId) return item; found = true; return mergeAllowed(item, payload) }) }
@@ -66,6 +71,10 @@ export function applyRecordOperation(value, operation, createId = randomUUID) {
   if (operation.type === 'transaction.categorize') {
     if (!operation.targetId || !payload.category) throw new Error('A transaction and category are required.')
     return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), id:operation.targetId, category:payload.category } } }
+  }
+  if (operation.type === 'transaction.rule.create') {
+    const item={id:createId(),name:payload.title||`Categorize ${payload.matchText}`,createdDate:payload.createdDate,applyToExisting:false,conditions:{originalStatement:{on:true,value:payload.matchText}},actions:{updateCategory:{on:true,value:payload.category}},splits:[]}
+    return {before,after:[...(Array.isArray(value)?value:[]),item],createdId:item.id}
   }
   if (operation.type === 'budget.update') {
     const item = operation.targetId || payload.title
@@ -134,6 +143,8 @@ export async function executeRecordOperations({ proposal, selections = {}, sessi
   const changes=[]
   for (const [resource, resourceOperations] of grouped) {
     const current=await resources.read(resource); let value=current.value
+    const reviewedVersion=proposal.expectedVersions?.[resource]
+    if(reviewedVersion!==undefined&&Number(current.version)!==Number(reviewedVersion))throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
     for(const operation of resourceOperations){
       const record=findRecord(value,operation)
       const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:record})
@@ -144,4 +155,14 @@ export async function executeRecordOperations({ proposal, selections = {}, sessi
     changes.push({resource,before:current.value,after:saved.value,beforeVersion:current.version,afterVersion:saved.version})
   }
   return { operations, changes, executedAt:nowIso(now) }
+}
+
+export async function captureExpectedVersions(proposal, resources) {
+  const expectedVersions={}
+  for(const operation of proposal.operations){
+    if(operation.type.startsWith('calendar.'))continue
+    const resource=resourceForOperation(operation)
+    if(expectedVersions[resource]===undefined)expectedVersions[resource]=(await resources.read(resource)).version
+  }
+  return {...proposal,expectedVersions}
 }

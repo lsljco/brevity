@@ -10,7 +10,7 @@ export const publicAssistantAudit=audit=>({
   id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,
   action:audit.action,status:audit.status,occurredAt:audit.occurredAt,
   undoAvailable:Boolean(audit.undoAvailable),undoneAt:audit.undoneAt||null,undoneBy:audit.undoneBy||null,
-  operations:(audit.operations||[]).map(({id,type,domain,description,selectedScope})=>({id,type,domain,description,selectedScope})),
+  operations:(audit.operations||[]).map(({id,type,domain,description,targetId,targetDate,selectedScope})=>({id,type,domain,description,...(targetId?{targetId}:{}),...(targetDate?{targetDate}:{}),selectedScope})),
 })
 
 async function calendarRequest(event, method, body) {
@@ -22,10 +22,13 @@ async function calendarRequest(event, method, body) {
   return payload
 }
 
-async function executeCalendarOperations({event,operations,session,permissions}) {
+const calendarVersion=events=>JSON.stringify((events||[]).map(item=>[item.id||'',item.uid||'',item.href||'',item.etag||'',item.updatedAt||'']).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))))
+
+async function executeCalendarOperations({event,operations,session,permissions,expectedCalendarVersion}) {
   const selected=operations.filter(operation=>operation.type.startsWith('calendar.'))
   if(!selected.length)return[]
   const remote=await calendarRequest(event,'GET')
+  if(expectedCalendarVersion!==undefined&&calendarVersion(remote.events)!==expectedCalendarVersion)throw Object.assign(new Error('The Family Calendar changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
   const changes=[]
   for(const operation of selected){
     const current=(remote.events||[]).find(item=>[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
@@ -103,7 +106,7 @@ export const handler=async event=>{
       await repository.saveProposalState(started)
       try{
         const recordResult=await executeRecordOperations({proposal:{...proposal,operations},selections:body.selections||{},session,permissions,resources})
-        const calendarChanges=await executeCalendarOperations({event,operations,session,permissions})
+        const calendarChanges=await executeCalendarOperations({event,operations,session,permissions,expectedCalendarVersion:proposal.expectedCalendarVersion})
         const changes=[...recordResult.changes,...calendarChanges]
         const audit=await repository.addAudit({proposalId:proposal.id,summary:proposal.summary,actor:session.member,action:'execute',status:'completed',operations,changes,undoAvailable:true})
         await repository.saveProposalState({...started,state:'executed',executedAt:audit.occurredAt,auditId:audit.id})
