@@ -22,8 +22,19 @@
 
 @media (max-width: 640px) {
   .alignment-header-actions { width: 100%; justify-content: space-between; }
-  .morning-alignment { padding-bottom: calc(190px + env(safe-area-inset-bottom, 0px)) !important; }
-  .alignment-footer { position: relative; z-index: 2; margin-bottom: calc(118px + env(safe-area-inset-bottom, 0px)) !important; scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom, 0px)) !important; }
+  .morning-alignment { padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px)) !important; }
+  .alignment-footer {
+    position: sticky;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    z-index: 1200;
+    margin: 20px -8px 0 !important;
+    padding: 10px 8px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px;
+    background: rgba(5,5,5,.96);
+    box-shadow: 0 12px 30px rgba(0,0,0,.42);
+    backdrop-filter: blur(16px);
+  }
 }
 
 /* Alignment is used like a seven-slide guided workflow on tablets. */
