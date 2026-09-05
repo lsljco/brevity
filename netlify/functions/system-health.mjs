@@ -1,7 +1,7 @@
-import { createRequire } from 'node:module'
 import householdAuth from './household-auth.js'
+import storage from './storage.js'
 import { getOneDriveRepositoryState, oneDriveConfigured } from '../lib/onedrive.mjs'
-const require=createRequire(import.meta.url),{getTokens}=require('./storage.js'),{readSession}=householdAuth
+const {getTokens}=storage,{readSession}=householdAuth
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 const status=(state,detail='')=>({state,detail})
 export async function buildSystemHealth(event={}){
