@@ -28,3 +28,5 @@ jobs:
         run: npm test
       - name: Build production application
         run: npm run build
+      - name: Enforce production bundle budget
+        run: node scripts/check-bundle-budget.mjs
