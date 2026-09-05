@@ -76,13 +76,17 @@ const sourceStatus = (id, label, result, asOf = '') => ({
 })
 
 const parseSharedValue=record=>{try{return record?.value==null?null:JSON.parse(record.value)}catch{return null}}
+const pick=(value,fields)=>Object.fromEntries(fields.filter(field=>value?.[field]!==undefined).map(field=>[field,value[field]]))
+const compactProject=item=>pick(item,['id','title','notes','status','priority','startDate','due','raci','pushToFamilyCalendar','updatedAt'])
+const compactCalendarEvent=item=>pick(item,['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'])
+const compactRecurring=item=>pick(item,['id','name','title','notes','amount','type','cat','category','accountId','freq','start','end','skips','owner','updatedAt'])
 const compactSharedRecords=records=>{
   const finance=parseSharedValue(records?.lslj_finance_v9)
   return {
-    projects:(parseSharedValue(records?.homehq_items_v1)||[]).slice(0,250),
-    familyCalendarEvents:(parseSharedValue(records?.family_calendar_events_v1)||[]).slice(0,300),
+    projects:(parseSharedValue(records?.homehq_items_v1)||[]).slice(0,250).map(compactProject),
+    familyCalendarEvents:(parseSharedValue(records?.family_calendar_events_v1)||[]).slice(0,300).map(compactCalendarEvent),
     finance:{
-      recurringRecords:(finance?.transactions||[]).filter(item=>item?.freq&&item.freq!=='once').slice(0,300),
+      recurringRecords:(finance?.transactions||[]).filter(item=>item?.freq&&item.freq!=='once').slice(0,300).map(compactRecurring),
       budgets:parseSharedValue(records?.lslj_budget_v1)||{},
       transactionOverrides:parseSharedValue(records?.lslj_tx_overrides_v1)||{},
       transactionRules:parseSharedValue(records?.lslj_tx_rules_v1)||[],

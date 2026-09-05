@@ -66,11 +66,14 @@ export const handler = async event => {
 
   const canonicalServerContext = await loadProductionAuthoritativeAssistantContext({ member: session.member })
   const appleCalendar=await loadAppleCalendar(event)
-  if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
-  const context = {
-    canonicalServerContext,
-    browserSnapshot: cleanBrowserContext(body.context),
+  if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300).map(item=>Object.fromEntries(['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'].filter(field=>item?.[field]!==undefined).map(field=>[field,item[field]]))),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
+  const browserSnapshot=cleanBrowserContext(body.context)
+  if(canonicalServerContext.actionRecords){
+    if(browserSnapshot.finance){delete browserSnapshot.finance.plan;delete browserSnapshot.finance.budgets;delete browserSnapshot.finance.transactionOverrides;delete browserSnapshot.finance.transactionRules}
+    delete browserSnapshot.projects
+    if(browserSnapshot.calendars){delete browserSnapshot.calendars.brevityEvents;if(canonicalServerContext.appleFamilyCalendar)delete browserSnapshot.calendars.appleFamilyCalendar}
   }
+  const context = {canonicalServerContext,browserSnapshot}
   const contextText = JSON.stringify(context)
   if (contextText.length > MAX_CONTEXT_LENGTH) return json(413, { error: 'The Brevity context is too large. Narrow the question to one household domain and try again.' })
 
