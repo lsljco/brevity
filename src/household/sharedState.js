@@ -159,6 +159,8 @@ function uploadRecord(storage, record, onError) {
 
 export function writeSharedJson(storage, key, value, now = new Date().toISOString()) {
   const serialized = JSON.stringify(value)
+  const previous = storage.getItem(key)
+  if (previous === serialized) return { ok:true, record:null, unchanged:true }
   suppressWriteThrough = true
   try {
     storage.setItem(key, serialized)
@@ -166,7 +168,7 @@ export function writeSharedJson(storage, key, value, now = new Date().toISOStrin
   } finally { suppressWriteThrough = false }
   const record = buildSharedRecord(storage, key, serialized, now)
   if (record && typeof window !== 'undefined') void uploadRecord(storage, record)
-  return { ok:true, record }
+  return { ok:true, record, unchanged:false }
 }
 
 export function reconcileSharedRecords(storage, remoteRecords = {}, now = new Date().toISOString()) {
