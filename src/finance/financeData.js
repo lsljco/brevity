@@ -1,3 +1,5 @@
+import { writeSharedJson } from '../household/sharedState.js'
+
 export const CALENDAR_DATA_VERSION = 4
 export const financeBackupKey = key => `${key}_backup`
 
@@ -33,79 +35,22 @@ export function migrateFinanceData(data) {
     ? data.transactions.map(transaction => {
         const correction = LEGACY_FRIDAY_ANCHORS[transaction.id]
         let next = transaction
-
-        if (correction && transaction.freq === 'weekly' && transaction.start === correction.from) {
-          next = { ...next, start: correction.to }
-        }
-
-        // This income series has ended. Cap a missing or later legacy end date,
-        // while preserving an earlier end date the user may have chosen.
-        if (transaction.id === SHRINER_ID && (!transaction.end || transaction.end > SHRINER_LAST_CHECK)) {
-          next = { ...next, end: SHRINER_LAST_CHECK }
-        }
-
-        // Javin's Mativ income ends after the September 18 check. Preserve an
-        // earlier user-selected end date, but do not project this series later.
-        if (currentVersion < 3 && transaction.id === MATIV_ID && (!transaction.end || transaction.end > MATIV_LAST_CHECK)) {
-          next = { ...next, end: MATIV_LAST_CHECK }
-        }
-
-        // The September 4 CRH/Oldcastle check is the first occurrence of the
-        // new weekly series. Keep the user's saved name and amount intact.
-        if (
-          currentVersion < 3
-          && transaction.type === 'income'
-          && transaction.start === CRH_FIRST_CHECK
-          && CRH_INCOME_NAME.test(transaction.name || '')
-          && transaction.freq !== 'weekly'
-        ) {
-          next = { ...next, freq: 'weekly' }
-        }
-
-        // The seeded property-tax obligation is annual. Older records marked
-        // it monthly, multiplying a single tax bill into every forecast month.
-        if (
-          currentVersion < 4
-          && transaction.id === PROPERTY_TAX_ID
-          && transaction.name === 'Property Taxes'
-          && transaction.type === 'expense'
-          && transaction.freq === 'monthly'
-        ) {
-          next = { ...next, freq: 'yearly' }
-        }
-
+        if (correction && transaction.freq === 'weekly' && transaction.start === correction.from) next = { ...next, start: correction.to }
+        if (transaction.id === SHRINER_ID && (!transaction.end || transaction.end > SHRINER_LAST_CHECK)) next = { ...next, end: SHRINER_LAST_CHECK }
+        if (currentVersion < 3 && transaction.id === MATIV_ID && (!transaction.end || transaction.end > MATIV_LAST_CHECK)) next = { ...next, end: MATIV_LAST_CHECK }
+        if (currentVersion < 3 && transaction.type === 'income' && transaction.start === CRH_FIRST_CHECK && CRH_INCOME_NAME.test(transaction.name || '') && transaction.freq !== 'weekly') next = { ...next, freq: 'weekly' }
+        if (currentVersion < 4 && transaction.id === PROPERTY_TAX_ID && transaction.name === 'Property Taxes' && transaction.type === 'expense' && transaction.freq === 'monthly') next = { ...next, freq: 'yearly' }
         return next
-      }).filter(transaction => {
-        // Ameripro was a legacy starter-series, not a bank transaction. Once
-        // cancelled, it must not be recreated by a refresh or deployment.
-        if (currentVersion < 4 && transaction.id === 't_i6' && transaction.name === 'LJ - Ameripro Income') return false
-        return true
-      })
+      }).filter(transaction => !(currentVersion < 4 && transaction.id === 't_i6' && transaction.name === 'LJ - Ameripro Income'))
     : data.transactions
 
-  return {
-    ...data,
-    calendarDataVersion: CALENDAR_DATA_VERSION,
-    transactions,
-  }
+  return { ...data, calendarDataVersion: CALENDAR_DATA_VERSION, transactions }
 }
 
 export function saveFinanceData(storage, key, data) {
   try {
-    const serialized = JSON.stringify(data)
-    storage.setItem(key, serialized)
-
-    // A second copy lets a future refresh recover from a damaged primary
-    // record. The primary write is the durability requirement; a quota-limited
-    // backup must not make an otherwise successful save look unsuccessful.
-    let backupError = null
-    try {
-      storage.setItem(financeBackupKey(key), serialized)
-    } catch (error) {
-      backupError = error
-    }
-
-    return { ok: true, backupError }
+    const result = writeSharedJson(storage, key, data)
+    return { ok: result.ok, record: result.record, backupError: null }
   } catch (error) {
     return { ok: false, error }
   }
@@ -113,20 +58,16 @@ export function saveFinanceData(storage, key, data) {
 
 export function loadFinanceData(storage, key) {
   let primaryError = null
-
   try {
     const primary = storage.getItem(key)
-    if (primary) return { data: JSON.parse(primary), source: 'primary' }
-  } catch (error) {
-    primaryError = error
-  }
+    if (primary) return { data: JSON.parse(primary), source: 'cache' }
+  } catch (error) { primaryError = error }
 
   try {
     const backup = storage.getItem(financeBackupKey(key))
-    if (backup) return { data: JSON.parse(backup), source: 'backup', primaryError }
+    if (backup) return { data: JSON.parse(backup), source: 'recovery-cache', primaryError }
   } catch (backupError) {
     return { data: null, source: 'invalid', primaryError, backupError }
   }
-
   return { data: null, source: primaryError ? 'invalid' : 'empty', primaryError }
 }
