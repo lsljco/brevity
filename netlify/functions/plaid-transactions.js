@@ -23,6 +23,7 @@ exports.handler = async (event) => {
   // start_date takes priority over days; default 30 days back
   const startDate = params.get('start_date') || daysAgo(parseInt(params.get('days') || '30', 10))
   const endDate   = new Date().toISOString().split('T')[0]
+  const requestRefresh = params.get('refresh') === '1'
 
   try {
     const session = await readSession(event)
@@ -34,8 +35,26 @@ exports.handler = async (event) => {
 
     const allTxns = []
     const syncErrors = []
+    const refresh = { requested: requestRefresh, accepted: 0, errors: [] }
 
     for (const { access_token, item_id, institution } of tokens) {
+      if (requestRefresh) {
+        try {
+          await plaidClient.transactionsRefresh({ access_token })
+          refresh.accepted += 1
+        } catch (err) {
+          const code = err.response?.data?.error_code || 'TRANSACTIONS_REFRESH_FAILED'
+          console.error('Transactions refresh error for token:', err.response?.data || err.message)
+          refresh.errors.push({
+            itemId: item_id,
+            institution: institution || 'Connected institution',
+            code,
+            message: code === 'PRODUCT_NOT_ENABLED'
+              ? 'On-demand transaction updates are not enabled for this Plaid connection.'
+              : 'The bank update could not be requested; Brevity is showing Plaid\'s latest available snapshot.',
+          })
+        }
+      }
       try {
         // Paginate — Plaid caps at 500 per request
         let offset = 0
@@ -88,7 +107,7 @@ exports.handler = async (event) => {
     }
 
     allTxns.sort((a, b) => new Date(b.date) - new Date(a.date))
-    return { statusCode: 200, headers, body: JSON.stringify({ transactions: allTxns, count: allTxns.length, errors: syncErrors }) }
+    return { statusCode: 200, headers, body: JSON.stringify({ transactions: allTxns, count: allTxns.length, errors: syncErrors, refresh }) }
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to fetch transactions', detail: err.message }) }
   }

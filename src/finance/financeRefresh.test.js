@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mergePlaidBalances } from './financeRefresh.js'
+import { fetchLatestPlaidTransactions, mergePlaidBalances, transactionSnapshotFingerprint } from './financeRefresh.js'
 
 test('startup balance refresh updates existing accounts without creating duplicates', () => {
   const finance = { accounts:[
@@ -45,4 +45,42 @@ test('does not link an exact account name when the financial account types confl
   ])
   assert.equal(refreshed.accounts[0].balance, 10)
   assert.equal(refreshed.accounts[0].plaidAccountId, undefined)
+})
+
+test('transaction snapshot fingerprint detects new pending transactions', () => {
+  const before = [{ id:'apple', date:'2026-09-06', amount:49.98, pending:true }]
+  const after = [...before, { id:'groceries', date:'2026-09-06', amount:150.12, pending:true }]
+  assert.notEqual(transactionSnapshotFingerprint(before), transactionSnapshotFingerprint(after))
+})
+
+test('on-demand transaction refresh polls until Plaid exposes a changed snapshot', async () => {
+  const calls=[]
+  const payloads=[
+    {transactions:[{id:'old',amount:10,pending:true}],refresh:{requested:true,accepted:1,errors:[]}},
+    {transactions:[{id:'old',amount:10,pending:true}]},
+    {transactions:[{id:'old',amount:10,pending:true},{id:'new',amount:48.32,pending:true}]},
+  ]
+  const result=await fetchLatestPlaidTransactions({
+    requestBankUpdate:true,
+    fetcher:async path=>{calls.push(path);return payloads.shift()},
+    wait:async()=>{},
+    retryDelays:[1,1],
+  })
+  assert.match(calls[0],/refresh=1/)
+  assert.equal(calls.length,3)
+  assert.equal(result.transactions.length,2)
+  assert.equal(result.refresh.updated,true)
+  assert.equal(result.refresh.stillProcessing,false)
+})
+
+test('on-demand transaction refresh reports when Plaid is still processing', async () => {
+  const snapshot={transactions:[{id:'same',amount:10,pending:true}]}
+  const result=await fetchLatestPlaidTransactions({
+    requestBankUpdate:true,
+    fetcher:async path=>path.includes('refresh=1')?{...snapshot,refresh:{requested:true,accepted:1,errors:[]}}:snapshot,
+    wait:async()=>{},
+    retryDelays:[1],
+  })
+  assert.equal(result.refresh.updated,false)
+  assert.equal(result.refresh.stillProcessing,true)
 })

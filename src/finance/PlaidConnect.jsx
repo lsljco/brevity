@@ -64,7 +64,7 @@ function PlaidLinkButton({ linkToken, onSuccess, onExit, receivedRedirectUri }) 
 }
 
 // ── Main PlaidConnect component ──
-export default function PlaidConnect({ onAccountsSync }) {
+export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
   const [linkToken, setLinkToken]       = useState(null)
   // Restore connected state from localStorage immediately — no flicker
   const [connections, setConnections]   = useState(() => {
@@ -79,14 +79,16 @@ export default function PlaidConnect({ onAccountsSync }) {
   // Startup refresh owns automatic synchronization. Remounts render cached state.
   const [initialChecking]               = useState(false)
   const [error, setError]               = useState(null)
+  const [syncNotice, setSyncNotice]     = useState('')
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
   const [oauthReturn, setOauthReturn]   = useState(false) // returning from bank OAuth redirect
 
   // Called by explicit connect, reconnect, disconnect, and Sync now actions.
-  const syncAccounts = useCallback(async () => {
+  const syncAccounts = useCallback(async ({ refreshTransactions = false } = {}) => {
     setSyncing(true)
     setError(null)
+    setSyncNotice('')
     try {
       const data = await apiFetch('/plaid-accounts?live=1')
       if (data.connected) {
@@ -107,6 +109,13 @@ export default function PlaidConnect({ onAccountsSync }) {
         if (data.accounts?.length) {
           onAccountsSync(data.accounts, data.syncedAt)
         }
+        if (refreshTransactions && onTransactionsSync) {
+          const transactionResult = await onTransactionsSync()
+          if (transactionResult?.error) setError(`Balances updated, but ${transactionResult.error}`)
+          else setSyncNotice(transactionResult?.refresh?.stillProcessing
+            ? 'Balances are current. Your bank accepted the transaction update and Plaid is still processing it; check again shortly.'
+            : 'Balances and the latest available transactions were checked.')
+        }
       } else {
         // Only clear cached connections if the server explicitly confirmed "not connected"
         // (i.e. Plaid token is gone). Don't clear on transient network errors.
@@ -120,7 +129,7 @@ export default function PlaidConnect({ onAccountsSync }) {
     } finally {
       setSyncing(false)
     }
-  }, [onAccountsSync])
+  }, [onAccountsSync, onTransactionsSync])
 
   // Detect OAuth return: Plaid redirects back with ?oauth_state_id=...
   // Re-initialize Link with the saved token + receivedRedirectUri to complete the flow
@@ -237,7 +246,7 @@ export default function PlaidConnect({ onAccountsSync }) {
               {connections.length} institution{connections.length !== 1 ? 's' : ''} connected
             </div>
             <button
-              onClick={syncAccounts}
+              onClick={() => syncAccounts({ refreshTransactions:true })}
               disabled={syncing}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -256,9 +265,10 @@ export default function PlaidConnect({ onAccountsSync }) {
             </button>
             {syncedAt && (
               <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.04em' }}>
-                Synced {new Date(syncedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                Balances checked {new Date(syncedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </span>
             )}
+            {syncNotice&&<span role="status" style={{flexBasis:'100%',fontSize:10,color:'#888884',lineHeight:1.45}}>{syncNotice}</span>}
             <button
               onClick={() => setExpanded(x => !x)}
               style={{ marginLeft: 'auto', fontSize: 10, color: '#888884', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em', textTransform: 'uppercase' }}
