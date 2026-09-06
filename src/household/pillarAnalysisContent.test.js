@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { BASE_ANALYSIS_GUIDANCE, PILLAR_INSTRUCTIONS } from '../../netlify/functions/pillar-analysis.mjs'
+import { BASE_ANALYSIS_GUIDANCE, buildPillarAnalysisPrompt, PILLAR_INSTRUCTIONS } from '../../netlify/functions/pillar-analysis.mjs'
 
 const expectedPillars = ['spiritual', 'health', 'fitness', 'household', 'education', 'finance', 'ministry']
 
@@ -22,6 +22,23 @@ test('spiritual analysis preserves each member’s personal responsibility', () 
   assert.match(instructions, /without making one person the household's spiritual supervisor/)
   assert.doesNotMatch(instructions, /Lorenzo owns this pillar/i)
   assert.doesNotMatch(instructions, /Lorenzo is the owner/i)
+})
+
+test('each prompt is isolated to the selected pillar data', () => {
+  const prompt = buildPillarAnalysisPrompt({
+    pillar:'household',
+    date:'2026-09-06',
+    currentMember:'Larry',
+    plan:{
+      spiritual:{ devotionFocus:'SPIRITUAL_SENTINEL' },
+      household:{ weeklyFocus:'HOUSEHOLD_SENTINEL' },
+    },
+    localContext:{ projects:[{ title:'PROJECT_SENTINEL' }] },
+  })
+  assert.match(prompt, /HOUSEHOLD_SENTINEL/)
+  assert.match(prompt, /PROJECT_SENTINEL/)
+  assert.doesNotMatch(prompt, /SPIRITUAL_SENTINEL/)
+  assert.match(prompt, /requested pillar is the absolute scope/)
 })
 
 test('pillar analysis UI presents insight and growth without an ownership section', async () => {

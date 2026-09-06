@@ -4,7 +4,7 @@ const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
-export const PILLAR_ANALYSIS_SCHEMA_VERSION = 4;
+export const PILLAR_ANALYSIS_SCHEMA_VERSION = 5;
 
 export const BASE_ANALYSIS_GUIDANCE = `Produce a concise daily insight brief for one of the household's Seven Pillars. The brief must interpret the supplied facts and reveal the key message for this pillar today. It is not a schedule, an ownership report, or a task inventory.
 
@@ -52,6 +52,11 @@ function outputText(response) {
   return (response.output || []).flatMap(item => item.content || []).map(part => part.text || '').join('').trim();
 }
 
+export function buildPillarAnalysisPrompt({ pillar, date, plan, currentMember, localContext = {} }) {
+  const pillarData = plan?.[pillar] || {};
+  return `${BASE_ANALYSIS_GUIDANCE}\n\nYou are producing the ${pillar} tab inside Brevity, the household source of truth. ${PILLAR_INSTRUCTIONS[pillar]}\n\nThe requested pillar is the absolute scope of this analysis. Analyze only the supplied ${pillar} data. Do not substitute the household's overall daily theme or content from another pillar. Mention another pillar only when the supplied ${pillar} data contains a direct dependency that changes today's interpretation.\n\nWrite for clarity, discernment, and forward growth. Keep the executive summary focused on the day's message in this pillar, not governance or assignments. Current signed-in member: ${currentMember}.\n\n${pillar.toUpperCase()} DATA (${date}):\n${JSON.stringify(pillarData)}\n\nADDITIONAL ${pillar.toUpperCase()} CONTEXT:\n${JSON.stringify(localContext)}\n\nReturn an insight-led analysis for this pillar only.`;
+}
+
 export const handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error:'Method not allowed.' });
   if (!process.env.OPENAI_API_KEY) return json(503, { error:'Brevity AI is not configured yet. OPENAI_API_KEY must be available to Netlify Functions.' });
@@ -66,7 +71,7 @@ export const handler = async event => {
   if (!PILLARS.has(pillar)) return json(400, { error:'Unknown Seven Pillar.' });
   if (!date || !plan) return json(400, { error:'Date and household plan are required.' });
 
-  const prompt = `${BASE_ANALYSIS_GUIDANCE}\n\nYou are producing the ${pillar} tab inside Brevity, the household source of truth. ${PILLAR_INSTRUCTIONS[pillar]}\n\nWrite for clarity, discernment, and forward growth. Keep the executive summary focused on the day's message, not governance or assignments. Current signed-in member: ${currentMember}.\n\nHOUSEHOLD DAILY PLAN (${date}):\n${JSON.stringify(plan)}\n\nADDITIONAL BREVITY CONTEXT:\n${JSON.stringify(localContext)}\n\nReturn an insight-led analysis for this pillar only.`;
+  const prompt = buildPillarAnalysisPrompt({ pillar, date, plan, currentMember, localContext });
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',
