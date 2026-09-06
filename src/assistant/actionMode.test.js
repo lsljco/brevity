@@ -68,7 +68,7 @@ test('Action Mode creates decisions and future-only categorization rules',()=>{
 
 test('forecast adjustments update only an exact model or scenario record',()=>{
   const model={expenseMode:'scenario',planningExpense:20000,scenarios:[{id:'current',title:'Current',description:'Today',incomes:[{id:'salary',description:'Salary',monthlyNet:5000,annualGross:80000,remote:true}]}]}
-  const expense=applyRecordOperation(model,{type:'forecast.update',targetId:'model',payload:{planningExpense:21000}})
+  const expense=applyRecordOperation(model,{type:'forecast.update',targetId:'planningExpense',payload:{planningExpense:21000}})
   assert.equal(expense.after.planningExpense,21000)
   const income=applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeId:'salary',monthlyNet:5500,notes:'Reviewed'}})
   assert.equal(income.after.scenarios[0].incomes[0].monthlyNet,5500)

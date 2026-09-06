@@ -30,7 +30,7 @@ function findRecord(value, operation) {
   if (operation.type === 'decision.update') return (value?.decisions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'assignment.update') return (value?.assignments || []).find(item => item.id === operation.targetId)
   if (operation.type === 'project.update') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
-  if (operation.type === 'forecast.update') return operation.targetId === 'model' ? value : (value?.scenarios || []).find(item => item.id === operation.targetId)
+  if (operation.type === 'forecast.update') return ['model','planningExpense','expenseMode'].includes(operation.targetId) ? value : (value?.scenarios || []).find(item => item.id === operation.targetId)
   if (operation.type.startsWith('recurring.')) return (value?.transactions || []).find(item => item.id === operation.targetId)
   return null
 }
@@ -87,7 +87,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID) {
     return { before, after:{ ...(value || {}), [item]:row } }
   }
   if (operation.type === 'forecast.update') {
-    if (operation.targetId === 'model') {
+    if (['model','planningExpense','expenseMode'].includes(operation.targetId)) {
       const after = { ...(value || {}) }
       if (payload.planningExpense !== undefined) after.planningExpense = Math.max(0, Number(payload.planningExpense) || 0)
       if (payload.expenseMode !== undefined) {
