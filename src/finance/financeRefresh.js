@@ -7,11 +7,12 @@ export const FINANCE_REFRESH_EVENT = 'brevity-finance-refreshed'
 
 const API = '/.netlify/functions'
 const REQUEST_TIMEOUT_MS = 20000
+const TRANSACTION_REFRESH_REQUEST_TIMEOUT_MS = 45000
 const TRANSACTION_REFRESH_DELAYS_MS = [6000, 12000]
 
-async function apiFetch(path) {
+async function apiFetch(path, { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(`${API}${path}`, { credentials: 'include', headers: { 'content-type': 'application/json' }, signal: controller.signal })
     const body = await response.json().catch(() => ({}))
@@ -41,7 +42,7 @@ export async function fetchLatestPlaidTransactions({
   retryDelays = TRANSACTION_REFRESH_DELAYS_MS,
 } = {}) {
   const refreshResponse = requestBankUpdate
-    ? await fetcher('/plaid-transactions?refresh=1&refresh_only=1')
+    ? await fetcher('/plaid-transactions?refresh=1&refresh_only=1', { timeoutMs: TRANSACTION_REFRESH_REQUEST_TIMEOUT_MS })
     : null
   const initial = await fetcher('/plaid-transactions?start_date=2000-01-01')
   const requested = Boolean(refreshResponse?.refresh?.requested)
