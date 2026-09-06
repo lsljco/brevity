@@ -182,6 +182,13 @@
   color: var(--theme-text);
 }
 
+[data-theme="light"] .app-context-navigation button {
+  background: rgba(250, 248, 242, .96);
+  border-color: rgba(138, 106, 30, .32);
+  color: var(--theme-accent-strong);
+  box-shadow: 0 8px 24px rgba(48, 39, 22, .14);
+}
+
 [data-theme="light"] .app-refresh-issues article {
   background: var(--theme-surface-subtle);
 }

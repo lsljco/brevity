@@ -99,6 +99,14 @@
     width: 100%;
     pointer-events: none;
   }
+  .app-context-navigation {
+    padding: 10px 12px 0;
+  }
+  .app-context-navigation button {
+    min-height: 40px;
+    max-width: calc(100vw - 24px);
+    padding: 9px 14px;
+  }
   .app-refresh-status {
     position: relative;
     top: auto;
