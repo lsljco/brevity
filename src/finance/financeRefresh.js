@@ -7,6 +7,7 @@ export const FINANCE_REFRESH_EVENT = 'brevity-finance-refreshed'
 
 const API = '/.netlify/functions'
 const REQUEST_TIMEOUT_MS = 20000
+const TRANSACTION_REFRESH_DELAYS_MS = [6000, 12000]
 
 async function apiFetch(path) {
   const controller = new AbortController()
@@ -22,6 +23,39 @@ async function apiFetch(path) {
   } finally {
     clearTimeout(timeout)
   }
+}
+
+const waitFor = delay => new Promise(resolve => setTimeout(resolve, delay))
+
+export function transactionSnapshotFingerprint(transactions = []) {
+  return transactions
+    .map(transaction => `${transaction?.id || ''}:${transaction?.pending ? 1 : 0}:${transaction?.date || ''}:${Number(transaction?.amount) || 0}`)
+    .sort()
+    .join('|')
+}
+
+export async function fetchLatestPlaidTransactions({
+  requestBankUpdate = false,
+  fetcher = apiFetch,
+  wait = waitFor,
+  retryDelays = TRANSACTION_REFRESH_DELAYS_MS,
+} = {}) {
+  const suffix = requestBankUpdate ? '&refresh=1' : ''
+  const initial = await fetcher(`/plaid-transactions?start_date=2000-01-01${suffix}`)
+  const requested = Boolean(initial.refresh?.requested)
+  const accepted = Number(initial.refresh?.accepted || 0)
+  if (!requested || accepted === 0) return initial
+
+  const firstFingerprint = transactionSnapshotFingerprint(initial.transactions)
+  let latest = initial
+  for (const delay of retryDelays) {
+    await wait(delay)
+    latest = await fetcher('/plaid-transactions?start_date=2000-01-01')
+    if (transactionSnapshotFingerprint(latest.transactions) !== firstFingerprint) {
+      return { ...latest, refresh: { ...initial.refresh, updated: true, stillProcessing: false } }
+    }
+  }
+  return { ...latest, refresh: { ...initial.refresh, updated: false, stillProcessing: true } }
 }
 
 const normalizeName = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -83,10 +117,10 @@ export function mergePlaidBalances(financeData, plaidAccounts = []) {
   return { ...financeData, accounts }
 }
 
-export async function refreshFinanceData(storage = window.localStorage) {
+export async function refreshFinanceData(storage = window.localStorage, { requestBankUpdate = false } = {}) {
   const [accountResult, transactionResult] = await Promise.allSettled([
     apiFetch('/plaid-accounts'),
-    apiFetch('/plaid-transactions?start_date=2000-01-01'),
+    fetchLatestPlaidTransactions({ requestBankUpdate }),
   ])
 
   const storedFinance = loadFinanceData(storage, FINANCE_STORAGE_KEY).data
@@ -119,10 +153,18 @@ export async function refreshFinanceData(storage = window.localStorage) {
     const payload = transactionResult.value
     actuals = payload.transactions || []
     ;(payload.errors || []).forEach(item => errors.push(`${item.institution}: ${item.message}`))
+    ;(payload.refresh?.errors || []).forEach(item => errors.push(`${item.institution}: ${item.message}`))
     storage.setItem(PLAID_ACTUALS_KEY, JSON.stringify(actuals))
   } else errors.push(transactionResult.reason?.message || 'Transactions could not be refreshed.')
 
-  const detail = { finance, accounts, actuals, errors, refreshedAt: new Date().toISOString() }
+  const detail = {
+    finance,
+    accounts,
+    actuals,
+    errors,
+    transactionRefresh: transactionResult.status === 'fulfilled' ? transactionResult.value?.refresh || null : null,
+    refreshedAt: new Date().toISOString(),
+  }
   window.dispatchEvent(new CustomEvent(FINANCE_REFRESH_EVENT, { detail }))
   return detail
 }

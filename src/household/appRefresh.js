@@ -38,9 +38,9 @@ export function buildRefreshIssues({ financeResult, planResult, calendar, health
   return Array.from(new Map(issues.map(issue=>[`${issue.source}:${issue.message}`,issue])).values())
 }
 
-async function runApplicationRefresh({ currentMember = 'Larry' } = {}) {
+async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdate = false } = {}) {
   const date = todayKey()
-  const financePromise = retryRefresh(()=>refreshFinanceData())
+  const financePromise = retryRefresh(()=>refreshFinanceData(window.localStorage,{ requestBankUpdate }))
   const planPromise = retryRefresh(()=>fetchDailyPlan(date))
   const healthPromise = retryRefresh(()=>fetchSystemHealth())
   const calendarPromise = retryRefresh(()=>fetchICloudCalendarEvents())

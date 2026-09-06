@@ -110,12 +110,18 @@ export default function App() {
   const [sharedReady,setSharedReady]=useState(false)
   const [sharedRevision,setSharedRevision]=useState(0)
 
-  const refreshAll=member=>{
-    setRefreshState({status:'loading',message:'Refreshing bank data, Family Calendar, and Today…',issues:[],expanded:false})
-    return refreshApplicationData({currentMember:member})
+  const refreshAll=(member,{requestBankUpdate=false}={})=>{
+    setRefreshState({status:'loading',message:requestBankUpdate?'Requesting the latest transactions from your bank…':'Refreshing bank data, Family Calendar, and Today…',issues:[],expanded:false})
+    return refreshApplicationData({currentMember:member,requestBankUpdate})
       .then(detail=>{
         const issues=detail.issues||[]
-        setRefreshState({status:issues.length?'warning':'ready',message:issues.length?`Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`:`All Brevity data refreshed at ${new Date(detail.refreshedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`,issues,expanded:false})
+        const bankPending=detail.finance?.transactionRefresh?.stillProcessing
+        const message=issues.length
+          ? `Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`
+          : bankPending
+            ? 'The bank accepted the update request. Brevity will show new transactions as soon as Plaid makes them available; refresh again shortly if they are still pending.'
+            : `All Brevity data refreshed at ${new Date(detail.refreshedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`
+        setRefreshState({status:issues.length?'warning':'ready',message,issues,expanded:false})
         return detail
       })
       .catch(error=>{setRefreshState({status:'error',message:error.message||'Brevity refresh failed.',issues:[],expanded:false});throw error})
@@ -168,7 +174,7 @@ export default function App() {
   const navigateTo=(pillarId,viewId)=>{setActivePillar(pillarId);setActiveView(viewId);setExpandedPillar(pillarId);closeSidebarAfterNavigation()}
   const openPillar=pillarId=>{setActivePillar(pillarId);setActiveView('pillar-analysis');setExpandedPillar(pillarId)}
   const handlePillarClick=pillar=>{openPillar(pillar.id);if(pillar.items.length)setExpandedPillar(pillar.id);else closeSidebarAfterNavigation()}
-  const handleRefreshStatus=()=>refreshAll(currentMember)
+  const handleRefreshStatus=()=>refreshAll(currentMember,{requestBankUpdate:true})
   const activePillarRecord=PILLARS.find(pillar=>pillar.id===activePillar)
   const activeItem=activePillarRecord?.items.find(item=>item.id===activeView)
   const assistantPageLabel=activeView==='today'?'Today':activeView==='settings'?'Settings':activeItem?.label||activePillarRecord?.label||activeView

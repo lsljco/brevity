@@ -22,7 +22,7 @@ import {
   calculateTransactionAmountForMonth,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
-import { FINANCE_REFRESH_EVENT, mergePlaidBalances } from './financeRefresh.js'
+import { FINANCE_REFRESH_EVENT, fetchLatestPlaidTransactions, mergePlaidBalances } from './financeRefresh.js'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from './recurrenceEditing.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
@@ -1202,6 +1202,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   })
   const [actualsLoading, setActualsLoading] = useState(false)
   const [actualsError, setActualsError] = useState(null)
+  const [actualsNotice, setActualsNotice] = useState('')
   const [balanceOverrides, setBalanceOverrides] = useState(() => loadSavedValue('lslj_bal_overrides_v1', {}))
   const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null), new Date()))
   const [transactionFilter, setTransactionFilter] = useState(null)
@@ -1370,15 +1371,24 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const fetchActuals = useCallback(async () => {
     setActualsLoading(true)
     setActualsError(null)
+    setActualsNotice('Requesting the latest transactions from your bank…')
     try {
-      const res = await fetch('/.netlify/functions/plaid-transactions?start_date=2000-01-01', { credentials: 'include' })
-      const json = await res.json()
-      if (json.error) { setActualsError(json.error + (json.detail ? ': ' + json.detail : '')); setPlaidActuals([]); return }
+      const json = await fetchLatestPlaidTransactions({ requestBankUpdate: true })
       const txns = json.transactions || []
       console.log('[Brevity] Plaid actuals fetched:', txns.length, 'transactions')
       setPlaidActuals(txns)
       try { localStorage.setItem('plaid_actuals_cache', JSON.stringify(txns)) } catch {}
-    } catch (e) { setActualsError('Network error: ' + e.message); setPlaidActuals([]) }
+      if (json.refresh?.errors?.length) setActualsError(json.refresh.errors.map(item=>`${item.institution}: ${item.message}`).join(' '))
+      setActualsNotice(json.refresh?.stillProcessing
+        ? 'Your bank accepted the update request, but Plaid is still processing it. The current list is the latest available snapshot; refresh again shortly.'
+        : `Bank transactions checked at ${new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`)
+      return json
+    } catch (e) {
+      const message='transactions could not be refreshed: '+e.message
+      setActualsError(message)
+      setActualsNotice('')
+      return { error:message }
+    }
     finally { setActualsLoading(false) }
   }, [])
 
@@ -2114,7 +2124,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
               <div className="dash-date">{todayLabel}</div>
             </div>
             <div className="dash-actions">
-              <PlaidConnect onAccountsSync={handlePlaidSync} />
+              <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={fetchActuals} />
               <div className="dash-search">
                 <i className="ti ti-search" />
                 <input aria-label="Search transactions" placeholder="Search transactions…" value={dashboardSearch} onChange={event => setDashboardSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && dashboardSearch.trim()) openFilteredTransactions({ query: dashboardSearch.trim(), label: `Search: ${dashboardSearch.trim()}` }) }} />
@@ -2709,17 +2719,22 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {/* ══════════ TRANSACTIONS ══════════ */}
       {view === 'transactions' && (
         <div className="finance-inner">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap:'wrap', gap:10, marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>
               {showActuals
                 ? `${transactionViewActuals.length} posted/pending transaction${transactionViewActuals.length !== 1 ? 's' : ''}`
                 : `${scheduledViewTransactions.length} scheduled transaction${scheduledViewTransactions.length !== 1 ? 's' : ''}`}
             </p>
-            <button onClick={() => { setEditTx(null); setView('tx-form') }}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-              <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" /> Add transaction
-            </button>
+            <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+              {showActuals&&<button type="button" onClick={fetchActuals} disabled={actualsLoading} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:actualsLoading?'default':'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className={`ti ${actualsLoading?'ti-loader-2':'ti-refresh'}`} style={{animation:actualsLoading?'spin .8s linear infinite':'none'}} aria-hidden="true"/>{actualsLoading?'Checking bank…':'Refresh bank data'}</button>}
+              <button onClick={() => { setEditTx(null); setView('tx-form') }}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" /> Add transaction
+              </button>
+            </div>
           </div>
+
+          {showActuals&&(actualsNotice||actualsError)&&<div role={actualsError?'alert':'status'} style={{padding:'10px 13px',marginBottom:14,borderRadius:10,border:`1px solid ${actualsError?'rgba(232,150,122,.35)':'rgba(197,164,109,.2)'}`,background:actualsError?'rgba(232,150,122,.08)':'rgba(197,164,109,.06)',color:actualsError?'var(--expense-color)':'var(--muted)',fontSize:11,lineHeight:1.45}}>{actualsError||actualsNotice}</div>}
 
           {transactionFilter && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12, background: 'rgba(197,164,109,.08)', border: '1px solid rgba(197,164,109,.2)' }}>
