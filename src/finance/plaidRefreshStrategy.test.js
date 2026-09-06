@@ -26,5 +26,6 @@ test('explicit transaction refresh requests a Plaid institution update without b
   assert.match(transactionsFunction,/params\.get\('refresh'\) === '1'/)
   assert.match(transactionsFunction,/plaidClient\.transactionsRefresh/)
   assert.match(transactionsFunction,/plaidClient\.transactionsGet/)
+  assert.match(transactionsFunction,/refreshOnly/)
   assert.match(financePlanner,/Refresh bank data/)
 })

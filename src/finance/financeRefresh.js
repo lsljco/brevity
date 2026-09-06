@@ -40,11 +40,15 @@ export async function fetchLatestPlaidTransactions({
   wait = waitFor,
   retryDelays = TRANSACTION_REFRESH_DELAYS_MS,
 } = {}) {
-  const suffix = requestBankUpdate ? '&refresh=1' : ''
-  const initial = await fetcher(`/plaid-transactions?start_date=2000-01-01${suffix}`)
-  const requested = Boolean(initial.refresh?.requested)
-  const accepted = Number(initial.refresh?.accepted || 0)
-  if (!requested || accepted === 0) return initial
+  const refreshResponse = requestBankUpdate
+    ? await fetcher('/plaid-transactions?refresh=1&refresh_only=1')
+    : null
+  const initial = await fetcher('/plaid-transactions?start_date=2000-01-01')
+  const requested = Boolean(refreshResponse?.refresh?.requested)
+  const accepted = Number(refreshResponse?.refresh?.accepted || 0)
+  if (!requested || accepted === 0) return refreshResponse?.refresh
+    ? { ...initial, refresh:refreshResponse.refresh }
+    : initial
 
   const firstFingerprint = transactionSnapshotFingerprint(initial.transactions)
   let latest = initial
@@ -52,10 +56,10 @@ export async function fetchLatestPlaidTransactions({
     await wait(delay)
     latest = await fetcher('/plaid-transactions?start_date=2000-01-01')
     if (transactionSnapshotFingerprint(latest.transactions) !== firstFingerprint) {
-      return { ...latest, refresh: { ...initial.refresh, updated: true, stillProcessing: false } }
+      return { ...latest, refresh: { ...refreshResponse.refresh, updated: true, stillProcessing: false } }
     }
   }
-  return { ...latest, refresh: { ...initial.refresh, updated: false, stillProcessing: true } }
+  return { ...latest, refresh: { ...refreshResponse.refresh, updated: false, stillProcessing: true } }
 }
 
 const normalizeName = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
