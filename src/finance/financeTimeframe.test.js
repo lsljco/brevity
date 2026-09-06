@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveTimeframe, filterTransactionsByTimeframe } from './financeTimeframe.js'
+import { resolveTimeframe, restoreTimeframe, filterTransactionsByTimeframe } from './financeTimeframe.js'
 
 const now = new Date(2026, 7, 15)
 test('calendar-month presets resolve to complete inclusive local calendar ranges', () => {
@@ -24,4 +24,22 @@ test('transaction filtering includes both boundaries', () => {
   const range = { from: '2026-08-01', to: '2026-08-15' }
   const rows = [{ date: '2026-07-31' }, { date: '2026-08-01' }, { date: '2026-08-15' }, { date: '2026-08-16' }]
   assert.equal(filterTransactionsByTimeframe(rows, range).length, 2)
+})
+
+test('saved relative presets are re-resolved instead of restoring stale dates', () => {
+  const saved = { preset: 'this-month', from: '2026-09-01', to: '2026-09-01' }
+  assert.deepEqual(restoreTimeframe(saved, new Date(2026, 8, 6)), {
+    preset: 'this-month', from: '2026-09-01', to: '2026-09-30',
+  })
+})
+
+test('saved custom bounds remain stable and invalid custom bounds fall back safely', () => {
+  assert.deepEqual(
+    restoreTimeframe({ preset: 'custom', from: '2026-08-10', to: '2026-08-20' }, now),
+    { preset: 'custom', from: '2026-08-10', to: '2026-08-20' },
+  )
+  assert.deepEqual(
+    restoreTimeframe({ preset: 'custom', from: '2026-08-20', to: '2026-08-10' }, now),
+    resolveTimeframe('last-12-months', now),
+  )
 })

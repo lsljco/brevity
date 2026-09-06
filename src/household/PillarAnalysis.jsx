@@ -4,7 +4,7 @@ import { useDailyPlan } from './useDailyPlan.js'
 import SermonRepository from './SermonRepository.jsx'
 import './PillarAnalysis.css'
 
-function List({ items = [], empty = 'None identified.' }) {
+function List({ items = [], empty = 'Nothing needs special attention.' }) {
   return items.length ? <ul>{items.map((item,index)=><li key={`${index}-${typeof item==='string'?item:item.title||item.owner}`}>{typeof item==='string'?item:item.title}</li>)}</ul> : <p className="pillar-analysis-empty">{empty}</p>
 }
 
@@ -44,7 +44,8 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     return () => window.removeEventListener(PILLAR_ANALYSIS_EVENT, receive)
   },[pillar.id,plan?.date])
 
-  const analysis=result?.analysis
+  const analysis=result?.pillar===pillar.id && result?.date===plan?.date ? result.analysis : null
+  const decisions=analysis?.decisions || []
   return <div className="pillar-analysis-page">
     <header className="pillar-analysis-hero">
       <div className="pillar-analysis-icon"><i className={`ti ${pillar.icon}`} /></div>
@@ -59,19 +60,18 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     {analysis && <>
       <section className="pillar-analysis-command"><div><span>Today’s Focus</span><h2>{analysis.headline}</h2><p>{analysis.executiveSummary}</p></div><aside><strong>{analysis.todayFocus}</strong><small>{result.cached?'Daily analysis cache':'Fresh AI analysis'} · {new Date(result.generatedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</small></aside></section>
 
-      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Analysis</span><h2>What Matters Today</h2></div><div className="pillar-analysis-grid">{analysis.analysisPoints.map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.detail}</p></article>)}</div></section>
+      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Key Message</span><h2>What Matters Today</h2></div><div className="pillar-analysis-grid">{(analysis.analysisPoints || []).map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.detail}</p></article>)}</div></section>
+
+      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Apply It Today</span><h2>Meaningful Next Moves</h2></div><div className="pillar-action-grid">{(analysis.actionableInsights || []).map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.whyItMatters}</p><small><strong>Next move</strong>{item.nextMove}</small></article>)}</div></section>
 
       <section className="pillar-analysis-two-column">
-        <div className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Decision Board</span><h2>Decisions Required</h2></div><List items={analysis.decisions} empty="No decisions identified." /></div>
-        <div className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Open Loop</span><h2>Confirm / Resolve</h2></div><List items={analysis.openItems} empty="No open items identified." /></div>
+        <div className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Reflect & Grow</span><h2>Questions Worth Considering</h2></div><List items={analysis.reflectionPrompts} /></div>
+        <div className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Awareness</span><h2>What to Watch For</h2></div><List items={analysis.watchFor} /></div>
       </section>
 
-      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Ownership</span><h2>Who Does What</h2></div><div className="pillar-owner-grid">{analysis.owners.map((item,index)=><article key={`${index}-${item.owner}-${item.action}`}><strong>{item.owner}</strong><p>{item.action}</p><small>Evidence: {item.evidence}</small></article>)}</div></section>
+      {decisions.length > 0 && <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Real Choices</span><h2>Decisions That Need Attention</h2></div><List items={decisions} /></section>}
 
-      <section className="pillar-analysis-two-column">
-        <div className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Family Alignment</span><h2>Discussion Prompts</h2></div><List items={analysis.discussionPrompts} /></div>
-        <div className="pillar-analysis-section pillar-analysis-standard"><div className="pillar-analysis-heading"><span>Success Standard</span><h2>Done Means Done</h2></div><p>{analysis.successStandard}</p><blockquote>{analysis.governingPrinciple}</blockquote></div>
-      </section>
+      <section className="pillar-analysis-section pillar-analysis-standard"><div className="pillar-analysis-heading"><span>Growth Signal</span><h2>How Progress Will Show</h2></div><p>{analysis.growthSignal}</p><blockquote>{analysis.governingPrinciple}</blockquote></section>
     </>}
     {pillar.id==='spiritual'&&planState==='ready'&&<SermonRepository notes={plan?.spiritual?.sermonNotes} source={plan?.spiritual?.sermonSource}/>}
   </div>

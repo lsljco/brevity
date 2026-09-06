@@ -7,6 +7,7 @@ import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
 import { resolveTimeframe } from '../finance/financeTimeframe.js'
 import './FamilyCalendar.css'
+import './FamilyCalendarViews.css'
 
 const gold = '#C5A46D'
 const soft = 'rgba(247,243,234,.72)'
@@ -32,6 +33,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [year,setYear]=useState(today.getFullYear())
   const [member,setMember]=useState(currentMember || 'Family')
   const [range,setRange]=useState(()=>calendarRange(resolveTimeframe('this-month')))
+  const [viewMode,setViewMode]=useState('month')
   const [legacyEvents,setLegacyEvents]=useState(()=>readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
   const cachedCalendar=useMemo(()=>readJson(localStorage,ICLOUD_CACHE_KEY,null),[])
   const [icloudEvents,setIcloudEvents]=useState(()=>(cachedCalendar?.events||[]).map(event=>({ ...event,source:'icloud',owner:event.owner||'Family' })))
@@ -103,6 +105,10 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     return map
   },[filtered])
   const agendaDays=useMemo(()=>Object.entries(byDate).sort(([left],[right])=>left.localeCompare(right)),[byDate])
+  const upcomingAgendaDays=useMemo(()=>{
+    const upcoming=agendaDays.filter(([date])=>date>=iso(today))
+    return (upcoming.length?upcoming:agendaDays).slice(0,14)
+  },[agendaDays])
   const first=new Date(year,month,1).getDay()
   const days=new Date(year,month+1,0).getDate()
   const cells=[...Array(first).fill(null),...Array.from({length:days},(_,i)=>i+1)]
@@ -129,13 +135,17 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       <span style={{fontSize:10,color:icloudState==='ready'?gold:icloudState==='loading'?muted:'#d8a16f'}}>{stateCopy[icloudState]}</span>
       <button onClick={loadIcloud} style={{border:`1px solid ${border}`,background:'rgba(255,255,255,.04)',color:soft,borderRadius:8,padding:'6px 10px',fontSize:10,cursor:'pointer'}}>Sync Family Calendar</button>
     </div>
-    <FinanceTimeframe value={range} onChange={next=>{const calendarDates=calendarRange(next);setRange(calendarDates);const focus=new Date(`${calendarDates.from}T12:00:00`);if(!Number.isNaN(focus.getTime())){setYear(focus.getFullYear());setMonth(focus.getMonth())}}} label="Planner dates" />
+    <FinanceTimeframe value={range} onChange={next=>{const calendarDates=calendarRange(next);setRange(calendarDates);const focus=new Date(`${calendarDates.from}T12:00:00`);if(!Number.isNaN(focus.getTime())){setYear(focus.getFullYear());setMonth(focus.getMonth())}}} label="Planner dates" selectLabel="Select calendar timeframe" />
+    <div className="family-calendar-view-toggle" aria-label="Calendar view">
+      <div><strong>Choose the useful view</strong><span>Agenda surfaces the next commitments; month shows spacing and conflicts.</span></div>
+      <div><button type="button" className={viewMode==='agenda'?'active':''} onClick={()=>setViewMode('agenda')}>Agenda</button><button type="button" className={viewMode==='month'?'active':''} onClick={()=>setViewMode('month')}>Month</button></div>
+    </div>
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:18}}>
       <button aria-label="Previous month" onClick={()=>move(-1)} style={{background:'rgba(255,255,255,.05)',border:`1px solid ${border}`,color:soft,borderRadius:8,padding:'6px 12px',cursor:'pointer'}}>‹</button>
       <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:23,color:'rgba(247,243,234,.92)',minWidth:170,textAlign:'center'}}>{new Date(year,month).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
       <button aria-label="Next month" onClick={()=>move(1)} style={{background:'rgba(255,255,255,.05)',border:`1px solid ${border}`,color:soft,borderRadius:8,padding:'6px 12px',cursor:'pointer'}}>›</button>
     </div>
-    <div className="family-calendar-scroll"><div className="family-calendar-grid" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
+    <div className={`family-calendar-scroll${viewMode==='month'?'':' is-hidden'}`}><div className="family-calendar-grid" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
       {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=><div className="family-calendar-weekday" key={day} style={{textAlign:'center',padding:8,fontSize:10,fontWeight:700,letterSpacing:1,color:muted,textTransform:'uppercase'}}>{day}</div>)}
       {cells.map((day,index)=>{
         if(!day)return <div key={index} style={{minHeight:108}}/>
@@ -149,8 +159,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
         </div>
       })}
     </div></div>
-    <div className="family-calendar-mobile-agenda">
-      {agendaDays.map(([date,events])=><section key={date} className="family-calendar-agenda-day">
+    <div className={`family-calendar-mobile-agenda${viewMode==='agenda'?' is-selected':''}`}>
+      {upcomingAgendaDays.map(([date,events])=><section key={date} className="family-calendar-agenda-day">
         <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span></header>
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>

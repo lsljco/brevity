@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MEAL_TYPES } from './mealLibrary.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
+import { summarizeMealPlan } from './mealPlanInsights.js'
 import './MealPlanner.css'
+import './MealPlannerInsights.css'
 
 const LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' }
 const ICONS = { breakfast: 'ti-sunrise', lunch: 'ti-sun-high', dinner: 'ti-moon-stars' }
@@ -60,6 +62,7 @@ export default function MealPlanner() {
   const [view, setView] = useState('plan')
   const [selection, setSelection] = useState(null)
   const [message, setMessage] = useState('')
+  const planInsight = useMemo(() => summarizeMealPlan(data?.days), [data])
 
   const chooseReplacement = async mealId => {
     setMessage('')
@@ -77,6 +80,7 @@ export default function MealPlanner() {
     <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>Rolling 7-Day Meal Plan</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>90</strong><span>household meals</span></div></header>
     <div className="meal-planner-controls"><nav aria-label="Meal planner views"><button type="button" className={view === 'plan' ? 'is-active' : ''} onClick={() => setView('plan')}><i className="ti ti-calendar-week" /> 7-Day Plan</button><button type="button" className={view === 'library' ? 'is-active' : ''} onClick={() => setView('library')}><i className="ti ti-tools-kitchen-2" /> Meal Library</button></nav><p><i className="ti ti-refresh" /> The window rolls forward daily; replacements remain attached to their date.</p></div>
     {message && <div className="meal-planner-message" role="status">{message}</div>}
+    {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Plan insight</span><strong>{planInsight.tomorrowDinner ? `Tomorrow’s dinner is ${planInsight.tomorrowDinner.name}.` : `${planInsight.mealCount} meals are planned.`}</strong><p>{planInsight.tomorrowDinner ? `It is scheduled for ${planInsight.tomorrowDinner.prepMinutes} minutes, so the useful preparation is making sure its main ingredients are available before tomorrow.` : `The plan represents about ${planInsight.totalPrepMinutes} minutes of preparation.`}</p></div><dl><div><dt>Planned prep</dt><dd>{planInsight.totalPrepMinutes} min</dd></div><div><dt>Avg. planned protein</dt><dd>{planInsight.averageProteinGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are plan estimates, not evidence that a meal was prepared or eaten.</small></section>}
     {state === 'loading' && !data && <div className="meal-planner-state"><i className="ti ti-loader-2" /> Preparing the household meal plan…</div>}
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {data && (view === 'plan' ? <PlanView days={data.days} onSelect={setSelection} /> : <LibraryView library={data.library} onSelect={setSelection} />)}

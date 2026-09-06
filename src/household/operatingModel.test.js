@@ -41,12 +41,30 @@ test('Today read model separates outcomes, actions, decisions, commitments, and 
   })
 
   assert.deepEqual(model.outcomes.map(item => item.title), ['Resolve the insurance decision'])
+  assert.deepEqual(model.memberOutcomes.map(item => item.title), ['Resolve the insurance decision'])
   assert.deepEqual(model.actions.map(item => item.title), ['Call the doctor'])
   assert.deepEqual(model.decisions.map(item => item.title), ['Choose contractor', 'Approved proposal'])
   assert.equal(model.commitments[0].kind, OPERATING_KIND.commitment)
   assert.equal(model.commitments[0].source.system, 'apple-calendar')
   assert.equal(model.nextCommitment.title, 'Doctor appointment')
   assert.equal(model.signals.length, 0)
+})
+
+test('pillar pulse communicates the daily meaning without announcing pillar owners', () => {
+  const model = buildTodayReadModel({ plan:{
+    ...plan,
+    spiritual:{ devotionFocus:'Assess the fruit, not the image', owner:'Lorenzo' },
+    health:{ dinner:'Salmon', hydration:'Keep water visible through transitions', owner:'Terica' },
+    fitness:{ objective:'Protect energy and mobility', owner:'Larry' },
+    education:{ thinkTankDeliverable:'Explain one idea in your own words', owner:'Larry' },
+    finance:{ bills:[{title:'Mortgage'}], purchases:[], accountsToFund:[], owner:'Larry' },
+    ministry:{ contentFocus:'Move conviction into concrete obedience', owners:['Larry','Lorenzo'] },
+  }})
+  const summaries = model.pillarPulse.map(item => item.summary).join(' ')
+  assert.match(summaries, /Assess the fruit/)
+  assert.match(summaries, /Keep water visible/)
+  assert.match(summaries, /Explain one idea/)
+  assert.doesNotMatch(summaries, /Lorenzo|Terica|owner/i)
 })
 
 test('calendar failures become prioritized signals without hiding cached commitments', () => {

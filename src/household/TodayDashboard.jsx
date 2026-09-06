@@ -33,7 +33,7 @@ function AttentionPanel({ signals, onOpenCalendar }) {
     <header><div><span>Act First</span><h2 id="today-attention-title">Needs Attention</h2></div><strong>{signals.length}</strong></header>
     <div className="today-attention-list">{signals.map(signal => <article key={signal.id} className={`today-attention-item today-attention-item--${signal.priority}`}>
       <i className={`ti ${signal.source.system === 'integration' ? 'ti-plug-connected-x' : 'ti-alert-triangle'}`} aria-hidden="true" />
-      <div><strong>{signal.title}</strong><span>{signal.detail}</span><small>{signal.owner} · {PILLAR_META[signal.pillar]?.[0] || 'Household'}</small></div>
+      <div><strong>{signal.title}</strong><span>{signal.detail}</span><small>{PILLAR_META[signal.pillar]?.[0] || 'Household'} · Operational exception</small></div>
       {signal.source.recordType === 'calendar-health' && <button type="button" onClick={onOpenCalendar}>Review Calendar <i className="ti ti-arrow-right" /></button>}
     </article>)}</div>
   </section>
@@ -124,7 +124,7 @@ export default function TodayDashboard({ plan, todayAlignmentCompleted = false, 
 
     <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Today’s Top 3</h2></div><small>Outcomes that make today successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
 
-    <section className="today-section today-actions"><div className="today-section-heading"><div><span>Ownership</span><h2>{currentMember}'s Actions</h2></div><small>Only unresolved work owned by or explicitly involving {currentMember}.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <div className="today-assignment" key={item.id}><div><strong>{item.title}</strong>{item.detail && <span>{item.detail}</span>}</div><span className={`today-status today-status--${item.state}`}>{statusLabel(item.state)}</span></div>)}</div> : <div className="today-empty">No unresolved assignments are owned by {currentMember}.</div>}</section>
+    <section className="today-section today-actions"><div className="today-section-heading"><div><span>Personal View</span><h2>{currentMember}'s Actions</h2></div><small>Assignments are kept separate from outcomes and calendar commitments.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <div className="today-assignment" key={item.id}><div><strong>{item.title}</strong>{item.detail && <span>{item.detail}</span>}</div><span className={`today-status today-status--${item.state}`}>{statusLabel(item.state)}</span></div>)}</div> : <div className="today-empty">{readModel.memberOutcomes.length ? `${currentMember} owns ${readModel.memberOutcomes.length} outcome${readModel.memberOutcomes.length===1?'':'s'} in Today’s Top 3, with no separate unresolved assignment.` : `No unresolved assignments or Top 3 outcomes currently involve ${currentMember}.`}</div>}</section>
 
     <PillarPulse items={readModel.pillarPulse} onOpenPillar={onOpenPillar} />
 

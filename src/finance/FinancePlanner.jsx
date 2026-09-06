@@ -12,7 +12,7 @@ import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinance
 import { buildBalanceSheet, isTransferTransaction, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
-import { filterTransactionsByTimeframe, resolveTimeframe } from './financeTimeframe.js'
+import { filterTransactionsByTimeframe, resolveTimeframe, restoreTimeframe } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import ScenarioModeling from './ScenarioModeling.jsx'
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
@@ -27,6 +27,8 @@ import { deleteRecurringOccurrence, editRecurringOccurrence } from './recurrence
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
+import { findPossibleRecurringDuplicates, summarizeActualActivity } from './financialTruth.js'
+import FinanceReconciliation from './FinanceReconciliation.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1201,7 +1203,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
   const [actualsLoading, setActualsLoading] = useState(false)
   const [actualsError, setActualsError] = useState(null)
   const [balanceOverrides, setBalanceOverrides] = useState(() => loadSavedValue('lslj_bal_overrides_v1', {}))
-  const [financeRange, setFinanceRange] = useState(() => loadSavedValue('brevity_finance_timeframe_v1', resolveTimeframe('last-12-months')))
+  const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null), new Date()))
   const [transactionFilter, setTransactionFilter] = useState(null)
   const [transactionListOptions, setTransactionListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
   const [dashboardSearch, setDashboardSearch] = useState('')
@@ -1943,20 +1945,20 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     // 3. Monthly cash flow health (always include so forecast is always accessible)
     if (monthlyCashFlow > 1000) {
       ins.push({ type: 'cash-flow', sev: 'good', icon: 'ti-trending-up',
-        title: `Monthly cash flow: +${fmtMoney(monthlyCashFlow)}`,
-        detail: `${fmtMoney(monthlyIncome)} net income · ${fmtMoney(monthlyExpense)} recurring expenses. Click for year-end forecast.`,
-        action: 'Strong position — consider directing positive cash flow toward savings or investments.',
+        title: `Scheduled monthly cash flow: +${fmtMoney(monthlyCashFlow)}`,
+        detail: `${fmtMoney(monthlyIncome)} scheduled income · ${fmtMoney(monthlyExpense)} scheduled recurring expenses. This is a forecast, not posted cash.`,
+        action: 'Review the forecast floor and unreconciled activity before deciding how to use the projected surplus.',
         monthlyForecasts, accounts: fd.accounts })
     } else if (monthlyCashFlow < -500) {
       ins.push({ type: 'cash-flow', sev: 'danger', icon: 'ti-trending-down',
-        title: `Monthly shortfall: −${fmtMoney(Math.abs(monthlyCashFlow))}`,
-        detail: `${fmtMoney(monthlyIncome)} net income vs ${fmtMoney(monthlyExpense)} recurring expenses. Click for year-end forecast.`,
+        title: `Scheduled monthly shortfall: −${fmtMoney(Math.abs(monthlyCashFlow))}`,
+        detail: `${fmtMoney(monthlyIncome)} scheduled income vs ${fmtMoney(monthlyExpense)} scheduled recurring expenses.`,
         action: 'Spending exceeds income. Review recurring expenses for cuts.',
         monthlyForecasts, accounts: fd.accounts })
     } else {
       ins.push({ type: 'cash-flow', sev: 'tip', icon: 'ti-chart-bar',
-        title: `Cash flow: ${fmtMoney(monthlyIncome)}/mo in · ${fmtMoney(monthlyExpense)}/mo out`,
-        detail: `Monthly net: +${fmtMoney(monthlyCashFlow)}. Click to see your year-end balance forecast.`,
+        title: `Scheduled cash flow: ${fmtMoney(monthlyIncome)}/mo in · ${fmtMoney(monthlyExpense)}/mo out`,
+        detail: `Forecast monthly net: ${monthlyCashFlow >= 0 ? '+' : '−'}${fmtMoney(Math.abs(monthlyCashFlow))}. Click to see the year-end balance forecast.`,
         action: 'Click to see projected account balances through December.',
         monthlyForecasts, accounts: fd.accounts })
     }
@@ -1978,19 +1980,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
         transactions: txs, category: cat })
     }
 
-    // 5. Possible duplicate monthly charges (same ~amount, both monthly)
-    const monthlyExpTxs = fd.transactions.filter(tx => tx.type === 'expense' && tx.freq === 'monthly')
-    const amtBuckets = {}
-    monthlyExpTxs.forEach(tx => { const b = Math.round(tx.amount / 10) * 10; (amtBuckets[b] = amtBuckets[b] || []).push(tx) })
-    const dups = Object.entries(amtBuckets)
-      .filter(([amt, txs]) => txs.length >= 2 && parseInt(amt) >= 30)
-      .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
-    if (dups.length > 0) {
-      const [, txs] = dups[0]
+    // 5. Possible duplicate monthly charges require merchant and amount evidence.
+    const duplicatePair = findPossibleRecurringDuplicates(fd.transactions)[0]
+    if (duplicatePair) {
+      const txs = [duplicatePair.left, duplicatePair.right]
       ins.push({ type: 'duplicate', sev: 'tip', icon: 'ti-copy',
         title: `Possible duplicate: ${txs.slice(0, 2).map(tx => tx.name).join(' & ')}`,
-        detail: `Both billed ~${fmtMoney(txs[0].amount)}/mo — could be the same charge hitting twice.`,
-        action: 'Check your bank statement to confirm both are intentional.',
+        detail: `Similar merchant and monthly amount · ${duplicatePair.confidence} confidence.`,
+        action: 'Review both records before changing the recurring forecast.',
         transactions: txs })
     }
 
@@ -1998,16 +1995,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     if (filteredActuals?.length) {
       const cutoff = addDays(t, -7)
       const last7 = filteredActuals.filter(tx => new Date(tx.date + 'T00:00:00') >= cutoff)
-      if (last7.length > 0) {
-        const spent  = last7.filter(tx => tx.amount > 0).reduce((s, tx) => s + tx.amount, 0)
-        const earned = last7.filter(tx => tx.amount < 0).reduce((s, tx) => s + Math.abs(tx.amount), 0)
-        const top    = [...last7.filter(tx => tx.amount > 0)].sort((a, b) => b.amount - a.amount)[0]
-        const net    = earned - spent
+      const activity = summarizeActualActivity(last7)
+      if (activity.rows.length > 0) {
+        const { spent, received: earned, largestExpense: top, net } = activity
         ins.push({ type: 'actuals-7d', sev: net >= 0 ? 'good' : 'tip', icon: 'ti-chart-bar',
           title: `Last 7 days: ${fmtMoney(spent)} spent · ${fmtMoney(earned)} received`,
-          detail: top ? `Largest charge: ${top.name} (${fmtMoney(top.amount)}) · ${last7.length} transactions` : `${last7.length} transactions`,
-          action: net < 0 ? `Net outflow of ${fmtMoney(Math.abs(net))} — above typical. Review discretionary spending.` : `Net positive week: +${fmtMoney(net)}.`,
-          transactions: last7 })
+          detail: top ? `Largest expense: ${top.name} (${fmtMoney(Math.abs(top.amount))}) · ${activity.rows.length} non-transfer transactions` : `${activity.rows.length} non-transfer transactions`,
+          action: net < 0 ? `Net posted outflow: ${fmtMoney(Math.abs(net))}. Compare it with the reconciled plan before drawing a spending conclusion.` : `Net posted inflow: +${fmtMoney(net)}.`,
+          transactions: activity.rows })
       }
     }
 
@@ -2184,6 +2179,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             ].map(([label, value]) => <span key={label}><small style={{ display: 'block', color: 'var(--muted)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '.1em' }}>{label}</small><strong style={{ display: 'block', marginTop: 4, fontSize: 12 }}>{value}</strong></span>)}
             <span style={{ color: 'var(--gold)', fontSize: 11, whiteSpace: 'nowrap' }}>Open alignment <i className="ti ti-arrow-right" /></span>
           </button>
+
+          <FinanceReconciliation
+            scheduled={fd.transactions}
+            actuals={filteredActuals}
+            date={todayKey}
+            actualsAvailable={Array.isArray(plaidActuals)}
+            onOpenActual={openFilteredTransactions}
+            onOpenScheduled={openScheduledTransactions}
+          />
 
           {/* ── 3-column grid ── */}
           <div className="dash-main-grid">

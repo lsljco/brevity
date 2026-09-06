@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs'
 import { handler as generateSermonFormation } from './sermon-formation.mjs'
+import spiritualLanguage from '../lib/spiritual-language.cjs'
 
 const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
 const STORE_NAME='brevity-household'
@@ -7,12 +8,7 @@ const ACTIVE_SERMON_KEY=`${HOUSEHOLD_ID}/spiritual/active-sermon`
 const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 const jobKey=id=>`${HOUSEHOLD_ID}/sermon-jobs/${id}`
 
-const sharedText=value=>typeof value==='string'?value
-  .replace(/Lorenzo owns this pillar and must lead the household/gi,'This devotion belongs to every household member')
-  .replace(/Lorenzo must/gi,'Each household member should')
-  .replace(/Lorenzo leads?/gi,'the household practices')
-  .replace(/Lorenzo/gi,'each household member'):value
-const sharedValue=value=>Array.isArray(value)?value.map(sharedValue):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,item])=>[key,sharedValue(item)])):sharedText(value)
+const { sharedSpiritualValue: sharedValue } = spiritualLanguage
 
 export default async function handler(request){
   let body={}

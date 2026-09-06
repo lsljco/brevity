@@ -728,8 +728,9 @@ function App(){
           <>
             {filtered.length===0&&(
               <div style={{textAlign:"center",padding:"80px 20px",color:W3}}>
-                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,marginBottom:8,color:W2}}>No items yet</div>
-                <div style={{fontSize:14}}>Click "+ Add Item" to get started.</div>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,marginBottom:8,color:W2}}>{items.length?'No projects match these filters':'No projects have been defined yet'}</div>
+                <div style={{fontSize:14,maxWidth:520,margin:'0 auto 16px',lineHeight:1.5}}>{items.length?'Clear or change the filters to return to the active project portfolio.':'Create the first item around a concrete outcome, then add its room, decision owner, target date, and budget so Brevity can surface the real constraint.'}</div>
+                {!items.length&&<button type="button" onClick={openAdd} style={{padding:"9px 18px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G}}>Create first project</button>}
               </div>
             )}
             <div className="hq-proj-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
