@@ -516,6 +516,72 @@ html, body {
   gap: 1px;
 }
 
+.sidebar-settings-button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--white);
+  font: 500 16px var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background .18s, border-color .18s, color .18s;
+}
+.sidebar-settings-button:hover,
+.sidebar-settings-button.active {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(197,164,109,.2);
+}
+.sidebar-settings-button > i:first-child { font-size: 21px; }
+.sidebar-settings-button span { flex: 1; }
+.sidebar-settings-chevron { color: var(--muted); font-size: 16px; }
+.app-sidebar:not(.is-expanded) .sidebar-settings-button {
+  justify-content: center;
+  padding-inline: 10px;
+}
+.app-sidebar:not(.is-expanded) .sidebar-settings-button span,
+.app-sidebar:not(.is-expanded) .sidebar-settings-chevron { display: none; }
+
+.settings-profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-preferences { padding-block: 8px !important; }
+.settings-preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 4px;
+}
+.settings-preference-row + .settings-preference-row { border-top: 1px solid var(--glass-border); }
+.settings-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(197,164,109,.28);
+  background: rgba(197,164,109,.1);
+  color: var(--gold);
+  font: 600 13px var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.settings-action-button--danger {
+  border-color: rgba(220,105,92,.3);
+  background: rgba(220,105,92,.09);
+  color: #e99a8e;
+}
+
 .sidebar-footer-item {
   display: flex;
   align-items: center;

@@ -38,12 +38,18 @@
   }
   .app-sidebar:not(.is-expanded) .sidebar-nav-item span,
   .app-sidebar:not(.is-expanded) .sidebar-footer-item span,
+  .app-sidebar:not(.is-expanded) .sidebar-settings-button span,
+  .app-sidebar:not(.is-expanded) .sidebar-settings-chevron,
   .app-sidebar:not(.is-expanded) .pillar-label,
   .app-sidebar:not(.is-expanded) .pillar-chevron,
   .app-sidebar:not(.is-expanded) .sidebar-user-details { display: block; }
   .app-sidebar:not(.is-expanded) .sidebar-nav-item,
   .app-sidebar:not(.is-expanded) .pillar-header,
-  .app-sidebar:not(.is-expanded) .sidebar-footer-item { justify-content: flex-start; padding-left: 14px; padding-right: 14px; }
+  .app-sidebar:not(.is-expanded) .sidebar-footer-item,
+  .app-sidebar:not(.is-expanded) .sidebar-settings-button { justify-content: flex-start; padding-left: 14px; padding-right: 14px; }
+  .settings-page { padding: 28px 16px 100px !important; }
+  .settings-preference-row { align-items: stretch; flex-direction: column; gap: 12px; }
+  .settings-action-button { width: 100%; min-height: 44px; }
   .mobile-sidebar-backdrop {
     display: block;
     position: fixed;
