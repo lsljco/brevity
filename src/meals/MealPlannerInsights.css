@@ -1,0 +1,12 @@
+.meal-plan-insight { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr); gap:18px; margin-bottom:18px; padding:18px; border:1px solid rgba(197,164,109,.2); border-radius:15px; background:rgba(197,164,109,.045); }
+.meal-plan-insight span,.meal-plan-insight small { color:var(--muted); font-size:10px; }
+.meal-plan-insight span { color:var(--gold); font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.meal-plan-insight strong { display:block; margin-top:6px; color:var(--soft-white); font-size:16px; }
+.meal-plan-insight p { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+.meal-plan-insight dl { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:0; }
+.meal-plan-insight dl div { padding:10px; border-radius:10px; background:rgba(0,0,0,.2); }
+.meal-plan-insight dt { color:var(--muted); font-size:9px; }
+.meal-plan-insight dd { margin:5px 0 0; color:var(--soft-white); font-size:11px; font-weight:700; }
+.meal-plan-insight > small { grid-column:1/-1; }
+@media (max-width:800px) { .meal-plan-insight { grid-template-columns:1fr; }.meal-plan-insight > small { grid-column:auto; } }
+@media (max-width:520px) { .meal-plan-insight dl { grid-template-columns:1fr; } }

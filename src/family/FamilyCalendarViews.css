@@ -1,0 +1,35 @@
+.family-calendar-view-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -4px 0 18px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .02);
+}
+.family-calendar-view-toggle > div:first-child { display: grid; gap: 3px; }
+.family-calendar-view-toggle strong { color: rgba(247, 243, 234, .82); font-size: 12px; }
+.family-calendar-view-toggle span { color: rgba(247, 243, 234, .42); font-size: 10px; }
+.family-calendar-view-toggle > div:last-child { display: flex; gap: 6px; }
+.family-calendar-view-toggle button {
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .03);
+  color: rgba(247, 243, 234, .5);
+  cursor: pointer;
+}
+.family-calendar-view-toggle button.active {
+  border-color: rgba(197, 164, 109, .36);
+  background: rgba(197, 164, 109, .11);
+  color: #c5a46d;
+}
+.family-calendar-scroll.is-hidden { display: none; }
+.family-calendar-mobile-agenda.is-selected { display: block; }
+@media (max-width: 720px) {
+  .family-calendar-view-toggle { display: none; }
+  .family-calendar-scroll { display: none !important; }
+  .family-calendar-mobile-agenda { display: block; }
+}

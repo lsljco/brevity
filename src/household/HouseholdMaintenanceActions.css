@@ -1,0 +1,14 @@
+.maintenance-show-overdue {
+  display: block;
+  margin: -2px 0 14px auto;
+  padding: 8px 11px;
+  border: 1px solid rgba(209, 135, 120, .35);
+  border-radius: 9px;
+  background: rgba(209, 135, 120, .07);
+  color: #d18778;
+  font: 700 9px var(--font);
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .maintenance-show-overdue { width: 100%; margin-top: 0; }
+}

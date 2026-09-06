@@ -20,6 +20,7 @@ import HouseholdInventory from './HouseholdInventory.jsx'
 import HouseholdIntelligencePanel from './HouseholdIntelligencePanel.jsx'
 import HouseholdSchedule from './HouseholdSchedule.jsx'
 import './HouseholdMaintenance.css'
+import './HouseholdMaintenanceActions.css'
 import './HouseholdOperationsTabs.css'
 
 function loadState() {
@@ -44,6 +45,7 @@ export default function HouseholdMaintenance({ currentMember }) {
   const [state, setState] = useState(loadState)
   const [ownerFilter, setOwnerFilter] = useState('Mine')
   const [zoneFilter, setZoneFilter] = useState('All Zones')
+  const [overdueOnly, setOverdueOnly] = useState(false)
   const todayKey = maintenanceDateKey(new Date())
   const days = useMemo(() => buildHouseholdMaintenanceWeek(weekStart), [weekStart])
   const summary = useMemo(() => summarizeHouseholdMaintenance(days, state), [days, state])
@@ -157,6 +159,8 @@ export default function HouseholdMaintenance({ currentMember }) {
       <Stat label="Overdue" value={summary.overdue} tone={summary.overdue ? 'overdue' : ''} />
     </section>
 
+    {summary.overdue > 0 && <button className="maintenance-show-overdue" type="button" onClick={() => { setOwnerFilter('All'); setZoneFilter('All Zones'); setOverdueOnly(true) }}>Show all {summary.overdue} overdue {summary.overdue === 1 ? 'responsibility' : 'responsibilities'}</button>}
+
     {isVerifier && awaitingApproval.length > 0 && <section className="operations-signoff-queue"><header><div><p>Verification queue</p><h2>{awaitingApproval.length} chore{awaitingApproval.length===1?'':'s'} awaiting your sign-off</h2></div><span>Either Larry or Terica may approve.</span></header>{awaitingApproval.map(({day,task,occurrence})=><article key={task.occurrenceId}><div><strong>{task.title}</strong><span>{day.label} · {task.zone} · submitted by {occurrence.submittedBy || occurrence.completedBy}</span></div><div><button className="approve" onClick={()=>approveTask(task)}>Approve</button><button onClick={()=>returnTask(task)}>Return</button></div></article>)}</section>}
 
     <section className="maintenance-operating-rule operations-principles">
@@ -171,19 +175,25 @@ export default function HouseholdMaintenance({ currentMember }) {
     </section>
 
     <div className="maintenance-toolbar operations-toolbar">
-      <div className="operations-filter-group"><span>Responsibility</span>{owners.map(owner => <button type="button" className={ownerFilter === owner ? 'active' : ''} onClick={() => setOwnerFilter(owner)} key={owner}>{owner === 'Mine' ? 'My responsibilities' : owner}</button>)}</div>
+      <div className="operations-filter-group"><span>Responsibility</span>{owners.map(owner => <button type="button" className={!overdueOnly && ownerFilter === owner ? 'active' : ''} onClick={() => { setOwnerFilter(owner); setOverdueOnly(false) }} key={owner}>{owner === 'Mine' ? 'My responsibilities' : owner}</button>)}{overdueOnly && <button type="button" className="active" onClick={() => setOverdueOnly(false)}>Overdue only</button>}</div>
       <div className="operations-filter-group"><span>Zone</span>{zones.map(zone => <button type="button" className={zoneFilter === zone ? 'active' : ''} onClick={() => setZoneFilter(zone)} key={zone}>{zone}</button>)}</div>
       <small>Scheduled chores are not closed when submitted. They remain awaiting verification until Larry or Terica signs off.</small>
     </div>
 
     <div className="maintenance-days">
       {days.map(day => {
-        const visibleTasks = day.tasks.filter(task => ownerMatches(task) && (zoneFilter === 'All Zones' || task.zone === zoneFilter))
+        const visibleTasks = day.tasks.filter(task => {
+          const occurrence = householdOccurrence(state, task)
+          const status = occurrenceStatus(task, occurrence)
+          const isApproved = status === 'Approved' || status === 'Complete'
+          const isOverdue = day.date >= state.trackingStartedOn && day.date < todayKey && !isApproved
+          return ownerMatches(task) && (zoneFilter === 'All Zones' || task.zone === zoneFilter) && (!overdueOnly || isOverdue)
+        })
         const isToday = day.date === todayKey
         return <section className={`maintenance-day${isToday ? ' is-today' : ''}`} key={day.date}>
-          <header><div><span>{isToday ? 'Today' : 'Daily plan'}</span><h2>{day.label}</h2></div><strong>{visibleTasks.length} responsibility{visibleTasks.length === 1 ? '' : 'ies'}</strong></header>
+          <header><div><span>{isToday ? 'Today' : 'Daily plan'}</span><h2>{day.label}</h2></div><strong>{visibleTasks.length} {visibleTasks.length === 1 ? 'responsibility' : 'responsibilities'}</strong></header>
           <div className="maintenance-task-list">
-            {!visibleTasks.length && <p className="maintenance-empty">No responsibilities match this view.</p>}
+            {!visibleTasks.length && <p className="maintenance-empty">{overdueOnly ? 'No overdue responsibilities on this day.' : ownerFilter === 'Mine' ? `No responsibilities are assigned to or covered by ${currentMember} on this day.` : 'No responsibilities match the current filters.'}</p>}
             {visibleTasks.map(task => {
               const occurrence = householdOccurrence(state, task)
               const status = occurrenceStatus(task,occurrence)

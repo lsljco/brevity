@@ -59,6 +59,17 @@ export function resolveTimeframe(preset = 'last-12-months', now = new Date(), cu
   return { preset, from: isoDate(from), to: isoDate(to) }
 }
 
+export function restoreTimeframe(saved, now = new Date(), fallback = 'last-12-months') {
+  const presetIds = new Set(TIMEFRAME_PRESETS.map(([id]) => id))
+  const preset = presetIds.has(saved?.preset) ? saved.preset : fallback
+  if (preset !== 'custom') return resolveTimeframe(preset, now)
+  const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))
+  if (!validDate(saved?.from) || !validDate(saved?.to) || saved.from > saved.to) {
+    return resolveTimeframe(fallback, now)
+  }
+  return resolveTimeframe('custom', now, saved)
+}
+
 export function transactionInTimeframe(transaction, range) {
   const date = transaction?.date || transaction?.start
   return Boolean(date && date >= range.from && date <= range.to)

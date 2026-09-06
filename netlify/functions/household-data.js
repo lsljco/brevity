@@ -1,5 +1,6 @@
 const { getStore } = require('@netlify/blobs')
 const { readSession } = require('./household-auth')
+const { sharedSpiritualValue } = require('../lib/spiritual-language.cjs')
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const STORE_NAME = 'brevity-household'
@@ -20,11 +21,6 @@ const values = value => Array.isArray(value) ? value.filter(Boolean) : value ? [
 const addDays = (date, count) => { const value = new Date(`${date}T12:00:00-04:00`); value.setDate(value.getDate() + count); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}` }
 const itemText = item => typeof item === 'string' ? clean(item) : clean(item?.detail || item?.description || item?.text || item?.label || item?.stage)
 
-function sharedSpiritualText(value) {
-  if (typeof value !== 'string') return value
-  return value.replace(/Lorenzo owns this pillar and must lead the household/gi, 'This devotion belongs to every household member').replace(/Lorenzo must/gi, 'Each household member should').replace(/Lorenzo leads?/gi, 'the household practices').replace(/Lorenzo/gi, 'each household member')
-}
-function sharedSpiritualValue(value) { if (Array.isArray(value)) return value.map(sharedSpiritualValue); if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sharedSpiritualValue(item)])); return sharedSpiritualText(value) }
 const scriptureReference = item => clean(typeof item === 'string' ? item : item?.reference || item?.scripture || item?.title)
 function sermonScripturePool(activeSermon) {
   const notes = activeSermon?.sermonNotes || {}

@@ -1,9 +1,9 @@
-const DAYPART_ORDER = ['anchor','focus','flex','wind-down']
+import { orderDayparts } from './daypartOrder.js'
 
 const statusLabel = value => String(value || 'pending').replace(/-/g, ' ')
 
 export default function DailyCommandSchedule({ plan, showDecisions = true }) {
-  const dayparts = Array.isArray(plan?.dayparts) ? [...plan.dayparts].sort((a, b) => DAYPART_ORDER.indexOf(a.id) - DAYPART_ORDER.indexOf(b.id)) : []
+  const dayparts = Array.isArray(plan?.dayparts) ? orderDayparts(plan.dayparts) : []
   const decisions = Array.isArray(plan?.decisions) ? plan.decisions : []
 
   if (!dayparts.length && (!showDecisions || !decisions.length)) return null
