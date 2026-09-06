@@ -60,6 +60,16 @@ test('mobile Menu button identifies the navigation drawer it controls', () => {
   assert.match(appSource, /aria-controls="primary-navigation-drawer"/)
 })
 
+test('sidebar account controls are consolidated under one Settings destination', () => {
+  const footer = appSource.match(/<div className="sidebar-footer">([\s\S]*?)<\/div><\/aside>/)?.[1] || ''
+  assert.match(footer, /aria-label="Open settings"/)
+  assert.doesNotMatch(footer, /Light Mode|Dark Mode|Sign Out|sidebar-user/)
+  assert.match(appSource, /function SettingsPage\(\{ currentMember, role, theme, onThemeChange, onSignOut \}\)/)
+  assert.match(appSource, /Use Light Mode.*Use Dark Mode/)
+  assert.match(appSource, /onClick=\{onSignOut\}/)
+  assert.match(mobileShellSource, /\.settings-action-button\s*\{[^}]*min-height:\s*44px;/s)
+})
+
 test('desktop sidebar state is explicit, persistent, and unaffected by module navigation', () => {
   assert.match(appSource, /useState\(initialSidebarExpanded\)/)
   assert.match(appSource, /const closeSidebarAfterNavigation=\(\)=>\{if\(isCompactNavigation\(\)\)setSidebarExpanded\(false\)\}/)
