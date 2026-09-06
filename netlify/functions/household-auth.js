@@ -54,14 +54,22 @@ function sign(value, secret) {
 }
 
 async function createSession(member, role = 'member') {
-  const payload = b64url(JSON.stringify({ member, role, exp: Date.now() + SESSION_DAYS * 86400000 }))
-  const secret = await sessionSecret()
-  return `${payload}.${sign(payload, secret)}`
+  const token = crypto.randomBytes(48).toString('base64url')
+  const value = { member, role, exp:Date.now() + SESSION_DAYS * 86400000, createdAt:new Date().toISOString() }
+  await store().setJSON(`sessions/${crypto.createHash('sha256').update(token).digest('hex')}`,value)
+  return `v2.${token}`
 }
 
 async function readSession(event) {
   const token = parseCookies(event)[SESSION_COOKIE]
   if (!token || !token.includes('.')) return null
+  if(token.startsWith('v2.')){
+    const opaque=token.slice(3)
+    if(!/^[A-Za-z0-9_-]{64}$/.test(opaque))return null
+    const value=await store().get(`sessions/${crypto.createHash('sha256').update(opaque).digest('hex')}`,{type:'json'}).catch(()=>null)
+    if(!value?.member||!MEMBERS.includes(value.member)||Number(value.exp)<Date.now())return null
+    return value
+  }
   const [payload, signature] = token.split('.')
   const secret = await sessionSecret()
   const expected = sign(payload, secret)

@@ -81,7 +81,6 @@ export function createPlanItem(overrides = {}) {
     title: '',
     notes: '',
     owner: 'Family',
-    participants: [],
     status: ITEM_STATUS.pending,
     priority: 'normal',
     startTime: '',

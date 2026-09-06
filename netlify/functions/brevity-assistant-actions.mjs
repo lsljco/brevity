@@ -10,7 +10,7 @@ export const publicAssistantAudit=audit=>({
   id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,
   action:audit.action,status:audit.status,occurredAt:audit.occurredAt,
   undoAvailable:Boolean(audit.undoAvailable),undoneAt:audit.undoneAt||null,undoneBy:audit.undoneBy||null,
-  operations:(audit.operations||[]).map(({id,type,domain,description,selectedScope})=>({id,type,domain,description,selectedScope})),
+  operations:(audit.operations||[]).map(({id,type,domain,description,targetId,targetDate,selectedScope})=>({id,type,domain,description,...(targetId?{targetId}:{}),...(targetDate?{targetDate}:{}),selectedScope})),
 })
 
 async function calendarRequest(event, method, body) {
@@ -22,10 +22,13 @@ async function calendarRequest(event, method, body) {
   return payload
 }
 
-async function executeCalendarOperations({event,operations,session,permissions}) {
+const calendarVersion=events=>JSON.stringify((events||[]).map(item=>[item.id||'',item.uid||'',item.href||'',item.etag||'',item.updatedAt||'']).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))))
+
+async function executeCalendarOperations({event,operations,session,permissions,expectedCalendarVersion}) {
   const selected=operations.filter(operation=>operation.type.startsWith('calendar.'))
   if(!selected.length)return[]
   const remote=await calendarRequest(event,'GET')
+  if(expectedCalendarVersion!==undefined&&calendarVersion(remote.events)!==expectedCalendarVersion)throw Object.assign(new Error('The Family Calendar changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
   const changes=[]
   for(const operation of selected){
     const current=(remote.events||[]).find(item=>[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
@@ -46,6 +49,8 @@ async function executeCalendarOperations({event,operations,session,permissions})
   return changes
 }
 
+export const unchangedSinceAction=(current,change)=>Number(current?.version)===Number(change?.afterVersion)||JSON.stringify(current?.value)===JSON.stringify(change?.after)
+
 async function undoAudit({event,audit,session,resources}) {
   if(!audit?.undoAvailable||audit.undoneAt)throw new Error('This action is not available to undo.')
   if(session.role!=='admin'&&audit.actor!==session.member)throw Object.assign(new Error('Only the member who completed this action or an administrator can undo it.'),{code:'FORBIDDEN'})
@@ -53,7 +58,7 @@ async function undoAudit({event,audit,session,resources}) {
   for(const change of audit.changes||[]){
     if(change.resource==='calendar:apple-family')continue
     const current=await resources.read(change.resource)
-    if(Number(current.version)!==Number(change.afterVersion))throw Object.assign(new Error('A newer household edit exists, so Undo was stopped to protect it.'),{code:'VERSION_CONFLICT'})
+    if(!unchangedSinceAction(current,change))throw Object.assign(new Error('A newer household edit exists, so Undo was stopped to protect it.'),{code:'VERSION_CONFLICT'})
     preflight.set(change.resource,current)
   }
   const restored=[]
@@ -103,7 +108,7 @@ export const handler=async event=>{
       await repository.saveProposalState(started)
       try{
         const recordResult=await executeRecordOperations({proposal:{...proposal,operations},selections:body.selections||{},session,permissions,resources})
-        const calendarChanges=await executeCalendarOperations({event,operations,session,permissions})
+        const calendarChanges=await executeCalendarOperations({event,operations,session,permissions,expectedCalendarVersion:proposal.expectedCalendarVersion})
         const changes=[...recordResult.changes,...calendarChanges]
         const audit=await repository.addAudit({proposalId:proposal.id,summary:proposal.summary,actor:session.member,action:'execute',status:'completed',operations,changes,undoAvailable:true})
         await repository.saveProposalState({...started,state:'executed',executedAt:audit.occurredAt,auditId:audit.id})

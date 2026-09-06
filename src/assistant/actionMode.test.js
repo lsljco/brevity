@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { actionRisk, defaultActionPermissions, normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../../netlify/lib/assistant-action-contract.mjs'
-import { applyRecordOperation, executeRecordOperations, resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
+import { applyRecordOperation, captureExpectedVersions, executeRecordOperations, resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 import { createEmptyDailyPlan } from '../household/dailyPlan.js'
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
-import { publicAssistantAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
+import { publicAssistantAudit, unchangedSinceAction } from '../../netlify/functions/brevity-assistant-actions.mjs'
 
 test('action proposals accept only the explicit Brevity tool allowlist',()=>{
   const proposal=normalizeActionProposal({summary:'Update the decision',operations:[{type:'decision.update',description:'Assign the open decision to Larry',targetId:'d1',targetDate:'2026-09-05',payloadJson:'{"owner":"Larry","status":"determined"}',allowedScopes:['this-item'],defaultScope:'this-item'}]},{member:'Larry',role:'admin',now:new Date('2026-09-05T10:00:00Z'),id:'proposal-1'})
@@ -45,12 +45,37 @@ test('member-facing audit history omits stored before and after snapshots',()=>{
   assert.deepEqual(visible.operations[0],{id:'o1',type:'budget.update',domain:'finance',description:'Update budget',selectedScope:'this-item'})
 })
 
+test('Undo tolerates a newer sync version only when the saved value is unchanged',()=>{
+  const change={afterVersion:4,after:{transactions:[{id:'r1',notes:'test'}]}}
+  assert.equal(unchangedSinceAction({version:5,value:{transactions:[{id:'r1',notes:'test'}]}},change),true)
+  assert.equal(unchangedSinceAction({version:5,value:{transactions:[{id:'r1',notes:'newer edit'}]}},change),false)
+})
+
 test('record executor updates decisions and preserves a complete before image',()=>{
   const original={decisions:[{id:'d1',title:'Choose vendor',owner:'Larry',status:'needs-decision'}]}
   const result=applyRecordOperation(original,{type:'decision.update',targetId:'d1',payload:{status:'complete',notes:'Approved'}})
   assert.equal(result.after.decisions[0].status,'complete')
   assert.equal(result.before.decisions[0].status,'needs-decision')
   assert.equal(original.decisions[0].status,'needs-decision')
+})
+
+test('Action Mode creates decisions and future-only categorization rules',()=>{
+  const plan=applyRecordOperation(createEmptyDailyPlan('2026-09-05'),{type:'decision.create',targetDate:'2026-09-05',description:'Choose contractor',payload:{title:'Choose contractor',owner:'Larry'}},()=> 'decision-1')
+  assert.equal(plan.after.decisions[0].id,'decision-1')
+  const rules=applyRecordOperation([],{type:'transaction.rule.create',payload:{title:'Future coffee',matchText:'STARBUCKS',category:'Dining',createdDate:'2026-09-05'}},()=> 'rule-1')
+  assert.deepEqual(rules.after[0],{id:'rule-1',name:'Future coffee',createdDate:'2026-09-05',applyToExisting:false,conditions:{originalStatement:{on:true,value:'STARBUCKS'}},actions:{updateCategory:{on:true,value:'Dining'}},splits:[]})
+})
+
+test('forecast adjustments update only an exact model or scenario record',()=>{
+  const model={expenseMode:'scenario',planningExpense:20000,scenarios:[{id:'current',title:'Current',description:'Today',incomes:[{id:'salary',description:'Salary',monthlyNet:5000,annualGross:80000,remote:true}]}]}
+  const expense=applyRecordOperation(model,{type:'forecast.update',targetId:'planningExpense',payload:{planningExpense:21000}})
+  assert.equal(expense.after.planningExpense,21000)
+  const income=applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeId:'salary',monthlyNet:5500,notes:'Reviewed'}})
+  assert.equal(income.after.scenarios[0].incomes[0].monthlyNet,5500)
+  assert.equal(income.after.scenarios[0].incomes[0].notes,'Reviewed')
+  assert.equal(model.scenarios[0].incomes[0].monthlyNet,5000)
+  assert.throws(()=>applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeId:'missing',monthlyNet:1}}),/income record no longer exists/)
+  assert.equal(resourceForOperation({type:'forecast.update',domain:'finance'}),'shared:brevity_finance_scenarios_v1')
 })
 
 test('a first assignment can initialize an otherwise missing dated daily plan',()=>{
@@ -74,6 +99,15 @@ test('execution groups same-record operations into one versioned write',async()=
   const proposal={operations:[{id:'o1',type:'decision.update',domain:'planning',targetId:'d1',targetDate:'2026-09-05',payload:{status:'complete'},allowedScopes:['this-item'],defaultScope:'this-item'},{id:'o2',type:'decision.update',domain:'planning',targetId:'d2',targetDate:'2026-09-05',payload:{status:'deferred'},allowedScopes:['this-item'],defaultScope:'this-item'}]}
   const result=await executeRecordOperations({proposal,selections:{},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources})
   assert.equal(writes,1);assert.equal(result.changes[0].afterVersion,4);assert.equal(value.decisions[1].status,'deferred');assert.equal(resourceForOperation(proposal.operations[0]),'plan:2026-09-05')
+})
+
+test('execution stops when a resource changed after proposal review',async()=>{
+  let value={assignments:[]},version=2
+  const resources={read:async()=>({value,version}),write:async()=>{throw new Error('must not write')}}
+  let proposal={operations:[{id:'o1',type:'assignment.create',domain:'planning',targetDate:'2026-09-05',payload:{title:'Safe'},allowedScopes:['this-item'],defaultScope:'this-item'}]}
+  proposal=await captureExpectedVersions(proposal,resources)
+  version=3
+  await assert.rejects(()=>executeRecordOperations({proposal,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources}),error=>error.code==='VERSION_CONFLICT')
 })
 
 test('proposal repository persists proposals, permissions, and bounded audit history',async()=>{

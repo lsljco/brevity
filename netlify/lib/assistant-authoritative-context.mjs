@@ -3,6 +3,8 @@ import { productionMealPlanRepository } from './meal-plan-store.mjs'
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const HOUSEHOLD_STORE = 'brevity-household'
+const SHARED_STORE = 'brevity-household-state'
+const ACTION_SHARED_KEYS = ['lslj_finance_v9','lslj_budget_v1','brevity_finance_scenarios_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','homehq_items_v1','family_calendar_events_v1']
 const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`
 const SENSITIVE_KEY = /token|secret|password|credential|api.?key|access.?key|client.?id|private.?key/i
 const LARGE_VALUE = /^(?:data:|[A-Za-z0-9+/]{300,}={0,2}$)/
@@ -73,6 +75,28 @@ const sourceStatus = (id, label, result, asOf = '') => ({
   asOf,
 })
 
+const parseSharedValue=record=>{try{return record?.value==null?null:JSON.parse(record.value)}catch{return null}}
+const pick=(value,fields)=>Object.fromEntries(fields.filter(field=>value?.[field]!==undefined).map(field=>[field,value[field]]))
+const compactProject=item=>pick(item,['id','title','notes','status','priority','startDate','due','raci','pushToFamilyCalendar','updatedAt'])
+const compactCalendarEvent=item=>pick(item,['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'])
+const compactRecurring=item=>pick(item,['id','name','title','notes','amount','type','cat','category','accountId','freq','start','end','skips','owner','updatedAt'])
+const compactForecast=model=>({expenseMode:model?.expenseMode,planningExpense:model?.planningExpense,scenarios:(model?.scenarios||[]).map(scenario=>({...pick(scenario,['id','title','description']),incomes:(scenario.incomes||[]).map(income=>pick(income,['id','description','monthlyNet','annualGross','contribution','remote','employment','notes']))}))})
+const compactSharedRecords=records=>{
+  const finance=parseSharedValue(records?.lslj_finance_v9)
+  return {
+    projects:(parseSharedValue(records?.homehq_items_v1)||[]).slice(0,250).map(compactProject),
+    familyCalendarEvents:(parseSharedValue(records?.family_calendar_events_v1)||[]).slice(0,300).map(compactCalendarEvent),
+    finance:{
+      recurringRecords:(finance?.transactions||[]).filter(item=>item?.freq&&item.freq!=='once').slice(0,300).map(compactRecurring),
+      budgets:parseSharedValue(records?.lslj_budget_v1)||{},
+      forecasts:compactForecast(parseSharedValue(records?.brevity_finance_scenarios_v1)||{}),
+      transactionOverrides:parseSharedValue(records?.lslj_tx_overrides_v1)||{},
+      transactionRules:parseSharedValue(records?.lslj_tx_rules_v1)||[],
+    },
+    versions:Object.fromEntries(ACTION_SHARED_KEYS.map(key=>[key,Number(records?.[key]?.version||0)])),
+  }
+}
+
 export async function buildAuthoritativeAssistantContext({
   member,
   date,
@@ -80,17 +104,20 @@ export async function buildAuthoritativeAssistantContext({
   loadDailyPlan,
   loadMealWindow,
   loadActiveSermon,
+  loadSharedRecords = async()=>({}),
 }) {
-  const [dailyPlanResult, mealResult, sermonResult] = await Promise.allSettled([
+  const [dailyPlanResult, mealResult, sermonResult, sharedResult] = await Promise.allSettled([
     loadDailyPlan(date),
     loadMealWindow(date),
     loadActiveSermon(),
+    loadSharedRecords(),
   ])
   const dailyPlanRecord = dailyPlanResult.status === 'fulfilled' ? dailyPlanResult.value : null
   const dailyPlan = compactDailyPlan(dailyPlanRecord)
   const mealWindow = mealResult.status === 'fulfilled' ? mealResult.value : null
   const activeSermon = sermonResult.status === 'fulfilled' ? sermonResult.value : null
   const mealDays = (mealWindow?.days || []).map(compactMealDay)
+  const sharedRecords=sharedResult.status==='fulfilled'?sharedResult.value:{}
 
   return sanitizeAuthoritativeContext({
     generatedAt: now.toISOString(),
@@ -100,6 +127,7 @@ export async function buildAuthoritativeAssistantContext({
       sourceStatus('daily-plan', 'Household daily plan', dailyPlanResult, dailyPlanRecord?.updatedAt),
       sourceStatus('rolling-meals', 'Rolling seven-day meal plan', mealResult, mealDays.map(day => day.updatedAt).filter(Boolean).sort().at(-1) || ''),
       sourceStatus('active-sermon', 'Active spiritual formation source', sermonResult, activeSermon?.activatedAt),
+      sourceStatus('shared-action-records', 'Projects, calendar, and finance administration records', sharedResult, Object.values(sharedRecords||{}).map(record=>record?.updatedAt).filter(Boolean).sort().at(-1)||''),
     ],
     dailyPlan,
     rollingMealPlan: mealWindow ? {
@@ -116,6 +144,7 @@ export async function buildAuthoritativeAssistantContext({
       source: activeSermon.source,
       summary: activeSermon.sermonNotes?.executiveSummary || activeSermon.sermonNotes?.summary || '',
     } : null,
+    actionRecords:compactSharedRecords(sharedRecords),
   })
 }
 
@@ -127,6 +156,7 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
     siteID: process.env.NETLIFY_SITE_ID,
     token: process.env.NETLIFY_TOKEN,
   })
+  const sharedStore=getStore({name:SHARED_STORE,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
   const meals = await productionMealPlanRepository()
   return buildAuthoritativeAssistantContext({
     member,
@@ -135,5 +165,6 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
     loadDailyPlan: targetDate => dataStore.get(`${HOUSEHOLD_ID}/daily-plans/${targetDate}`, { type: 'json' }).catch(() => null),
     loadMealWindow: startDate => meals.getWindowReadOnly({ startDate, count: 7 }),
     loadActiveSermon: () => dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null),
+    loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await sharedStore.get(`${HOUSEHOLD_ID}/records/${key}`,{type:'json'}).catch(()=>null)]))),
   })
 }
