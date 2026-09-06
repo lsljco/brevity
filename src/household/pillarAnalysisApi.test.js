@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { clearPillarAnalyses, collectPillarContextFromStorage, pillarAnalysisStorageKey } from './pillarAnalysisApi.js'
+import { clearPillarAnalyses, collectPillarContextFromStorage, PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisStorageKey, readPillarAnalysis } from './pillarAnalysisApi.js'
 
 function storage(values) {
   return { getItem: key => values[key] ?? null }
@@ -27,4 +27,14 @@ test('clearing a changed daily plan invalidates every pillar analysis for that d
   assert.ok(removed.includes(pillarAnalysisStorageKey('2026-08-21', 'finance')))
   assert.ok(removed.includes(pillarAnalysisStorageKey('2026-08-21', 'spiritual')))
   assert.ok(removed.every(key => key.includes('2026-08-21')))
+})
+
+test('pillar analysis cache only reads the current insight schema', () => {
+  const date = '2026-09-06'
+  const pillar = 'spiritual'
+  const key = pillarAnalysisStorageKey(date, pillar)
+  assert.match(key, new RegExp(`_v${PILLAR_ANALYSIS_SCHEMA_VERSION}_`))
+  assert.equal(readPillarAnalysis(date, pillar, storage({ [key]: JSON.stringify({ schemaVersion:1, analysis:{} }) })), null)
+  const current = { schemaVersion:PILLAR_ANALYSIS_SCHEMA_VERSION, analysis:{ headline:'Growth' } }
+  assert.deepEqual(readPillarAnalysis(date, pillar, storage({ [key]: JSON.stringify(current) })), current)
 })

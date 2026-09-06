@@ -4,16 +4,28 @@ const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
-const BASE_AUTOMATION = `Produce the household’s Seven Pillars daily schedule for the upcoming day. Structure it around Spiritual Maturity, Health & Nutrition, Gym/Fitness, Household Operations, Education/Think Tank, Finances, and Ministry/Fellowship. Include a morning family alignment agenda, genuine decision points, owners, discussion prompts, and open items that need confirmation. Prioritize devotion and prayer before food, gym, errands, or outside activity. Treat Brevity’s rolling meal plan as the meal source of truth; include grocery and preparation implications without assigning manual meal communication. Lifetime Gym is the standing fitness location and never requires a daily decision. Isaiah’s education block is a standing household commitment and never requires a daily accountability or supervising-owner decision. Include workout planning, household appointments and key focus, think tank topic, finance review with bills/purchases/transfers/accounts to fund, and ministry/fellowship content or meeting needs. Spiritual Maturity is owned by Lorenzo.`;
+export const PILLAR_ANALYSIS_SCHEMA_VERSION = 2;
 
-const PILLAR_INSTRUCTIONS = {
-  spiritual: `Analyze Spiritual Maturity as the governing foundation for the day. Lorenzo owns this pillar and should own scripture focus, devotion insight, prayer priorities and practical obedience unless a specific item is explicitly delegated. Produce Scripture focus, devotion insight, prayer priorities, practical obedience, family discussion prompts, and what must be settled spiritually before the household moves into food, fitness, errands, work, or outside activity.`,
-  health: `Analyze Health & Nutrition operationally. Brevity’s rolling meal plan supplies breakfast, lunch and dinner. Cover the selected meals, snacks, hydration, grocery needs, next-day preparation and substitutions that need attention. Do not invent medical restrictions or make meal availability depend on manual communication.`,
-  fitness: `Analyze Physical Fitness operationally. Display the standing location as Lifetime Gym. Monday operationally uses Lifetime Buckhead for chest and triceps; every other day uses Lifetime Perimeter. Do not create a location decision. Resolve participants, workout/body-part objective, departure and return time, step target, recovery, and only genuine exceptions.`,
-  household: `Analyze Household Operations as a command-center brief. Reconcile appointments, projects, errands, deadlines, home/HOA/contractor matters present in the supplied data, top three household outcomes, owners, deadlines, evidence of completion, and open decisions. Never invent appointments; label unknowns CONFIRM.`,
-  education: `Analyze Education / Think Tank. Define one high-value Think Tank topic and required output, plus Isaiah’s standing age-appropriate reading, sight-word/vocabulary, comprehension, math/homework block and what should be staged for the next school day. Do not request or create a decision about who supervises or is accountable for Isaiah’s education block.`,
-  finance: `Analyze Finances as a CFO-style daily operating brief using only supplied Brevity data. Cover bills, purchases, transfers, accounts requiring funding, liquidity/cash implications visible in the data, income-producing priorities, decision rules, owners, and facts requiring confirmation. Never fabricate balances or transactions.`,
-  ministry: `Analyze Ministry & Fellowship. Cover Church Triumphant responsibilities, teaching/music/content readiness, meetings, Lorenzo’s content responsibilities when applicable, fellowship/discipleship follow-up, prayer needs, owners, deadlines, and what must be ready before the ministry moment arrives.`
+export const BASE_ANALYSIS_GUIDANCE = `Produce a concise daily insight brief for one of the household's Seven Pillars. The brief must interpret the supplied facts and reveal the key message for this pillar today. It is not a schedule, an ownership report, or a task inventory.
+
+Hard rules:
+- Never state, repeat, or emphasize who owns a pillar. Owner fields in supplied data are operational metadata, not analysis content.
+- Never infer that a pillar owner is responsible for another household member's personal growth, practice, devotion, or prayer.
+- Spiritual Maturity is shared formation. Each household member is responsible for personally engaging the day's Scripture, reflection, prayer, and response. Do not require Lorenzo to lead anyone else's devotion or prayer unless the supplied plan contains a specific, explicit assignment for that date.
+- Center the brief on insight: what the data means, why it matters today, what pattern or opportunity deserves attention, and how the household can move forward or grow.
+- Provide no more than three high-value insights and no more than two meaningful next moves. Do not turn routine plan items into a checklist.
+- A next move must be specific and useful, but it may be a conversation, adjustment, boundary, observation, or practice rather than a task.
+- Include a decision only when the supplied data presents a real unresolved choice. Never manufacture decisions, assignments, deadlines, or facts.
+- Use CONFIRM for a material unknown. Preserve human authority: AI offers perspective; household members decide.`;
+
+export const PILLAR_INSTRUCTIONS = {
+  spiritual: `Identify the day's central Scriptural truth, the heart pattern it illuminates, and a personal way each household member can respond. Connect insight to growth without making one person the household's spiritual supervisor.`,
+  health: `Interpret the meal, hydration, preparation, and energy context. Highlight the strongest health leverage point or pattern for the day rather than repeating the menu or producing a grocery checklist. Do not invent medical restrictions.`,
+  fitness: `Explain the day's training intent, likely readiness or recovery need, and the adjustment most likely to improve consistency or progress. Treat Lifetime Gym as settled and do not recite routine logistics unless an exception materially changes the day.`,
+  household: `Surface the household bottleneck, dependency, or sequencing insight that most affects today's flow. Recommend one or two high-leverage ways to reduce friction; do not restate the entire project and errand list. Never invent appointments.`,
+  education: `Identify the day's most valuable learning objective, the growth gap or encouraging signal visible in the data, and one practice that deepens understanding. Do not create a supervision or accountability decision for Isaiah's standing block.`,
+  finance: `Explain the most consequential change, variance, liquidity signal, or tradeoff visible in Brevity's data. Emphasize implications and a prudent next move, not a list of bills or transfers. Never fabricate balances or transactions.`,
+  ministry: `Identify the message, relationship need, or readiness issue that matters most today. Offer insight that strengthens preparation, service, or follow-through without turning the brief into a roster of owners and deadlines.`
 };
 
 const schema = {
@@ -22,15 +34,15 @@ const schema = {
     headline: { type: 'string' },
     executiveSummary: { type: 'string' },
     todayFocus: { type: 'string' },
-    analysisPoints: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, detail:{type:'string'} }, required:['title','detail'] } },
-    decisions: { type: 'array', items: { type: 'string' } },
-    owners: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { owner:{type:'string'}, action:{type:'string'}, evidence:{type:'string'} }, required:['owner','action','evidence'] } },
-    discussionPrompts: { type: 'array', items: { type: 'string' } },
-    openItems: { type: 'array', items: { type: 'string' } },
-    successStandard: { type: 'string' },
+    analysisPoints: { type: 'array', maxItems: 3, items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, detail:{type:'string'} }, required:['title','detail'] } },
+    actionableInsights: { type: 'array', maxItems: 2, items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, whyItMatters:{type:'string'}, nextMove:{type:'string'} }, required:['title','whyItMatters','nextMove'] } },
+    reflectionPrompts: { type: 'array', maxItems: 2, items: { type: 'string' } },
+    watchFor: { type: 'array', maxItems: 2, items: { type: 'string' } },
+    decisions: { type: 'array', maxItems: 2, items: { type: 'string' } },
+    growthSignal: { type: 'string' },
     governingPrinciple: { type: 'string' }
   },
-  required: ['headline','executiveSummary','todayFocus','analysisPoints','decisions','owners','discussionPrompts','openItems','successStandard','governingPrinciple']
+  required: ['headline','executiveSummary','todayFocus','analysisPoints','actionableInsights','reflectionPrompts','watchFor','decisions','growthSignal','governingPrinciple']
 };
 
 const json = (statusCode, body) => ({ statusCode, headers: { 'content-type':'application/json; charset=utf-8', 'cache-control':'no-store' }, body: JSON.stringify(body) });
@@ -53,7 +65,7 @@ export const handler = async event => {
   if (!PILLARS.has(pillar)) return json(400, { error:'Unknown Seven Pillar.' });
   if (!date || !plan) return json(400, { error:'Date and household plan are required.' });
 
-  const prompt = `${BASE_AUTOMATION}\n\nYou are now producing the ${pillar} tab inside Brevity, the household source of truth. ${PILLAR_INSTRUCTIONS[pillar]}\n\nUse concrete execution language. Do not give generic motivational filler. Do not invent appointments, balances, restrictions, or commitments. When information is unavailable, explicitly use CONFIRM. Preserve human authority: AI analyzes and proposes; household members decide. Current signed-in member: ${currentMember}. If the pillar is Spiritual Maturity, Lorenzo is the owner regardless of which member is signed in.\n\nHOUSEHOLD DAILY PLAN (${date}):\n${JSON.stringify(plan)}\n\nADDITIONAL BREVITY CONTEXT:\n${JSON.stringify(localContext)}\n\nReturn a decision-oriented analysis for this pillar only.`;
+  const prompt = `${BASE_ANALYSIS_GUIDANCE}\n\nYou are producing the ${pillar} tab inside Brevity, the household source of truth. ${PILLAR_INSTRUCTIONS[pillar]}\n\nWrite for clarity, discernment, and forward growth. Keep the executive summary focused on the day's message, not governance or assignments. Current signed-in member: ${currentMember}.\n\nHOUSEHOLD DAILY PLAN (${date}):\n${JSON.stringify(plan)}\n\nADDITIONAL BREVITY CONTEXT:\n${JSON.stringify(localContext)}\n\nReturn an insight-led analysis for this pillar only.`;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',
@@ -77,5 +89,5 @@ export const handler = async event => {
 
   let analysis;
   try { analysis = JSON.parse(outputText(payload)); } catch { return json(502, { error:'Brevity AI returned an unreadable analysis.' }); }
-  return json(200, { pillar, date, generatedAt:new Date().toISOString(), model:MODEL, analysis, cached:false });
+  return json(200, { schemaVersion:PILLAR_ANALYSIS_SCHEMA_VERSION, pillar, date, generatedAt:new Date().toISOString(), model:MODEL, analysis, cached:false });
 };
