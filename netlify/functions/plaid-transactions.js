@@ -24,6 +24,7 @@ exports.handler = async (event) => {
   const startDate = params.get('start_date') || daysAgo(parseInt(params.get('days') || '30', 10))
   const endDate   = new Date().toISOString().split('T')[0]
   const requestRefresh = params.get('refresh') === '1'
+  const refreshOnly = params.get('refresh_only') === '1'
 
   try {
     const session = await readSession(event)
@@ -55,6 +56,7 @@ exports.handler = async (event) => {
           })
         }
       }
+      if (refreshOnly) continue
       try {
         // Paginate — Plaid caps at 500 per request
         let offset = 0
@@ -96,6 +98,10 @@ exports.handler = async (event) => {
             : 'Transactions could not be refreshed for this institution.',
         })
       }
+    }
+
+    if (refreshOnly) {
+      return { statusCode: 200, headers, body: JSON.stringify({ transactions: [], count: 0, errors: [], refresh }) }
     }
 
     if (!allTxns.length && syncErrors.length === tokens.length) {
