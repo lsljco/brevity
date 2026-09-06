@@ -85,3 +85,14 @@ test('on-demand transaction refresh reports when Plaid is still processing', asy
   assert.equal(result.refresh.updated,false)
   assert.equal(result.refresh.stillProcessing,true)
 })
+
+test('on-demand institution refresh receives a longer timeout without weakening ordinary reads', async () => {
+  const calls=[]
+  await fetchLatestPlaidTransactions({
+    requestBankUpdate:true,
+    fetcher:async (path,options)=>{calls.push({path,options});return path.includes('refresh_only=1')?{transactions:[],refresh:{requested:true,accepted:0,errors:[]}}:{transactions:[]}},
+    wait:async()=>{},
+  })
+  assert.equal(calls[0].options.timeoutMs,45000)
+  assert.equal(calls[1].options,undefined)
+})
