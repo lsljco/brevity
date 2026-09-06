@@ -9,7 +9,7 @@ const SHARED_STORE = 'brevity-household-state'
 const PLAN_STORE = 'brevity-household'
 const SHARED_KEYS = {
   projects:'homehq_items_v1', calendar:'family_calendar_events_v1', overrides:'lslj_tx_overrides_v1',
-  rules:'lslj_tx_rules_v1', budget:'lslj_budget_v1', finance:'lslj_finance_v9',
+  rules:'lslj_tx_rules_v1', budget:'lslj_budget_v1', forecasts:'brevity_finance_scenarios_v1', finance:'lslj_finance_v9',
 }
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value))
 const nowIso = now => now().toISOString()
@@ -21,6 +21,7 @@ export function resourceForOperation(operation) {
   if (operation.type === 'transaction.categorize') return `shared:${SHARED_KEYS.overrides}`
   if (operation.type === 'transaction.rule.create') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
+  if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
   throw new Error(`No action resource exists for ${operation.type}.`)
 }
@@ -29,6 +30,7 @@ function findRecord(value, operation) {
   if (operation.type === 'decision.update') return (value?.decisions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'assignment.update') return (value?.assignments || []).find(item => item.id === operation.targetId)
   if (operation.type === 'project.update') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
+  if (operation.type === 'forecast.update') return operation.targetId === 'model' ? value : (value?.scenarios || []).find(item => item.id === operation.targetId)
   if (operation.type.startsWith('recurring.')) return (value?.transactions || []).find(item => item.id === operation.targetId)
   return null
 }
@@ -83,6 +85,38 @@ export function applyRecordOperation(value, operation, createId = randomUUID) {
     const row = Array.isArray(value?.[item]) ? [...value[item]] : Array(12).fill(0)
     row[month] = Number(payload.value ?? payload.amount) || 0
     return { before, after:{ ...(value || {}), [item]:row } }
+  }
+  if (operation.type === 'forecast.update') {
+    if (operation.targetId === 'model') {
+      const after = { ...(value || {}) }
+      if (payload.planningExpense !== undefined) after.planningExpense = Math.max(0, Number(payload.planningExpense) || 0)
+      if (payload.expenseMode !== undefined) {
+        if (!['scenario', 'budget'].includes(payload.expenseMode)) throw new Error('Forecast expense mode must be scenario or budget.')
+        after.expenseMode = payload.expenseMode
+      }
+      return { before, after }
+    }
+    let found = false
+    const after = { ...(value || {}), scenarios:(value?.scenarios || []).map(scenario => {
+      if (scenario.id !== operation.targetId) return scenario
+      found = true
+      const next = { ...scenario }
+      for (const field of ['title', 'description']) if (payload[field] !== undefined) next[field] = payload[field]
+      if (payload.incomeId) {
+        let incomeFound = false
+        next.incomes = (scenario.incomes || []).map(income => {
+          if (income.id !== payload.incomeId) return income
+          incomeFound = true
+          const updated = { ...income }
+          for (const field of ['monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']) if (payload[field] !== undefined) updated[field] = payload[field]
+          return updated
+        })
+        if (!incomeFound) throw new Error('That forecast income record no longer exists. Refresh Brevity and ask again.')
+      }
+      return next
+    }) }
+    if (!found) throw new Error('That forecast scenario no longer exists. Refresh Brevity and ask again.')
+    return { before, after }
   }
   if (operation.type === 'recurring.update' || operation.type === 'recurring.delete') {
     const transactions = [...(value?.transactions || [])]

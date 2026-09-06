@@ -66,6 +66,18 @@ test('Action Mode creates decisions and future-only categorization rules',()=>{
   assert.deepEqual(rules.after[0],{id:'rule-1',name:'Future coffee',createdDate:'2026-09-05',applyToExisting:false,conditions:{originalStatement:{on:true,value:'STARBUCKS'}},actions:{updateCategory:{on:true,value:'Dining'}},splits:[]})
 })
 
+test('forecast adjustments update only an exact model or scenario record',()=>{
+  const model={expenseMode:'scenario',planningExpense:20000,scenarios:[{id:'current',title:'Current',description:'Today',incomes:[{id:'salary',description:'Salary',monthlyNet:5000,annualGross:80000,remote:true}]}]}
+  const expense=applyRecordOperation(model,{type:'forecast.update',targetId:'model',payload:{planningExpense:21000}})
+  assert.equal(expense.after.planningExpense,21000)
+  const income=applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeId:'salary',monthlyNet:5500,notes:'Reviewed'}})
+  assert.equal(income.after.scenarios[0].incomes[0].monthlyNet,5500)
+  assert.equal(income.after.scenarios[0].incomes[0].notes,'Reviewed')
+  assert.equal(model.scenarios[0].incomes[0].monthlyNet,5000)
+  assert.throws(()=>applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeId:'missing',monthlyNet:1}}),/income record no longer exists/)
+  assert.equal(resourceForOperation({type:'forecast.update',domain:'finance'}),'shared:brevity_finance_scenarios_v1')
+})
+
 test('a first assignment can initialize an otherwise missing dated daily plan',()=>{
   const date='2026-09-05'
   const result=applyRecordOperation(createEmptyDailyPlan(date),{type:'assignment.create',targetDate:date,description:'Create Action Mode Test',payload:{title:'Action Mode Test',owner:'Larry'}},()=> 'assignment-1')

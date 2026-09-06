@@ -15,12 +15,13 @@ export const ACTION_TYPES = {
   'transaction.categorize': 'finance',
   'transaction.rule.create': 'finance',
   'budget.update': 'finance',
+  'forecast.update': 'finance',
   'recurring.update': 'finance',
   'recurring.delete': 'finance',
 }
 export const FORBIDDEN_ACTION_PATTERN = /payment|purchase|transfer|withdraw|deposit|connect|disconnect|password|credential|bank\.account/i
 export const SCOPES = ['this-item', 'this-and-future']
-const STANDARD_FIELDS = ['title', 'notes', 'owner', 'participants', 'status', 'date', 'time', 'allDay', 'priority', 'category', 'amount', 'month', 'value', 'raci', 'pushToFamilyCalendar', 'frequency', 'endDate', 'matchText', 'createdDate']
+const STANDARD_FIELDS = ['title', 'description', 'notes', 'owner', 'participants', 'status', 'date', 'time', 'allDay', 'priority', 'category', 'amount', 'month', 'value', 'raci', 'pushToFamilyCalendar', 'frequency', 'endDate', 'matchText', 'createdDate', 'planningExpense', 'expenseMode', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment']
 const STRONG_TYPES = new Set(['calendar.delete', 'recurring.delete'])
 const MAX_OPERATIONS = 8
 
@@ -30,6 +31,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type === 'transaction.categorize') return 'shared:brevity_transaction_overrides_v1'
   if (operation.type === 'transaction.rule.create') return 'shared:brevity_transaction_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
+  if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
   if (operation.type.startsWith('recurring.')) return 'shared:brevity_recurring_plan_v1'
   if (operation.domain === 'calendar') return 'calendar:apple-family'
   return operation.domain
@@ -68,14 +70,14 @@ export function normalizeActionOperation(input = {}) {
   try { payload = typeof input.payloadJson === 'string' ? JSON.parse(input.payloadJson || '{}') : object(input.payload) }
   catch { throw new Error(`The ${type} action contains invalid details.`) }
   payload = Object.fromEntries(Object.entries(object(payload)).filter(([key]) => STANDARD_FIELDS.includes(key)))
-  for (const field of ['title', 'status', 'category', 'frequency', 'priority', 'matchText']) if (field in payload) payload[field] = clean(payload[field], 300)
+  for (const field of ['title', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeId', 'employment']) if (field in payload) payload[field] = clean(payload[field], 300)
   if ('notes' in payload) payload.notes = clean(payload.notes, 6000)
-  for (const field of ['amount', 'value', 'month']) if (field in payload) {
+  for (const field of ['amount', 'value', 'month', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution']) if (field in payload) {
     const numeric = Number(payload[field])
     if (!Number.isFinite(numeric)) throw new Error(`The proposed ${field} must be a valid number.`)
     payload[field] = numeric
   }
-  for (const field of ['allDay', 'pushToFamilyCalendar']) if (field in payload) payload[field] = Boolean(payload[field])
+  for (const field of ['allDay', 'pushToFamilyCalendar', 'remote']) if (field in payload) payload[field] = Boolean(payload[field])
   for (const field of ['date', 'endDate', 'createdDate']) if (payload[field] && !isDate(payload[field])) throw new Error(`The proposed ${field} must use YYYY-MM-DD.`)
   if (payload.owner && ![...HOUSEHOLD_MEMBERS, 'Family'].includes(payload.owner)) throw new Error('The proposed owner is not a recognized household member.')
   if (payload.participants) payload.participants = [...new Set((Array.isArray(payload.participants) ? payload.participants : []).filter(member => HOUSEHOLD_MEMBERS.includes(member)))]
@@ -100,6 +102,7 @@ export function normalizeActionOperation(input = {}) {
   if ((operation.domain === 'planning' || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (type === 'calendar.create' && !isDate(payload.date || operation.targetDate)) throw new Error('A new calendar event requires an exact date.')
   if (type === 'transaction.rule.create' && (!payload.matchText || !payload.category || !isDate(payload.createdDate))) throw new Error('A future categorization rule requires match text, a category, and a YYYY-MM-DD start date.')
+  if (type === 'forecast.update' && !operation.targetId) throw new Error('A forecast update requires the exact scenario id, or model for the shared planning expense.')
   return operation
 }
 

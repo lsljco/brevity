@@ -17,6 +17,7 @@ test('authoritative Assistant context includes current daily plan and rolling me
     loadSharedRecords: async()=>({
       lslj_finance_v9:{version:7,updatedAt:'2026-08-26T11:30:00.000Z',value:JSON.stringify({transactions:[{id:'mortgage',name:'Mortgage',freq:'monthly',start:'2026-08-01'},{id:'one',name:'One time',freq:'once'}]})},
       homehq_items_v1:{version:3,value:JSON.stringify([{id:'roof',title:'Roof'}])},
+      brevity_finance_scenarios_v1:{version:2,value:JSON.stringify({expenseMode:'scenario',planningExpense:21000,scenarios:[{id:'current',title:'Current',incomes:[{id:'salary',description:'Salary',monthlyNet:5000}]}]})},
     }),
   })
 
@@ -28,6 +29,7 @@ test('authoritative Assistant context includes current daily plan and rolling me
   assert.equal(context.activeSermon.title, 'From the Page to the Pattern')
   assert.equal(context.actionRecords.finance.recurringRecords[0].id,'mortgage')
   assert.equal(context.actionRecords.projects[0].id,'roof')
+  assert.equal(context.actionRecords.finance.forecasts.scenarios[0].incomes[0].id,'salary')
   assert.equal(context.actionRecords.versions.lslj_finance_v9,7)
   assert.ok(context.sources.every(source => source.authority === 'canonical'))
   assert.ok(context.sources.every(source => source.state === 'available'))
