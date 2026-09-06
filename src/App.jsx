@@ -199,7 +199,7 @@ export default function App() {
     setActivePillar(result.previous.pillarId)
     setActiveView(result.previous.viewId)
     setExpandedPillar(result.previous.pillarId||null)
-    setSidebarExpanded(false)
+    closeSidebarAfterNavigation()
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=result.previous.scrollTop||0}))
   }
   const openPillar=pillarId=>navigateTo(pillarId,'pillar-analysis')
