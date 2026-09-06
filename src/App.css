@@ -611,6 +611,43 @@ html, body {
   background: #000000;
 }
 
+.app-context-navigation {
+  position: sticky;
+  z-index: 90;
+  top: 0;
+  flex: 0 0 auto;
+  padding: 10px 24px 0;
+  pointer-events: none;
+}
+.app-context-navigation button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 8px 13px;
+  border: 1px solid rgba(197,164,109,.28);
+  border-radius: 999px;
+  background: rgba(12,11,10,.92);
+  color: var(--gold-light);
+  box-shadow: 0 8px 24px rgba(0,0,0,.28);
+  backdrop-filter: blur(18px);
+  font: 600 12px/1.2 var(--font);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.app-context-navigation button:hover,
+.app-context-navigation button:focus-visible {
+  border-color: rgba(197,164,109,.55);
+  background: rgba(197,164,109,.13);
+  outline: none;
+}
+.app-context-navigation span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-refresh-status {
   position: fixed;
   z-index: 1200;

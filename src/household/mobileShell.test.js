@@ -63,7 +63,7 @@ test('mobile Menu button identifies the navigation drawer it controls', () => {
 test('desktop sidebar state is explicit, persistent, and unaffected by module navigation', () => {
   assert.match(appSource, /useState\(initialSidebarExpanded\)/)
   assert.match(appSource, /const closeSidebarAfterNavigation=\(\)=>\{if\(isCompactNavigation\(\)\)setSidebarExpanded\(false\)\}/)
-  assert.match(appSource, /const navigateTo=.*closeSidebarAfterNavigation\(\)/)
+  assert.match(appSource, /const navigateTo=[\s\S]*?closeSidebarAfterNavigation\(\)/)
   assert.doesNotMatch(appSource, /<aside[^>]+onBlur=/)
   assert.match(appSource, /localStorage\.setItem\(SIDEBAR_STATE_KEY,next\?'expanded':'collapsed'\)/)
 })
@@ -85,4 +85,15 @@ test('expanded desktop navigation protects readable labels and a visible toggle 
 
 test('mobile refresh status stays in the page flow instead of covering page controls', () => {
   assert.match(mobileShellSource, /\.app-refresh-status\s*\{[^}]*position:\s*relative;[^}]*width:\s*calc\(100% - 24px\);[^}]*margin:\s*10px 12px 0;/s)
+})
+
+test('drill-down screens expose a labeled Back control sized for phone use', () => {
+  assert.match(appSource, /aria-label={`Back to \$\{navigationHistory\.at\(-1\)\.label\}`}/)
+  assert.match(appSource, /Back to \{navigationHistory\.at\(-1\)\.label\}/)
+  assert.match(mobileShellSource, /\.app-context-navigation button\s*\{[^}]*min-height:\s*40px;/s)
+})
+
+test('Finance keeps drill-down context while moving between its internal screens', () => {
+  assert.match(appSource, /key={`\$\{activePillar==='finance'\?'finance':activeView\}-\$\{sharedRevision\}`}/)
+  assert.match(appSource, /navigateFromFinance=viewId=>navigateTo\(viewId==='property'\?'household':'finance',viewId\)/)
 })
