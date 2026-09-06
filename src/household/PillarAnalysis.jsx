@@ -44,7 +44,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     return () => window.removeEventListener(PILLAR_ANALYSIS_EVENT, receive)
   },[pillar.id,plan?.date])
 
-  const analysis=result?.analysis
+  const analysis=result?.pillar===pillar.id && result?.date===plan?.date ? result.analysis : null
   const decisions=analysis?.decisions || []
   return <div className="pillar-analysis-page">
     <header className="pillar-analysis-hero">

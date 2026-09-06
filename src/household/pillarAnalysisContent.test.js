@@ -29,4 +29,5 @@ test('pillar analysis UI presents insight and growth without an ownership sectio
   assert.doesNotMatch(source, /Who Does What/)
   assert.doesNotMatch(source, />Ownership</)
   assert.doesNotMatch(source, /analysis\.owners/)
+  assert.match(source, /result\?\.pillar===pillar\.id && result\?\.date===plan\?\.date/)
 })
