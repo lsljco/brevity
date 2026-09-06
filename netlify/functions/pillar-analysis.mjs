@@ -4,7 +4,7 @@ const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
-export const PILLAR_ANALYSIS_SCHEMA_VERSION = 3;
+export const PILLAR_ANALYSIS_SCHEMA_VERSION = 4;
 
 export const BASE_ANALYSIS_GUIDANCE = `Produce a concise daily insight brief for one of the household's Seven Pillars. The brief must interpret the supplied facts and reveal the key message for this pillar today. It is not a schedule, an ownership report, or a task inventory.
 
@@ -14,6 +14,7 @@ Hard rules:
 - Spiritual Maturity is shared formation. Each household member is responsible for personally engaging the day's Scripture, reflection, prayer, and response. Do not require Lorenzo to lead anyone else's devotion or prayer unless the supplied plan contains a specific, explicit assignment for that date.
 - Center the brief on insight: what the data means, why it matters today, what pattern or opportunity deserves attention, and how the household can move forward or grow.
 - Provide no more than three high-value insights and no more than two meaningful next moves. Do not turn routine plan items into a checklist.
+- Keep each array item to one complete insight, prompt, signal, or decision. Never combine several entries inside one string.
 - A next move must be specific and useful, but it may be a conversation, adjustment, boundary, observation, or practice rather than a task.
 - Set decisions to an empty array unless the supplied data contains a clearly stated unresolved choice between concrete alternatives. A missing fact, a generic CONFIRM statement, or whether to perform an optional routine is not a decision.
 - Never manufacture decisions, assignments, deadlines, or facts. Use CONFIRM only for a material unknown inside the relevant insight, never as a standalone decision. Preserve human authority: AI offers perspective; household members decide.`;
@@ -36,7 +37,7 @@ const schema = {
     todayFocus: { type: 'string' },
     analysisPoints: { type: 'array', maxItems: 3, items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, detail:{type:'string'} }, required:['title','detail'] } },
     actionableInsights: { type: 'array', maxItems: 2, items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, whyItMatters:{type:'string'}, nextMove:{type:'string'} }, required:['title','whyItMatters','nextMove'] } },
-    reflectionPrompts: { type: 'array', maxItems: 2, items: { type: 'string' } },
+    reflectionPrompts: { type: 'array', maxItems: 3, items: { type: 'string' } },
     watchFor: { type: 'array', maxItems: 2, items: { type: 'string' } },
     decisions: { type: 'array', maxItems: 2, items: { type: 'string' } },
     growthSignal: { type: 'string' },

@@ -6,7 +6,7 @@ function safeJson(value, fallback) {
   try { return JSON.parse(value) } catch { return fallback }
 }
 
-export const PILLAR_ANALYSIS_SCHEMA_VERSION = 3
+export const PILLAR_ANALYSIS_SCHEMA_VERSION = 4
 export const pillarAnalysisStorageKey = (date, pillar) => `brevity_pillar_analysis_v${PILLAR_ANALYSIS_SCHEMA_VERSION}_${date}_${pillar}`
 
 const PILLAR_IDS = ['spiritual', 'health', 'fitness', 'household', 'education', 'finance', 'ministry']

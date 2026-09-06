@@ -13,6 +13,7 @@ test('every pillar receives the insight-led analysis contract', () => {
   assert.match(BASE_ANALYSIS_GUIDANCE, /Never infer that a pillar owner is responsible for another household member/)
   assert.match(BASE_ANALYSIS_GUIDANCE, /Set decisions to an empty array unless/)
   assert.match(BASE_ANALYSIS_GUIDANCE, /generic CONFIRM statement.*is not a decision/)
+  assert.match(BASE_ANALYSIS_GUIDANCE, /Never combine several entries inside one string/)
 })
 
 test('spiritual analysis preserves each member’s personal responsibility', () => {
