@@ -41,6 +41,11 @@ test('each prompt is isolated to the selected pillar data', () => {
   assert.match(prompt, /requested pillar is the absolute scope/)
 })
 
+test('education analysis keeps routine management out of the daily message', () => {
+  assert.match(PILLAR_INSTRUCTIONS.education, /standing routine and management details as background/)
+  assert.match(PILLAR_INSTRUCTIONS.education, /Never discuss who supervises, owns, or is accountable/)
+})
+
 test('pillar analysis UI presents insight and growth without an ownership section', async () => {
   const source = await readFile(new URL('./PillarAnalysis.jsx', import.meta.url), 'utf8')
   assert.match(source, /Meaningful Next Moves/)
