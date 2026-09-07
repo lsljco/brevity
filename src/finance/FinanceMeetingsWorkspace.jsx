@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { analyzeMeetingTranscript, transcribeMeetingAudio } from './meetingApi.js'
 import MetricDrilldown from './MetricDrilldown.jsx'
 import { syncMeetingActionToCalendar } from './meetingCalendar.js'
+import { canonicalMeetingNameText } from './meetingNames.js'
+import { HOUSEHOLD_MEMBERS } from '../household/dailyPlan.js'
+import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 import './FinanceMeetings.css'
 
 const STORAGE_KEY='brevity_finance_meetings_v1'
@@ -13,7 +16,17 @@ const AUTO_KEYS=['currentMonthlyNet','actualMonthlyNet','projectedMonthlyNet','o
 
 const freshSnapshot=()=>({goalMonthlyNet:50000,currentMonthlyNet:'',actualMonthlyNet:'',projectedMonthlyNet:'',operatingBalance:'',operatingAvailable:'',todayInflows:'',todayObligations:'',approvedDiscretionary:'',weekInflows:'',weekObligations:'',monthForecast:'',monthStatus:'yellow',expenseFocus:'Gym · Phone · Cable · Subscriptions · Food waste'})
 const fresh=()=>({activeCadence:'weekly',meetings:[],corrections:[],openActions:[],cadenceNotes:{},snapshot:freshSnapshot(),autoSnapshot:{}})
-const readStore=()=>{try{const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');return{...fresh(),...parsed,snapshot:{...freshSnapshot(),...(parsed.snapshot||{})}}}catch{return fresh()}}
+const repairMeetingNames=workspace=>{
+  let changed=false
+  const openActions=(workspace.openActions||[]).map(item=>{
+    const text=canonicalMeetingNameText(item.text),owner=canonicalMeetingNameText(item.owner)
+    if(text===item.text&&owner===(item.owner||''))return item
+    changed=true
+    return{...item,text,owner}
+  })
+  return changed?{...workspace,openActions}:workspace
+}
+const readStore=()=>{try{const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');return repairMeetingNames({...fresh(),...parsed,snapshot:{...freshSnapshot(),...(parsed.snapshot||{})}})}catch{return fresh()}}
 const money=value=>value===''||value==null||Number.isNaN(Number(value))?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(value))
 const id=prefix=>`${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`
 const meetingDate=()=>new Date().toISOString().slice(0,10)
@@ -25,7 +38,7 @@ function Metric({label,value,tone='neutral',note,onClick}){
 function Action({item,onToggle,onSave}){
   const[editing,setEditing]=useState(false),[draft,setDraft]=useState(item)
   useEffect(()=>setDraft(item),[item])
-  if(editing)return <article className="fm-action-row fm-edit-row"><div className="fm-inline-editor"><textarea aria-label="Commitment text" value={draft.text} onChange={event=>setDraft(value=>({...value,text:event.target.value}))}/><input aria-label="Commitment owner" value={draft.owner||''} onChange={event=>setDraft(value=>({...value,owner:event.target.value}))} placeholder="Family"/><input aria-label="Commitment due date" type="date" value={draft.due||''} onChange={event=>setDraft(value=>({...value,due:event.target.value}))}/><div><button type="button" onClick={()=>{setDraft(item);setEditing(false)}}>Cancel</button><button type="button" className="fm-save" onClick={()=>{onSave(item.id,draft);setEditing(false)}}>Save</button></div></div></article>
+  if(editing)return <article className="fm-action-row fm-edit-row"><div className="fm-inline-editor"><textarea aria-label="Commitment text" value={draft.text} onChange={event=>setDraft(value=>({...value,text:event.target.value}))}/><select aria-label="Commitment owner" value={draft.owner||''} onChange={event=>setDraft(value=>({...value,owner:event.target.value}))}><option value="">Family</option>{HOUSEHOLD_MEMBERS.map(member=><option key={member}>{member}</option>)}</select><input aria-label="Commitment due date" type="date" value={draft.due||''} onChange={event=>setDraft(value=>({...value,due:event.target.value}))}/><div><button type="button" onClick={()=>{setDraft(item);setEditing(false)}}>Cancel</button><button type="button" className="fm-save" onClick={()=>{onSave(item.id,draft);setEditing(false)}}>Save changes</button></div></div></article>
   return <article className="fm-action-row"><button type="button" className={`fm-check${item.status==='done'?' is-done':''}`} onClick={()=>onToggle(item.id)}><i className={`ti ${item.status==='done'?'ti-check':'ti-circle'}`}/></button><div><strong>{item.text}</strong><span>{item.owner||'Family'}{item.due?` · ${item.due}`:' · Meeting date'}{item.calendarPublished?' · Calendar':''}{item.updatedBy?` · edited by ${item.updatedBy}`:''}</span></div><button type="button" className="fm-edit" aria-label={`Edit ${item.text}`} onClick={()=>setEditing(true)}><i className="ti ti-edit"/> Edit</button></article>
 }
 
@@ -52,6 +65,11 @@ export default function FinanceMeetingsWorkspace({liveSnapshot={},drilldowns={},
   const cadence=workspace.activeCadence||'weekly',snapshot=workspace.snapshot||freshSnapshot()
 
   useEffect(()=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(workspace))}catch{}},[workspace])
+  useEffect(()=>{
+    const receiveSharedUpdate=event=>{if(event.detail?.keys?.includes(STORAGE_KEY))setWorkspace(readStore())}
+    window.addEventListener(SHARED_STATE_EVENT,receiveSharedUpdate)
+    return()=>window.removeEventListener(SHARED_STATE_EVENT,receiveSharedUpdate)
+  },[])
   useEffect(()=>{
     if(!liveSnapshot||typeof liveSnapshot!=='object')return
     setWorkspace(current=>{
@@ -115,7 +133,7 @@ export default function FinanceMeetingsWorkspace({liveSnapshot={},drilldowns={},
   const updateAction=(actionId,changes)=>{
     const existing=(workspace.openActions||[]).find(item=>item.id===actionId)
     if(!existing||!String(changes.text||'').trim())return
-    const updated={...existing,text:String(changes.text).trim(),owner:String(changes.owner||'').trim(),due:changes.due||'',updatedAt:new Date().toISOString(),updatedBy:currentMember}
+    const updated={...existing,text:canonicalMeetingNameText(changes.text).trim(),owner:canonicalMeetingNameText(changes.owner).trim(),due:changes.due||'',updatedAt:new Date().toISOString(),updatedBy:currentMember}
     if(updated.calendarPublished)syncMeetingActionToCalendar(localStorage,updated)
     setWorkspace(current=>({...current,openActions:(current.openActions||[]).map(item=>item.id===actionId?updated:item)}))
   }
