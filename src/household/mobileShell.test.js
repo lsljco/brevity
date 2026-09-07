@@ -7,6 +7,8 @@ const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const mobileShellSource = readFileSync(new URL('../MobileShell.css', import.meta.url), 'utf8')
 const themeCoverageSource = readFileSync(new URL('../ThemeCoverage.css', import.meta.url), 'utf8')
 const financePlannerSource = readFileSync(new URL('../finance/FinancePlanner.jsx', import.meta.url), 'utf8')
+const familyCalendarSource = readFileSync(new URL('../family/FamilyCalendar.jsx', import.meta.url), 'utf8')
+const homeHqSource = readFileSync(new URL('../homehq/HomeHQ.jsx', import.meta.url), 'utf8')
 
 test('phone drawer styles load after the general app shell styles', () => {
   const appStyles = mainSource.indexOf("import './App.css'")
@@ -105,7 +107,11 @@ test('drill-down screens expose a labeled Back control sized for phone use', () 
   assert.match(mobileShellSource, /\.app-context-navigation button\s*\{[^}]*min-height:\s*40px;/s)
 })
 
-test('Finance keeps drill-down context while moving between its internal screens', () => {
-  assert.match(appSource, /key={`\$\{activePillar==='finance'\?'finance':activeView\}-\$\{sharedRevision\}`}/)
+test('background household sync preserves every active drill-down and editor', () => {
+  assert.doesNotMatch(appSource, /sharedRevision/)
+  assert.doesNotMatch(appSource, /key={`\$\{activePillar==='finance'/)
+  assert.match(financePlannerSource, /addEventListener\(SHARED_STATE_EVENT, receiveSharedUpdate\)/)
+  assert.match(familyCalendarSource, /addEventListener\(SHARED_STATE_EVENT,refresh\)/)
+  assert.match(homeHqSource, /addEventListener\(SHARED_STATE_EVENT,receiveSharedUpdate\)/)
   assert.match(appSource, /navigateFromFinance=viewId=>navigateTo\(viewId==='property'\?'household':'finance',viewId\)/)
 })
