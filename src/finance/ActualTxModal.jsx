@@ -34,7 +34,8 @@ function SearchableInput({ value, onChange, onBlur, options, ariaLabel, placehol
   const listId = useId()
   const rootRef = useRef(null)
   const [open, setOpen] = useState(false)
-  const filtered = filterTypeaheadOptions(options, value)
+  const [filtering, setFiltering] = useState(false)
+  const filtered = filterTypeaheadOptions(options, filtering ? value : '')
 
   useEffect(() => {
     const close = event => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
@@ -51,8 +52,8 @@ function SearchableInput({ value, onChange, onBlur, options, ariaLabel, placehol
         aria-autocomplete="list"
         aria-expanded={open}
         value={value}
-        onChange={event => { onChange(event); setOpen(true) }}
-        onFocus={() => setOpen(true)}
+        onChange={event => { onChange(event); setFiltering(true); setOpen(true) }}
+        onFocus={event => { setFiltering(false); setOpen(true); event.currentTarget.select() }}
         onBlur={event => { window.setTimeout(() => onBlur?.(event), 0) }}
         onKeyDown={event => {
           if (event.key === 'Escape') setOpen(false)
@@ -70,7 +71,7 @@ function SearchableInput({ value, onChange, onBlur, options, ariaLabel, placehol
         {filtered.length ? filtered.map(option => <button key={option} type="button" role="option"
           aria-selected={option.toLocaleLowerCase() === String(value || '').toLocaleLowerCase()}
           onPointerDown={event => event.preventDefault()}
-          onClick={() => { onChange({ target: { value: option } }); setOpen(false) }}
+          onClick={() => { onChange({ target: { value: option } }); setFiltering(false); setOpen(false) }}
           style={{ width: '100%', border: 0, borderRadius: 6, padding: '9px 10px', background: 'transparent', color: '#F7F6F2', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 13 }}>
           {option}
         </button>) : <div style={{ padding: '9px 10px', color: '#888884', fontSize: 12 }}>No saved matches. Your typed value can still be saved.</div>}
