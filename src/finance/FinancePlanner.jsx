@@ -542,6 +542,17 @@ const LUXURY_CSS = `
 .finance-root select option { background: #111; color: var(--brevity-white); }
 .finance-root button { font-weight: 400 !important; }
 
+.transaction-list-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: end;
+}
+.transaction-list-controls > * { min-width: 0; }
+.transaction-list-controls > button { min-height: 38px; }
+.transaction-list-controls.is-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
 /* Calendar cells */
 .cal-grid {
   display: grid !important;
@@ -825,6 +836,8 @@ const LUXURY_CSS = `
   .dash-main-grid { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }
   .dash-main-grid > * { grid-column: 1 !important; grid-row: auto !important; }
   .dash-card[style*="span 2"] { min-height: 520px !important; }
+  .transaction-list-controls,
+  .transaction-list-controls.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 768px) {
   .dash-body { padding: 16px !important; }
@@ -833,6 +846,8 @@ const LUXURY_CSS = `
   .kpi-sparkline { display: none !important; }
   .dash-search { width: 100% !important; }
   .hq-proj-grid { grid-template-columns: 1fr !important; }
+  .transaction-list-controls,
+  .transaction-list-controls.is-compact { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .kpi-grid { grid-template-columns: 1fr !important; }
@@ -1177,7 +1192,7 @@ function TransactionListControls({ options, onChange, showDateFilters = true, co
       : [['desc', 'Greatest to least'], ['asc', 'Least to greatest']]
   const inputStyle = { minHeight: 38, borderRadius: 9, border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,.04)', color: 'var(--white)', padding: '7px 10px', fontSize: 12, minWidth: 0 }
   return (
-    <section className="transaction-list-controls" aria-label="Sort and filter transactions" style={{ display: 'grid', gridTemplateColumns: compact ? 'minmax(150px,1fr) repeat(4,minmax(105px,.55fr))' : 'minmax(180px,1.4fr) repeat(6,minmax(110px,.7fr)) auto', gap: 8, marginBottom: 16, alignItems: 'end' }}>
+    <section className={`transaction-list-controls${compact ? ' is-compact' : ''}`} aria-label="Sort and filter transactions">
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Description</span><input aria-label="Filter by description" type="search" placeholder="Search description" value={options.description} onChange={event => set('description', event.target.value)} style={inputStyle}/></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Minimum amount</span><input aria-label="Minimum amount" type="number" min="0" step="0.01" placeholder="$0" value={options.minAmount} onChange={event => set('minAmount', event.target.value)} style={inputStyle}/></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Maximum amount</span><input aria-label="Maximum amount" type="number" min="0" step="0.01" placeholder="Any" value={options.maxAmount} onChange={event => set('maxAmount', event.target.value)} style={inputStyle}/></label>
@@ -1195,7 +1210,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const dataRef                 = useRef(data)
   dataRef.current               = data
   const [formView, setFormView] = useState(null) // 'tx-form' | 'acct-form' | null
-  const [selectedAccts, setSelectedAccts] = useState(null) // null = all selected
+  const [selectedAccts, setSelectedAccts] = useState(() => {
+    const operating = data.accounts.find(account => account.name === 'Operating Account')
+    return operating ? new Set([operating.id]) : null
+  }) // Finance opens on the household operating account; null means all selected.
   const [acctFilterOpen, setAcctFilterOpen] = useState(false)
   const [showActuals, setShowActuals] = useState(false)
   const [plaidActuals, setPlaidActuals] = useState(() => {
@@ -1348,17 +1366,6 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     () => selectOperatingTransactions(data.accounts, data.transactions),
     [data.accounts, data.transactions],
   )
-
-  const toggleAcct = (id) => {
-    setSelectedAccts(prev => {
-      const current = prev ?? new Set(data.accounts.map(a => a.id))
-      const next = new Set(current)
-      if (next.has(id)) { next.delete(id); if (next.size === 0) return null }
-      else next.add(id)
-      if (next.size === data.accounts.length) return null
-      return next
-    })
-  }
 
   const proj = useMemo(() => {
     // Pass today's actual account balance as an anchor so the projection for
@@ -2072,7 +2079,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
         return (
           <button
             key={acct.id}
-            onClick={() => toggleAcct(acct.id)}
+            onClick={() => setSelectedAccts(new Set([acct.id]))}
             style={{
               padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
               border: isOn && !allSelected ? '1px solid rgba(197,164,109,0.45)' : '1px solid rgba(255,255,255,0.10)',
