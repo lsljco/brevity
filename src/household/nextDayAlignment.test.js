@@ -30,3 +30,11 @@ test('today alignment is a separate action that saves only today’s plan', () =
   assert.match(alignmentSource, /Today’s Alignment/)
   assert.match(alignmentSource, /These updates apply only to today/)
 })
+
+test('Today displays the resolved rolling breakfast, lunch and dinner with their images', () => {
+  assert.match(householdTodaySource, /resolvedMeals \|\| \{\}/)
+  assert.match(householdTodaySource, /meals=\{todayMeals\}/)
+  assert.match(dashboardSource, /Today’s Meals/)
+  assert.match(dashboardSource, /Object\.entries\(MEAL_LABELS\)/)
+  assert.match(dashboardSource, /<img src=\{meal\.image\} alt=\{`\$\{label\}: \$\{meal\.name\}`\}/)
+})

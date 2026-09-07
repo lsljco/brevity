@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   calculateMonthlyCashFlow,
   calculateScheduledTotalsForMonth,
+  calculateScheduledTotalsForRange,
+  calculateTransactionAmountForRange,
   calculateTransactionAmountForMonth,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
@@ -22,6 +24,20 @@ test('selects the operating account independently of the visible account filter'
     selectOperatingTransactions(accounts, transactions).map(transaction => transaction.id),
     ['operating-income', 'legacy-operating-income'],
   )
+})
+
+test('selected-timeframe totals count only occurrences inside the requested range', () => {
+  const transactions = [
+    { id: 'weekly-income', amount: 100, type: 'income', freq: 'weekly', start: '2026-09-04' },
+    { id: 'one-time-income', amount: 250, type: 'income', freq: 'once', start: '2026-09-10' },
+    { id: 'weekly-expense', amount: 40, type: 'expense', freq: 'weekly', start: '2026-09-04' },
+    { id: 'one-time-expense', amount: 90, type: 'expense', freq: 'once', start: '2026-09-08' },
+  ]
+  const range = { from: '2026-09-07', to: '2026-09-13' }
+
+  assert.equal(calculateTransactionAmountForRange(transactions[0], range), 100)
+  assert.deepEqual(calculateScheduledTotalsForRange(transactions, range), { income: 350, expenses: 130, net: 220 })
+  assert.deepEqual(calculateScheduledTotalsForRange(transactions, range, { recurringOnly: true }), { income: 100, expenses: 40, net: 60 })
 })
 
 test('counts actual monthly occurrences and respects mid-month income endings', () => {

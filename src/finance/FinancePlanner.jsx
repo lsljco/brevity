@@ -20,7 +20,9 @@ import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 import {
   calculateMonthlyCashFlow,
   calculateScheduledTotalsForMonth,
+  calculateScheduledTotalsForRange,
   calculateTransactionAmountForMonth,
+  calculateTransactionAmountForRange,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
 import { FINANCE_REFRESH_EVENT, fetchLatestPlaidTransactions, mergePlaidBalances } from './financeRefresh.js'
@@ -1380,8 +1382,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     transactions: data.transactions.filter(tx => activeAcctIds.has(tx.acct) || (tx.type === 'transfer' && tx.transferTo && activeAcctIds.has(tx.transferTo))),
   }), [data, activeAcctIds])
 
-  // Cash Flow is an operating-account metric. It must not change when the
-  // dashboard account filter is switched to savings or project accounts.
+  // Keep a separate operating-account view for household alignment and
+  // scenario-modeling calculations that are intentionally operating-only.
   const operatingTransactions = useMemo(
     () => selectOperatingTransactions(data.accounts, data.transactions),
     [data.accounts, data.transactions],
@@ -1469,8 +1471,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     months[month].total += Math.abs(Number(tx.amount) || 0)
     return months
   }, {})).sort(([a], [b]) => b.localeCompare(a)), [transactionViewActuals])
-  const filteredScheduledViewTransactions = useMemo(() => (transactionFilter?.budgetLines || fd.transactions).filter(tx => {
+  const filteredScheduledViewTransactions = useMemo(() => (transactionFilter?.budgetLines || fd.transactions).map(tx => {
+    if (!transactionFilter?.range || transactionFilter?.budgetLines) return tx
+    const rangeAmount = calculateTransactionAmountForRange(tx, transactionFilter.range, { recurringOnly:Boolean(transactionFilter.recurringOnly) })
+    return { ...tx, rangeAmount, occurrenceCount:Math.round(rangeAmount / Math.max(Math.abs(Number(tx.amount) || 0), 0.01)) }
+  }).filter(tx => {
     if (!transactionFilter?.scheduled) return true
+    if (transactionFilter.range && !transactionFilter.budgetLines && !tx.rangeAmount) return false
     if (transactionFilter.ids?.length && !transactionFilter.ids.includes(tx.id)) return false
     if (transactionFilter.direction && tx.type !== transactionFilter.direction) return false
     if (transactionFilter.value && transactionFilter.displayBy === 'category' && tx.cat !== transactionFilter.value) return false
@@ -1481,7 +1488,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     [filteredScheduledViewTransactions, transactionListOptions],
   )
   const scheduledViewStats = useMemo(() => scheduledViewTransactions.reduce((stats, tx) => {
-    const amount = Math.abs(Number(tx.amount) || 0)
+    const amount = Math.abs(Number(tx.rangeAmount ?? tx.amount) || 0)
     if (tx.type === 'income') stats.income += amount
     if (tx.type === 'expense') stats.expenses += amount
     return stats
@@ -1493,7 +1500,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     setView('transactions')
   }
   const openScheduledTransactions = (filter = null) => {
-    setTransactionFilter(filter ? { ...filter, scheduled: true } : { scheduled: true, label: 'Scheduled transactions' })
+    setTransactionFilter(filter ? { ...filter, scheduled: true, range:filter.range || financeRange } : { scheduled: true, range:financeRange, label: 'Scheduled transactions' })
     setShowActuals(false)
     setView('transactions')
   }
@@ -1850,6 +1857,32 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const monthlyIncome = monthlyTotals.income
   const monthlyExpense = monthlyTotals.recurringExpenses
   const monthlyCashFlow = monthlyTotals.cashFlow
+  const expectedRangeTotals = useMemo(
+    () => calculateScheduledTotalsForRange(fd.transactions, financeRange),
+    [fd.transactions, financeRange],
+  )
+  const recurringRangeTotals = useMemo(
+    () => calculateScheduledTotalsForRange(fd.transactions, financeRange, { recurringOnly:true }),
+    [fd.transactions, financeRange],
+  )
+  const actualRangeTotals = useMemo(() => timeframeActuals.reduce((totals, transaction) => {
+    const amount = Math.abs(Number(transaction.amount) || 0)
+    if (transactionDirection(transaction) === 'income') totals.income += amount
+    else if (transactionDirection(transaction) === 'expense') totals.expenses += amount
+    totals.net = totals.income - totals.expenses
+    return totals
+  }, { income:0, expenses:0, net:0 }), [timeframeActuals])
+  const dashboardIncome = showActuals ? actualRangeTotals.income : expectedRangeTotals.income
+  const dashboardExpense = showActuals ? actualRangeTotals.expenses : recurringRangeTotals.expenses
+  const dashboardCashFlow = showActuals ? actualRangeTotals.net : expectedRangeTotals.net
+  const expectedIncomeSources = useMemo(
+    () => fd.transactions.filter(transaction => transaction.type === 'income' && calculateTransactionAmountForRange(transaction, financeRange) > 0),
+    [fd.transactions, financeRange],
+  )
+  const recurringExpenseSources = useMemo(
+    () => fd.transactions.filter(transaction => transaction.type === 'expense' && transaction.freq !== 'once' && calculateTransactionAmountForRange(transaction, financeRange, { recurringOnly:true }) > 0),
+    [fd.transactions, financeRange],
+  )
   const dailyBudget = useMemo(() => loadBudget(), [view])
   const todayAlignment = useMemo(() => buildDailyAlignmentSnapshot({
     date: todayKey,
@@ -2173,15 +2206,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           {/* ── 5 KPI Cards ── */}
           <div className="kpi-grid">
             {[
-              { label: 'Total Balance',    value: fmtMoney(totBal),                                                        sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`,                trend: `vs last month`, icon: 'ti-wallet',          spark: sparkBalance,   good: true, target: 'accounts' },
-              { label: 'Monthly Net Income', value: fmtMoney(monthlyIncome),                                               sub: `${incomeSources.length} streams`,                                                       trend: 'this month',     icon: 'ti-trending-up',     spark: sparkIncome,    good: true, target: 'recurring' },
-              { label: 'Recurring Expenses', value: fmtMoney(monthlyExpense),                                              sub: `${operatingTransactions.filter(t=>t.type==='expense' && t.freq !== 'once').length} items`, trend: 'this month',   icon: 'ti-trending-down',   spark: sparkExpense,   good: false, target: 'recurring' },
-              { label: 'Cash Flow',          value: (monthlyCashFlow >= 0 ? '+' : '') + fmtMoney(monthlyCashFlow),         sub: 'Net income minus recurring expenses',                                                   trend: 'this month',     icon: 'ti-arrows-exchange', spark: sparkNet,       good: monthlyCashFlow >= 0, target: 'recurring' },
-              { label: '90-Day Floor',     value: minDay ? fmtMoney(minBal) : '—',                                         sub: minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—',        trend: 'lowest point',   icon: 'ti-chart-bar',       spark: sparkFloor,     good: minBal >= 1000, target: 'calendar' },
+              { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'current balance', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
+              { label: showActuals ? 'Realized Income' : financeRange.preset === 'this-month' ? 'Monthly Net Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(transaction => transactionDirection(transaction) === 'income').length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted and pending' : 'selected timeframe', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
+              { label: showActuals ? 'Actual Expenses' : 'Recurring Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${timeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} realized transactions` : `${recurringExpenseSources.length} recurring items`, trend:showActuals ? 'posted and pending' : 'selected timeframe', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', label:'Actual expenses' }) : openScheduledTransactions({ direction:'expense', recurringOnly:true, label:'Recurring expenses' }) },
+              { label: showActuals ? 'Actual Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Realized income minus actual expenses' : 'Expected income minus expected outflow', trend:'selected timeframe', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ label:'Actual cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
+              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'selected-account forecast', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) setSelDay(toISO(minDay)); setView('calendar') } },
             ].map((kpi, i) => {
               const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
               return (
-                <div key={i} className="kpi-card" role="button" tabIndex={0} title="View what makes up this total" onClick={() => setView(kpi.target)} onKeyDown={e => { if (e.key === 'Enter') setView(kpi.target) }} style={{ cursor: 'pointer' }}>
+                <div key={i} className="kpi-card" role="button" tabIndex={0} title="View what makes up this total" onClick={kpi.open} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') kpi.open() }} style={{ cursor: 'pointer' }}>
                   <div className="kpi-icon"><i className={`ti ${kpi.icon}`} /></div>
                   <div className="kpi-label">{kpi.label}</div>
                   <div className="kpi-value">{kpi.value}</div>
@@ -2784,15 +2817,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'income', label: 'Income' }):openScheduledTransactions({ direction:'income', label:'Scheduled income' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--income-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{showActuals ? 'Income' : 'Monthly Net Income'}</p>
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income : transactionFilter?.budgetLines ? scheduledViewStats.income : monthlyIncome)}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income : transactionFilter?.range || transactionFilter?.budgetLines ? scheduledViewStats.income : monthlyIncome)}</p>
             </div>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'expense', label: 'Expenses' }):openScheduledTransactions({ direction:'expense', label:'Scheduled expenses' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{showActuals ? 'Expenses' : 'Recurring Expenses'}</p>
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.expenses : transactionFilter?.budgetLines ? scheduledViewStats.expenses : monthlyExpense)}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.expenses : transactionFilter?.range || transactionFilter?.budgetLines ? scheduledViewStats.expenses : monthlyExpense)}</p>
             </div>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions(null):openScheduledTransactions()} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}`, cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: monthlyCashFlow >= 0 ? 'var(--income-color)' : 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Net Cash Flow</p>
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income - transactionViewStats.expenses : transactionFilter?.budgetLines ? scheduledViewStats.income - scheduledViewStats.expenses : monthlyCashFlow)}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income - transactionViewStats.expenses : transactionFilter?.range || transactionFilter?.budgetLines ? scheduledViewStats.income - scheduledViewStats.expenses : monthlyCashFlow)}</p>
             </div>
           </div>
 
@@ -2838,7 +2871,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                     )
                   })
             ) : (
-              // ── Projected mode: scheduled recurring transactions ──
+              // ── Projected mode: scheduled transactions ──
               scheduledViewTransactions.map(tx => {
                   const freqLabel = tx.budgetLine ? `Budgeted for ${transactionFilter?.budgetPeriodLabel}` : FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
                   return (
@@ -2848,10 +2881,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}{tx.start ? ` · Starts ${new Date(`${tx.start}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}{tx.occurrenceCount ? ` · ${tx.occurrenceCount} occurrence${tx.occurrenceCount === 1 ? '' : 's'} in timeframe` : tx.start ? ` · Starts ${new Date(`${tx.start}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
                       </div>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
-                        {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
+                        {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.rangeAmount ?? tx.amount)}
                       </p>
                       {!tx.budgetLine && <div style={{ display: 'flex', gap: 4 }}>
                         <button onClick={() => { setEditTx({ ...tx }); setView('tx-form') }}
