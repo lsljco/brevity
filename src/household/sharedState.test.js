@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { SHARED_STATE_KEYS, buildSharedRecord, hashValue, reconcileSharedRecords, writeSharedJson } from './sharedState.js'
+import { SHARED_STATE_KEYS, buildSharedRecord, hashValue, reconcileSharedRecords, shouldUploadSharedWrite, writeSharedJson } from './sharedState.js'
 
 function memoryStorage(values = {}) {
   const data = new Map(Object.entries(values))
@@ -57,4 +57,11 @@ test('shared JSON writes keep a local cache and backup while preparing a version
   assert.equal(storage.getItem('brevity_household_inventory_v1_backup'), JSON.stringify(value))
   assert.equal(result.record.updatedAt, '2026-09-04T15:31:00.000Z')
   assert.equal(result.record.expectedVersion, 0)
+})
+
+test('identical shared writes cannot create a multi-device synchronization loop', () => {
+  const storage = memoryStorage({ lslj_finance_v9:'{"version":9,"transactions":[]}' })
+  assert.equal(shouldUploadSharedWrite(storage, 'lslj_finance_v9', '{"version":9,"transactions":[]}'), false)
+  assert.equal(shouldUploadSharedWrite(storage, 'lslj_finance_v9', '{"version":9,"transactions":[{"id":"new"}]}'), true)
+  assert.equal(shouldUploadSharedWrite(storage, 'unshared_ui_preference', 'anything'), false)
 })
