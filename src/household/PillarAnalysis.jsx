@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { generatePillarAnalysis, PILLAR_ANALYSIS_EVENT, readPillarAnalysis } from './pillarAnalysisApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
 import SermonRepository from './SermonRepository.jsx'
@@ -13,18 +13,27 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
   const [result,setResult]=useState(null)
   const [state,setState]=useState('idle')
   const [error,setError]=useState('')
+  const planRef=useRef(plan)
+  const inFlightRef=useRef('')
+  planRef.current=plan
 
   const run = useCallback(async force => {
-    if (!plan?.date) return
+    const currentPlan=planRef.current
+    if (!currentPlan?.date) return
+    const requestKey=`${pillar.id}:${currentPlan.date}`
+    if(inFlightRef.current===requestKey)return
+    inFlightRef.current=requestKey
     setState('loading'); setError('')
     try {
-      const response = await generatePillarAnalysis({ pillar:pillar.id, date:plan.date, plan, currentMember, force })
+      const response = await generatePillarAnalysis({ pillar:pillar.id, date:currentPlan.date, plan:currentPlan, currentMember, force })
       setResult(response)
       setState('ready')
     } catch (err) {
       setState('error'); setError(err.message || 'Could not generate this pillar analysis.')
+    } finally {
+      if(inFlightRef.current===requestKey)inFlightRef.current=''
     }
-  }, [currentMember, pillar.id, plan])
+  }, [currentMember, pillar.id])
 
   useEffect(()=>{
     if(planState!=='ready' || !plan?.date) return
