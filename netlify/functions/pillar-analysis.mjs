@@ -1,10 +1,16 @@
 import householdAuth from './household-auth.js';
+import { getStore } from '@netlify/blobs';
 
 const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
+const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
+const STORE_NAME = 'brevity-household';
 
 export const PILLAR_ANALYSIS_SCHEMA_VERSION = 5;
+const cacheSegment = value => String(value || '').toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-|-$/g,'') || 'unknown';
+const cacheKey = (date,pillar,planVersion,member) => `${HOUSEHOLD_ID}/pillar-analysis/v${PILLAR_ANALYSIS_SCHEMA_VERSION}/${date}/${pillar}/plan-${Number(planVersion || 0)}/${cacheSegment(member)}`;
+const store = () => getStore({ name:STORE_NAME, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN });
 
 export const BASE_ANALYSIS_GUIDANCE = `Produce a concise daily insight brief for one of the household's Seven Pillars. The brief must interpret the supplied facts and reveal the key message for this pillar today. It is not a schedule, an ownership report, or a task inventory.
 
@@ -68,10 +74,16 @@ export const handler = async event => {
 
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error:'Invalid request body.' }); }
-  const { pillar, date, plan, localContext = {} } = body;
+  const { pillar, date, plan, localContext = {}, force = false } = body;
   const currentMember = session.member;
   if (!PILLARS.has(pillar)) return json(400, { error:'Unknown Seven Pillar.' });
   if (!date || !plan) return json(400, { error:'Date and household plan are required.' });
+
+  const dataStore=store();
+  if(!force){
+    const cached=await dataStore.get(cacheKey(date,pillar,plan.version,currentMember),{type:'json'}).catch(()=>null);
+    if(cached?.schemaVersion===PILLAR_ANALYSIS_SCHEMA_VERSION)return json(200,{...cached,cached:true});
+  }
 
   const prompt = buildPillarAnalysisPrompt({ pillar, date, plan, currentMember, localContext });
 
@@ -97,5 +109,7 @@ export const handler = async event => {
 
   let analysis;
   try { analysis = JSON.parse(outputText(payload)); } catch { return json(502, { error:'Brevity AI returned an unreadable analysis.' }); }
-  return json(200, { schemaVersion:PILLAR_ANALYSIS_SCHEMA_VERSION, pillar, date, generatedAt:new Date().toISOString(), model:MODEL, analysis, cached:false });
+  const result={ schemaVersion:PILLAR_ANALYSIS_SCHEMA_VERSION, pillar, date, generatedAt:new Date().toISOString(), model:MODEL, analysis };
+  await dataStore.setJSON(cacheKey(date,pillar,plan.version,currentMember),result).catch(error=>console.error('[pillar-analysis cache]',error));
+  return json(200, { ...result, cached:false });
 };
