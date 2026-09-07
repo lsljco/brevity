@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { buildBudgetBreakdown, buildBudgetCategoryItems, budgetBreakdownTotal } from './budgetBreakdown.js'
+
+const financeSource = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
+
+test('Budget restores the selected month after a drill-down', () => {
+  assert.match(financeSource, /initialMonth=\{transactionFilter\?\.budgetMonth\}/)
+  assert.match(financeSource, /budgetMonth:\s*monthKey/)
+  assert.match(financeSource, /new Date\(Number\(initialMonth\.slice\(0, 4\)\), Number\(initialMonth\.slice\(5, 7\)\) - 1, 1\)/)
+})
 
 test('budget categories list a repeated named series only once', () => {
   const categories = buildBudgetCategoryItems([
