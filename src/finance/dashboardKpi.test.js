@@ -7,7 +7,7 @@ const source = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'u
 test('dashboard income and expense cards use matching timeframe drill-downs', () => {
   assert.match(source, /dashboardIncome = showActuals \? actualRangeTotals\.income : expectedRangeTotals\.income/)
   assert.match(source, /dashboardExpense = showActuals \? actualRangeTotals\.expenses : recurringRangeTotals\.expenses/)
-  assert.match(source, /openFilteredTransactions\(\{ direction:'income', label:'Realized income' \}\)/)
+  assert.match(source, /openFilteredTransactions\(\{ direction:'income', realizedIncomeOnly:true, label:'Realized income' \}\)/)
   assert.match(source, /openScheduledTransactions\(\{ direction:'income', label:'Expected income' \}\)/)
   assert.match(source, /openFilteredTransactions\(\{ direction:'expense', label:'Actual expenses' \}\)/)
   assert.match(source, /openScheduledTransactions\(\{ direction:'expense', recurringOnly:true, label:'Recurring expenses' \}\)/)
@@ -15,8 +15,9 @@ test('dashboard income and expense cards use matching timeframe drill-downs', ()
 
 test('dashboard cash flow and 90-day floor drill into their own supporting records', () => {
   assert.match(source, /dashboardCashFlow = showActuals \? actualRangeTotals\.net : expectedRangeTotals\.net/)
+  assert.match(source, /openFilteredTransactions\(\{ excludeTransfers:true, label:'Actual cash flow' \}\)/)
   assert.match(source, /openScheduledTransactions\(\{ label:'Expected cash flow' \}\)/)
-  assert.match(source, /if \(minDay\) setSelDay\(toISO\(minDay\)\); setView\('calendar'\)/)
+  assert.match(source, /setCalMonth\(minDay\.getMonth\(\)\); setCalYear\(minDay\.getFullYear\(\)\)/)
 })
 
 test('scheduled timeframe drill-downs display occurrence totals instead of one base amount', () => {

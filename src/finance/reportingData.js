@@ -46,6 +46,13 @@ export function transactionDirection(transaction) {
   return Number(transaction?.amount) < 0 ? 'income' : 'expense'
 }
 
+export function isRealizedIncomeTransaction(transaction) {
+  if (isTransferTransaction(transaction) || Number(transaction?.amount) >= 0) return false
+  const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
+  const name = String(transaction?.name || transaction?.merchant_name || transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
+  return /\b(?:income|payroll|salary|wages?|interest|dividend|pension|benefits?|reimbursement)\b/.test(`${category} ${name}`)
+}
+
 export function isTransferTransaction(transaction) {
   const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
   const name = String(transaction?.name || transaction?.merchant_name || '').toLowerCase()
@@ -110,6 +117,7 @@ export function matchesTransactionFilter(transaction, filter = {}) {
   if (filter.dateFrom && String(transaction.date || '') < filter.dateFrom) return false
   if (filter.dateTo && String(transaction.date || '') > filter.dateTo) return false
   if (filter.excludeTransfers && isTransferTransaction(transaction)) return false
+  if (filter.realizedIncomeOnly && !isRealizedIncomeTransaction(transaction)) return false
   if (filter.direction && transactionDirection(transaction) !== filter.direction) return false
   if (filter.displayBy && filter.value && reportKey(transaction, filter.displayBy) !== filter.value) return false
   if (filter.budgetCategory && budgetCategoryForTransaction(transaction) !== filter.budgetCategory) return false
