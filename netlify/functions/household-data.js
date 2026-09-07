@@ -54,9 +54,11 @@ async function getPlan(date) {
   const dataStore = store(), value = await dataStore.get(planKey(date), { type: 'json' })
   if (!value) return null
   const activeSermon = await dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null), devotion = sermonDevotion(activeSermon, date)
-  if (!devotion) return value
   const existingSpiritual = sharedSpiritualValue(value.spiritual || {})
-  return { ...value, spiritual: { ...existingSpiritual, owner: '', scripture: devotion.scripture, devotionFocus: devotion.devotionFocus, prayerFocus: devotion.prayerFocus, discussionPrompts: devotion.discussionPrompts, obedienceAction: devotion.obedienceAction, requiredOutput: devotion.requiredOutput, todayFocus: devotion.title, devotionDay: devotion.day, devotionDate: devotion.date, devotionTitle: devotion.title, sermonNotes: sharedSpiritualValue(activeSermon.sermonNotes), sermonSource: { ...activeSermon.source, generatedAt: activeSermon.activatedAt, model: activeSermon.model, active: true, sharedHouseholdDevotion: true, devotionStartDate: daysStart(activeSermon) } } }
+  if (!activeSermon?.sermonNotes) return value
+  const retained={ ...existingSpiritual, owner: '', sermonNotes: sharedSpiritualValue(activeSermon.sermonNotes), sermonSource: { ...activeSermon.source, generatedAt: activeSermon.activatedAt, model: activeSermon.model, active: true, sharedHouseholdDevotion: true, devotionStartDate: daysStart(activeSermon) } }
+  if (!devotion) return { ...value, spiritual:retained }
+  return { ...value, spiritual: { ...retained, scripture: devotion.scripture, devotionFocus: devotion.devotionFocus, prayerFocus: devotion.prayerFocus, discussionPrompts: devotion.discussionPrompts, obedienceAction: devotion.obedienceAction, requiredOutput: devotion.requiredOutput, todayFocus: devotion.title, devotionDay: devotion.day, devotionDate: devotion.date, devotionTitle: devotion.title } }
 }
 function daysStart(activeSermon) { const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(sermonDate) ? addDays(sermonDate, 1) : '' }
 async function putPlan(date, plan, expectedVersion) {
