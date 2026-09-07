@@ -168,9 +168,6 @@ export default function App() {
   useEffect(()=>{
     if(!auth.authenticated||!sharedReady)return
     return startSharedStateSync({
-      onRemoteChange:keys=>{
-        setRefreshState({status:'ready',message:`Household changes synchronized automatically (${keys.length} record${keys.length===1?'':'s'}).`,issues:[],expanded:false})
-      },
       onError:error=>setRefreshState({status:'warning',message:error.message||'Household records could not be synchronized. Local changes remain on this device.',issues:[{id:'household-sync',source:'Household Sync',message:error.message||'Household records could not be synchronized.',action:'Retry the refresh. Local changes remain protected on this device.'}],expanded:false}),
     })
   },[auth.authenticated,sharedReady])
