@@ -50,6 +50,7 @@ export function isRealizedIncomeTransaction(transaction) {
   if (isTransferTransaction(transaction) || Number(transaction?.amount) >= 0) return false
   const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
   const name = String(transaction?.name || transaction?.merchant_name || transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
+  if (/\b(?:memo credit pos|merchant credit|purchase refund|refund|reversal|cash ?back)\b/.test(name)) return false
   return /\b(?:income|payroll|salary|wages?|interest|dividend|pension|benefits?|reimbursement)\b/.test(`${category} ${name}`)
 }
 

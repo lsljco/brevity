@@ -55,9 +55,11 @@ test('transaction search covers merchant, statement, category, and institution t
 test('realized income excludes transfers and merchant credits', () => {
   const payroll = { amount: -1200, category: 'INCOME', name: 'Employer payroll' }
   const refund = { amount: -24, category: 'ENTERTAINMENT', name: 'Apple' }
+  const mislabeledMerchantCredit = { amount: -78.90, category: 'INCOME', name: 'Pending: Memo Credit POS - Instacart' }
   const transfer = { amount: -500, category: 'TRANSFER_IN', name: 'Transfer from savings' }
   assert.equal(isRealizedIncomeTransaction(payroll), true)
   assert.equal(isRealizedIncomeTransaction(refund), false)
+  assert.equal(isRealizedIncomeTransaction(mislabeledMerchantCredit), false)
   assert.equal(isRealizedIncomeTransaction(transfer), false)
   assert.equal(matchesTransactionFilter(payroll, { realizedIncomeOnly: true }), true)
   assert.equal(matchesTransactionFilter(refund, { realizedIncomeOnly: true }), false)
