@@ -57,4 +57,15 @@ test('pillar analysis UI presents insight and growth without an ownership sectio
   assert.doesNotMatch(source, />Ownership</)
   assert.doesNotMatch(source, /analysis\.owners/)
   assert.match(source, /result\?\.pillar===pillar\.id && result\?\.date===plan\?\.date/)
+  assert.match(source, /inFlightRef\.current===requestKey/)
+  assert.match(source, /\[currentMember, pillar\.id\]/)
+})
+
+test('pillar analyses are retained server-side and force refresh bypasses that cache', async () => {
+  const source = await readFile(new URL('../../netlify/functions/pillar-analysis.mjs', import.meta.url), 'utf8')
+  assert.match(source, /pillar-analysis\/v\$\{PILLAR_ANALYSIS_SCHEMA_VERSION\}/)
+  assert.match(source, /if\(!force\)/)
+  assert.match(source, /cached:true/)
+  assert.match(source, /plan-\$\{Number\(planVersion \|\| 0\)\}/)
+  assert.match(source, /setJSON\(cacheKey\(date,pillar,plan\.version,currentMember\),result\)/)
 })
