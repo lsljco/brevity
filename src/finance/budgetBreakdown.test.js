@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildBudgetBreakdown, budgetBreakdownTotal } from './budgetBreakdown.js'
+import { buildBudgetBreakdown, buildBudgetCategoryItems, budgetBreakdownTotal } from './budgetBreakdown.js'
+
+test('budget categories list a repeated named series only once', () => {
+  const categories = buildBudgetCategoryItems([
+    { name:'Payroll', type:'income', freq:'weekly' },
+    { name:'Payroll', type:'income', freq:'once' },
+    { name:'Payroll', type:'income', freq:'monthly' },
+    { name:'Utilities', cat:'Housing', type:'expense', freq:'monthly' },
+    { name:'Utilities', cat:'Housing', type:'expense', freq:'weekly' },
+  ])
+  assert.deepEqual(categories, { Income:['Payroll'], Housing:['Utilities'] })
+})
 
 test('budget breakdown lines total the selected month card including repeated occurrences', () => {
   const lines = buildBudgetBreakdown({
