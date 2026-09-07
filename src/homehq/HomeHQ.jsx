@@ -10,6 +10,7 @@ import {
   writeJson,
 } from './projectData.js'
 import { syncProjectEventsToICloud } from './projectIcloudSync.js'
+import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 
 const ROOMS      = ["Kitchen","Bathroom","Living Room","Bedroom","Basement","Garage","Exterior","Attic","Yard"];
 const TYPES      = ["Renovation","Maintenance","Repair"];
@@ -547,6 +548,14 @@ function App(){
   const toastTmr  = useRef();
 
   useEffect(()=>{ saveItems(items); },[items]);
+  useEffect(()=>{
+    const receiveSharedUpdate=event=>{
+      if(!event.detail?.keys?.includes(STORAGE_KEY))return;
+      setItems(loadItems());
+    };
+    window.addEventListener(SHARED_STATE_EVENT,receiveSharedUpdate);
+    return()=>window.removeEventListener(SHARED_STATE_EVENT,receiveSharedUpdate);
+  },[]);
 
   function showToast(msg){ setToast(msg); clearTimeout(toastTmr.current); toastTmr.current=setTimeout(()=>setToast(""),3000); }
   function openAdd(){ setEditId(null); setForm(EMPTY_FORM); setModal(true); }

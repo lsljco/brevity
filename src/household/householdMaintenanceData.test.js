@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildHouseholdMaintenanceWeek,
+  maintenanceDateKey,
   householdOccurrence,
   householdOperationCalendarEvent,
   maintenanceWeekStart,
@@ -25,7 +26,7 @@ test('household operations follow the authoritative weekly cleaning cadence', ()
 })
 
 test('household weeks begin on Monday and completion summary honors sign-off', () => {
-  assert.equal(maintenanceWeekStart('2026-08-29').toISOString().slice(0, 10), '2026-08-24')
+  assert.equal(maintenanceDateKey(maintenanceWeekStart('2026-08-29')), '2026-08-24')
   const days = buildHouseholdMaintenanceWeek('2026-08-29')
   const firstTask = days[0].tasks[0]
   const state = normalizeHouseholdMaintenanceState({

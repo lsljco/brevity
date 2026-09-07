@@ -4,6 +4,7 @@ import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
 import { calendarSnapshotHealth, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
 import { dedupeCalendarEvents } from './calendarOverlay.js'
 import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
+import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
 import { resolveTimeframe } from '../finance/financeTimeframe.js'
 import './FamilyCalendar.css'
@@ -68,7 +69,11 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
 
   useEffect(()=>{
     if(!cachedCalendar||calendarSnapshotHealth(cachedCalendar).stale)loadIcloud()
-    const refresh=()=>setLegacyEvents(readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
+    const refresh=event=>{
+      if(event.type===SHARED_STATE_EVENT&&!event.detail?.keys?.includes(FAMILY_CALENDAR_KEY))return
+      if(event.type==='storage'&&event.key&&event.key!==FAMILY_CALENDAR_KEY)return
+      setLegacyEvents(readJson(localStorage,FAMILY_CALENDAR_KEY,[]).map(normalizeLegacy))
+    }
     const receiveIcloud=event=>{
       const result=event.detail||{}
       setIcloudEvents((result.events||[]).map(item=>({ ...item,source:'icloud',owner:item.owner||'Family' })))
@@ -80,8 +85,9 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     }
     window.addEventListener('storage',refresh)
     window.addEventListener('brevity-family-calendar-updated',refresh)
+    window.addEventListener(SHARED_STATE_EVENT,refresh)
     window.addEventListener('brevity-icloud-calendar-refreshed',receiveIcloud)
-    return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('brevity-family-calendar-updated',refresh);window.removeEventListener('brevity-icloud-calendar-refreshed',receiveIcloud)}
+    return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('brevity-family-calendar-updated',refresh);window.removeEventListener(SHARED_STATE_EVENT,refresh);window.removeEventListener('brevity-icloud-calendar-refreshed',receiveIcloud)}
   },[])
 
   const allEvents=useMemo(()=>{

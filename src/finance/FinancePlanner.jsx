@@ -30,6 +30,7 @@ import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 import { findPossibleRecurringDuplicates, summarizeActualActivity } from './financialTruth.js'
 import FinanceReconciliation from './FinanceReconciliation.jsx'
+import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1245,7 +1246,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
   const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
   const [txRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
-  const [goals] = useState(() => loadSavedValue('fp_goals', []))
+  const [goals, setGoals] = useState(() => loadSavedValue('fp_goals', []))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
 
   // Primary view comes from App sidebar; form overlays are local
@@ -1341,6 +1342,25 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  useEffect(() => {
+    const receiveSharedUpdate = event => {
+      const keys = new Set(event.detail?.keys || [])
+      if (keys.has('lslj_finance_v9')) {
+        const next = loadData()
+        dataRef.current = next
+        setData(next)
+      }
+      if (keys.has('plaid_actuals_cache')) setPlaidActuals(loadSavedValue('plaid_actuals_cache', null))
+      if (keys.has('lslj_bal_overrides_v1')) setBalanceOverrides(loadSavedValue('lslj_bal_overrides_v1', {}))
+      if (keys.has('lslj_tx_overrides_v1')) setTxOverrides(loadSavedValue('lslj_tx_overrides_v1', {}))
+      if (keys.has('lslj_tx_rules_v1')) setTxRules(loadSavedValue('lslj_tx_rules_v1', []))
+      if (keys.has('fp_goals')) setGoals(loadSavedValue('fp_goals', []))
+      if (keys.has('homehq_items_v1')) setHqItems(loadSavedValue('homehq_items_v1', []))
+    }
+    window.addEventListener(SHARED_STATE_EVENT, receiveSharedUpdate)
+    return () => window.removeEventListener(SHARED_STATE_EVENT, receiveSharedUpdate)
   }, [])
 
   useEffect(() => {
@@ -2698,6 +2718,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       {/* ══════════ DAILY FINANCIAL ALIGNMENT ══════════ */}
       {view === 'daily-alignment' && (
         <DailyAlignment
+          currentMember={currentMember}
           accounts={fd.accounts}
           scheduled={fd.transactions}
           cashFlowScheduled={operatingTransactions}
