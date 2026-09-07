@@ -12,6 +12,7 @@ import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinance
 import { buildBalanceSheet, isTransferTransaction, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
+import { buildBudgetBreakdown, budgetBreakdownTotal } from './budgetBreakdown.js'
 import { filterTransactionsByTimeframe, resolveTimeframe, restoreTimeframe } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import ScenarioModeling from './ScenarioModeling.jsx'
@@ -1441,7 +1442,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     months[month].total += Math.abs(Number(tx.amount) || 0)
     return months
   }, {})).sort(([a], [b]) => b.localeCompare(a)), [transactionViewActuals])
-  const filteredScheduledViewTransactions = useMemo(() => fd.transactions.filter(tx => {
+  const filteredScheduledViewTransactions = useMemo(() => (transactionFilter?.budgetLines || fd.transactions).filter(tx => {
     if (!transactionFilter?.scheduled) return true
     if (transactionFilter.ids?.length && !transactionFilter.ids.includes(tx.id)) return false
     if (transactionFilter.direction && tx.type !== transactionFilter.direction) return false
@@ -1452,6 +1453,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
     () => sortAndFilterTransactions(filteredScheduledViewTransactions, transactionListOptions),
     [filteredScheduledViewTransactions, transactionListOptions],
   )
+  const scheduledViewStats = useMemo(() => scheduledViewTransactions.reduce((stats, tx) => {
+    const amount = Math.abs(Number(tx.amount) || 0)
+    if (tx.type === 'income') stats.income += amount
+    if (tx.type === 'expense') stats.expenses += amount
+    return stats
+  }, { income: 0, expenses: 0 }), [scheduledViewTransactions])
 
   const openFilteredTransactions = (filter = null) => {
     setTransactionFilter(filter)
@@ -2738,7 +2745,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 
           {transactionFilter && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12, background: 'rgba(197,164,109,.08)', border: '1px solid rgba(197,164,109,.2)' }}>
-              <div><strong style={{ color: 'var(--gold)' }}>{transactionFilter.label || 'Filtered transactions'}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{showActuals?transactionViewActuals.length:scheduledViewTransactions.length} matching transactions in the selected timeframe</div></div>
+              <div><strong style={{ color: 'var(--gold)' }}>{transactionFilter.label || 'Filtered transactions'}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{transactionFilter.budgetLines ? `${scheduledViewTransactions.length} budget lines · ${fmtMoney(transactionFilter.budgetTotal)} total · matches the Budget card` : `${showActuals?transactionViewActuals.length:scheduledViewTransactions.length} matching transactions in the selected timeframe`}</div></div>
               <button onClick={() => setTransactionFilter(null)} style={{ border: '1px solid rgba(255,255,255,.12)', background: 'transparent', color: 'var(--soft-white)', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>Clear filter</button>
             </div>
           )}
@@ -2749,15 +2756,15 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'income', label: 'Income' }):openScheduledTransactions({ direction:'income', label:'Scheduled income' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--income-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{showActuals ? 'Income' : 'Monthly Net Income'}</p>
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income : monthlyIncome)}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income : transactionFilter?.budgetLines ? scheduledViewStats.income : monthlyIncome)}</p>
             </div>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions({ direction: 'expense', label: 'Expenses' }):openScheduledTransactions({ direction:'expense', label:'Scheduled expenses' })} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{showActuals ? 'Expenses' : 'Recurring Expenses'}</p>
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.expenses : monthlyExpense)}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: 'var(--white)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.expenses : transactionFilter?.budgetLines ? scheduledViewStats.expenses : monthlyExpense)}</p>
             </div>
             <div role="button" tabIndex={0} onClick={() => showActuals?openFilteredTransactions(null):openScheduledTransactions()} style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${monthlyCashFlow >= 0 ? 'rgba(197,164,109,0.20)' : 'rgba(196,120,90,0.20)'}`, cursor: 'pointer' }}>
               <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: monthlyCashFlow >= 0 ? 'var(--income-color)' : 'var(--expense-color)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Net Cash Flow</p>
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income - transactionViewStats.expenses : monthlyCashFlow)}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 300, color: monthlyCashFlow >= 0 ? 'var(--gold-light)' : 'var(--expense-color)', letterSpacing: '-0.02em' }}>{fmtMoney(showActuals ? transactionViewStats.income - transactionViewStats.expenses : transactionFilter?.budgetLines ? scheduledViewStats.income - scheduledViewStats.expenses : monthlyCashFlow)}</p>
             </div>
           </div>
 
@@ -2805,7 +2812,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
             ) : (
               // ── Projected mode: scheduled recurring transactions ──
               scheduledViewTransactions.map(tx => {
-                  const freqLabel = FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
+                  const freqLabel = tx.budgetLine ? `Budgeted for ${transactionFilter?.budgetPeriodLabel}` : FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
                   return (
                     <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, transition: 'background 0.15s' }}>
                       <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: tx.type === 'income' ? 'rgba(197,164,109,0.12)' : 'rgba(196,120,90,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2818,14 +2825,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
                         {tx.type === 'income' ? '+' : '-'}{fmtMoney(tx.amount)}
                       </p>
-                      <div style={{ display: 'flex', gap: 4 }}>
+                      {!tx.budgetLine && <div style={{ display: 'flex', gap: 4 }}>
                         <button onClick={() => { setEditTx({ ...tx }); setView('tx-form') }}
                           style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
                           title="Edit"><i className="ti ti-edit" style={{ fontSize: 13 }} aria-hidden="true" /></button>
                         <button onClick={() => deleteTx(tx.id)}
                           style={{ padding: '5px 8px', cursor: 'pointer', borderRadius: 7, border: '1px solid rgba(255,255,255,0.09)', background: 'transparent', color: 'var(--muted)' }}
                           title="Delete"><i className="ti ti-trash" style={{ fontSize: 13 }} aria-hidden="true" /></button>
-                      </div>
+                      </div>}
                     </div>
                   )
                 })
@@ -2890,7 +2897,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {/* ══════════ BUDGET ══════════ */}
       {view === 'budget' && (
         <div className="finance-inner">
-          <BudgetView data={fd} plaidActuals={filteredActuals} onOpenTransactions={openFilteredTransactions} onOpenRecurring={() => setView('recurring')} />
+          <BudgetView data={fd} plaidActuals={filteredActuals} onOpenTransactions={openFilteredTransactions} onOpenRecurring={openScheduledTransactions} />
         </div>
       )}
 
@@ -3051,6 +3058,18 @@ function BudgetView({ data, plaidActuals = [], onOpenTransactions, onOpenRecurri
   const totalActual  = Object.keys(BUDGET_CATS).filter(c => c !== 'Income').reduce((s, c) => s + catActual(c), 0)
   const totalIncomeBudget = catBudgeted('Income')
   const totalIncomeActual = catActual('Income')
+  const openBudgetBreakdown = (direction) => {
+    const month = new Date(selYear, selMonth, 1)
+    const budgetLines = buildBudgetBreakdown({ transactions: data.transactions, budget, month, direction })
+    onOpenRecurring?.({
+      direction,
+      budgetLines,
+      budgetMonth: monthKey,
+      budgetPeriodLabel: `${MONTHS[selMonth]} ${selYear}`,
+      budgetTotal: budgetBreakdownTotal(budgetLines),
+      label: `${direction === 'income' ? 'Budgeted income' : 'Budgeted expenses'} · ${MONTHS[selMonth]} ${selYear}`,
+    })
+  }
 
   if (mode === 'monthly-view') {
     const expenseCats = Object.entries(BUDGET_CATS).filter(([c]) => c !== 'Income')
@@ -3092,8 +3111,8 @@ function BudgetView({ data, plaidActuals = [], onOpenTransactions, onOpenRecurri
             const direction = label.startsWith('Income') ? 'income' : 'expense'
             const open = actual
               ? () => onOpenTransactions?.({ direction, dateFrom: monthFrom, dateTo: monthTo, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
-              : onOpenRecurring
-            return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open recurring plan'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
+              : () => openBudgetBreakdown(direction)
+            return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open budget lines'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
               <div style={{ fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-serif)', color }}>{fmtMoney(val)}</div>
             </div>
