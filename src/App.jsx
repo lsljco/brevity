@@ -221,7 +221,7 @@ export default function App() {
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-published updates"/></Suspense>
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
-    if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><FinancePlanner view={activeView} setView={navigateFromFinance}/></Suspense>
+    if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><FinancePlanner view={activeView} setView={navigateFromFinance} currentMember={currentMember}/></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)
     return pillar?<PillarAnalysis pillar={pillar} currentMember={currentMember}/>:null
   }
