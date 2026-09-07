@@ -94,6 +94,10 @@ export function buildSharedRecord(storage, key, serializedValue, now = new Date(
   }
 }
 
+export function shouldUploadSharedWrite(storage, key, value) {
+  return SHARED_STATE_KEY_SET.has(String(key)) && storage.getItem(String(key)) !== String(value)
+}
+
 function applyServerRecord(storage, record) {
   if (!record?.key || !SHARED_STATE_KEY_SET.has(record.key) || typeof record.value !== 'string') return false
   const localValue = storage.getItem(record.key)
@@ -227,8 +231,9 @@ export function installSharedStateWriteThrough({ storage = window.localStorage, 
   const prototype = Storage.prototype
   const original = prototype.setItem
   prototype.setItem = function setItem(key, value) {
+    const changed = this === storage && shouldUploadSharedWrite(storage, key, value)
     original.call(this, key, value)
-    if (this !== storage || suppressWriteThrough || !SHARED_STATE_KEY_SET.has(String(key))) return
+    if (!changed || suppressWriteThrough) return
     const record = buildSharedRecord(storage, String(key), String(value))
     if (record) void uploadRecord(storage, record, onError)
   }
