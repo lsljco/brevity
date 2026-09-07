@@ -12,7 +12,7 @@ import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinance
 import { buildBalanceSheet, isTransferTransaction, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
-import { buildBudgetBreakdown, budgetBreakdownTotal } from './budgetBreakdown.js'
+import { buildBudgetBreakdown, buildBudgetCategoryItems, budgetBreakdownTotal } from './budgetBreakdown.js'
 import { filterTransactionsByTimeframe, resolveTimeframe, restoreTimeframe } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import ScenarioModeling from './ScenarioModeling.jsx'
@@ -2967,23 +2967,6 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
 const BUDGET_LS_KEY = 'lslj_budget_v1'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-function buildBudgetCats(transactions) {
-  const CAT_ORDER = ['Housing','Utilities','Transportation','Insurance','Health','Debt','Food','Household','Family','Subscriptions','Discretionary','Other']
-  const recurring = transactions.filter(t => t.freq !== 'once' && t.type !== 'transfer')
-  const income = recurring.filter(t => t.type === 'income').map(t => t.name)
-  const expMap = {}
-  recurring.filter(t => t.type === 'expense').forEach(t => {
-    const cat = t.cat || 'Other'
-    if (!expMap[cat]) expMap[cat] = []
-    if (!expMap[cat].includes(t.name)) expMap[cat].push(t.name)
-  })
-  const result = {}
-  if (income.length) result['Income'] = income
-  CAT_ORDER.forEach(c => { if (expMap[c]) result[c] = expMap[c] })
-  Object.keys(expMap).filter(c => !CAT_ORDER.includes(c)).sort().forEach(c => { result[c] = expMap[c] })
-  return result
-}
-
 function loadBudget() {
   try { return JSON.parse(localStorage.getItem(BUDGET_LS_KEY)) || {} } catch { return {} }
 }
@@ -3011,7 +2994,7 @@ function BudgetView({ data, plaidActuals = [], onOpenTransactions, onOpenRecurri
   const [editActual, setEditActual] = useState(null)
 
   const year = new Date().getFullYear()
-  const BUDGET_CATS = useMemo(() => buildBudgetCats(data.transactions), [data.transactions])
+  const BUDGET_CATS = useMemo(() => buildBudgetCategoryItems(data.transactions), [data.transactions])
 
   const monthKey = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`
   const monthFrom = `${monthKey}-01`
