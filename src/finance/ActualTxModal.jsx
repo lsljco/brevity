@@ -1,6 +1,7 @@
-import { useId, useState, useRef } from 'react'
+import { useEffect, useId, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_TRANSACTION_CATEGORIES, loadStoredCategoryOptions, mergeCategoryOptions, saveStoredCategoryOptions, transactionCategories } from './categoryData.js'
+import { filterTypeaheadOptions } from './typeahead.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -29,26 +30,59 @@ const inputStyle = {
 const labelStyle = { fontSize: 11, fontWeight: 600, color: '#888884', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }
 const sectionStyle = { display: 'flex', flexDirection: 'column', gap: 4 }
 
-function CategoryInput({ value, onChange, onBlur, options, ariaLabel = 'Category', placeholder = 'Type or select a category…', style }) {
+function SearchableInput({ value, onChange, onBlur, options, ariaLabel, placeholder, style }) {
   const listId = useId()
-  const categoryOptions = mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, options, value)
+  const rootRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const filtered = filterTypeaheadOptions(options, value)
+
+  useEffect(() => {
+    const close = event => { if (!rootRef.current?.contains(event.target)) setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [])
 
   return (
-    <>
+    <div ref={rootRef} style={{ position: 'relative' }}>
       <input
+        id={listId}
         aria-label={ariaLabel}
-        list={listId}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
         value={value}
-        onChange={onChange}
-        onBlur={onBlur}
+        onChange={event => { onChange(event); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={event => { window.setTimeout(() => onBlur?.(event), 0) }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') setOpen(false)
+          if (event.key === 'ArrowDown') setOpen(true)
+        }}
         placeholder={placeholder}
         style={style}
       />
-      <datalist id={listId}>
-        {categoryOptions.map(category => <option key={category} value={category} />)}
-      </datalist>
-    </>
+      {open && <div role="listbox" aria-labelledby={listId} style={{
+        position: 'absolute', zIndex: 40, top: 'calc(100% + 5px)', left: 0, right: 0,
+        maxHeight: 210, overflowY: 'auto', padding: 5, borderRadius: 9,
+        background: 'var(--card-bg, #202020)', border: '1px solid rgba(255,255,255,.16)',
+        boxShadow: '0 12px 30px rgba(0,0,0,.5)',
+      }}>
+        {filtered.length ? filtered.map(option => <button key={option} type="button" role="option"
+          aria-selected={option.toLocaleLowerCase() === String(value || '').toLocaleLowerCase()}
+          onPointerDown={event => event.preventDefault()}
+          onClick={() => { onChange({ target: { value: option } }); setOpen(false) }}
+          style={{ width: '100%', border: 0, borderRadius: 6, padding: '9px 10px', background: 'transparent', color: '#F7F6F2', textAlign: 'left', cursor: 'pointer', font: 'inherit', fontSize: 13 }}>
+          {option}
+        </button>) : <div style={{ padding: '9px 10px', color: '#888884', fontSize: 12 }}>No saved matches. Your typed value can still be saved.</div>}
+      </div>}
+    </div>
   )
+}
+
+function CategoryInput({ value, onChange, onBlur, options, ariaLabel = 'Category', placeholder = 'Type or select a category…', style }) {
+  return <SearchableInput value={value} onChange={onChange} onBlur={onBlur}
+    options={mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, options, value)}
+    ariaLabel={ariaLabel} placeholder={placeholder} style={style} />
 }
 
 // ── Rule Modal ────────────────────────────────────────────────────────────────
@@ -452,16 +486,15 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
             {/* Name */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Name</label>
-              <input
+              <SearchableInput
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
-                list="vendor-list"
+                options={mergeCategoryOptions(allTxNames, form.name)}
+                ariaLabel="Transaction name"
                 style={inputStyle}
                 placeholder="Merchant / payee name"
               />
-              <datalist id="vendor-list">
-                {(allTxNames || []).map(n => <option key={n} value={n} />)}
-              </datalist>
+              <span style={{ fontSize: 10, color: '#888884' }}>Choose a saved name or type a new one. Matches filter as you type.</span>
             </div>
 
             {/* Original Statement */}
