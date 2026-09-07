@@ -47,7 +47,7 @@ export default function FinanceMeetingsWorkspace({liveSnapshot={},drilldowns={},
   const[workspace,setWorkspace]=useState(readStore)
   const[isRecording,setIsRecording]=useState(false),[startedAt,setStartedAt]=useState(null),[transcript,setTranscript]=useState(''),[notes,setNotes]=useState(''),[showReconcile,setShowReconcile]=useState(false)
   const[aiBusy,setAiBusy]=useState(false),[aiError,setAiError]=useState(''),[aiSummary,setAiSummary]=useState(''),[transcribing,setTranscribing]=useState(0),[commandNotice,setCommandNotice]=useState('')
-  const[decision,setDecision]=useState({text:'',owner:'',due:''}),[correction,setCorrection]=useState({label:'',value:'',source:'User Confirmed',scope:'this occurrence'}),[drilldown,setDrilldown]=useState(null),[visionMode,setVisionMode]=useState('actual')
+  const[decision,setDecision]=useState({text:'',owner:'',due:''}),[correction,setCorrection]=useState({label:'',value:'',source:'User Confirmed',scope:'this occurrence'}),[drilldown,setDrilldown]=useState(null),[visionMode,setVisionMode]=useState('projected')
   const masterRef=useRef(null),segmentRef=useRef(null),streamRef=useRef(null),masterChunks=useRef([]),segmentTimer=useRef(null),recordingFlag=useRef(false),fileRef=useRef(null)
   const cadence=workspace.activeCadence||'weekly',snapshot=workspace.snapshot||freshSnapshot()
 
