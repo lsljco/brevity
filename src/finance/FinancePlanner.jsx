@@ -2897,7 +2897,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
       {/* ══════════ BUDGET ══════════ */}
       {view === 'budget' && (
         <div className="finance-inner">
-          <BudgetView data={fd} plaidActuals={filteredActuals} onOpenTransactions={openFilteredTransactions} onOpenRecurring={openScheduledTransactions} />
+          <BudgetView data={fd} plaidActuals={filteredActuals} initialMonth={transactionFilter?.budgetMonth} onOpenTransactions={openFilteredTransactions} onOpenRecurring={openScheduledTransactions} />
         </div>
       )}
 
@@ -2981,15 +2981,18 @@ function saveActuals(a) {
   try { localStorage.setItem(ACTUALS_LS_KEY, JSON.stringify(a)) } catch {}
 }
 
-function BudgetView({ data, plaidActuals = [], onOpenTransactions, onOpenRecurring }) {
+function BudgetView({ data, plaidActuals = [], initialMonth, onOpenTransactions, onOpenRecurring }) {
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
   const [editCell, setEditCell] = useState(null) // { cat, item, month }
   const [saved, setSaved] = useState(false)
   const [mode, setMode] = useState('monthly-view') // 'monthly-view' | 'plan'
-  const [selMonth, setSelMonth] = useState(new Date().getMonth())
-  const [selYear, setSelYear] = useState(new Date().getFullYear())
+  const initialBudgetDate = /^\d{4}-\d{2}$/.test(String(initialMonth || ''))
+    ? new Date(Number(initialMonth.slice(0, 4)), Number(initialMonth.slice(5, 7)) - 1, 1)
+    : new Date()
+  const [selMonth, setSelMonth] = useState(initialBudgetDate.getMonth())
+  const [selYear, setSelYear] = useState(initialBudgetDate.getFullYear())
   const [monthActuals, setMonthActuals] = useState(loadActuals)
   const [editActual, setEditActual] = useState(null)
 
@@ -3093,7 +3096,7 @@ function BudgetView({ data, plaidActuals = [], onOpenTransactions, onOpenRecurri
             const actual = label.endsWith('Actual')
             const direction = label.startsWith('Income') ? 'income' : 'expense'
             const open = actual
-              ? () => onOpenTransactions?.({ direction, dateFrom: monthFrom, dateTo: monthTo, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
+              ? () => onOpenTransactions?.({ direction, dateFrom: monthFrom, dateTo: monthTo, budgetMonth: monthKey, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
               : () => openBudgetBreakdown(direction)
             return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open budget lines'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
