@@ -9,7 +9,7 @@ import PlaidConnect from './PlaidConnect.jsx'
 import ActualTxModal from './ActualTxModal.jsx'
 import { buildProjection, today0, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, saveFinanceData } from './financeData.js'
-import { buildBalanceSheet, isTransferTransaction, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
+import { buildBalanceSheet, isRealizedIncomeTransaction, isTransferTransaction, matchesTransactionFilter, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
 import { buildBudgetBreakdown, buildBudgetCategoryItems, budgetBreakdownTotal } from './budgetBreakdown.js'
@@ -1867,11 +1867,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   )
   const actualRangeTotals = useMemo(() => timeframeActuals.reduce((totals, transaction) => {
     const amount = Math.abs(Number(transaction.amount) || 0)
-    if (transactionDirection(transaction) === 'income') totals.income += amount
-    else if (transactionDirection(transaction) === 'expense') totals.expenses += amount
-    totals.net = totals.income - totals.expenses
+    if (isTransferTransaction(transaction)) return totals
+    if (isRealizedIncomeTransaction(transaction)) totals.income += amount
+    else if (Number(transaction.amount) >= 0) totals.expenses += amount
+    else totals.adjustments += amount
+    totals.net = totals.income + totals.adjustments - totals.expenses
     return totals
-  }, { income:0, expenses:0, net:0 }), [timeframeActuals])
+  }, { income:0, expenses:0, adjustments:0, net:0 }), [timeframeActuals])
   const dashboardIncome = showActuals ? actualRangeTotals.income : expectedRangeTotals.income
   const dashboardExpense = showActuals ? actualRangeTotals.expenses : recurringRangeTotals.expenses
   const dashboardCashFlow = showActuals ? actualRangeTotals.net : expectedRangeTotals.net
@@ -2207,10 +2209,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           <div className="kpi-grid">
             {[
               { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'current balance', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
-              { label: showActuals ? 'Realized Income' : financeRange.preset === 'this-month' ? 'Monthly Net Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(transaction => transactionDirection(transaction) === 'income').length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted and pending' : 'selected timeframe', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
+              { label: showActuals ? 'Realized Income' : financeRange.preset === 'this-month' ? 'Monthly Net Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(isRealizedIncomeTransaction).length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted and pending' : 'selected timeframe', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', realizedIncomeOnly:true, label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
               { label: showActuals ? 'Actual Expenses' : 'Recurring Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${timeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} realized transactions` : `${recurringExpenseSources.length} recurring items`, trend:showActuals ? 'posted and pending' : 'selected timeframe', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', label:'Actual expenses' }) : openScheduledTransactions({ direction:'expense', recurringOnly:true, label:'Recurring expenses' }) },
-              { label: showActuals ? 'Actual Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Realized income minus actual expenses' : 'Expected income minus expected outflow', trend:'selected timeframe', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ label:'Actual cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
-              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'selected-account forecast', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) setSelDay(toISO(minDay)); setView('calendar') } },
+              { label: showActuals ? 'Actual Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Cash income and credits minus expenses' : 'Expected income minus expected outflow', trend:'selected timeframe', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ excludeTransfers:true, label:'Actual cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
+              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'selected-account forecast', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) { setSelDay(toISO(minDay)); setCalMonth(minDay.getMonth()); setCalYear(minDay.getFullYear()) } setView('calendar') } },
             ].map((kpi, i) => {
               const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
               return (

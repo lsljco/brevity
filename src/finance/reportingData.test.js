@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildBalanceSheet, summarizeActuals, categoryGroup, groupReportTransactions, reportStats, matchesTransactionFilter, budgetCategoryForTransaction, summarizeBudgetActuals, isTransferTransaction, transactionDirection } from './reportingData.js'
+import { buildBalanceSheet, summarizeActuals, categoryGroup, groupReportTransactions, reportStats, matchesTransactionFilter, budgetCategoryForTransaction, summarizeBudgetActuals, isRealizedIncomeTransaction, isTransferTransaction, transactionDirection } from './reportingData.js'
 
 test('builds actual P&L totals, monthly results, categories, and vendor spend', () => {
   const report = summarizeActuals([
@@ -50,6 +50,17 @@ test('transaction search covers merchant, statement, category, and institution t
   assert.equal(matchesTransactionFilter(row, { query: 'payroll' }), true)
   assert.equal(matchesTransactionFilter(row, { query: 'pinnacle' }), true)
   assert.equal(matchesTransactionFilter(row, { query: 'amazon' }), false)
+})
+
+test('realized income excludes transfers and merchant credits', () => {
+  const payroll = { amount: -1200, category: 'INCOME', name: 'Employer payroll' }
+  const refund = { amount: -24, category: 'ENTERTAINMENT', name: 'Apple' }
+  const transfer = { amount: -500, category: 'TRANSFER_IN', name: 'Transfer from savings' }
+  assert.equal(isRealizedIncomeTransaction(payroll), true)
+  assert.equal(isRealizedIncomeTransaction(refund), false)
+  assert.equal(isRealizedIncomeTransaction(transfer), false)
+  assert.equal(matchesTransactionFilter(payroll, { realizedIncomeOnly: true }), true)
+  assert.equal(matchesTransactionFilter(refund, { realizedIncomeOnly: true }), false)
 })
 
 test('budget actuals normalize Plaid categories and exclude transfers', () => {
