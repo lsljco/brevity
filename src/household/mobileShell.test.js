@@ -110,6 +110,7 @@ test('drill-down screens expose a labeled Back control sized for phone use', () 
 test('background household sync preserves every active drill-down and editor', () => {
   assert.doesNotMatch(appSource, /sharedRevision/)
   assert.doesNotMatch(appSource, /key={`\$\{activePillar==='finance'/)
+  assert.doesNotMatch(appSource, /Household changes synchronized automatically/)
   assert.match(financePlannerSource, /addEventListener\(SHARED_STATE_EVENT, receiveSharedUpdate\)/)
   assert.match(familyCalendarSource, /addEventListener\(SHARED_STATE_EVENT,refresh\)/)
   assert.match(homeHqSource, /addEventListener\(SHARED_STATE_EVENT,receiveSharedUpdate\)/)
