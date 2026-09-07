@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { buildCanonicalFinanceModel } from './financeDomain.js'
 import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
 
-export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},projection}){
+export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},projection,currentMember='Household member'}){
   const today=useMemo(()=>new Date(),[])
   const model=useMemo(()=>{
     const canonical=buildCanonicalFinanceModel({accounts,scheduled,cashFlowScheduled,actuals,budget,projection,today})
@@ -38,5 +38,5 @@ export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlow
   },[today,accounts,scheduled,cashFlowScheduled,actuals,budget,projection])
 
   const accountScope=useMemo(()=>!accounts.length?'No selected accounts':accounts.length===1?(accounts[0].name||accounts[0].accountName||'Selected account'):`${accounts.length} selected accounts`,[accounts])
-  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope}/>
+  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember}/>
 }

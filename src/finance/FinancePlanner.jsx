@@ -1190,7 +1190,7 @@ function TransactionListControls({ options, onChange, showDateFilters = true, co
   )
 }
 
-export default function FinancePlanner({ view: extView, setView: setExtView }) {
+export default function FinancePlanner({ view: extView, setView: setExtView, currentMember = 'Household member' }) {
   const [data, setData]         = useState(loadData)
   const dataRef                 = useRef(data)
   dataRef.current               = data
@@ -2127,7 +2127,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView }) {
           {/* ── Greeting header ── */}
           <div className="dash-header">
             <div>
-              <div className="dash-greeting">{getGreeting()}, Larry</div>
+              <div className="dash-greeting">{getGreeting()}, {currentMember}</div>
               <div className="dash-date">{todayLabel}</div>
             </div>
             <div className="dash-actions">
