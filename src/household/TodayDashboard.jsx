@@ -53,6 +53,20 @@ function TodayCalendarAgenda({ commitments, nextCommitment, health, onOpenCalend
   </section>
 }
 
+const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' }
+
+function TodayMeals({ meals, onOpenMealPlan }) {
+  const entries = Object.entries(MEAL_LABELS).map(([mealType, label]) => ({ mealType, label, meal: meals?.[mealType] })).filter(item => item.meal)
+  if (!entries.length) return null
+  return <section className="today-section today-meals" aria-labelledby="today-meals-title">
+    <div className="today-section-heading"><div><span>At the Table</span><h2 id="today-meals-title">Today’s Meals</h2></div><button type="button" className="today-meals-open" onClick={onOpenMealPlan}>Open Meal Plan <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
+    <div className="today-meal-grid">{entries.map(({ mealType, label, meal }) => <article className="today-meal-card" key={mealType}>
+      <img src={meal.image} alt={`${label}: ${meal.name}`} loading={mealType === 'breakfast' ? 'eager' : 'lazy'} />
+      <div className="today-meal-card-copy"><span>{label}</span><strong>{meal.name}</strong><small>{meal.prepMinutes} min · {meal.macros?.proteinGrams || 0}g protein</small></div>
+    </article>)}</div>
+  </section>
+}
+
 function DecisionEditor({ decision, number, onSave }) {
   const [draft, setDraft] = useState(() => ({ title: decision.title, notes: decision.detail, owner: decision.owner || 'Family', status: decision.state || DECISION_STATUS.needsDecision }))
   const [saveState, setSaveState] = useState('idle')
@@ -80,7 +94,7 @@ function PillarPulse({ items, onOpenPillar }) {
   })}</div></section>
 }
 
-export default function TodayDashboard({ plan, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onGeneratePlan, onSavePlan, generationState = 'idle' }) {
+export default function TodayDashboard({ plan, meals = {}, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onSavePlan, generationState = 'idle' }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
   const readModel = useMemo(() => buildTodayReadModel({ plan: dailyPlan, calendarAppointments, calendarHealth, currentMember }), [calendarAppointments, calendarHealth, currentMember, dailyPlan])
   const [showDecisions, setShowDecisions] = useState(false)
@@ -121,6 +135,8 @@ export default function TodayDashboard({ plan, todayAlignmentCompleted = false, 
     {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Queue</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{readModel.counts.decisions} active {readModel.counts.decisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}. A determined decision remains visible until its resulting work is complete.</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{readModel.decisions.map((decision, index) => <DecisionEditor key={decision.id} decision={decision} number={index + 1} onSave={updated => saveDecision(updated, decision.sourceIndex)} />)}{!readModel.decisions.length && <div className="today-decision-all-clear"><i className="ti ti-circle-check" /><strong>All decisions are resolved.</strong><span>There are no remaining decisions needing attention.</span></div>}</div></section></div>}
 
     <TodayCalendarAgenda commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} />
+
+    <TodayMeals meals={meals} onOpenMealPlan={onOpenMealPlan} />
 
     <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Today’s Top 3</h2></div><small>Outcomes that make today successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
 

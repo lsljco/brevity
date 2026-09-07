@@ -43,6 +43,28 @@ export function calculateScheduledTotalsForMonth(transactions = [], month = new 
   return { income, expenses, net: income - expenses }
 }
 
+export function calculateTransactionAmountForRange(transaction, range, { recurringOnly = false } = {}) {
+  if (!transaction || transaction.type === 'transfer' || (recurringOnly && transaction.freq === 'once')) return 0
+  const from = parseISODate(range?.from)
+  const to = parseISODate(range?.to)
+  if (!from || !to || from > to) return 0
+  let total = 0
+  for (let date = from; date <= to; date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)) {
+    if (txOccursOnDate(transaction, date)) total += money(transaction.amount)
+  }
+  return total
+}
+
+export function calculateScheduledTotalsForRange(transactions = [], range, { recurringOnly = false } = {}) {
+  return transactions.reduce((totals, transaction) => {
+    const amount = calculateTransactionAmountForRange(transaction, range, { recurringOnly })
+    if (transaction?.type === 'income') totals.income += amount
+    else if (transaction?.type === 'expense') totals.expenses += amount
+    totals.net = totals.income - totals.expenses
+    return totals
+  }, { income: 0, expenses: 0, net: 0 })
+}
+
 /**
  * Calculate scheduled recurring cash flow for one calendar month.
  *
