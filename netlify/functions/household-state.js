@@ -40,7 +40,7 @@ const ADMIN_WRITE_KEYS = new Set([
 ])
 const PLAID_SOURCE_KEYS = new Set(['lslj_finance_v9', 'plaid_actuals_cache'])
 const PLAID_ACCOUNT_FIELDS = new Set([
-  'balance', 'plaidAccountId', 'plaidName', 'plaidOfficialName', 'plaidType', 'plaidSubtype',
+  'balance', 'plaidAccountId', 'plaidItemId', 'plaidName', 'plaidOfficialName', 'plaidType', 'plaidSubtype',
   'institution', 'mask', 'plaidCurrentBalance', 'plaidAvailableBalance',
 ])
 const PLAID_TRANSACTION_FIELDS = new Set([
@@ -200,7 +200,7 @@ function validatePlaidFinanceUpdate(candidate, existing) {
     if (next.plaidAvailableBalance !== undefined && (!Number.isFinite(next.plaidAvailableBalance) || Math.abs(next.plaidAvailableBalance) > 1_000_000_000_000)) {
       return `Plaid returned an invalid available balance for account ${prior.id}.`
     }
-    for (const field of ['plaidAccountId','plaidName','plaidOfficialName','plaidType','plaidSubtype','institution','mask']) {
+    for (const field of ['plaidAccountId','plaidItemId','plaidName','plaidOfficialName','plaidType','plaidSubtype','institution','mask']) {
       if (!boundedString(next[field], 512)) return `Plaid returned invalid ${field} metadata for account ${prior.id}.`
     }
   }
