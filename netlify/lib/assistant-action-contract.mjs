@@ -48,6 +48,7 @@ export const ACTION_TYPES = {
   'meeting.history.update': 'planning',
   'budget.update': 'finance',
   'forecast.update': 'finance',
+  'finance.account.link': 'finance',
   'recurring.create': 'finance',
   'recurring.update': 'finance',
   'recurring.delete': 'finance',
@@ -97,6 +98,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
   'forecast.update': ['title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
+  'finance.account.link': ['plaidAccountId'],
   'recurring.create': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.update': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.delete': [],
@@ -136,7 +138,7 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['project.delete', 'calendar.delete', 'recurring.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete'])
+const STRONG_TYPES = new Set(['project.delete', 'calendar.delete', 'recurring.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
@@ -154,6 +156,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type === 'transaction.rule.create') return 'shared:brevity_transaction_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
+  if (operation.type === 'finance.account.link') return 'shared:lslj_finance_v9'
   if (operation.type.startsWith('recurring.')) return 'shared:brevity_recurring_plan_v1'
   if (operation.domain === 'calendar') return 'calendar:apple-family'
   return operation.domain
@@ -260,6 +263,9 @@ function normalizeActionPayload(type, input) {
     } else if (field === 'accountId' || field === 'transferAccountId' || field === 'legacyAccountId') {
       assertString(type, field, value)
       normalized[field] = cleanId(value)
+    } else if (field === 'plaidAccountId') {
+      assertString(type, field, value)
+      normalized[field] = clean(value, 512)
     } else if (STRING_FIELDS.has(field)) {
       assertString(type, field, value)
       const cleaned = ['summary', 'reason', 'transcript', 'note'].includes(field)
@@ -446,6 +452,7 @@ export function normalizeActionOperation(input = {}) {
     if (!['income', 'expense'].includes(payload.direction)) throw new Error('A budget update requires an income or expense direction.')
   }
   if (type === 'forecast.update' && !operation.targetId) throw new Error('A forecast update requires the exact scenario id, or model for the shared planning expense.')
+  if (type === 'finance.account.link' && (!operation.targetId || !payload.plaidAccountId)) throw new Error('A bank-source link requires the exact Brevity account and returned bank account ids.')
   if (type === 'recurring.create') {
     const required = ['title', 'amount', 'frequency', 'transactionType', 'accountId']
     if (required.some(field => payload[field] === undefined || payload[field] === '')) throw new Error('A scheduled transaction requires a name, amount, type, frequency, account, and exact date.')

@@ -26,7 +26,7 @@ import {
   calculateTransactionAmountForRange,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
-import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount } from './financeRefresh.js'
+import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, compatiblePlaidAccountType, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount } from './financeRefresh.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
@@ -1200,6 +1200,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const [actualsFreshness, setActualsFreshness] = useState(() => readTransactionFreshness(localStorage))
   const [balanceDataStatus, setBalanceDataStatus] = useState(() => readLatestBalanceRefreshStatus().status)
   const [balanceDataErrors, setBalanceDataErrors] = useState(() => readLatestBalanceRefreshStatus().errors)
+  const [plaidAccountCandidates, setPlaidAccountCandidates] = useState([])
+  const [accountLinkDrafts, setAccountLinkDrafts] = useState({})
+  const [preparingAccountLink, setPreparingAccountLink] = useState('')
+  const [accountLinkError, setAccountLinkError] = useState('')
   const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null), getHouseholdCalendarDate()))
   const [transactionFilter, setTransactionFilter] = useState(null)
   const [transactionListOptions, setTransactionListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
@@ -1661,6 +1665,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
 
   // Called by PlaidConnect when accounts are synced — update balances only, NEVER create accounts
   const handlePlaidSync = useCallback(async (plaidAccounts, syncedAt, accountSourceReceipt, sourceErrors = []) => {
+    const returnedAccounts = Array.isArray(plaidAccounts)
+      ? [...new Map(plaidAccounts.filter(account => account?.accountId).map(account => [account.accountId, account])).values()]
+      : []
+    setPlaidAccountCandidates(returnedAccounts)
     if (readOnly) return { error:'Finance is read-only for this household member' }
     const reportedAttempt = !plaidAccounts?.length
       ? sourceErrors.find(item => ['disconnected','stale','partial'].includes(String(item?.balanceDataStatus || '').toLowerCase()))
@@ -1691,11 +1699,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           ...sourceErrors.map(item => `${item.institution || 'Bank'}: ${item.message || 'balance refresh was not confirmed'}`),
         ] })
         showToast(`⚠ Balance check partial · ${missingLinkedCount} linked account${missingLinkedCount === 1 ? '' : 's'} missing`)
-        return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial:true }
+        return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial:true, linkReviewAvailable:unmatchedCount > 0 }
       }
       const error = 'No bank balance safely matched a uniquely linked Brevity account. Existing balances were preserved; review account linkage and try again.'
       adoptBalanceAttempt({ status:'unmatched', checkedAt:syncedAt, live:true, errors:[error] })
-      return { error }
+      return { error, matchedCount, unmatchedCount, missingLinkedCount, linkReviewAvailable:Boolean(linkageIsOtherwiseSafe && unmatchedCount > 0) }
     }
     try {
       await persistSharedSourceImport(localStorage, LS_KEY, next, { accountSourceReceipt })
@@ -1711,7 +1719,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
         ...(missingLinkedCount > 0 ? [`${missingLinkedCount} previously linked Brevity ${missingLinkedCount === 1 ? 'account was' : 'accounts were'} missing from the live bank response. Prior balances and the last complete balance-check time were preserved.`] : []),
         ...sourceErrors.map(item => `${item.institution || 'Bank'}: ${item.message || 'balance refresh was not confirmed'}`),
       ] })
-      return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial }
+      return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial, linkReviewAvailable:unmatchedCount > 0 }
     } catch (error) {
       const current = loadData()
       dataRef.current = current
@@ -1720,6 +1728,47 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       return { error:error.message || 'Account balances could not be synchronized safely.' }
     }
   }, [adoptBalanceAttempt, readOnly])
+
+  async function reviewAccountLink(account) {
+    if (readOnly) return
+    const plaidAccountId = accountLinkDrafts[account.id] || ''
+    const source = plaidAccountCandidates.find(candidate => candidate.accountId === plaidAccountId)
+    if (!source) {
+      setAccountLinkError(`Choose the returned bank account that should supply ${account.name}.`)
+      return
+    }
+    if (!compatiblePlaidAccountType(account, source)) {
+      setAccountLinkError(`That bank account is not compatible with the ${account.type} account type in Brevity.`)
+      return
+    }
+    const duplicate = data.accounts.find(item => item.id !== account.id && item.plaidAccountId === plaidAccountId)
+    if (duplicate) {
+      setAccountLinkError(`That bank account is already linked to ${duplicate.name}.`)
+      return
+    }
+    setPreparingAccountLink(account.id)
+    setAccountLinkError('')
+    try {
+      const sourceLabel = `${source.institution || 'Bank'} · ${source.name || source.officialName || 'Account'}${source.mask ? ` ••••${source.mask}` : ''}`
+      const expectedVersion = getAcknowledgedSharedStateVersion(localStorage, LS_KEY)
+      const result = await prepareDirectAction({
+        summary:`Link ${account.name} to ${sourceLabel}`,
+        expectedVersion,
+        operation:{
+          type:'finance.account.link',
+          targetId:account.id,
+          payload:{ plaidAccountId },
+          description:`Link ${account.name} to ${sourceLabel}. This selects a verified source identity only; it does not move money or change bank credentials. Use Sync now after approval to import the verified balance.`,
+        },
+      })
+      if (!result?.proposal?.id) throw new Error('Action Mode did not return a reviewable account link.')
+      requestActionReview(result.proposal)
+    } catch (error) {
+      setAccountLinkError(error.message || 'The account link could not be prepared for review.')
+    } finally {
+      setPreparingAccountLink('')
+    }
+  }
 
   async function stageDirectFinanceReview({ summary, operation, storageKey, expectedVersion }) {
     if (readOnly) {
@@ -2281,7 +2330,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
               <div className="dash-date">{todayLabel}</div>
             </div>
             <div className="dash-actions">
-              {!readOnly && <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={fetchActuals} />}
+              {!readOnly && <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={fetchActuals} onReviewAccountLinks={() => setView('accounts')} />}
               <div className="dash-search">
                 <i className="ti ti-search" />
                 <input aria-label="Search transactions" placeholder="Search transactions…" value={dashboardSearch} onChange={event => setDashboardSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && dashboardSearch.trim()) openFilteredTransactions({ query: dashboardSearch.trim(), label: `Search: ${dashboardSearch.trim()}` }) }} />
@@ -3011,15 +3060,21 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
             <p style={{ fontSize: 14, fontWeight: 600 }}>{data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</p>
           </div>
           <div role="note" style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 11, border: '1px solid rgba(197,164,109,.22)', background: 'rgba(197,164,109,.07)', color: 'var(--muted)', fontSize: 11, lineHeight: 1.5 }}>
-            Account identity, type, and current balance are source-managed. Brevity does not allow manual account creation, renaming, type changes, balance overrides, or deletion. Review connection status or sync an existing connected source from the Finance Dashboard; connection changes are disabled in this release.
+            Brevity never guesses when bank names differ. Map each existing Brevity account to one compatible returned bank account by institution and last four digits. The reviewed link does not move money or change credentials; Sync now imports the verified balance after approval.
           </div>
+          {plaidAccountCandidates.length === 0 && <div role="status" style={{marginBottom:16,padding:'10px 13px',borderRadius:10,border:'1px solid rgba(255,255,255,.10)',background:'rgba(255,255,255,.04)',color:'var(--muted)',fontSize:11,lineHeight:1.5}}>No current bank-account list is loaded on this screen. Return to the Finance Dashboard and choose Sync now, then use Review account links if Brevity cannot match the returned accounts.</div>}
+          {accountLinkError && <p role="alert" style={{margin:'0 0 14px',padding:'9px 12px',borderRadius:9,border:'1px solid rgba(196,120,90,.30)',background:'rgba(196,120,90,.09)',color:'#C4785A',fontSize:11}}>{accountLinkError}</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {data.accounts.map(acct => (
-              <div key={acct.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 12 }}>
+            {data.accounts.map(acct => {
+              const compatibleSources = plaidAccountCandidates.filter(source => compatiblePlaidAccountType(acct, source) && !data.accounts.some(other => other.id !== acct.id && other.plaidAccountId === source.accountId))
+              const selectedSourceId = accountLinkDrafts[acct.id] ?? acct.plaidAccountId ?? ''
+              const selectedSource = plaidAccountCandidates.find(source => source.accountId === selectedSourceId)
+              const linkUnchanged = selectedSourceId && selectedSourceId === acct.plaidAccountId
+              return <div key={acct.id} className="finance-account-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(197,164,109,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <i className="ti ti-building-bank" style={{ fontSize: 18, color: 'var(--gold)' }} aria-hidden="true" />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
                     {acct.name}
                     <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, background: acct.plaidAccountId ? 'rgba(125,203,164,.12)' : 'rgba(255,255,255,.06)', color: acct.plaidAccountId ? '#7DCBA4' : 'var(--muted)', padding: '2px 7px', borderRadius: 10 }}>
@@ -3030,10 +3085,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                     <span style={{ textTransform: 'capitalize' }}>{acct.type}</span>
                     {acct.institution ? ` · ${acct.institution}${acct.mask ? ` ••••${acct.mask}` : ''}` : ' · Awaiting bank link'}
                   </p>
+                  {plaidAccountCandidates.length > 0 && <div className="finance-account-link-controls" style={{display:'flex',gap:7,alignItems:'center',flexWrap:'wrap',marginTop:9}}>
+                    <label style={{display:'grid',gap:3,flex:'1 1 250px',minWidth:0}}><span className="field-label">Verified bank source</span><select aria-label={`Bank source for ${acct.name}`} value={selectedSourceId} onChange={event=>{setAccountLinkDrafts(current=>({...current,[acct.id]:event.target.value}));setAccountLinkError('')}} style={{width:'100%',minWidth:0,minHeight:38,borderRadius:8,border:'1px solid rgba(255,255,255,.12)',background:'#171512',color:'var(--white)',padding:'7px 9px',fontFamily:'inherit',fontSize:11}}><option value="">Choose a compatible bank account</option>{compatibleSources.map(source=><option key={source.accountId} value={source.accountId}>{source.institution || 'Bank'} · {source.name || source.officialName || 'Account'}{source.mask ? ` ••••${source.mask}` : ''}</option>)}</select></label>
+                    <button type="button" disabled={!selectedSource || linkUnchanged || preparingAccountLink === acct.id} onClick={()=>reviewAccountLink(acct)} style={{alignSelf:'end',minHeight:38,padding:'7px 11px',borderRadius:8,border:'1px solid rgba(197,164,109,.35)',background:'rgba(197,164,109,.12)',color:'#C5A46D',fontFamily:'inherit',fontSize:11,fontWeight:600,cursor:!selectedSource||linkUnchanged?'not-allowed':'pointer',opacity:(!selectedSource||linkUnchanged)?0.6:1}}>{preparingAccountLink === acct.id ? 'Preparing…' : linkUnchanged ? 'Linked' : 'Review link'}</button>
+                  </div>}
                 </div>
                 <p title={acct.plaidAccountId ? 'Latest available bank balance' : 'Stored modeled balance; link this account to refresh it from the bank'} style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{fmtMoney(parseFloat(acct.balance || 0))}</p>
               </div>
-            ))}
+            })}
           </div>
           <div className="finance-card">
             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--muted)', marginBottom: 12 }}>Combined balance forecast</p>

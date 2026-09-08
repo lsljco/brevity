@@ -307,7 +307,7 @@ export async function fetchLatestPlaidTransactions({
 
 const normalizeName = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
-function compatibleAccountType(localAccount, plaidAccount) {
+export function compatiblePlaidAccountType(localAccount, plaidAccount) {
   const localType = String(localAccount?.type || '').toLowerCase()
   const plaidType = String(plaidAccount?.type || '').toLowerCase()
   const plaidSubtype = String(plaidAccount?.subtype || '').toLowerCase()
@@ -321,7 +321,7 @@ function compatibleAccountType(localAccount, plaidAccount) {
 function nameCandidates(account, plaidAccounts, used) {
   const localName = normalizeName(account.name)
   if (!localName) return []
-  return plaidAccounts.filter(item => !used.has(item.accountId) && compatibleAccountType(account, item) && normalizeName(item.name) === localName)
+  return plaidAccounts.filter(item => !used.has(item.accountId) && compatiblePlaidAccountType(account, item) && normalizeName(item.name) === localName)
 }
 
 function missingLinkedLocalAccountIds(financeData, plaidAccounts) {
@@ -398,7 +398,7 @@ export function mergePlaidBalancesWithDiagnostics(financeData, plaidAccounts = [
   const incompatibleLinks = accounts.flatMap(account => {
     if (!account.plaidAccountId || ambiguousPlaidIds.has(account.plaidAccountId)) return []
     const match = plaidAccounts.find(item => item.accountId && item.accountId === account.plaidAccountId)
-    return match && !compatibleAccountType(account, match) ? [{ account, match }] : []
+    return match && !compatiblePlaidAccountType(account, match) ? [{ account, match }] : []
   })
   if (incompatibleLinks.length) {
     return {

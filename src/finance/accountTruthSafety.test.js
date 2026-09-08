@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 
-test('account identity and bank balances have no manual mutation controls', () => {
+test('account balances and household account structure have no manual mutation controls', () => {
   for (const unsafeControl of [
     'function AcctForm',
     "view === 'acct-form'",
@@ -20,8 +20,10 @@ test('account identity and bank balances have no manual mutation controls', () =
     'Click to set actual balance',
   ]) assert.equal(planner.includes(unsafeControl), false, `${unsafeControl} must remain unavailable`)
 
-  assert.match(planner, /Account identity, type, and current balance are source-managed/)
-  assert.match(planner, /does not allow manual account creation, renaming, type changes, balance overrides, or deletion/)
+  assert.match(planner, /Brevity never guesses when bank names differ/)
+  assert.match(planner, /reviewed link does not move money or change credentials/)
+  assert.match(planner, /type:'finance\.account\.link'/)
+  assert.match(planner, /payload:\{ plaidAccountId \}/)
   assert.match(planner, /title="Reconstructed end-of-day balance from the latest bank balance and transaction history"/)
   assert.match(planner, /Reconstructed end-of-day balance/)
   assert.doesNotMatch(planner, /Actual ending balance from bank/)

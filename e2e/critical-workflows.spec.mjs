@@ -16,10 +16,37 @@ const cashForecastRecords=()=>{
   ]
   return Object.fromEntries(Object.entries({lslj_finance_v9:finance,plaid_actuals_cache:actuals}).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt}]))
 }
-async function mockBackend(page,{financeFixture=false}={}){await page.route('**/.netlify/functions/**',async route=>{const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action');let body={};if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:'Larry',role:'admin',bootstrapRequired:false};else if(path.endsWith('/household-auth')&&action==='members')body={members:[]};else if(path.endsWith('/household-state')){if(route.request().method()==='PUT'){const payload=route.request().postDataJSON();body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}}else body={records:financeFixture?cashForecastRecords():{},serverTime:new Date().toISOString()}}else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()};else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()};else if(path.endsWith('/plaid-accounts'))body={connected:false,accounts:[],errors:[],syncedAt:new Date().toISOString()};else if(path.endsWith('/plaid-transactions'))body={connected:false,transactions:[],errors:[]};else if(path.endsWith('/health-alerts'))body={alerts:[]};else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}};else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]};await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})})}
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false}={}){
+  await page.route('**/.netlify/functions/**',async route=>{
+    const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
+    let body={}
+    if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:'Larry',role:'admin',bootstrapRequired:false}
+    else if(path.endsWith('/household-auth')&&action==='members')body={members:[]}
+    else if(path.endsWith('/household-state')){
+      if(route.request().method()==='PUT'){
+        const payload=route.request().postDataJSON()
+        body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
+      }else body={records:(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
+    }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
+    else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()}
+    else if(path.endsWith('/plaid-accounts'))body=accountLinkFixture?{
+      connected:true,balanceMode:'live',balanceProvenance:'plaid.accountsBalanceGet',syncedAt:new Date().toISOString(),errors:[],requiresUpdate:[],
+      accountSourceReceipt:{payload:'test',signature:'a'.repeat(64)},
+      accounts:[
+        {accountId:'bank-checking',itemId:'item-1',institution:'Pinnacle',name:'Personal Checking',type:'depository',subtype:'checking',mask:'0607',balance:756.74},
+        {accountId:'bank-savings',itemId:'item-1',institution:'Pinnacle',name:'Personal Savings',type:'depository',subtype:'savings',mask:'4412',balance:2400},
+      ],
+    }:{connected:false,accounts:[],errors:[],syncedAt:new Date().toISOString()}
+    else if(path.endsWith('/plaid-transactions'))body={connected:false,transactions:[],errors:[]}
+    else if(path.endsWith('/health-alerts'))body={alerts:[]}
+    else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}}
+    else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]}
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})
+  })
+}
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('iPhone Cash Forecast')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('iPhone Cash Forecast'),accountLinkFixture:testInfo.title.includes('account-link repair')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -91,6 +118,23 @@ test('iPhone Cash Forecast clearly separates its monthly plan without a sticky a
     }
   })
   expect(layout).toEqual({accountPosition:'static',rootOverflow:'visible',overlaps:false})
+})
+
+test('iPhone account-link repair turns an unmatched balance warning into a compatible reviewed choice',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='iphone','iPhone account-link repair contract')
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await page.getByRole('button',{name:'Check existing connection'}).click()
+  const warning=page.getByRole('alert')
+  await expect(warning).toContainText('returned bank accounts did not match Brevity')
+  await warning.getByRole('button',{name:'Review account links'}).click()
+  const selector=page.getByRole('combobox',{name:'Bank source for Operating Account'})
+  await expect(selector).toBeVisible()
+  await selector.selectOption({label:'Pinnacle · Personal Checking ••••0607'})
+  await expect(page.getByRole('button',{name:'Review link'})).toBeEnabled()
+  await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
 })
 
 test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})

@@ -57,7 +57,7 @@ async function reportUnverifiedBalanceAttempt(onAccountsSync, { status, message,
 }
 
 // ── Main PlaidConnect component ──
-export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
+export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onReviewAccountLinks }) {
   // Restore connected state from localStorage immediately — no flicker
   const [connections, setConnections]   = useState(() => {
     try {
@@ -75,13 +75,16 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
   const [syncNotice, setSyncNotice]     = useState('')
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
+  const [linkReviewCount, setLinkReviewCount] = useState(0)
 
   // Existing connections remain readable and can be explicitly synchronized.
-  // Connection, re-link, and disconnect mutations are disabled for this release.
+  // Institution credential mutations remain disabled; reviewed local account
+  // mapping does not touch Plaid credentials or the connected institution.
   const syncAccounts = useCallback(async ({ refreshTransactions = false } = {}) => {
     setSyncing(true)
     setError(null)
     setSyncNotice('')
+    setLinkReviewCount(0)
     let balanceState = 'failed'
     let balanceDetail = ''
     let transactionState = refreshTransactions && typeof onTransactionsSync === 'function' ? 'pending' : 'skipped'
@@ -128,6 +131,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
           const balancePartial = endpointErrors.length > 0 || !plaidAccounts.length || balanceResult?.partial === true
           const missingLinkedCount = balanceResult?.missingLinkedCount || 0
           const unmatchedCount = balanceResult?.unmatchedCount || 0
+          setLinkReviewCount(balanceResult?.linkReviewAvailable ? unmatchedCount : 0)
           const balanceGapDetails = [
             ...(missingLinkedCount ? [`${missingLinkedCount} previously linked Brevity account${missingLinkedCount === 1 ? ' was' : 's were'} missing from the live bank response`] : []),
             ...(unmatchedCount ? [`${unmatchedCount} returned bank account${unmatchedCount === 1 ? ' did' : 's did'} not match Brevity`] : []),
@@ -170,6 +174,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
           setConnections([])
           setSyncedAt(null)
           setRequiresUpdate([])
+          setLinkReviewCount(0)
           try {
             localStorage.removeItem('plaid_connections')
             localStorage.removeItem('plaid_synced_at')
@@ -315,7 +320,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
 
       {syncNotice && <p role="status" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>{syncNotice}</p>}
 
-      <p className="plaid-connection-safety-note" role="note" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>Existing connected sources can still sync. Adding, re-linking, or disconnecting a bank is disabled in this release to protect financial credentials and account identity.</p>
+      <p className="plaid-connection-safety-note" role="note" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>Existing connected sources can still sync. Adding, reauthorizing, or disconnecting an institution is disabled in this release. Mapping a returned account to an existing Brevity account uses reviewed Action Mode and does not change bank credentials.</p>
 
       {/* ── Add another institution (when connected) ── */}
       {isConnected && !expanded && (
@@ -365,9 +370,10 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
         </div>
       )}
       {error && (
-        <p style={{ marginTop: 8, fontSize: 11, color: '#C4785A', background: 'rgba(196,120,90,0.1)', padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(196,120,90,0.2)' }}>
-          {error}
-        </p>
+        <div role="alert" style={{ marginTop: 8, fontSize: 11, color: '#C4785A', background: 'rgba(196,120,90,0.1)', padding: '9px 12px', borderRadius: 8, border: '1px solid rgba(196,120,90,0.2)' }}>
+          <p style={{margin:0,lineHeight:1.5}}>{error}</p>
+          {linkReviewCount > 0 && typeof onReviewAccountLinks === 'function' && <button type="button" onClick={onReviewAccountLinks} style={{marginTop:9,padding:'7px 11px',borderRadius:8,border:'1px solid rgba(197,164,109,.35)',background:'rgba(197,164,109,.12)',color:'#C5A46D',fontFamily:'inherit',fontSize:11,fontWeight:600,cursor:'pointer'}}>Review account links</button>}
+        </div>
       )}
     </div>
   )

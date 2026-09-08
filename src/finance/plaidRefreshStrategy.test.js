@@ -81,6 +81,20 @@ test('Plaid balance success waits for versioned household persistence',()=>{
   assert.doesNotMatch(financePlanner,/useEffect\(\(\) => \{\s*if \(readOnly\) return\s*const result = saveData\(data\)/)
 })
 
+test('unmatched returned accounts lead to a reviewed bank-source mapping instead of a dead-end warning',()=>{
+  assert.match(plaidConnect,/setLinkReviewCount\(balanceResult\?\.linkReviewAvailable \? unmatchedCount : 0\)/)
+  assert.match(plaidConnect,/Review account links/)
+  assert.match(plaidConnect,/onReviewAccountLinks/)
+  assert.match(financePlanner,/setPlaidAccountCandidates\(returnedAccounts\)/)
+  assert.match(financePlanner,/compatiblePlaidAccountType\(acct, source\)/)
+  assert.match(financePlanner,/Verified bank source/)
+  assert.match(financePlanner,/type:'finance\.account\.link'/)
+  assert.match(financePlanner,/payload:\{ plaidAccountId \}/)
+  assert.match(financePlanner,/getAcknowledgedSharedStateVersion\(localStorage, LS_KEY\)/)
+  assert.match(financePlanner,/requestActionReview\(result\.proposal\)/)
+  assert.match(financePlanner,/does not move money or change bank credentials/)
+})
+
 test('a failed balance write cannot suppress the independently requested transaction refresh',()=>{
   const syncHandler=plaidConnect.match(/const syncAccounts = useCallback\(async[\s\S]*?\n  \}, \[onAccountsSync, onTransactionsSync\]\)/)?.[0] || ''
   assert.ok(syncHandler)

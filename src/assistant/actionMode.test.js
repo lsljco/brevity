@@ -283,6 +283,26 @@ test('recurring executor applies explicit one versus future scope semantics',()=
   assert.equal(future.after.transactions[0].end,'2026-09-10')
 })
 
+test('reviewed bank-source linking changes only source identity and preserves the prior balance until verified refresh',()=>{
+  const proposal=normalizeActionProposal({summary:'Link Operating Account',operations:[{
+    type:'finance.account.link',targetId:'operating',description:'Link Operating Account to Pinnacle ••••0607',payload:{plaidAccountId:'plaid-checking-0607'},
+  }]},{member:'Larry',role:'admin'})
+  const operation=proposal.operations[0]
+  assert.equal(proposal.risk,'strong-confirmation')
+  assert.equal(resourceForOperation(operation),'shared:lslj_finance_v9')
+  const finance={accounts:[{
+    id:'operating',name:'Operating Account',type:'checking',balance:425,
+    plaidAccountId:'old-source',plaidItemId:'old-item',plaidName:'Old Checking',plaidType:'depository',plaidSubtype:'checking',institution:'Old Bank',mask:'1111',plaidCurrentBalance:450,plaidAvailableBalance:425,
+  },{id:'savings',name:'Savings',type:'savings',balance:900}],transactions:[{id:'mortgage'}]}
+  const result=applyRecordOperation(finance,operation)
+  const linked=result.after.accounts[0]
+  assert.equal(linked.balance,425)
+  assert.equal(linked.plaidAccountId,'plaid-checking-0607')
+  for(const field of ['plaidItemId','plaidName','plaidType','plaidSubtype','institution','mask','plaidCurrentBalance','plaidAvailableBalance'])assert.equal(field in linked,false)
+  assert.deepEqual(result.after.transactions,finance.transactions)
+  assert.throws(()=>applyRecordOperation({accounts:[{id:'operating'},{id:'savings',name:'Savings',plaidAccountId:'plaid-checking-0607'}]},operation),/already linked to Savings/)
+})
+
 test('execution groups same-record operations into one versioned write',async()=>{
   let value={decisions:[{id:'d1',title:'One',owner:'Larry',status:'needs-decision'},{id:'d2',title:'Two',owner:'Larry',status:'needs-decision'}]},version=3,writes=0
   const resources={read:async()=>({value,version}),write:async(_resource,next,expected)=>{assert.equal(expected,3);writes+=1;value=next;version=4;return{value,version}}}
