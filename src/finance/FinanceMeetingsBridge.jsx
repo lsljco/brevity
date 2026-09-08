@@ -1,42 +1,58 @@
 import { useMemo } from 'react'
 import { buildCanonicalFinanceModel } from './financeDomain.js'
+import { buildMeetingCashScope, meetingBalanceQualification, meetingTransactionQualification, normalizeMeetingSourceStatus } from './financeMeetingTruth.js'
 import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
 
-export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
+export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',balanceDataStatus='unknown',transactionFreshnessStatus='unknown',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
   const today=useMemo(()=>new Date(),[])
+  const meetingScope=useMemo(()=>buildMeetingCashScope({accounts,scheduled,cashFlowScheduled,actuals,balanceDataStatus,transactionFreshnessStatus,today}),[accounts,scheduled,cashFlowScheduled,actuals,balanceDataStatus,transactionFreshnessStatus,today])
   const model=useMemo(()=>{
-    const canonical=buildCanonicalFinanceModel({accounts,scheduled,cashFlowScheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,projection,today})
+    const canonical=buildCanonicalFinanceModel({accounts:meetingScope.accounts,scheduled:meetingScope.scheduled,cashFlowScheduled:meetingScope.cashFlowScheduled,actuals:meetingScope.actuals,budget,budgetLegacyYear,budgetLegacyAccountId,today})
     const {metrics,breakdowns,sources}=canonical
+    const balanceQualification=meetingBalanceQualification(meetingScope.balanceDataStatus,{hasDistinctCurrentBalance:meetingScope.hasDistinctCurrentBalance})
+    const transactionQualification=meetingTransactionQualification(transactionFreshnessStatus,{actualMetricsAvailable:meetingScope.actualMetricsAvailable})
+    const cashMetric=value=>meetingScope.hasCashAccounts?value:null
+    const actualMetric=value=>meetingScope.actualMetricsAvailable?value:null
+    const transferProjectionNote='Internal checking/savings transfers are neutral. Transfers crossing this cash scope count as projected inflows or obligations.'
+    const balanceRows=meetingScope.availableCash==null?[]:meetingScope.accounts.map(account=>({id:account.id,label:account.name||account.accountName||'Cash account',amount:Number(account.balance),meta:balanceQualification}))
+    const currentRows=meetingScope.hasDistinctCurrentBalance?meetingScope.accounts.map(account=>({id:account.id,label:account.name||account.accountName||'Cash account',amount:Number(account.plaidCurrentBalance),meta:'Bank current balance from the same verified refresh.'})):[]
     const liveSnapshot={
-      currentMonthlyNet:metrics.actualMonthlyNet,
-      actualMonthlyNet:metrics.actualMonthlyNet,
-      projectedMonthlyNet:metrics.projectedMonthlyNet,
-      operatingBalance:metrics.operatingBalance,
-      operatingAvailable:metrics.operatingAvailable,
-      todayInflows:metrics.todayInflows,
-      todayObligations:metrics.todayObligations,
-      approvedDiscretionary:metrics.approvedDiscretionary,
-      weekInflows:metrics.weekInflows,
-      weekObligations:metrics.weekObligations,
-      monthForecast:metrics.monthForecast,
+      currentMonthlyNet:actualMetric(metrics.actualMonthlyNet),
+      actualMonthlyNet:actualMetric(metrics.actualMonthlyNet),
+      projectedMonthlyNet:cashMetric(metrics.projectedMonthlyNet),
+      operatingBalance:meetingScope.currentBalance,
+      operatingAvailable:meetingScope.availableCash,
+      todayInflows:cashMetric(metrics.todayInflows),
+      todayObligations:cashMetric(metrics.todayObligations),
+      approvedDiscretionary:cashMetric(metrics.approvedDiscretionary),
+      weekInflows:cashMetric(metrics.weekInflows),
+      weekObligations:cashMetric(metrics.weekObligations),
+      monthForecast:cashMetric(metrics.monthForecast),
     }
     const drilldowns={
-      currentMonthlyNet:{label:'Actual monthly net cash flow',amount:metrics.actualMonthlyNet,note:'Posted month-to-date cash inflows minus posted expenses. Pending activity and transfers are excluded.',source:'Canonical Finance ledger',children:[{label:'Realized income',amount:metrics.actualMonthlyIncome,meta:'Posted this month · transfers excluded',children:breakdowns.actual.income},{label:'Refunds and other cash inflows',amount:metrics.actualMonthlyOtherInflows,meta:'Posted cash credits that are not earned income',children:breakdowns.actual.otherInflows},{label:'Posted expenses',amount:metrics.actualMonthlyExpenses,meta:'Posted this month · transfers excluded',children:breakdowns.actual.expenses}]},
-      actualMonthlyNet:{label:'Actual monthly net cash flow',amount:metrics.actualMonthlyNet,note:'Posted month-to-date cash inflows minus posted expenses. Pending activity and transfers are excluded.',source:'Canonical Finance ledger',children:[{label:'Realized income',amount:metrics.actualMonthlyIncome,children:breakdowns.actual.income},{label:'Refunds and other cash inflows',amount:metrics.actualMonthlyOtherInflows,children:breakdowns.actual.otherInflows},{label:'Posted expenses',amount:metrics.actualMonthlyExpenses,children:breakdowns.actual.expenses}]},
-      projectedMonthlyNet:{label:'Projected monthly net cash flow',amount:metrics.projectedMonthlyNet,note:'All projected income minus all projected expenses for the calendar month. Transfers are excluded.',source:'Canonical Finance forecast',children:[{label:'Projected income',amount:metrics.projectedMonthlyIncome,children:breakdowns.projected.income},{label:'Projected expenses',amount:metrics.projectedMonthlyExpenses,children:breakdowns.projected.expenses}]},
-      operatingAvailable:{label:'Available cash',amount:metrics.operatingAvailable,source:'Canonical Finance accounts',children:breakdowns.cashRows},
-      operatingBalance:{label:'Current balance',amount:metrics.operatingBalance,source:'Canonical Finance accounts',children:breakdowns.cashRows},
-      todayInflows:{label:'Expected inflows today / tomorrow',amount:metrics.todayInflows,source:'Canonical scheduled ledger',children:breakdowns.nearIncome},
-      todayObligations:{label:'Obligations due today / tomorrow',amount:metrics.todayObligations,source:'Canonical scheduled ledger',children:breakdowns.nearExpenses},
-      approvedDiscretionary:{label:'Approved discretionary amount',amount:metrics.approvedDiscretionary,note:'Remaining discretionary budget divided across the remaining days in the month.',source:'Canonical budget model',children:[]},
-      weekInflows:{label:'Expected inflows this week',amount:metrics.weekInflows,source:'Canonical scheduled ledger',children:breakdowns.weekIncome},
-      weekObligations:{label:'Obligations this week',amount:metrics.weekObligations,source:'Canonical scheduled ledger',children:breakdowns.weekExpenses},
-      monthForecast:{label:'Projected month-end net cash flow',amount:metrics.monthForecast,note:'All projected monthly income minus all projected monthly expenses. Transfers are excluded.',source:'Canonical Finance forecast',children:[{label:'Income',amount:sources.forecast.income,children:breakdowns.projected.income},{label:'Expenses',amount:sources.forecast.expenses,children:breakdowns.projected.expenses}]},
-      recurringMonthForecast:{label:'Recurring-only monthly net',amount:metrics.recurringMonthlyNet,note:'Recurring scheduled income minus recurring scheduled expenses.',source:'Canonical recurring plan',children:[]},
+      currentMonthlyNet:{label:'Actual monthly net cash flow',amount:actualMetric(metrics.actualMonthlyNet),note:transactionQualification,source:'Canonical Finance ledger · checking and savings only',children:meetingScope.actualMetricsAvailable?[{label:'Realized income',amount:metrics.actualMonthlyIncome,meta:'Posted this month · transfers excluded',children:breakdowns.actual.income},{label:'Refunds and other cash inflows',amount:metrics.actualMonthlyOtherInflows,meta:'Posted cash credits that are not earned income',children:breakdowns.actual.otherInflows},{label:'Posted expenses',amount:metrics.actualMonthlyExpenses,meta:'Posted this month · transfers excluded',children:breakdowns.actual.expenses}]:[]},
+      actualMonthlyNet:{label:'Actual monthly net cash flow',amount:actualMetric(metrics.actualMonthlyNet),note:transactionQualification,source:'Canonical Finance ledger · checking and savings only',children:meetingScope.actualMetricsAvailable?[{label:'Realized income',amount:metrics.actualMonthlyIncome,children:breakdowns.actual.income},{label:'Refunds and other cash inflows',amount:metrics.actualMonthlyOtherInflows,children:breakdowns.actual.otherInflows},{label:'Posted expenses',amount:metrics.actualMonthlyExpenses,children:breakdowns.actual.expenses}]:[]},
+      projectedMonthlyNet:{label:'Projected monthly net cash flow',amount:cashMetric(metrics.projectedMonthlyNet),note:`All projected cash inflows minus projected obligations for the calendar month. ${transferProjectionNote}`,source:'Canonical Finance forecast',children:meetingScope.hasCashAccounts?[{label:'Projected inflows',amount:metrics.projectedMonthlyIncome,children:breakdowns.projected.income},{label:'Projected obligations',amount:metrics.projectedMonthlyExpenses,children:breakdowns.projected.expenses}]:[]},
+      operatingAvailable:{label:meetingScope.hasDistinctCurrentBalance?'Available cash':'Cash balance',amount:meetingScope.availableCash,note:balanceQualification,source:'Checking and savings account scope',children:balanceRows},
+      operatingBalance:{label:'Current balance',amount:meetingScope.currentBalance,note:balanceQualification,source:'Checking and savings account scope',children:currentRows},
+      todayInflows:{label:'Projected inflows today / tomorrow',amount:cashMetric(metrics.todayInflows),note:`Scheduled plan entries are projections; they are not treated as completed bank activity. ${transferProjectionNote}`,source:'Canonical scheduled ledger',children:meetingScope.hasCashAccounts?breakdowns.nearIncome:[]},
+      todayObligations:{label:'Projected obligations today / tomorrow',amount:cashMetric(metrics.todayObligations),note:`Scheduled plan entries are projections; they are not treated as completed bank activity. ${transferProjectionNote}`,source:'Canonical scheduled ledger',children:meetingScope.hasCashAccounts?breakdowns.nearExpenses:[]},
+      approvedDiscretionary:{label:'Approved discretionary amount',amount:cashMetric(metrics.approvedDiscretionary),note:'Remaining discretionary budget divided across the remaining days in the month.',source:'Canonical budget model',children:[]},
+      weekInflows:{label:'Projected inflows this week',amount:cashMetric(metrics.weekInflows),note:`Scheduled plan entries are projections; they are not treated as completed bank activity. ${transferProjectionNote}`,source:'Canonical scheduled ledger',children:meetingScope.hasCashAccounts?breakdowns.weekIncome:[]},
+      weekObligations:{label:'Projected obligations this week',amount:cashMetric(metrics.weekObligations),note:`Scheduled plan entries are projections; they are not treated as completed bank activity. ${transferProjectionNote}`,source:'Canonical scheduled ledger',children:meetingScope.hasCashAccounts?breakdowns.weekExpenses:[]},
+      monthForecast:{label:'Projected month-end net cash flow',amount:cashMetric(metrics.monthForecast),note:`All projected monthly cash inflows minus projected obligations. ${transferProjectionNote}`,source:'Canonical Finance forecast',children:meetingScope.hasCashAccounts?[{label:'Inflows',amount:sources.forecast.income,children:breakdowns.projected.income},{label:'Obligations',amount:sources.forecast.expenses,children:breakdowns.projected.expenses}]:[]},
+      recurringMonthForecast:{label:'Recurring-only monthly net',amount:cashMetric(metrics.recurringMonthlyNet),note:`Recurring scheduled cash inflows minus recurring scheduled obligations. ${transferProjectionNote}`,source:'Canonical recurring plan',children:[]},
     }
     return {liveSnapshot,drilldowns}
-  },[today,accounts,scheduled,cashFlowScheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,projection])
+  },[today,meetingScope,budget,budgetLegacyYear,budgetLegacyAccountId,transactionFreshnessStatus])
 
-  const accountScope=useMemo(()=>!accounts.length?'No selected accounts':accounts.length===1?(accounts[0].name||accounts[0].accountName||'Selected account'):`${accounts.length} selected accounts`,[accounts])
-  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember} readOnly={readOnly} financeReadOnly={financeReadOnly} meetingPlanningReadOnly={meetingPlanningReadOnly}/>
+  const accountScope=useMemo(()=>{
+    const cashLabel=!meetingScope.accounts.length?'No selected checking or savings accounts':meetingScope.accounts.length===1?`${meetingScope.accounts[0].name||meetingScope.accounts[0].accountName||'Selected cash account'} · checking/savings cash only`:`${meetingScope.accounts.length} selected checking/savings cash accounts`
+    const excludedTypes=[...new Set(meetingScope.excludedAccounts.map(account=>String(account?.type||'other').toLowerCase()))].join(', ')
+    const accountExclusion=meetingScope.excludedAccounts.length?` ${meetingScope.excludedAccounts.length} selected non-cash account${meetingScope.excludedAccounts.length===1?' is':'s are'} excluded${excludedTypes?` (${excludedTypes})`:''}; non-cash accounts do not count toward coverage.`:''
+    const activityExclusion=meetingScope.excludedActualCount?` ${meetingScope.excludedActualCount} bank transaction${meetingScope.excludedActualCount===1?' is':'s are'} outside exact cash-account links and excluded from actual totals.`:''
+    const transferScope=meetingScope.boundaryTransferCount||meetingScope.internalCashTransferCount?` ${meetingScope.boundaryTransferCount} boundary transfer${meetingScope.boundaryTransferCount===1?'':'s'} count as projected cash movement; ${meetingScope.internalCashTransferCount} transfer${meetingScope.internalCashTransferCount===1?'':'s'} within selected cash remain neutral.`:''
+    return `${cashLabel}.${accountExclusion}${activityExclusion}${transferScope}`
+  },[meetingScope])
+  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember} balanceDataStatus={meetingScope.balanceDataStatus} transactionFreshnessStatus={normalizeMeetingSourceStatus(transactionFreshnessStatus)} hasDistinctCurrentBalance={meetingScope.hasDistinctCurrentBalance} hasCashAccounts={meetingScope.hasCashAccounts} actualMetricsAvailable={meetingScope.actualMetricsAvailable} readOnly={readOnly} financeReadOnly={financeReadOnly} meetingPlanningReadOnly={meetingPlanningReadOnly}/>
 }

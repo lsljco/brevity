@@ -303,6 +303,7 @@ async function writePlaidSourceRecord({
   }
 
   let verifiedBatches = []
+  let accountReceiptWatermark = null
   if (key === 'plaid_actuals_cache') {
     if (existing && !Array.isArray(parsedExisting.value)) {
       throw new Error('The existing synchronized transaction record is damaged and cannot be safely refreshed.')
@@ -335,9 +336,9 @@ async function writePlaidSourceRecord({
     }
   } else {
     if (body.sourceReceipts !== undefined) return { statusCode:400, body:{ error:'Transaction source receipts are not valid for a balance refresh.', code:'INVALID_SOURCE_INGESTION' } }
-    let verifiedAccounts
+    let verifiedAccountSnapshot
     try {
-      verifiedAccounts = await verifyAccountReceipt(body.accountSourceReceipt)
+      verifiedAccountSnapshot = await verifyAccountReceipt(body.accountSourceReceipt)
     } catch (error) {
       const unavailable = error?.code === 'PLAID_ACCOUNT_RECEIPT_UNAVAILABLE'
       return {
@@ -350,9 +351,44 @@ async function writePlaidSourceRecord({
         },
       }
     }
+    const verifiedAccounts = verifiedAccountSnapshot?.accounts
+    accountReceiptWatermark = {
+      issuedAt:Number(verifiedAccountSnapshot?.issuedAt),
+      receiptId:String(verifiedAccountSnapshot?.receiptId || ''),
+    }
+    if (!Array.isArray(verifiedAccounts) || !Number.isFinite(accountReceiptWatermark.issuedAt) || !/^[a-f0-9]{64}$/.test(accountReceiptWatermark.receiptId)) {
+      return { statusCode:409, body:{ error:'The Plaid balance receipt is missing its monotonic source identity. Refresh balances and try again.', code:'SOURCE_RECEIPT_REJECTED' } }
+    }
+    const priorWatermark = existing?.plaidAccountReceipt
+    if (priorWatermark) {
+      const priorIssuedAt = Number(priorWatermark.issuedAt)
+      const priorReceiptId = String(priorWatermark.receiptId || '')
+      const older = !Number.isFinite(priorIssuedAt) || accountReceiptWatermark.issuedAt < priorIssuedAt
+      const conflictingSameTime = accountReceiptWatermark.issuedAt === priorIssuedAt && accountReceiptWatermark.receiptId !== priorReceiptId
+      const changedReplay = accountReceiptWatermark.receiptId === priorReceiptId && existing?.value !== body.value
+      if (older || conflictingSameTime || changedReplay) {
+        return { statusCode:409, body:{ error:'This Plaid balance receipt is older than, conflicts with, or replays the last applied balance snapshot. The newer stored balances were kept.', code:'SOURCE_RECEIPT_REPLAYED' } }
+      }
+    }
     // Compare the same JSON representation the browser submits; optional
     // source fields with an undefined value are omitted during serialization.
-    const exactCandidate = JSON.parse(JSON.stringify(mergeVerifiedPlaidBalances(parsedExisting.value, verifiedAccounts)))
+    let exactCandidate
+    try {
+      exactCandidate = JSON.parse(JSON.stringify(mergeVerifiedPlaidBalances(parsedExisting.value, verifiedAccounts)))
+    } catch (error) {
+      if (['PLAID_ACCOUNT_LINKAGE_AMBIGUOUS','PLAID_ACCOUNT_LINKAGE_INCOMPATIBLE'].includes(error?.code)) {
+        return {
+          statusCode:422,
+          body:{
+            error:error.message,
+            code:error.code === 'PLAID_ACCOUNT_LINKAGE_INCOMPATIBLE'
+              ? 'SOURCE_ACCOUNT_LINKAGE_INCOMPATIBLE'
+              : 'SOURCE_SCHEMA_REJECTED',
+          },
+        }
+      }
+      throw error
+    }
     if (!isDeepStrictEqual(parsedCandidate.value, exactCandidate)) {
       return { statusCode:422, body:{ error:'The submitted finance snapshot does not exactly match the server-verified Plaid balances and prior household plan.', code:'SOURCE_SNAPSHOT_MISMATCH' } }
     }
@@ -366,7 +402,10 @@ async function writePlaidSourceRecord({
   // snapshot does not need to manufacture a new household-state version.
   let record
   let unchanged = false
-  if (existing && existing.value === body.value && String(existing.hash || '') === calculatedHash) {
+  const watermarkAlreadyApplied = key !== 'lslj_finance_v9'
+    || (existing?.plaidAccountReceipt?.issuedAt === accountReceiptWatermark?.issuedAt
+      && existing?.plaidAccountReceipt?.receiptId === accountReceiptWatermark?.receiptId)
+  if (existing && existing.value === body.value && String(existing.hash || '') === calculatedHash && watermarkAlreadyApplied) {
     record = { ...existing, version:existingVersion }
     unchanged = true
   } else {
@@ -378,6 +417,7 @@ async function writePlaidSourceRecord({
       updatedAt:now().toISOString(),
       updatedBy:session.member,
       source:'plaid',
+      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark } : {}),
     }
     const writeOptions = existing ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }
     const writeResult = await dataStore.setJSON(recordKey(key), record, writeOptions)

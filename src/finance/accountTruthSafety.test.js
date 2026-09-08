@@ -22,8 +22,10 @@ test('account identity and bank balances have no manual mutation controls', () =
 
   assert.match(planner, /Account identity, type, and current balance are source-managed/)
   assert.match(planner, /does not allow manual account creation, renaming, type changes, balance overrides, or deletion/)
-  assert.match(planner, /title="Actual ending balance from bank"/)
-  assert.match(planner, /Projected from the latest bank-sourced balance/)
+  assert.match(planner, /title="Reconstructed end-of-day balance from the latest bank balance and transaction history"/)
+  assert.match(planner, /Reconstructed end-of-day balance/)
+  assert.doesNotMatch(planner, /Actual ending balance from bank/)
+  assert.match(planner, /`Projected from \$\{balanceSource\}`/)
   assert.match(planner, /Manual balance overrides are intentionally ignored/)
   assert.match(planner, /buildProjection\(fd\.accounts, fd\.transactions, 365, \{\}, 365, todayAnchor\)/)
 })

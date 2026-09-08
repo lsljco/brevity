@@ -41,6 +41,17 @@ export function getHouseholdTimeLabel(now = new Date(), timeZone = HOUSEHOLD_TIM
   }).format(now)
 }
 
+export function getHouseholdDateTimeLabel(now = new Date(), timeZone = HOUSEHOLD_TIME_ZONE) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month:'short',
+    day:'numeric',
+    year:'numeric',
+    hour:'numeric',
+    minute:'2-digit',
+  }).format(now)
+}
+
 export function getHouseholdMinuteOfDay(now = new Date(), timeZone = HOUSEHOLD_TIME_ZONE) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
     timeZone,

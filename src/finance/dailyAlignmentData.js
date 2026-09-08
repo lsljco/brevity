@@ -45,15 +45,22 @@ function isDiscretionary(transaction) {
   return category === 'discretionary' || /shopping|entertainment|personal care|travel|merchandise/.test(category)
 }
 
+function hasExplicitPostedReconciliation(transaction, actual) {
+  if (actual?.pending || !transaction?.id) return false
+  const scheduledId = actual?.reconciledScheduledId || actual?.scheduledTransactionId || ''
+  const occurrenceDate = actual?.reconciledOccurrenceDate || actual?.scheduledOccurrenceDate || ''
+  return scheduledId === transaction.id
+    && /^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate)
+    && occurrenceDate === actual?.date
+}
+
 function pairScheduledWithActuals(scheduled, actuals) {
   const usedActualIndexes = new Set()
   const pairs = scheduled.map(transaction => {
-    const direction = transaction.type === 'income' ? 'income' : 'expense'
-    const amount = money(transaction.amount)
     const actualIndex = actuals.findIndex((actual, index) => {
-      if (usedActualIndexes.has(index) || directionOfActual(actual) !== direction) return false
-      const tolerance = Math.max(1, amount * 0.015)
-      return Math.abs(money(actual.amount) - amount) <= tolerance
+      if (usedActualIndexes.has(index) || !hasExplicitPostedReconciliation(transaction, actual)) return false
+      const direction = transaction.type === 'income' ? 'income' : 'expense'
+      return directionOfActual(actual) === direction
     })
     if (actualIndex >= 0) usedActualIndexes.add(actualIndex)
     return { transaction, actual: actualIndex >= 0 ? actuals[actualIndex] : null }

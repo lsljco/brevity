@@ -73,9 +73,9 @@ const stagedSource = ({ transactions = [actual()], removed = [], acknowledge = a
   },
   acknowledgeSourceReceipt:acknowledge,
 })
-const verifiedAccounts = accounts => ({ verifyAccountReceipt:async value => {
+const verifiedAccounts = (accounts, { issuedAt = new Date('2026-09-07T13:59:00.000Z').getTime(), receiptId = 'c'.repeat(64) } = {}) => ({ verifyAccountReceipt:async value => {
   assert.deepEqual(value, accountReceipt)
-  return accounts
+  return { accounts, issuedAt, receiptId }
 } })
 
 test('generic household-state writes require reviewed Action Mode for members and administrators', async () => {
@@ -247,14 +247,66 @@ test('Plaid balance ingestion updates only source-owned fields on an existing fi
   }
   const value=JSON.stringify(finance)
   const existing={key:'lslj_finance_v9',value,hash:hashValue(value),version:4,updatedBy:'Larry'}
-  const next={...finance,accounts:[{...finance.accounts[0],balance:756.74,plaidAccountId:'source-account',plaidItemId:'source-item',plaidName:'Bank Checking',plaidOfficialName:'',plaidType:'depository',plaidSubtype:'checking',institution:'Pinnacle',mask:'607'}]}
+  const next={...finance,accounts:[{...finance.accounts[0],balance:756.74,plaidAccountId:'source-account',plaidItemId:'source-item',plaidName:'Operating Account',plaidOfficialName:'',plaidType:'depository',plaidSubtype:'checking',institution:'Pinnacle',mask:'607'}]}
   const dataStore=memoryStore(existing)
-  const plaidAccounts=[{accountId:'source-account',itemId:'source-item',name:'Bank Checking',officialName:'',type:'depository',subtype:'checking',institution:'Pinnacle',mask:'607',balance:756.74}]
+  const plaidAccounts=[{accountId:'source-account',itemId:'source-item',name:'Operating Account',officialName:'',type:'depository',subtype:'checking',institution:'Pinnacle',mask:'607',balance:756.74}]
   const result=await writePlaidSourceRecord({dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',next,4),now,...verifiedAccounts(plaidAccounts)})
   assert.equal(result.statusCode,200)
   assert.equal(result.body.record.version,5)
   assert.equal(JSON.parse(result.body.record.value).accounts[0].plaidItemId,'source-item')
   assert.deepEqual(dataStore.writes[0].options,{onlyIfMatch:'etag-current'})
+})
+
+test('Plaid balance ingestion rejects a valid but older receipt after a newer balance watermark', async () => {
+  const linkedAccount={
+    id:'operating',name:'Operating Account',type:'checking',balance:50,
+    plaidAccountId:'source-account',plaidName:'Operating Account',plaidOfficialName:'',
+    plaidType:'depository',plaidSubtype:'checking',institution:'',mask:'',
+  }
+  const finance={accounts:[linkedAccount],transactions:[]}
+  const value=JSON.stringify(finance)
+  const dataStore=memoryStore({key:'lslj_finance_v9',value,hash:hashValue(value),version:1})
+  const sourceAccount=balance => [{accountId:'source-account',name:'Operating Account',type:'depository',subtype:'checking',balance}]
+
+  const newer={...finance,accounts:[{...linkedAccount,balance:200}]}
+  const first=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',newer,1),now,
+    ...verifiedAccounts(sourceAccount(200),{issuedAt:200,receiptId:'d'.repeat(64)}),
+  })
+  assert.equal(first.statusCode,200)
+  assert.equal(first.body.record.version,2)
+
+  const older={...finance,accounts:[{...linkedAccount,balance:100}]}
+  const replay=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',older,2),now,
+    ...verifiedAccounts(sourceAccount(100),{issuedAt:100,receiptId:'e'.repeat(64)}),
+  })
+  assert.equal(replay.statusCode,409)
+  assert.equal(replay.body.code,'SOURCE_RECEIPT_REPLAYED')
+  assert.equal(dataStore.writes.length,1)
+
+  const conflicting=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',older,2),now,
+    ...verifiedAccounts(sourceAccount(100),{issuedAt:200,receiptId:'e'.repeat(64)}),
+  })
+  assert.equal(conflicting.statusCode,409)
+  assert.equal(conflicting.body.code,'SOURCE_RECEIPT_REPLAYED')
+
+  const changedReplay=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',older,2),now,
+    ...verifiedAccounts(sourceAccount(100),{issuedAt:200,receiptId:'d'.repeat(64)}),
+  })
+  assert.equal(changedReplay.statusCode,409)
+  assert.equal(changedReplay.body.code,'SOURCE_RECEIPT_REPLAYED')
+
+  const newerIdentical=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',newer,2),now,
+    ...verifiedAccounts(sourceAccount(200),{issuedAt:300,receiptId:'f'.repeat(64)}),
+  })
+  assert.equal(newerIdentical.statusCode,200)
+  assert.equal(newerIdentical.body.record.version,3)
+  assert.deepEqual(newerIdentical.body.record.plaidAccountReceipt,{issuedAt:300,receiptId:'f'.repeat(64)})
+  assert.equal(dataStore.writes.length,2)
 })
 
 test('Plaid balances cannot seed finance data or change household-managed finance fields', async () => {
@@ -277,6 +329,46 @@ test('Plaid balances cannot seed finance data or change household-managed financ
     assert.equal(result.body.code,'SOURCE_SCHEMA_REJECTED')
     assert.equal(dataStore.writes.length,0)
   }
+})
+
+test('Plaid balance ingestion rejects ambiguous stored account identities without a server error', async () => {
+  const finance={accounts:[
+    {id:'duplicate',name:'Operating Account',type:'checking',balance:100},
+    {id:'duplicate',name:'Reserve Account',type:'savings',balance:50},
+  ],transactions:[]}
+  const value=JSON.stringify(finance)
+  const existing={key:'lslj_finance_v9',value,hash:hashValue(value),version:2}
+  const sourceAccounts=[{accountId:'source-account',name:'Operating Account',type:'depository',subtype:'checking',balance:100}]
+  const dataStore=memoryStore(existing)
+  const result=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',finance,2),now,
+    ...verifiedAccounts(sourceAccounts),
+  })
+  assert.equal(result.statusCode,422)
+  assert.equal(result.body.code,'SOURCE_SCHEMA_REJECTED')
+  assert.match(result.body.error,/duplicate account identity/i)
+  assert.equal(dataStore.writes.length,0)
+})
+
+test('Plaid balance ingestion returns a structured 422 for an incompatible existing account link', async () => {
+  const finance={accounts:[{
+    id:'operating',name:'Operating Account',type:'checking',balance:425,
+    plaidAccountId:'source-account',
+  }],transactions:[]}
+  const value=JSON.stringify(finance)
+  const dataStore=memoryStore({key:'lslj_finance_v9',value,hash:hashValue(value),version:2})
+  const sourceAccounts=[{
+    accountId:'source-account',name:'Credit Card',type:'credit',subtype:'credit card',balance:-1875,
+  }]
+  const result=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',finance,2),now,
+    ...verifiedAccounts(sourceAccounts),
+  })
+
+  assert.equal(result.statusCode,422)
+  assert.equal(result.body.code,'SOURCE_ACCOUNT_LINKAGE_INCOMPATIBLE')
+  assert.match(result.body.error,/different financial type/i)
+  assert.equal(dataStore.writes.length,0)
 })
 
 test('Plaid balance ingestion rejects missing, forged, and inexact server receipts', async () => {

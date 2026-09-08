@@ -737,7 +737,7 @@ html, body {
 .app-refresh-status--loading .app-refresh-status-row>span { flex: 1; }
 .app-refresh-status--warning { border-color: rgba(232,168,96,.48); }
 .app-refresh-status--error { border-color: rgba(232,120,96,.52); }
-.app-refresh-status button { border: 0; background: transparent; color: var(--gold); font: 600 12px/1 var(--font); cursor: pointer; white-space: nowrap; }
+.app-refresh-status button { min-height: 44px; border: 0; background: transparent; color: var(--gold); font: 600 12px/1 var(--font); cursor: pointer; white-space: nowrap; }
 .app-refresh-issues { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(197,164,109,.18); }
 .app-refresh-issues article { display: grid; gap: 3px; padding: 9px 10px; border-radius: 8px; background: rgba(255,255,255,.035); }
 .app-refresh-issues strong { color: var(--gold-light); font-size: 12px; }

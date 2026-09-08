@@ -1,7 +1,12 @@
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens } = require('./storage')
 const { readSession } = require('./household-auth')
-const { createAccountSourceReceipt } = require('../lib/plaid-account-source.cjs')
+const {
+  createAccountSourceReceipt,
+  normalizePlaidAccountBalances,
+  LIVE_BALANCE_MODE,
+  LIVE_BALANCE_PROVENANCE,
+} = require('../lib/plaid-account-source.cjs')
 
 const plaidClient = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
@@ -38,14 +43,20 @@ exports.handler = async (event) => {
         const res = liveBalance
           ? await plaidClient.accountsBalanceGet({ access_token })
           : await plaidClient.accountsGet({ access_token })
-        res.data.accounts.forEach(a => allAccounts.push({
-          accountId: a.account_id, itemId: item_id,
-          name: a.name, officialName: a.official_name,
-          type: a.type, subtype: a.subtype,
-          mask: a.mask,
-          balance: a.balances.available ?? a.balances.current, availableBalance: a.balances.current,
-          institution,
-        }))
+        const sourceAccounts = res.data.accounts.map(a => {
+          // Assets stay positive, credit liabilities become negative, and
+          // available credit never masquerades as spendable cash.
+          const { balance, currentBalance, availableBalance } = normalizePlaidAccountBalances(a)
+          return {
+            accountId: a.account_id, itemId: item_id,
+            name: a.name, officialName: a.official_name,
+            type: a.type, subtype: a.subtype,
+            mask: a.mask,
+            balance, currentBalance, availableBalance,
+            institution,
+          }
+        })
+        allAccounts.push(...sourceAccounts)
       } catch (err) {
         const code = err.response?.data?.error_code
         console.error(`Error for item ${item_id}:`, err.response?.data || err.message)
@@ -76,16 +87,22 @@ exports.handler = async (event) => {
       }
     }
 
+    const balanceMode = liveBalance ? LIVE_BALANCE_MODE : 'cached'
+    const balanceProvenance = liveBalance ? LIVE_BALANCE_PROVENANCE : 'plaid.accountsGet'
     return {
       statusCode: 200, headers,
       body: JSON.stringify({
         accounts: allAccounts,
-        accountSourceReceipt: createAccountSourceReceipt(allAccounts),
+        // Cached accountsGet values describe connection/account metadata only.
+        // Only the institution-facing live balance call can mint an importable
+        // source receipt and advance durable household balance truth.
+        ...(liveBalance ? { accountSourceReceipt:createAccountSourceReceipt(allAccounts) } : {}),
         connected: true,
         requiresUpdate,  // non-empty = show "Re-connect [bank]" prompt
         errors: syncErrors,
         syncedAt: new Date().toISOString(),
-        balanceMode: liveBalance ? 'live' : 'cached',
+        balanceMode,
+        balanceProvenance,
       }),
     }
   } catch (err) {

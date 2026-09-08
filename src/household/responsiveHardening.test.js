@@ -8,6 +8,7 @@ const homeHqSource = readFileSync(new URL('../homehq/HomeHQ.jsx', import.meta.ur
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const mobileShellCss = readFileSync(new URL('../MobileShell.css', import.meta.url), 'utf8')
 const financeSource = readFileSync(new URL('../finance/FinancePlanner.jsx', import.meta.url), 'utf8')
+const cashForecastAgendaSource = readFileSync(new URL('../finance/CashForecastAgenda.jsx', import.meta.url), 'utf8')
 const dashboardFooterSource = readFileSync(new URL('../finance/DashboardFooter.jsx', import.meta.url), 'utf8')
 const metricDrilldownCss = readFileSync(new URL('../finance/MetricDrilldown.css', import.meta.url), 'utf8')
 const scenarioSource = readFileSync(new URL('../finance/ScenarioModeling.jsx', import.meta.url), 'utf8')
@@ -67,9 +68,10 @@ test('390px finance layouts stack, expose a forecast agenda, and keep the full c
   assert.match(responsiveCss, /@media \(max-width:\s*520px\)[\s\S]*?\.finance-budget-summary,[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*!important;/)
   assert.match(responsiveCss, /\.finance-calendar-month-head,[\s\S]*?\.finance-calendar-month-grid\s*\{\s*display:\s*none\s*!important;/)
   assert.match(responsiveCss, /\.finance-calendar-mobile-agenda\s*\{\s*display:\s*grid;/)
-  assert.match(financeSource, /className="finance-calendar-mobile-agenda"/)
-  assert.match(financeSource, /mobileAgendaDays\.length > 0/)
-  assert.match(financeSource, /No planned or bank activity for this month/)
+  assert.match(financeSource, /<CashForecastAgenda/)
+  assert.match(cashForecastAgendaSource, /className="finance-calendar-mobile-agenda"/)
+  assert.match(cashForecastAgendaSource, /days\.length > 0/)
+  assert.match(cashForecastAgendaSource, /No planned or bank activity for this month/)
 })
 
 test('Budget, Reporting, Cash Flow, Accounts, and dashboard footer have responsive hooks', () => {
