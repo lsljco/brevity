@@ -16,7 +16,16 @@ const cashForecastRecords=()=>{
   ]
   return Object.fromEntries(Object.entries({lslj_finance_v9:finance,plaid_actuals_cache:actuals}).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt}]))
 }
-async function mockBackend(page,{financeFixture=false,accountLinkFixture=false}={}){
+const alreadyLinkedAccountRecords=()=>{
+  const updatedAt=new Date().toISOString()
+  const finance={calendarDataVersion:6,accounts:[
+    {id:'operating',name:'Operating Account',type:'checking',balance:100,plaidAccountId:'bank-operating'},
+    {id:'projects',name:'Renovation / Projects',type:'checking',balance:200,plaidAccountId:'bank-projects'},
+    {id:'savings',name:'LSLJ Savings',type:'savings',balance:300,plaidAccountId:'bank-savings'},
+  ],transactions:[]}
+  return {lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(finance),version:1,updatedAt}}
+}
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false}={}){
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
     let body={}
@@ -26,10 +35,19 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false}=
       if(route.request().method()==='PUT'){
         const payload=route.request().postDataJSON()
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
-      }else body={records:(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
+      }else body={records:alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
     else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()}
-    else if(path.endsWith('/plaid-accounts'))body=accountLinkFixture?{
+    else if(path.endsWith('/plaid-accounts'))body=alreadyLinkedExtrasFixture?{
+      connected:true,balanceMode:'live',balanceProvenance:'plaid.accountsBalanceGet',syncedAt:new Date().toISOString(),errors:[],requiresUpdate:[],
+      accountSourceReceipt:{payload:'test',signature:'a'.repeat(64)},
+      accounts:[
+        {accountId:'bank-operating',itemId:'item-1',institution:'Pinnacle',name:'Operating Account',type:'depository',subtype:'checking',mask:'2200',balance:150.58},
+        {accountId:'bank-projects',itemId:'item-1',institution:'Pinnacle',name:'Renovation / Projects',type:'depository',subtype:'checking',mask:'4607',balance:1052.51},
+        {accountId:'bank-savings',itemId:'item-1',institution:'Pinnacle',name:'LSLJ Savings',type:'depository',subtype:'savings',mask:'9638',balance:13000.20},
+        ...Array.from({length:10},(_,index)=>({accountId:`untracked-${index}`,itemId:'item-1',institution:'Pinnacle',name:`Untracked ${index}`,type:'depository',subtype:'checking',mask:`10${String(index).padStart(2,'0')}`,balance:index})),
+      ],
+    }:accountLinkFixture?{
       connected:true,balanceMode:'live',balanceProvenance:'plaid.accountsBalanceGet',syncedAt:new Date().toISOString(),errors:[],requiresUpdate:[],
       accountSourceReceipt:{payload:'test',signature:'a'.repeat(64)},
       accounts:[
@@ -46,7 +64,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false}=
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('iPhone Cash Forecast'),accountLinkFixture:testInfo.title.includes('account-link repair')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('iPhone Cash Forecast'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -128,13 +146,28 @@ test('iPhone account-link repair turns an unmatched balance warning into a compa
   await page.getByRole('button',{name:'Dashboard',exact:true}).click()
   await page.getByRole('button',{name:'Check existing connection'}).click()
   const warning=page.getByRole('alert')
-  await expect(warning).toContainText('returned bank accounts did not match Brevity')
+  await expect(warning).toContainText('returned bank accounts are available for reviewed linkage')
   await warning.getByRole('button',{name:'Review account links'}).click()
   const selector=page.getByRole('combobox',{name:'Bank source for Operating Account'})
   await expect(selector).toBeVisible()
   await selector.selectOption({label:'Pinnacle · Personal Checking ••••0607'})
   await expect(page.getByRole('button',{name:'Review link'})).toBeEnabled()
   await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
+})
+
+test('iPad already-linked accounts ignore additional institution accounts without a false partial warning',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='tablet','iPad already-linked account contract')
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await page.getByRole('button',{name:'Check existing connection'}).click()
+  await expect(page.getByText(/Balance refresh is partial/)).toHaveCount(0)
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Accounts',exact:true}).click()
+  await expect(page.getByRole('note')).toContainText('All 3 Brevity accounts are linked to verified bank sources. No action is required.')
+  await expect(page.getByRole('button',{name:'Linked'})).toHaveCount(3)
+  await expect(page.getByRole('button',{name:'Review link'})).toHaveCount(0)
 })
 
 test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})

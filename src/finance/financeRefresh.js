@@ -469,6 +469,24 @@ export function mergePlaidBalances(financeData, plaidAccounts = []) {
   return mergePlaidBalancesWithDiagnostics(financeData, plaidAccounts).finance
 }
 
+export function classifyPlaidBalanceGaps(diagnostics = {}) {
+  const unmatchedReturnedCount = diagnostics?.unmatchedPlaidAccountIds?.length || 0
+  const unmatchedLocalCount = diagnostics?.unmatchedLocalAccountIds?.length || 0
+  const missingLinkedCount = diagnostics?.missingLinkedLocalAccountIds?.length || 0
+  const linkReviewAvailable = unmatchedReturnedCount > 0 && unmatchedLocalCount > 0
+  return {
+    matchedCount:diagnostics?.matchedCount || 0,
+    unmatchedReturnedCount,
+    unmatchedLocalCount,
+    missingLinkedCount,
+    linkReviewAvailable,
+    // Plaid commonly returns every account available under an institution.
+    // Once every Brevity account has a verified match, additional source
+    // accounts are intentionally untracked—not a failed balance refresh.
+    untrackedReturnedCount:linkReviewAvailable ? 0 : unmatchedReturnedCount,
+  }
+}
+
 /**
  * Build a Plaid balance write from the persisted household record, not from a
  * migrated/restored view model. FinancePlanner intentionally applies display

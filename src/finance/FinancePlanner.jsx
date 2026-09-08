@@ -26,7 +26,7 @@ import {
   calculateTransactionAmountForRange,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
-import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, compatiblePlaidAccountType, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount } from './financeRefresh.js'
+import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, compatiblePlaidAccountType, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount } from './financeRefresh.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
@@ -1683,9 +1683,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     // React view may contain in-memory migrations/default restoration, which
     // must never ride along with a Plaid-owned balance refresh.
     const { finance:next, diagnostics } = buildPlaidBalanceSourceResult(localStorage, plaidAccounts, LS_KEY)
-    const matchedCount = diagnostics?.matchedCount || 0
-    const unmatchedCount = diagnostics?.unmatchedPlaidAccountIds?.length || 0
-    const missingLinkedCount = diagnostics?.missingLinkedLocalAccountIds?.length || 0
+    const {
+      matchedCount,
+      unmatchedReturnedCount:unmatchedCount,
+      missingLinkedCount,
+      linkReviewAvailable,
+      untrackedReturnedCount,
+    } = classifyPlaidBalanceGaps(diagnostics)
     if (!next) {
       const linkageIsOtherwiseSafe = diagnostics
         && diagnostics.invalidLocalAccountIds.length === 0
@@ -1699,27 +1703,29 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           ...sourceErrors.map(item => `${item.institution || 'Bank'}: ${item.message || 'balance refresh was not confirmed'}`),
         ] })
         showToast(`⚠ Balance check partial · ${missingLinkedCount} linked account${missingLinkedCount === 1 ? '' : 's'} missing`)
-        return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial:true, linkReviewAvailable:unmatchedCount > 0 }
+        return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial:true, linkReviewAvailable }
       }
       const error = 'No bank balance safely matched a uniquely linked Brevity account. Existing balances were preserved; review account linkage and try again.'
       adoptBalanceAttempt({ status:'unmatched', checkedAt:syncedAt, live:true, errors:[error] })
-      return { error, matchedCount, unmatchedCount, missingLinkedCount, linkReviewAvailable:Boolean(linkageIsOtherwiseSafe && unmatchedCount > 0) }
+      return { error, matchedCount, unmatchedCount, missingLinkedCount, linkReviewAvailable:Boolean(linkageIsOtherwiseSafe && linkReviewAvailable) }
     }
     try {
       await persistSharedSourceImport(localStorage, LS_KEY, next, { accountSourceReceipt })
       const current = loadData()
       dataRef.current = current
       setData(current)
-      showToast(unmatchedCount || missingLinkedCount
-        ? `✓ ${matchedCount} balance${matchedCount === 1 ? '' : 's'} updated · ${unmatchedCount + missingLinkedCount} account gap${unmatchedCount + missingLinkedCount === 1 ? '' : 's'}`
+      showToast(missingLinkedCount
+        ? `✓ ${matchedCount} balance${matchedCount === 1 ? '' : 's'} updated · ${missingLinkedCount} linked account gap${missingLinkedCount === 1 ? '' : 's'}`
+        : untrackedReturnedCount
+          ? `✓ ${matchedCount} balance${matchedCount === 1 ? '' : 's'} synced · ${untrackedReturnedCount} untracked bank account${untrackedReturnedCount === 1 ? '' : 's'} safely ignored`
         : `✓ ${matchedCount} balance${matchedCount === 1 ? '' : 's'} synced from Plaid`)
-      const partial = unmatchedCount > 0 || missingLinkedCount > 0 || sourceErrors.length > 0
+      const partial = missingLinkedCount > 0 || sourceErrors.length > 0
       adoptBalanceAttempt({ status:partial ? 'partial' : 'fresh', checkedAt:syncedAt, live:true, errors:[
-        ...(unmatchedCount > 0 ? [`${unmatchedCount} returned bank account${unmatchedCount === 1 ? ' is' : 's are'} not linked to Brevity.`] : []),
+        ...(linkReviewAvailable && missingLinkedCount > 0 ? [`${unmatchedCount} returned bank account${unmatchedCount === 1 ? ' is' : 's are'} available for reviewed linkage.`] : []),
         ...(missingLinkedCount > 0 ? [`${missingLinkedCount} previously linked Brevity ${missingLinkedCount === 1 ? 'account was' : 'accounts were'} missing from the live bank response. Prior balances and the last complete balance-check time were preserved.`] : []),
         ...sourceErrors.map(item => `${item.institution || 'Bank'}: ${item.message || 'balance refresh was not confirmed'}`),
       ] })
-      return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, partial, linkReviewAvailable:unmatchedCount > 0 }
+      return { ok:true, syncedAt, matchedCount, unmatchedCount, missingLinkedCount, untrackedReturnedCount, partial, linkReviewAvailable:partial && linkReviewAvailable }
     } catch (error) {
       const current = loadData()
       dataRef.current = current
@@ -2307,6 +2313,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       )}
     </div>
   )
+
+  const allAccountsLinkedToCurrentBankSources = data.accounts.length > 0
+    && plaidAccountCandidates.length > 0
+    && data.accounts.every(account => account.plaidAccountId
+      && plaidAccountCandidates.some(source => source.accountId === account.plaidAccountId))
 
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
@@ -3059,8 +3070,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>{data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</p>
           </div>
-          <div role="note" style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 11, border: '1px solid rgba(197,164,109,.22)', background: 'rgba(197,164,109,.07)', color: 'var(--muted)', fontSize: 11, lineHeight: 1.5 }}>
-            Brevity never guesses when bank names differ. Map each existing Brevity account to one compatible returned bank account by institution and last four digits. The reviewed link does not move money or change credentials; Sync now imports the verified balance after approval.
+          <div role="note" style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 11, border:allAccountsLinkedToCurrentBankSources?'1px solid rgba(125,203,164,.25)':'1px solid rgba(197,164,109,.22)', background:allAccountsLinkedToCurrentBankSources?'rgba(125,203,164,.07)':'rgba(197,164,109,.07)', color: 'var(--muted)', fontSize: 11, lineHeight: 1.5 }}>
+            {allAccountsLinkedToCurrentBankSources
+              ? `All ${data.accounts.length} Brevity accounts are linked to verified bank sources. No action is required. Review link appears only if you select a different compatible source or Brevity detects an account that needs repair; additional accounts returned by the institution remain safely untracked.`
+              : 'Brevity never guesses when bank names differ. Map each existing Brevity account to one compatible returned bank account by institution and last four digits. The reviewed link does not move money or change credentials; Sync now imports the verified balance after approval.'}
           </div>
           {plaidAccountCandidates.length === 0 && <div role="status" style={{marginBottom:16,padding:'10px 13px',borderRadius:10,border:'1px solid rgba(255,255,255,.10)',background:'rgba(255,255,255,.04)',color:'var(--muted)',fontSize:11,lineHeight:1.5}}>No current bank-account list is loaded on this screen. Return to the Finance Dashboard and choose Sync now, then use Review account links if Brevity cannot match the returned accounts.</div>}
           {accountLinkError && <p role="alert" style={{margin:'0 0 14px',padding:'9px 12px',borderRadius:9,border:'1px solid rgba(196,120,90,.30)',background:'rgba(196,120,90,.09)',color:'#C4785A',fontSize:11}}>{accountLinkError}</p>}

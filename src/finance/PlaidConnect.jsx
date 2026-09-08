@@ -134,7 +134,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
           setLinkReviewCount(balanceResult?.linkReviewAvailable ? unmatchedCount : 0)
           const balanceGapDetails = [
             ...(missingLinkedCount ? [`${missingLinkedCount} previously linked Brevity account${missingLinkedCount === 1 ? ' was' : 's were'} missing from the live bank response`] : []),
-            ...(unmatchedCount ? [`${unmatchedCount} returned bank account${unmatchedCount === 1 ? ' did' : 's did'} not match Brevity`] : []),
+            ...(balanceResult?.linkReviewAvailable && unmatchedCount ? [`${unmatchedCount} returned bank account${unmatchedCount === 1 ? ' is' : 's are'} available for reviewed linkage`] : []),
             ...(endpointErrors.length ? [`${endpointErrors.length} bank institution${endpointErrors.length === 1 ? ' did' : 's did'} not confirm`] : []),
             ...(!plaidAccounts.length ? ['no bank accounts were returned'] : []),
           ]

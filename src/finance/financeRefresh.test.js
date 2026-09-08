@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { BALANCE_FRESHNESS_MAX_AGE_MS, buildPlaidBalanceSourceCandidate, buildPlaidBalanceSourceResult, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidBalances, mergePlaidBalancesWithDiagnostics, mergePlaidTransactionResponse, mergePlaidTransactionSnapshots, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, refreshFinanceData, scopePlaidTransactionsByAccount, transactionResponseFingerprint, transactionSnapshotFingerprint } from './financeRefresh.js'
+import { BALANCE_FRESHNESS_MAX_AGE_MS, buildPlaidBalanceSourceCandidate, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidBalances, mergePlaidBalancesWithDiagnostics, mergePlaidTransactionResponse, mergePlaidTransactionSnapshots, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, refreshFinanceData, scopePlaidTransactionsByAccount, transactionResponseFingerprint, transactionSnapshotFingerprint } from './financeRefresh.js'
 
 const liveAccountPayload = payload => ({
   balanceMode:'live',
@@ -34,6 +34,51 @@ test('startup balance refresh updates existing accounts without creating duplica
   assert.equal(refreshed.accounts[0].mask, '607')
   assert.equal(refreshed.accounts[0].plaidCurrentBalance, 1525)
   assert.equal(refreshed.accounts[0].plaidAvailableBalance, 1500)
+})
+
+test('additional Plaid accounts are untracked—not linkage failures—when every Brevity account matched', () => {
+  const finance={accounts:[
+    {id:'operating',name:'Operating Account',type:'checking',balance:10,plaidAccountId:'bank-operating'},
+    {id:'projects',name:'Renovation / Projects',type:'checking',balance:20,plaidAccountId:'bank-projects'},
+    {id:'savings',name:'LSLJ Savings',type:'savings',balance:30,plaidAccountId:'bank-savings'},
+  ],transactions:[]}
+  const linked=[
+    {accountId:'bank-operating',name:'Operating Account',type:'depository',subtype:'checking',balance:150.58},
+    {accountId:'bank-projects',name:'Renovation / Projects',type:'depository',subtype:'checking',balance:1052.51},
+    {accountId:'bank-savings',name:'LSLJ Savings',type:'depository',subtype:'savings',balance:13000.20},
+  ]
+  const extras=Array.from({length:10},(_,index)=>({
+    accountId:`untracked-${index}`,
+    name:`Untracked account ${index}`,
+    type:'depository',
+    subtype:'checking',
+    balance:index,
+  }))
+
+  const diagnostics=mergePlaidBalancesWithDiagnostics(finance,[...linked,...extras])
+  const gaps=classifyPlaidBalanceGaps(diagnostics)
+
+  assert.equal(diagnostics.matchedCount,3)
+  assert.deepEqual(diagnostics.unmatchedLocalAccountIds,[])
+  assert.equal(gaps.unmatchedReturnedCount,10)
+  assert.equal(gaps.missingLinkedCount,0)
+  assert.equal(gaps.linkReviewAvailable,false)
+  assert.equal(gaps.untrackedReturnedCount,10)
+})
+
+test('link review remains available when an unmatched Brevity account has a returned candidate', () => {
+  const diagnostics=mergePlaidBalancesWithDiagnostics({accounts:[
+    {id:'operating',name:'Operating Account',type:'checking',balance:10,plaidAccountId:'missing-old-id'},
+  ],transactions:[]},[
+    {accountId:'replacement',name:'Personal Checking',type:'depository',subtype:'checking',balance:150.58},
+  ])
+  const gaps=classifyPlaidBalanceGaps(diagnostics)
+
+  assert.equal(gaps.missingLinkedCount,1)
+  assert.equal(gaps.unmatchedLocalCount,1)
+  assert.equal(gaps.unmatchedReturnedCount,1)
+  assert.equal(gaps.linkReviewAvailable,true)
+  assert.equal(gaps.untrackedReturnedCount,0)
 })
 
 test('manual balance refresh preserves the exact persisted household plan instead of folding in view migrations', () => {

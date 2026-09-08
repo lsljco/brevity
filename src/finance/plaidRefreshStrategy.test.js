@@ -95,6 +95,15 @@ test('unmatched returned accounts lead to a reviewed bank-source mapping instead
   assert.match(financePlanner,/does not move money or change bank credentials/)
 })
 
+test('extra returned bank accounts do not downgrade a complete linked-account refresh',()=>{
+  assert.match(financePlanner,/classifyPlaidBalanceGaps\(diagnostics\)/)
+  assert.match(financePlanner,/const partial = missingLinkedCount > 0 \|\| sourceErrors\.length > 0/)
+  assert.match(financePlanner,/untracked bank account.*safely ignored/)
+  assert.match(plaidConnect,/balanceResult\?\.linkReviewAvailable && unmatchedCount/)
+  assert.match(financePlanner,/All \$\{data\.accounts\.length\} Brevity accounts are linked to verified bank sources/)
+  assert.match(financePlanner,/additional accounts returned by the institution remain safely untracked/)
+})
+
 test('a failed balance write cannot suppress the independently requested transaction refresh',()=>{
   const syncHandler=plaidConnect.match(/const syncAccounts = useCallback\(async[\s\S]*?\n  \}, \[onAccountsSync, onTransactionsSync\]\)/)?.[0] || ''
   assert.ok(syncHandler)
