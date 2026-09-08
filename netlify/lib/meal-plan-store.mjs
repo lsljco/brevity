@@ -64,6 +64,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       timeZone,
       startDate,
       days: days.map(resolveMealDay),
+      library: MEAL_LIBRARY,
       librarySummary: mealLibrarySummary(),
     }
   }

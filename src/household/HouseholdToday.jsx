@@ -13,7 +13,7 @@ import { nextDailyPlanDate } from './alignmentDate.js'
 import { assignmentUpdateOperation, buildAlignmentOperations, buildPlanDraftOperations, buildRecapOperations, decisionUpdateOperation, stageDailyPlanReview } from './dailyPlanActionReview.js'
 import { clearLocalAlignmentDraft, clearLocalRecapDraft } from './dailyPlanLocalDraft.js'
 import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
-import { clearPillarAnalyses } from './pillarAnalysisApi.js'
+import { clearPillarAnalyses } from './pillarAnalysisCache.js'
 import './HouseholdOS.css'
 
 const cachedCalendar = () => {
@@ -46,7 +46,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     error: alignmentError,
     reload: reloadAlignment,
   } = useDailyPlan(alignmentDate)
-  const mealPlan = useRollingMealPlan()
+  const mealPlan = useRollingMealPlan({reloadOnRefreshEvents:true})
   const [mode, setMode] = useState('today')
   const [generationState, setGenerationState] = useState('idle')
   const [generationMessage, setGenerationMessage] = useState('')
