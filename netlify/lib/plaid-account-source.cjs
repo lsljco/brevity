@@ -97,6 +97,7 @@ function mergeVerifiedPlaidBalances(financeData, plaidAccounts = []) {
     matchedPlaidIds.add(match.accountId)
     account.balance = match.balance
     account.plaidAccountId = match.accountId
+    if (match.itemId) account.plaidItemId = match.itemId
     account.plaidName = match.name || ''
     account.plaidOfficialName = match.officialName || ''
     account.plaidType = match.type || ''

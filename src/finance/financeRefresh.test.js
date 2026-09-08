@@ -79,6 +79,14 @@ test('account-scoped bank activity reports unmapped rows and only includes them 
   assert.deepEqual(all.unmapped.map(transaction => transaction.id), ['unmapped'])
 })
 
+test('account scope safely recovers stale Plaid ids from a unique institution identity', () => {
+  const transactions = [{ id:'legacy-operating', accountId:'old-plaid-id', institution:'Pinnacle' }]
+  const accountMap = { 'current-plaid-id':'a1', 'institution:pinnacle':'a1' }
+  const result = scopePlaidTransactionsByAccount(transactions, accountMap, new Set(['a1']))
+  assert.deepEqual(result.included.map(transaction => transaction.id), ['legacy-operating'])
+  assert.deepEqual(result.unmapped, [])
+})
+
 test('partial Plaid snapshots retain cached rows for failed institutions', () => {
   const cached = [
     { id:'old-operating', institution:'Pinnacle', date:'2026-09-06', amount:10 },
