@@ -40,6 +40,7 @@ test('read-only meal windows never create missing records', async () => {
   const plan = await repository.getWindowReadOnly({ startDate: '2026-08-24' })
 
   assert.equal(plan.days.length, 7)
+  assert.equal(plan.library.length, 90)
   assert.equal(memory.size, 0)
 })
 

@@ -64,11 +64,17 @@ function LibraryView({ library, onSelect }) {
 }
 
 export default function MealPlanner() {
-  const { data, state, error, reload, prepareReplacement, applyReplacement } = useRollingMealPlan()
+  const { data, state, error, reload, prepareReplacement, applyReplacement } = useRollingMealPlan({reloadOnRefreshEvents:true})
   const [view, setView] = useState('plan')
   const [selection, setSelection] = useState(null)
   const [message, setMessage] = useState('')
   const planInsight = useMemo(() => summarizeMealPlan(data?.days), [data])
+
+  useEffect(()=>setSelection(current=>{
+    if(!current)return current
+    const currentDay=data?.days?.find(day=>day.date===current.day.date)
+    return currentDay?.version===current.day.version?current:null
+  }),[data])
 
   const chooseReplacement = mealId => setSelection(current=>({...current,mealId,proposal:null}))
 
@@ -78,6 +84,7 @@ export default function MealPlanner() {
       const proposal=await prepareReplacement({date:selection.day.date,mealType:selection.mealType,mealId:selection.mealId,expectedVersion:selection.day.version})
       setSelection(current=>current&&current.mealId===selection.mealId?{...current,proposal}:current)
     } catch (replaceError) {
+      if(replaceError.code==='STALE_MEAL_SCOPE')return
       setMessage(replaceError.status === 409 ? 'The plan changed on another device. Refreshing the latest version…' : replaceError.message)
       if (replaceError.status === 409) await reload().catch(() => undefined)
     }
@@ -86,10 +93,12 @@ export default function MealPlanner() {
   const applyReviewedReplacement = async proposalId => {
     setMessage('')
     try {
-      await applyReplacement(proposalId)
+      const applied=await applyReplacement(proposalId)
+      if(applied.scopeChanged)return
       setSelection(null)
-      setMessage('Meal replaced after review. The change is recorded in Action Mode Audit History and can be safely undone.')
+      setMessage(applied.refreshError?'Meal replaced and recorded in Action Mode Audit History, but the updated meal plan could not be reloaded. Retry the meal-plan refresh before making another replacement.':'Meal replaced after review. The change is recorded in Action Mode Audit History and can be safely undone.')
     } catch (replaceError) {
+      if(replaceError.code==='STALE_MEAL_SCOPE')return
       setMessage(replaceError.status === 409 ? 'The plan changed after review. Refreshing the latest version…' : replaceError.message)
       if (replaceError.status === 409) await reload().catch(() => undefined)
     }
@@ -102,6 +111,7 @@ export default function MealPlanner() {
     {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Plan insight</span><strong>{planInsight.tomorrowDinner ? `Tomorrow’s dinner is ${planInsight.tomorrowDinner.name}.` : `${planInsight.mealCount} meals are planned.`}</strong><p>{planInsight.tomorrowDinner ? `It is scheduled for ${planInsight.tomorrowDinner.prepMinutes} minutes, so the useful preparation is making sure its main ingredients are available before tomorrow.` : `The plan represents about ${planInsight.totalPrepMinutes} minutes of preparation.`}</p></div><dl><div><dt>Planned prep</dt><dd>{planInsight.totalPrepMinutes} min</dd></div><div><dt>Avg. planned protein</dt><dd>{planInsight.averageProteinGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are plan estimates, not evidence that a meal was prepared or eaten.</small></section>}
     {state === 'loading' && !data && <div className="meal-planner-state"><i className="ti ti-loader-2" /> Preparing the household meal plan…</div>}
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
+    {error && data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan refresh needed</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {data && (view === 'plan' ? <PlanView days={data.days} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onSelect={setSelection} />)}
     {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} onClose={() => setSelection(null)} onChoose={chooseReplacement} onReview={reviewReplacement} onApply={applyReviewedReplacement} />}
   </main>
