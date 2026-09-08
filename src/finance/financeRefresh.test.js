@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { BALANCE_FRESHNESS_MAX_AGE_MS, buildPlaidBalanceSourceCandidate, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidBalances, mergePlaidBalancesWithDiagnostics, mergePlaidTransactionResponse, mergePlaidTransactionSnapshots, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, refreshFinanceData, scopePlaidTransactionsByAccount, transactionResponseFingerprint, transactionSnapshotFingerprint } from './financeRefresh.js'
+import { BALANCE_FRESHNESS_MAX_AGE_MS, buildPlaidBalanceSourceCandidate, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidBalances, mergePlaidBalancesWithDiagnostics, mergePlaidTransactionResponse, mergePlaidTransactionSnapshots, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, refreshFinanceData, scopePlaidTransactionsByAccount, transactionResponseFingerprint, transactionSnapshotFingerprint, waitForPlaidTransactionRefresh } from './financeRefresh.js'
 
 const liveAccountPayload = payload => ({
   balanceMode:'live',
@@ -443,6 +443,37 @@ test('on-demand transaction refresh reports when Plaid is still processing', asy
   })
   assert.equal(result.refresh.updated,false)
   assert.equal(result.refresh.stillProcessing,true)
+})
+
+test('accepted transaction refresh polls bounded Item status until Plaid confirms completion', async () => {
+  const calls=[]
+  const pauses=[]
+  const requestedAt='2026-09-08T23:00:00.000Z'
+  const responses=[
+    {refresh:{requested:true,requestedAt,accepted:1,completed:0,stillProcessing:true,errors:[]}},
+    {refresh:{requested:true,requestedAt,accepted:1,completed:1,stillProcessing:false,errors:[]}},
+  ]
+  const result=await waitForPlaidTransactionRefresh({requested:true,requestedAt,accepted:1,stillProcessing:true},{
+    delays:[10,20,40],
+    pause:async delay=>{pauses.push(delay)},
+    fetcher:async (path,options)=>{calls.push({path,options});return responses.shift()},
+  })
+
+  assert.deepEqual(pauses,[10,20])
+  assert.equal(calls.length,2)
+  assert.match(calls[0].path,/refresh_status=1&since=2026-09-08T23%3A00%3A00\.000Z/)
+  assert.equal(calls[0].options.timeoutMs,45000)
+  assert.equal(result.refresh.stillProcessing,false)
+})
+
+test('transaction refresh status outages retain processing truth instead of claiming completion', async () => {
+  const refresh={requested:true,requestedAt:'2026-09-08T23:00:00.000Z',accepted:1,stillProcessing:true}
+  const result=await waitForPlaidTransactionRefresh(refresh,{
+    delays:[0,0],
+    pause:async()=>{},
+    fetcher:async()=>{throw new Error('status unavailable')},
+  })
+  assert.deepEqual(result,{refresh})
 })
 
 test('on-demand institution refresh receives a longer timeout without weakening ordinary reads', async () => {

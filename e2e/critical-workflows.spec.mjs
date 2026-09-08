@@ -55,7 +55,13 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
         {accountId:'bank-savings',itemId:'item-1',institution:'Pinnacle',name:'Personal Savings',type:'depository',subtype:'savings',mask:'4412',balance:2400},
       ],
     }:{connected:false,accounts:[],errors:[],syncedAt:new Date().toISOString()}
-    else if(path.endsWith('/plaid-transactions'))body={connected:false,transactions:[],errors:[]}
+    else if(path.endsWith('/plaid-transactions'))body=alreadyLinkedExtrasFixture
+      ? url.searchParams.get('refresh_only')==='1'
+          ? {connected:true,transactions:[],errors:[],refresh:{requested:true,requestedAt:'2026-09-08T23:00:00.000Z',accepted:1,errors:[]}}
+          : url.searchParams.get('refresh_status')==='1'
+            ? {connected:true,transactions:[],errors:[],refresh:{requested:true,requestedAt:'2026-09-08T23:00:00.000Z',accepted:1,completed:1,stillProcessing:false,errors:[]}}
+            : {connected:true,mode:'incremental',transactions:[],removed:[],errors:[],syncedAt:new Date().toISOString(),successfulInstitutions:['Pinnacle'],sourceReceipts:[{cursorIdentity:'item-1',batchId:'a'.repeat(64)}]}
+      : {connected:false,transactions:[],errors:[]}
     else if(path.endsWith('/health-alerts'))body={alerts:[]}
     else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}}
     else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]}
@@ -162,7 +168,8 @@ test('iPad already-linked accounts ignore additional institution accounts withou
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Dashboard',exact:true}).click()
   await page.getByRole('button',{name:'Check existing connection'}).click()
-  await expect(page.getByText(/Balance refresh is partial/)).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByRole('status').filter({hasText:'The latest available transactions were checked.'})).toBeVisible()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Accounts',exact:true}).click()
   await expect(page.getByRole('note')).toContainText('All 3 Brevity accounts are linked to verified bank sources. No action is required.')

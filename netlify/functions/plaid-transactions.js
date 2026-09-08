@@ -238,6 +238,16 @@ function responseBody(overrides = {}) {
   }
 }
 
+function lastSuccessfulTransactionUpdate(itemResponse) {
+  return String(itemResponse?.data?.item?.status?.transactions?.last_successful_update || '')
+}
+
+function transactionRefreshCompleted(lastSuccessfulUpdate, requestedAt) {
+  const updated = Date.parse(lastSuccessfulUpdate || '')
+  const requested = Date.parse(requestedAt || '')
+  return Number.isFinite(updated) && Number.isFinite(requested) && updated >= requested
+}
+
 exports.handler = async event => {
   const headers = {
     'Access-Control-Allow-Origin':'*',
@@ -250,6 +260,7 @@ exports.handler = async event => {
   const params = new URLSearchParams(event.rawQuery || '')
   const requestRefresh = params.get('refresh') === '1'
   const refreshOnly = params.get('refresh_only') === '1'
+  const refreshStatusOnly = params.get('refresh_status') === '1'
 
   try {
     const session = await readSession(event)
@@ -259,6 +270,29 @@ exports.handler = async event => {
       return { statusCode:200, headers, body:JSON.stringify(responseBody({ connected:false, refresh:{ requested:requestRefresh, accepted:0, errors:[] } })) }
     }
 
+    if (refreshStatusOnly) {
+      const requestedAt = String(params.get('since') || '')
+      if (!Number.isFinite(Date.parse(requestedAt))) {
+        return { statusCode:400, headers, body:JSON.stringify({ error:'A valid transaction refresh start time is required.' }) }
+      }
+      const statuses = []
+      const errors = []
+      for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
+        try {
+          const response = await plaidClient.itemGet({ access_token:accessToken })
+          const lastSuccessfulUpdate = lastSuccessfulTransactionUpdate(response)
+          statuses.push({ itemId, institution:institution || 'Connected institution', lastSuccessfulUpdate, complete:transactionRefreshCompleted(lastSuccessfulUpdate, requestedAt) })
+        } catch (error) {
+          const code = plaidErrorCode(error) || 'TRANSACTION_REFRESH_STATUS_FAILED'
+          errors.push({ itemId, institution:institution || 'Connected institution', code, message:'Brevity could not confirm whether this bank finished updating transactions.' })
+        }
+      }
+      const completed = statuses.filter(status => status.complete).length
+      return { statusCode:200, headers, body:JSON.stringify(responseBody({
+        refresh:{ requested:true, requestedAt, accepted:tokens.length, completed, stillProcessing:completed < tokens.length, errors, statuses },
+      })) }
+    }
+
     const changedTransactions = []
     const removedTransactionIds = new Set()
     const syncErrors = []
@@ -266,7 +300,7 @@ exports.handler = async event => {
     const successfulItems = []
     const sourceReceipts = []
     const delta = { added:0, modified:0, removed:0 }
-    const refresh = { requested:requestRefresh, accepted:0, errors:[] }
+    const refresh = { requested:requestRefresh, requestedAt:requestRefresh ? new Date().toISOString() : '', accepted:0, errors:[] }
 
     for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
       if (requestRefresh) {
@@ -353,5 +387,7 @@ exports.itemCursorIdentity = itemCursorIdentity
 exports.mapPlaidTransaction = mapPlaidTransaction
 exports.pendingDeltaResult = pendingDeltaResult
 exports.responseBody = responseBody
+exports.lastSuccessfulTransactionUpdate = lastSuccessfulTransactionUpdate
+exports.transactionRefreshCompleted = transactionRefreshCompleted
 exports.syncAndStageItem = syncAndStageItem
 exports.syncItemTransactions = syncItemTransactions
