@@ -1,7 +1,8 @@
 import { TIMEFRAME_PRESETS, resolveTimeframe, timeframeLabel } from './financeTimeframe.js'
+import { getHouseholdCalendarDate } from './financeTime.js'
 
 export default function FinanceTimeframe({ value, onChange, compact = false, label = 'Dates / Timeframe', selectLabel = 'Select financial timeframe' }) {
-  const setPreset = preset => onChange(resolveTimeframe(preset, new Date(), value))
+  const setPreset = preset => onChange(resolveTimeframe(preset, getHouseholdCalendarDate(), value))
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: compact ? 14 : 20,
       padding: compact ? '10px 12px' : '12px 16px', borderRadius: 12, background: 'rgba(255,255,255,.035)', border: '1px solid var(--glass-border)' }}>

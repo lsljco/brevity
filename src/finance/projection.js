@@ -2,6 +2,8 @@
 // Given a list of accounts and scheduled transactions, computes
 // the projected balance for every day over the next N days.
 
+import { getHouseholdCalendarDate } from './financeTime.js'
+
 export function toISO(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -16,9 +18,7 @@ export function addDays(d, n) {
 }
 
 export function today0() {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
+  return getHouseholdCalendarDate()
 }
 
 export function fmtMoney(n) {

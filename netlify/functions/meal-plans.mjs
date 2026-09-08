@@ -21,22 +21,18 @@ export const handler = async event => {
     const repository = await productionMealPlanRepository()
 
     if (event.httpMethod === 'GET') {
-      const plan = await repository.getWindow({ startDate: event.queryStringParameters?.startDate, count: 7 })
+      const plan = await repository.getWindowReadOnly({ startDate: event.queryStringParameters?.startDate, count: 7 })
       return response(200, plan)
     }
 
     if (event.httpMethod === 'PUT') {
-      if ((event.body || '').length > 50000) return response(413, { error: 'Meal-plan update is too large.' })
-      let body
-      try { body = JSON.parse(event.body || '{}') } catch { return response(400, { error: 'Invalid JSON body.' }) }
-      const day = await repository.substitute({ ...body, actor: session.member || session.name || 'Household member' })
-      return response(200, { day })
+      return response(409, { error: 'Meal substitutions require review and confirmation. Refresh Brevity and use the meal replacement review.' })
     }
 
     return response(405, { error: 'Method not allowed.' })
   } catch (error) {
     console.error('[meal-plans]', error)
-    const status = error.code === 'VERSION_CONFLICT' ? 409 : error.code === 'VALIDATION_ERROR' || /valid YYYY-MM-DD/.test(error.message) ? 400 : 500
+    const status = error.code === 'VERSION_CONFLICT' || error.code === 'REVIEW_REQUIRED' ? 409 : error.code === 'VALIDATION_ERROR' || /valid YYYY-MM-DD/.test(error.message) ? 400 : 500
     return response(status, { error: error.message || 'Meal-plan request failed.' })
   }
 }

@@ -1,5 +1,7 @@
-import householdAuth from './household-auth.js'
-import { createOneDriveAuthorization } from '../lib/onedrive.mjs'
-const {readSession}=householdAuth
-export default async function handler(request){const session=await readSession({headers:{cookie:request.headers.get('cookie')||''}}).catch(()=>null);if(!session)return new Response('Sign in to connect OneDrive.',{status:401});try{const url=new URL(request.url);return Response.redirect(await createOneDriveAuthorization(url.searchParams.get('folderUrl')||''),302)}catch(error){return new Response(error.message||'Could not start OneDrive connection.',{status:500})}}
+const disabled=()=>new Response(JSON.stringify({
+  code:'CONNECTION_MUTATIONS_DISABLED',
+  error:'Connecting or changing the OneDrive repository is disabled in this release. Existing authorized publishing remains unchanged.',
+}),{status:423,headers:{'content-type':'application/json','cache-control':'no-store'}})
+
+export default async function handler(){return disabled()}
 export const config={path:'/.netlify/functions/onedrive-oauth-start'}

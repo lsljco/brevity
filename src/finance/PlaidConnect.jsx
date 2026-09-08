@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
-import { usePlaidLink } from 'react-plaid-link'
+import { useState, useCallback } from 'react'
+import { HOUSEHOLD_TIME_ZONE } from './financeTime.js'
 
 const API = '/.netlify/functions'
 const REQUEST_TIMEOUT_MS = 45000
@@ -28,44 +28,8 @@ async function apiFetch(path, options = {}) {
   }
 }
 
-// ── PlaidLinkButton — rendered only when we have a link_token ──
-function PlaidLinkButton({ linkToken, onSuccess, onExit, receivedRedirectUri }) {
-  const { open, ready } = usePlaidLink({
-    token: linkToken,
-    onSuccess: (public_token, metadata) => onSuccess(public_token, metadata),
-    onExit,
-    ...(receivedRedirectUri ? { receivedRedirectUri } : {}),
-  })
-
-  // Auto-open when returning from OAuth redirect — no button click needed
-  useEffect(() => {
-    if (ready && receivedRedirectUri) open()
-  }, [ready, receivedRedirectUri, open])
-
-  // When resuming OAuth, no button is shown — Link opens automatically
-  if (receivedRedirectUri) return null
-
-  return (
-    <button
-      onClick={() => open()}
-      disabled={!ready}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 20px', borderRadius: 10, cursor: 'pointer',
-        background: '#1D9E75', border: 'none', color: 'white',
-        fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-        opacity: ready ? 1 : 0.6,
-      }}
-    >
-      <i className="ti ti-building-bank" style={{ fontSize: 16 }} aria-hidden="true" />
-      Connect a bank account
-    </button>
-  )
-}
-
 // ── Main PlaidConnect component ──
 export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
-  const [linkToken, setLinkToken]       = useState(null)
   // Restore connected state from localStorage immediately — no flicker
   const [connections, setConnections]   = useState(() => {
     try {
@@ -74,7 +38,6 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
     } catch { return [] }
   })
   const [syncedAt, setSyncedAt]         = useState(() => localStorage.getItem('plaid_synced_at') || null)
-  const [loading, setLoading]           = useState(false)
   const [syncing, setSyncing]           = useState(false)
   // Startup refresh owns automatic synchronization. Remounts render cached state.
   const [initialChecking]               = useState(false)
@@ -82,9 +45,9 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
   const [syncNotice, setSyncNotice]     = useState('')
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
-  const [oauthReturn, setOauthReturn]   = useState(false) // returning from bank OAuth redirect
 
-  // Called by explicit connect, reconnect, disconnect, and Sync now actions.
+  // Existing connections remain readable and can be explicitly synchronized.
+  // Connection, re-link, and disconnect mutations are disabled for this release.
   const syncAccounts = useCallback(async ({ refreshTransactions = false } = {}) => {
     setSyncing(true)
     setError(null)
@@ -92,8 +55,6 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
     try {
       const data = await apiFetch('/plaid-accounts?live=1')
       if (data.connected) {
-        setSyncedAt(data.syncedAt)
-        localStorage.setItem('plaid_synced_at', data.syncedAt)
         // Derive connections list from accounts
         const byInstitution = {}
         ;(data.accounts || []).forEach(a => {
@@ -103,16 +64,36 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
           byInstitution[a.itemId].accounts.push(a)
         })
         const conns = Object.values(byInstitution)
-        setConnections(conns)
-        localStorage.setItem('plaid_connections', JSON.stringify(conns))
-        setRequiresUpdate(data.requiresUpdate || [])
         if (data.accounts?.length) {
-          onAccountsSync(data.accounts, data.syncedAt)
+          const balanceResult = typeof onAccountsSync === 'function'
+            ? await onAccountsSync(data.accounts, data.syncedAt, data.accountSourceReceipt)
+            : null
+          if (balanceResult?.ok !== true) {
+            const persistenceError = new Error(balanceResult?.error || 'The versioned household balance store did not acknowledge this refresh.')
+            persistenceError.code = 'BALANCE_PERSISTENCE_FAILED'
+            throw persistenceError
+          }
         }
+        // Only mark the balance check successful after its versioned household
+        // record has been durably acknowledged.
+        try {
+          localStorage.setItem('plaid_synced_at', data.syncedAt)
+          localStorage.setItem('plaid_connections', JSON.stringify(conns))
+        } catch (cause) {
+          const cacheError = new Error(cause?.message || 'Browser storage is unavailable.')
+          cacheError.code = 'CONNECTION_CACHE_FAILED'
+          cacheError.cause = cause
+          throw cacheError
+        }
+        setSyncedAt(data.syncedAt)
+        setConnections(conns)
+        setRequiresUpdate(data.requiresUpdate || [])
         if (refreshTransactions && onTransactionsSync) {
           const transactionResult = await onTransactionsSync()
           if (transactionResult?.error) setError(`Balances updated, but ${transactionResult.error}`)
-          else setSyncNotice(transactionResult?.refresh?.stillProcessing
+          else if (transactionResult?.refresh?.errors?.length || transactionResult?.errors?.length) {
+            setSyncNotice('Balances are current and Brevity safely checked every available transaction change. The bank update request was not fully confirmed, so the transaction view is marked partial; try Sync now again shortly.')
+          } else setSyncNotice(transactionResult?.refresh?.stillProcessing
             ? 'Balances are current. Your bank accepted the transaction update and Plaid is still processing it; check again shortly.'
             : 'Balances and the latest available transactions were checked.')
         }
@@ -125,115 +106,22 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
       }
     } catch (err) {
       // Network / server error — keep whatever cached state we had, just show error
-      setError('Could not reach bank sync. ' + err.message)
+      setError(err.code === 'BALANCE_PERSISTENCE_FAILED'
+        ? 'Bank balances were received but could not be saved safely. ' + err.message
+        : err.code === 'CONNECTION_CACHE_FAILED'
+          ? 'Bank balances were saved, but connection status could not be cached on this device. Refresh before relying on the status shown here.'
+          : 'Could not reach bank sync. ' + err.message)
     } finally {
       setSyncing(false)
     }
   }, [onAccountsSync, onTransactionsSync])
 
-  // Detect OAuth return: Plaid redirects back with ?oauth_state_id=...
-  // Re-initialize Link with the saved token + receivedRedirectUri to complete the flow
-  useEffect(() => {
-    const url = new URL(window.location.href)
-    if (url.searchParams.has('oauth_state_id')) {
-      const savedToken = localStorage.getItem('plaid_oauth_link_token')
-      if (savedToken) {
-        setLinkToken(savedToken)
-        setOauthReturn(true)
-      }
-    }
-  }, [])
-
-  // Get link token from server
-  const startLink = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await apiFetch('/plaid-create-link-token')
-      localStorage.setItem('plaid_oauth_link_token', data.link_token) // survive OAuth redirect
-      setLinkToken(data.link_token)
-    } catch (err) {
-      setError('Could not start Plaid Link. ' + err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Plaid Link success — exchange token
-  const handleSuccess = useCallback(async (public_token, metadata) => {
-    console.log('[Brevity] Plaid onSuccess fired', { institution: metadata?.institution?.name })
-    setSyncing(true)
-    setError(null)
-    setLinkToken(null)
-    setOauthReturn(false)
-    localStorage.removeItem('plaid_oauth_link_token')
-    try {
-      console.log('[Brevity] Exchanging public token...')
-      const data = await apiFetch('/plaid-exchange-token', {
-        method: 'POST',
-        body: JSON.stringify({
-          public_token,
-          institutionName: metadata?.institution?.name || 'Bank',
-        }),
-      })
-      console.log('[Brevity] Exchange response:', data)
-      if (data.accounts?.length) {
-        onAccountsSync(data.accounts, new Date().toISOString())
-        setSyncedAt(new Date().toISOString())
-      }
-      await syncAccounts()
-    } catch (err) {
-      console.error('[Brevity] Exchange failed:', err)
-      setError('Connection failed. ' + err.message)
-    } finally {
-      setSyncing(false)
-    }
-  }, [onAccountsSync, syncAccounts])
-
-  // Plaid Link exit — capture reason so we can display it
-  const handleExit = useCallback((err, metadata) => {
-    console.log('[Brevity] Plaid onExit fired', { err, status: metadata?.status, institution: metadata?.institution?.name })
-    setLinkToken(null)
-    setOauthReturn(false)
-    localStorage.removeItem('plaid_oauth_link_token')
-    if (err) {
-      const msg = err.display_message || err.error_message || err.error_code || 'Unknown Plaid error'
-      setError(`Bank connection exited: ${msg} (${err.error_code || ''})`)
-    }
-  }, [])
-
-  // Re-authenticate an item whose bank session has expired (ITEM_LOGIN_REQUIRED)
-  const handleRelink = async (access_token) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await apiFetch('/plaid-create-link-token', {
-        method: 'POST',
-        body: JSON.stringify({ access_token }),
-      })
-      setLinkToken(data.link_token)
-    } catch (err) { setError('Could not start re-authentication. ' + err.message) }
-    finally { setLoading(false) }
-  }
-
-  const handleDisconnect = async (itemId) => {
-    if (!window.confirm('Disconnect this bank account?')) return
-    try {
-      await apiFetch('/plaid-disconnect', { method: 'POST', body: JSON.stringify({ item_id: itemId }) })
-      localStorage.removeItem('plaid_connections')
-      localStorage.removeItem('plaid_synced_at')
-      await syncAccounts()
-    } catch (err) {
-      setError('Disconnect failed: ' + err.message)
-    }
-  }
-
   const isConnected = connections.length > 0
 
   return (
-    <div style={{ marginBottom: 20 }}>
+    <div className="plaid-connect" style={{ marginBottom: 20 }}>
       {/* ── Status bar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div className="plaid-connect-status" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {initialChecking ? (
           <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             <i className="ti ti-refresh" style={{ fontSize: 11, marginRight: 5, animation: 'spin 0.8s linear infinite' }} aria-hidden="true" />
@@ -265,7 +153,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
             </button>
             {syncedAt && (
               <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.04em' }}>
-                Balances checked {new Date(syncedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                Balances checked {new Date(syncedAt).toLocaleString('en-US', { timeZone:HOUSEHOLD_TIME_ZONE, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </span>
             )}
             {syncNotice&&<span role="status" style={{flexBasis:'100%',fontSize:10,color:'#888884',lineHeight:1.45}}>{syncNotice}</span>}
@@ -273,54 +161,23 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
               onClick={() => setExpanded(x => !x)}
               style={{ marginLeft: 'auto', fontSize: 10, color: '#888884', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em', textTransform: 'uppercase' }}
             >
-              {expanded ? 'Hide' : 'Manage'}
+              {expanded ? 'Hide' : 'Details'}
             </button>
           </>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.08em', textTransform: 'uppercase' }}>No bank connected — balances are manual</span>
-            {linkToken ? (
-              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={handleExit} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
-            ) : (
-              <button
-                onClick={startLink}
-                disabled={loading}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '8px 18px', borderRadius: 10, cursor: 'pointer',
-                  background: 'rgba(197,164,109,0.12)', border: '1px solid rgba(197,164,109,0.3)', color: '#C5A46D',
-                  fontSize: 11, fontWeight: 600, fontFamily: 'inherit', letterSpacing: '0.08em', textTransform: 'uppercase',
-                  opacity: loading ? 0.6 : 1,
-                }}
-              >
-                <i className="ti ti-building-bank" style={{ fontSize: 14 }} aria-hidden="true" />
-                {loading ? 'Loading…' : 'Connect a bank'}
-              </button>
-            )}
+          <div className="plaid-connect-disconnected" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.08em', textTransform: 'uppercase' }}>No bank connected — source-managed balances unavailable</span>
+            <button type="button" disabled title="Adding or changing bank connections is disabled in this release." style={{display:'flex',alignItems:'center',gap:7,padding:'8px 18px',borderRadius:10,cursor:'not-allowed',background:'rgba(197,164,109,0.05)',border:'1px solid rgba(197,164,109,0.16)',color:'#888884',fontSize:11,fontWeight:600,fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase'}}><i className="ti ti-lock" style={{fontSize:14}} aria-hidden="true"/>Bank connections unavailable</button>
           </div>
         )}
       </div>
 
+      <p className="plaid-connection-safety-note" role="note" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>Existing connected sources can still sync. Adding, re-linking, or disconnecting a bank is disabled in this release to protect financial credentials and account identity.</p>
+
       {/* ── Add another institution (when connected) ── */}
       {isConnected && !expanded && (
         <div style={{ marginTop: 8 }}>
-          {linkToken ? (
-            <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={handleExit} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
-          ) : (
-            <button
-              onClick={startLink}
-              disabled={loading}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '5px 12px', borderRadius: 8, cursor: 'pointer',
-                background: 'white', border: '1px solid rgba(0,0,0,0.15)',
-                fontSize: 12, fontWeight: 500, fontFamily: 'inherit', color: '#333',
-              }}
-            >
-              <i className="ti ti-plus" style={{ fontSize: 12 }} aria-hidden="true" />
-              Add another bank
-            </button>
-          )}
+          <button type="button" disabled title="Adding bank connections is disabled in this release." style={{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:8,cursor:'not-allowed',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',fontSize:12,fontWeight:500,fontFamily:'inherit',color:'#888884'}}><i className="ti ti-lock" style={{fontSize:12}} aria-hidden="true"/>Add bank unavailable</button>
         </div>
       )}
 
@@ -349,46 +206,19 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync }) {
                   {conn.accounts.length} account{conn.accounts.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <button
-                onClick={() => handleDisconnect(conn.itemId)}
-                style={{ fontSize: 10, color: '#C4785A', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.06em', textTransform: 'uppercase' }}
-              >
-                Disconnect
-              </button>
+              <span style={{fontSize:10,color:'#888884',letterSpacing:'0.06em',textTransform:'uppercase'}}>Source-managed</span>
             </div>
           ))}
           <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', paddingTop: 10 }}>
-            {linkToken ? (
-              <PlaidLinkButton linkToken={linkToken} onSuccess={handleSuccess} onExit={handleExit} receivedRedirectUri={oauthReturn ? window.location.href : undefined} />
-            ) : (
-              <button
-                onClick={startLink}
-                disabled={loading}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '7px 14px', borderRadius: 9, cursor: 'pointer',
-                  background: 'white', border: '1px solid rgba(0,0,0,0.15)',
-                  fontSize: 12, fontWeight: 500, fontFamily: 'inherit', color: '#333',
-                }}
-              >
-                <i className="ti ti-plus" style={{ fontSize: 13 }} aria-hidden="true" />
-                {loading ? 'Loading…' : 'Add another bank'}
-              </button>
-            )}
+            <button type="button" disabled title="Adding bank connections is disabled in this release." style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:9,cursor:'not-allowed',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',fontSize:12,fontWeight:500,fontFamily:'inherit',color:'#888884'}}><i className="ti ti-lock" style={{fontSize:13}} aria-hidden="true"/>Add bank unavailable</button>
           </div>
         </div>
       )}
 
       {requiresUpdate.length > 0 && (
         <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(196,120,90,0.08)', border: '1px solid rgba(196,120,90,0.3)', borderRadius: 10 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 12, color: '#C4785A', fontWeight: 600 }}>Bank session expired — re-connect to resume syncing</p>
-          {requiresUpdate.map(item => (
-            <button key={item.item_id}
-              onClick={() => handleRelink(item.item_id)}
-              style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(196,120,90,0.4)', background: 'rgba(196,120,90,0.12)', color: '#C4785A', fontFamily: 'inherit', fontWeight: 600 }}>
-              Re-connect {item.institution}
-            </button>
-          ))}
+          <p style={{ margin: '0 0 5px', fontSize: 12, color: '#C4785A', fontWeight: 600 }}>Bank session expired for {requiresUpdate.map(item=>item.institution).join(', ')}</p>
+          <p style={{margin:0,fontSize:11,color:'#888884',lineHeight:1.45}}>Re-authentication is unavailable in this release. Brevity will retain the latest verified cached data without changing bank credentials.</p>
         </div>
       )}
       {error && (

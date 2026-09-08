@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { BASE_ANALYSIS_GUIDANCE, buildPillarAnalysisPrompt, PILLAR_INSTRUCTIONS } from '../../netlify/functions/pillar-analysis.mjs'
+import { BASE_ANALYSIS_GUIDANCE, buildPillarAnalysisPrompt, pillarAnalysisServerCacheKey, PILLAR_INSTRUCTIONS } from '../../netlify/functions/pillar-analysis.mjs'
 
 const expectedPillars = ['spiritual', 'health', 'fitness', 'household', 'education', 'finance', 'ministry']
 
@@ -67,5 +67,23 @@ test('pillar analyses are retained server-side and force refresh bypasses that c
   assert.match(source, /if\(!force\)/)
   assert.match(source, /cached:true/)
   assert.match(source, /plan-\$\{Number\(planVersion \|\| 0\)\}/)
-  assert.match(source, /setJSON\(cacheKey\(date,pillar,plan\.version,currentMember\),result\)/)
+  assert.match(source, /pillarAnalysisContextSignature/)
+  assert.match(source, /setJSON\(pillarAnalysisServerCacheKey\(date,pillar,plan\.version,currentMember,contextSignature\),result\)/)
+  assert.match(source, /requestedContextSignature!==contextSignature/)
+  assert.match(source, /member:currentMember/)
+  assert.match(source, /enforcePillarAnalysisGuardrails\(\{analysis,pillar,date,pillarData:plan\?\.\[pillar\]/)
+  assert.ok(source.indexOf('enforcePillarAnalysisGuardrails({analysis,pillar,date') < source.indexOf('setJSON(pillarAnalysisServerCacheKey(date,pillar,plan.version,currentMember,contextSignature),result)'),'semantic guardrails must run before generated analysis is cached')
+  assert.match(source, /evidence: \{ type:'array', minItems:1, maxItems:2/)
+  assert.notEqual(
+    pillarAnalysisServerCacheKey('2026-09-07','finance',2,'Larry','context-a'),
+    pillarAnalysisServerCacheKey('2026-09-07','finance',2,'Lorenzo','context-a'),
+  )
+})
+
+test('pillar analysis UI identifies evidence and safe deterministic fallback output', async () => {
+  const source = await readFile(new URL('./PillarAnalysis.jsx', import.meta.url), 'utf8')
+  assert.match(source, /Evidence & Provenance/)
+  assert.match(source, /What This Is Based On/)
+  assert.match(source, /Source-grounded safe analysis/)
+  assert.match(source, /analysis\.evidence/)
 })

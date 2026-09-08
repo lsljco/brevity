@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createEmptyDailyPlan, normalizeDailyPlan } from './dailyPlan.js'
-import { fetchDailyPlan, saveDailyPlan } from './householdApi.js'
+import { fetchDailyPlan } from './householdApi.js'
+import { getHouseholdDateKey } from '../finance/financeTime.js'
+import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 
-const localDateKey = () => {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+export const currentDailyPlanDate = (now = new Date()) => getHouseholdDateKey(now)
+
+export function dailyPlanFromRefresh(detail, date) {
+  if (!detail?.plan || detail.date !== date || detail.plan.date !== date) return null
+  return normalizeDailyPlan(detail.plan)
 }
 
-export function useDailyPlan(date = localDateKey()) {
+export function useDailyPlan(date = currentDailyPlanDate()) {
   const [plan, setPlan] = useState(() => createEmptyDailyPlan(date))
   const [state, setState] = useState('loading')
   const [error, setError] = useState('')
@@ -28,24 +32,27 @@ export function useDailyPlan(date = localDateKey()) {
 
   useEffect(() => { reload() }, [reload])
 
-  const persist = useCallback(async next => {
-    const previous = plan
-    const candidate = normalizeDailyPlan(typeof next === 'function' ? next(plan) : next)
-    setPlan(candidate)
-    setState('saving')
-    setError('')
-    try {
-      const saved = await saveDailyPlan(candidate)
-      setPlan(saved)
+  useEffect(() => {
+    const receiveRefresh = event => {
+      const refreshedPlan = dailyPlanFromRefresh(event?.detail, date)
+      if (!refreshedPlan) return
+      setPlan(refreshedPlan)
+      setError('')
       setState('ready')
-      return saved
-    } catch (err) {
-      setPlan(err.currentPlan ? normalizeDailyPlan(err.currentPlan) : previous)
-      setError(err.message || 'Could not save the household plan.')
-      setState('error')
-      throw err
     }
-  }, [plan])
+    window.addEventListener('brevity-app-refreshed', receiveRefresh)
+    return () => window.removeEventListener('brevity-app-refreshed', receiveRefresh)
+  }, [date])
 
-  return { plan, state, error, reload, savePlan: persist }
+  useEffect(() => {
+    const refreshAfterReviewedAction = event => {
+      const operations = event?.detail?.audit?.operations || []
+      if (!operations.some(operation => operation.targetDate === date && (operation.domain === 'planning' || operation.type?.startsWith('plan.')))) return
+      reload()
+    }
+    window.addEventListener(ACTION_COMPLETED_EVENT, refreshAfterReviewedAction)
+    return () => window.removeEventListener(ACTION_COMPLETED_EVENT, refreshAfterReviewedAction)
+  }, [date, reload])
+
+  return { plan, state, error, reload }
 }

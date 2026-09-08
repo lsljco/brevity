@@ -1,4 +1,5 @@
 import { parseISODate, txOccursOnDate } from './projection.js'
+import { getHouseholdCalendarDate } from './financeTime.js'
 
 function money(value) {
   const amount = Math.abs(Number(value) || 0)
@@ -7,7 +8,7 @@ function money(value) {
 
 function monthAnchor(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value)
-  return parseISODate(value) || new Date()
+  return parseISODate(value) || getHouseholdCalendarDate()
 }
 
 export function selectOperatingTransactions(accounts = [], transactions = []) {
@@ -18,7 +19,7 @@ export function selectOperatingTransactions(accounts = [], transactions = []) {
   return transactions.filter(transaction => operatingIds.has(transaction?.acct))
 }
 
-export function calculateTransactionAmountForMonth(transaction, month = new Date(), { recurringOnly = false } = {}) {
+export function calculateTransactionAmountForMonth(transaction, month = getHouseholdCalendarDate(), { recurringOnly = false } = {}) {
   if (!transaction || transaction.type === 'transfer' || (recurringOnly && transaction.freq === 'once')) return 0
   const selectedMonth = monthAnchor(month)
   const year = selectedMonth.getFullYear()
@@ -32,7 +33,7 @@ export function calculateTransactionAmountForMonth(transaction, month = new Date
   return total
 }
 
-export function calculateScheduledTotalsForMonth(transactions = [], month = new Date(), { recurringOnly = false } = {}) {
+export function calculateScheduledTotalsForMonth(transactions = [], month = getHouseholdCalendarDate(), { recurringOnly = false } = {}) {
   let income = 0
   let expenses = 0
   for (const transaction of transactions) {
@@ -44,15 +45,22 @@ export function calculateScheduledTotalsForMonth(transactions = [], month = new 
 }
 
 export function calculateTransactionAmountForRange(transaction, range, { recurringOnly = false } = {}) {
-  if (!transaction || transaction.type === 'transfer' || (recurringOnly && transaction.freq === 'once')) return 0
+  return transactionOccurrencesForRange(transaction, range, { recurringOnly })
+    .reduce((total, occurrence) => total + occurrence.amount, 0)
+}
+
+export function transactionOccurrencesForRange(transaction, range, { recurringOnly = false } = {}) {
+  if (!transaction || transaction.type === 'transfer' || (recurringOnly && transaction.freq === 'once')) return []
   const from = parseISODate(range?.from)
   const to = parseISODate(range?.to)
-  if (!from || !to || from > to) return 0
-  let total = 0
+  if (!from || !to || from > to) return []
+  const occurrences = []
   for (let date = from; date <= to; date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)) {
-    if (txOccursOnDate(transaction, date)) total += money(transaction.amount)
+    if (txOccursOnDate(transaction, date)) {
+      occurrences.push({ date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`, amount: money(transaction.amount) })
+    }
   }
-  return total
+  return occurrences
 }
 
 export function calculateScheduledTotalsForRange(transactions = [], range, { recurringOnly = false } = {}) {
@@ -72,7 +80,7 @@ export function calculateScheduledTotalsForRange(transactions = [], range, { rec
  * dates, and five-paycheck months are reflected without frequency estimates.
  * Transfers and one-time items are excluded from the recurring calculation.
  */
-export function calculateMonthlyCashFlow(transactions = [], month = new Date()) {
+export function calculateMonthlyCashFlow(transactions = [], month = getHouseholdCalendarDate()) {
   const totals = calculateScheduledTotalsForMonth(transactions, month, { recurringOnly: true })
 
   return {

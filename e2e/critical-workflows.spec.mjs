@@ -13,6 +13,32 @@ test('Household Operations exposes Schedule, Routines, Operations and Inventory 
 
 test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
 
+test('Finance workspaces fit phone and tablet viewports without overlapping filters',async({page},testInfo)=>{
+  test.skip(testInfo.project.name==='desktop-chromium','responsive contract')
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){
+    await openMenuIfMobile(page,testInfo)
+    await page.getByRole('button',{name:label,exact:true}).click()
+    await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
+  }
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  const controls=page.locator('.transaction-list-controls > *')
+  const boxes=await controls.evaluateAll(elements=>elements.map(element=>{
+    const rect=element.getBoundingClientRect()
+    return{left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom}
+  }))
+  for(let left=0;left<boxes.length;left+=1){
+    for(let right=left+1;right<boxes.length;right+=1){
+      const a=boxes[left],b=boxes[right]
+      const overlapX=Math.min(a.right,b.right)-Math.max(a.left,b.left)
+      const overlapY=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)
+      expect(overlapX>1&&overlapY>1,`transaction controls ${left} and ${right} overlap`).toBe(false)
+    }
+  }
+})
+
 test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
 test('Settings remains operational when optional integration payloads are empty',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Settings'}).click();await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Recovery Mode');await expect(page.locator('body')).not.toContainText('Cannot read properties of undefined')})

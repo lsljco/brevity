@@ -23,3 +23,14 @@ test('inventory intelligence flags food approaching expiration', () => {
   const summary = inventoryIntelligence(state, { today:new Date('2026-09-03T12:00:00') })
   assert.equal(summary.expiring.length, 1)
 })
+
+test('inventory intelligence uses the household date and month near UTC midnight', () => {
+  const state = normalizeInventoryState({
+    items:[{ id:'milk', name:'Milk', quantity:1, expiresOn:'2026-08-31' }],
+    waste:[{ recordedAt:'2026-09-01T02:15:00.000Z', estimatedValue:7 }],
+  })
+  const summary = inventoryIntelligence(state, { today:new Date('2026-09-01T02:30:00.000Z') })
+  assert.equal(summary.expiring.length, 1)
+  assert.equal(summary.expired.length, 0)
+  assert.equal(summary.monthlyWaste, 7)
+})

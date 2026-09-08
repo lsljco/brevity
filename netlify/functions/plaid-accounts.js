@@ -1,6 +1,7 @@
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens } = require('./storage')
 const { readSession } = require('./household-auth')
+const { createAccountSourceReceipt } = require('../lib/plaid-account-source.cjs')
 
 const plaidClient = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
@@ -79,6 +80,7 @@ exports.handler = async (event) => {
       statusCode: 200, headers,
       body: JSON.stringify({
         accounts: allAccounts,
+        accountSourceReceipt: createAccountSourceReceipt(allAccounts),
         connected: true,
         requiresUpdate,  // non-empty = show "Re-connect [bank]" prompt
         errors: syncErrors,

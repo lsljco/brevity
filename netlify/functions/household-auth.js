@@ -127,6 +127,10 @@ function clearCookie() {
 exports.handler = async event => {
   try {
     const action = event.queryStringParameters?.action || 'session'
+    if (action === 'set-member-password') return json(423, {
+      code:'CREDENTIAL_MUTATIONS_DISABLED',
+      error:'Creating household accounts and setting or resetting member passwords are disabled in this release. No credentials or sessions were changed.',
+    })
     const dataStore = store()
 
     if (event.httpMethod === 'GET' && action === 'session') {
@@ -169,24 +173,6 @@ exports.handler = async event => {
     }
 
     if (action === 'logout') return json(200, { ok: true }, { 'set-cookie': clearCookie() })
-
-    if (action === 'set-member-password') {
-      const session = await readSession(event)
-      if (!session || session.role !== 'admin') return json(403, { error: 'Household administrator access required.' })
-      const member = String(body.member || '')
-      if (!MEMBERS.includes(member)) return json(400, { error: 'Unknown household member.' })
-      if (String(body.password || '').length < 8) return json(400, { error: 'Use a password with at least 8 characters.' })
-      const existing = await dataStore.get(userKey(member), { type: 'json' }).catch(() => null)
-      const password = passwordHash(body.password)
-      await dataStore.setJSON(userKey(member), {
-        member,
-        role: member === 'Larry' ? 'admin' : 'member',
-        ...password,
-        createdAt: existing?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-      return json(200, { ok: true, member })
-    }
 
     return json(404, { error: 'Unknown authentication action.' })
   } catch (error) {

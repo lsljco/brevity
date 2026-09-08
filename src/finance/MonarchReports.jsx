@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { addDays, fmtMoney, parseISODate, toISO, txOccursOnDate } from './projection.js'
-import { groupReportTransactions, reportStats, transactionDirection } from './reportingData.js'
+import { groupCashInflows, groupReportTransactions, isRealizedIncomeTransaction, reportStats, summarizeActualCashActivity, transactionDirection } from './reportingData.js'
 import { timeframeLabel } from './financeTimeframe.js'
 
 const COLORS = ['#17A9CC','#35AD76','#FFC247','#FF6A2F','#8850CE','#D23B9A','#4867DD','#18A99A','#ED4C52','#86A63D']
@@ -47,15 +47,19 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
   const [chart, setChart] = useState('bar')
   const income = useMemo(() => reportStats(transactions, 'income'), [transactions])
   const expense = useMemo(() => reportStats(transactions, 'expense'), [transactions])
+  const postedCash = useMemo(() => summarizeActualCashActivity(transactions.filter(transaction => !transaction.pending)), [transactions])
   const direction = tab === 'income' ? 'income' : 'expense'
   const stats = direction === 'income' ? income : expense
   const rows = useMemo(() => groupReportTransactions(transactions, direction, displayBy), [transactions, direction, displayBy])
   const incomeRows = useMemo(() => groupReportTransactions(transactions, 'income', displayBy), [transactions, displayBy])
+  const cashInflowRows = useMemo(() => groupCashInflows(transactions, displayBy), [transactions, displayBy])
   const expenseRows = useMemo(() => groupReportTransactions(transactions, 'expense', displayBy), [transactions, displayBy])
-  const open = (value, selectedDirection, ids) => onOpenTransactions?.({
+  const open = (value, selectedDirection, ids, realizedIncomeOnly = false) => onOpenTransactions?.({
     direction: selectedDirection || null, displayBy: value ? displayBy : null, value: value || null, ids: ids || null,
-    label: value || (selectedDirection === 'income' ? 'Income' : selectedDirection === 'expense' ? 'Expenses' : 'Cash Flow'),
+    postedOnly:true, excludeTransfers:true, ...(realizedIncomeOnly ? { realizedIncomeOnly:true } : {}),
+    label: value || (selectedDirection === 'income' ? realizedIncomeOnly ? 'Realized Income' : 'Cash Inflows' : selectedDirection === 'expense' ? 'Posted Expenses' : 'Posted Cash Flow'),
   })
+  const openIncome = (value, selectedDirection = 'income', ids) => open(value, selectedDirection, ids, true)
 
   return <div className="monarch-reports">
     <div style={{ display: 'flex', gap: 8, padding: 5, borderRadius: 13, background: 'rgba(255,255,255,.035)', marginBottom: 16 }}>
@@ -68,22 +72,22 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
     <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px' }}>{timeframeLabel(range)}</p>
     {tab === 'cashflow' ? <>
       <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
-        <Stat label="Total income" value={fmtMoney(income.total)} color="var(--income-color)" onClick={() => open(null, 'income')} />
+        <Stat label="Cash inflows" value={fmtMoney(postedCash.inflows)} color="var(--income-color)" onClick={() => open(null, 'income')} />
         <Stat label="Total expenses" value={fmtMoney(expense.total)} color="var(--expense-color)" onClick={() => open(null, 'expense')} />
-        <Stat label="Net cash flow" value={fmtMoney(income.total - expense.total)} color="var(--gold)" onClick={() => open(null, null)} />
+        <Stat label="Net cash flow" value={fmtMoney(postedCash.net)} color="var(--gold)" onClick={() => open(null, null)} />
       </div>
       <div className="report-chart-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
-        {chart === 'pie' ? <><Donut title="Income" rows={incomeRows} total={income.total} direction="income" onOpen={open} /><Donut title="Expenses" rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></> : <><Bars rows={incomeRows} total={income.total} direction="income" onOpen={open} /><Bars rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></>}
+        {chart === 'pie' ? <><Donut title="Cash Inflows" rows={cashInflowRows} total={postedCash.inflows} direction="income" onOpen={open} /><Donut title="Expenses" rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></> : <><Bars rows={cashInflowRows} total={postedCash.inflows} direction="income" onOpen={open} /><Bars rows={expenseRows} total={expense.total} direction="expense" onOpen={open} /></>}
       </div>
     </> : <>
-      {chart === 'pie' ? <Donut title={direction === 'income' ? 'Income' : 'Spending'} rows={rows} total={stats.total} direction={direction} onOpen={open} /> : null}
+      {chart === 'pie' ? <Donut title={direction === 'income' ? 'Realized Income' : 'Spending'} rows={rows} total={stats.total} direction={direction} onOpen={direction === 'income' ? openIncome : open} /> : null}
       <div className="report-stat-grid report-stat-grid--four" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, margin: '18px 0' }}>
-        <Stat label={`Total ${direction}`} value={fmtMoney(stats.total)} onClick={() => open(null, direction)} />
-        <Stat label="Transactions" value={stats.count.toLocaleString()} onClick={() => open(null, direction)} />
-        <Stat label="Largest" value={fmtMoney(stats.largest)} onClick={() => open(null, direction, transactions.filter(row => transactionDirection(row) === direction && Math.abs(Number(row.amount)) === stats.largest).map(row => row.id))} />
-        <Stat label="Average" value={fmtMoney(stats.average)} onClick={() => open(null, direction)} />
+        <Stat label={`Total ${direction === 'income' ? 'realized income' : direction}`} value={fmtMoney(stats.total)} onClick={() => direction === 'income' ? openIncome(null) : open(null, direction)} />
+        <Stat label="Transactions" value={stats.count.toLocaleString()} onClick={() => direction === 'income' ? openIncome(null) : open(null, direction)} />
+        <Stat label="Largest" value={fmtMoney(stats.largest)} onClick={() => (direction === 'income' ? openIncome : open)(null, direction, transactions.filter(row => (direction === 'income' ? isRealizedIncomeTransaction(row) : !row.pending && transactionDirection(row) === direction) && Math.abs(Number(row.amount)) === stats.largest).map(row => row.id))} />
+        <Stat label="Average" value={fmtMoney(stats.average)} onClick={() => direction === 'income' ? openIncome(null) : open(null, direction)} />
       </div>
-      {chart === 'bar' ? <Bars rows={rows} total={stats.total} direction={direction} onOpen={open} /> : null}
+      {chart === 'bar' ? <Bars rows={rows} total={stats.total} direction={direction} onOpen={direction === 'income' ? openIncome : open} /> : null}
     </>}
   </div>
 }

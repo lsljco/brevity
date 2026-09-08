@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildDailyAlignmentSnapshot, calculateActualMonthToDateCashFlow, emptyDailyAlignmentRecord, normalizeDailyAlignmentRecord } from './dailyAlignmentData.js'
+import { applyBudgetTarget } from './budgetBreakdown.js'
 
 const accounts = [{ id: 'operating', name: 'Operating', balance: 1000 }]
 const scheduled = [
@@ -32,6 +33,26 @@ test('daily discretionary amount uses the remaining monthly budget and days', ()
   assert.equal(snapshot.approvedDiscretionary, 10)
 })
 
+test('daily discretionary guidance reads the selected stable account and year budget target', () => {
+  const operatingFun = { id:'fun', acct:'operating', name:'Family Fun', amount:310, type:'expense', freq:'monthly', start:'2026-08-18', cat:'Discretionary' }
+  const savingsFun = { ...operatingFun, acct:'savings', amount:90 }
+  let budget = applyBudgetTarget({}, {
+    month:7, year:2026, value:620, lineId:'operating:fun', recordId:'fun', lineName:'Family Fun', category:'Discretionary', direction:'expense', accountId:'operating', legacyYear:2026, legacyAccountId:'operating',
+  })
+  budget = applyBudgetTarget(budget, {
+    month:7, year:2026, value:90, lineId:'savings:fun', recordId:'fun', lineName:'Family Fun', category:'Discretionary', direction:'expense', accountId:'savings',
+  })
+  const snapshot = buildDailyAlignmentSnapshot({
+    date:'2026-08-18',
+    accounts,
+    scheduled:[operatingFun],
+    budget,
+    budgetLegacyYear:2026,
+    budgetLegacyAccountId:'operating',
+  })
+  assert.equal(snapshot.discretionaryBudget,620)
+})
+
 test('monthly cash flow can use operating transactions while daily activity follows the visible account', () => {
   const snapshot = buildDailyAlignmentSnapshot({
     date: '2026-09-04',
@@ -50,9 +71,10 @@ test('monthly cash flow can use operating transactions while daily activity foll
   assert.equal(snapshot.monthlyCashFlowSource, 'scheduled')
 })
 
-test('monthly goal progress uses posted and pending net cash flow instead of scheduled income', () => {
+test('monthly goal progress uses posted cash activity and separates earned income from other credits', () => {
   const actuals = [
-    { id: 'income', name: 'Deposits', amount: -26159.53, date: '2026-08-20', pending: false },
+    { id: 'income', name: 'Deposits', category:'INCOME', amount: -26159.53, date: '2026-08-20', pending: false },
+    { id: 'refund', name: 'Purchase refund', category:'GENERAL_MERCHANDISE', amount: -50, date: '2026-08-21', pending: false },
     { id: 'expenses', name: 'Monthly expenses', amount: 24265.32, date: '2026-08-27', pending: true },
     { id: 'transfer', name: 'Transfer to savings', category: 'TRANSFER_OUT', amount: 5000, date: '2026-08-27', pending: true },
     { id: 'future', name: 'Future expense', amount: 500, date: '2026-08-29', pending: true },
@@ -60,8 +82,9 @@ test('monthly goal progress uses posted and pending net cash flow instead of sch
 
   const totals = calculateActualMonthToDateCashFlow(actuals, '2026-08-28')
   assert.equal(totals.income, 26159.53)
-  assert.equal(totals.expenses, 24265.32)
-  assert.ok(Math.abs(totals.cashFlow - 1894.21) < 0.001)
+  assert.equal(totals.otherInflows, 50)
+  assert.equal(totals.expenses, 0)
+  assert.equal(totals.cashFlow, 26209.53)
   assert.equal(totals.transactionCount, 2)
 
   const snapshot = buildDailyAlignmentSnapshot({
@@ -73,8 +96,8 @@ test('monthly goal progress uses posted and pending net cash flow instead of sch
   })
 
   assert.equal(snapshot.monthlyIncome, 26159.53)
-  assert.equal(snapshot.monthlyExpenses, 24265.32)
-  assert.ok(Math.abs(snapshot.monthlyCashFlow - 1894.21) < 0.001)
+  assert.equal(snapshot.monthlyExpenses, 0)
+  assert.equal(snapshot.monthlyCashFlow, 26209.53)
   assert.equal(snapshot.monthlyCashFlowSource, 'actual')
 })
 

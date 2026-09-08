@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchRollingMealPlan, substituteMeal } from './mealPlanApi.js'
+import { executeMealSubstitution, fetchRollingMealPlan, prepareMealSubstitution } from './mealPlanApi.js'
 
 export function useRollingMealPlan() {
   const [data, setData] = useState(null)
@@ -23,20 +23,33 @@ export function useRollingMealPlan() {
 
   useEffect(() => { reload().catch(() => undefined) }, [reload])
 
-  const replace = useCallback(async ({ date, mealType, mealId, expectedVersion }) => {
+  const prepareReplacement = useCallback(async ({ date, mealType, mealId, expectedVersion }) => {
     setState('saving')
     setError('')
     try {
-      const result = await substituteMeal({ date, mealType, mealId, expectedVersion })
-      setData(current => ({ ...current, days: current.days.map(day => day.date === result.day.date ? result.day : day) }))
+      const result = await prepareMealSubstitution({ date, mealType, mealId, expectedVersion })
       setState('ready')
-      return result.day
+      return result.proposal
     } catch (requestError) {
-      setError(requestError.message || 'Could not replace this meal.')
+      setError(requestError.message || 'Could not prepare this meal replacement.')
       setState('error')
       throw requestError
     }
   }, [])
 
-  return { data, state, error, reload, replace }
+  const applyReplacement = useCallback(async proposalId => {
+    setState('saving')
+    setError('')
+    try {
+      const result = await executeMealSubstitution(proposalId)
+      await reload()
+      return result.audit
+    } catch (requestError) {
+      setError(requestError.message || 'Could not apply this meal replacement.')
+      setState('error')
+      throw requestError
+    }
+  }, [reload])
+
+  return { data, state, error, reload, prepareReplacement, applyReplacement }
 }

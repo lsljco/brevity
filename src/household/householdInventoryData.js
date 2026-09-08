@@ -1,3 +1,5 @@
+import { getHouseholdDateKey } from '../finance/financeTime.js'
+
 export const HOUSEHOLD_INVENTORY_STORAGE_KEY = 'brevity_household_inventory_v1'
 
 export const INVENTORY_CATEGORIES = ['Food & Pantry', 'Refrigerator', 'Freezer', 'Cleaning', 'Laundry', 'Paper Goods', 'Pet Care', 'Personal Care', 'Other']
@@ -5,6 +7,10 @@ export const INVENTORY_LOCATIONS = ['Pantry', 'Refrigerator', 'Freezer', 'Kitche
 
 const nowIso = () => new Date().toISOString()
 const id = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+const householdMonthForTimestamp = value => {
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? String(value || '').slice(0, 7) : getHouseholdDateKey(parsed).slice(0, 7)
+}
 
 export function normalizeInventoryState(value = {}) {
   return {
@@ -59,14 +65,14 @@ export function recordInventoryWaste(state, { itemId, quantity, reason = 'Discar
 
 export function inventoryIntelligence(state, { today = new Date() } = {}) {
   const value = normalizeInventoryState(state)
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-  const horizon = new Date(today); horizon.setDate(horizon.getDate() + 3)
+  const todayKey = getHouseholdDateKey(today)
+  const horizon = new Date(`${todayKey}T12:00:00`); horizon.setDate(horizon.getDate() + 3)
   const horizonKey = `${horizon.getFullYear()}-${String(horizon.getMonth()+1).padStart(2,'0')}-${String(horizon.getDate()).padStart(2,'0')}`
   const lowStock = value.items.filter(item => item.parLevel > 0 && item.quantity <= item.parLevel)
   const expiring = value.items.filter(item => item.expiresOn && item.expiresOn >= todayKey && item.expiresOn <= horizonKey)
   const expired = value.items.filter(item => item.expiresOn && item.expiresOn < todayKey && item.quantity > 0)
   const month = todayKey.slice(0,7)
-  const monthlyWaste = value.waste.filter(entry => String(entry.recordedAt || '').slice(0,7) === month).reduce((sum, entry) => sum + Number(entry.estimatedValue || 0), 0)
+  const monthlyWaste = value.waste.filter(entry => householdMonthForTimestamp(entry.recordedAt) === month).reduce((sum, entry) => sum + Number(entry.estimatedValue || 0), 0)
   const inventoryValue = value.items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitCost || 0), 0)
   return { lowStock, expiring, expired, monthlyWaste, inventoryValue, purchaseList: lowStock.map(item => ({ ...item, suggestedQuantity: Math.max(1, (item.parLevel * 2) - item.quantity) })) }
 }

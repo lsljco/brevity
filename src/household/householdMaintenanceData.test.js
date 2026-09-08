@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   buildHouseholdMaintenanceWeek,
   maintenanceDateKey,
+  maintenanceToday,
   householdOccurrence,
   householdOperationCalendarEvent,
   maintenanceWeekStart,
@@ -70,4 +71,9 @@ test('joint Sunday reset publishes one shared Family Calendar event', () => {
   assert.deepEqual(event.members, ['Javin','Nyla'])
   assert.equal(event.owner, 'Family')
   assert.equal(event.source, 'household-operations')
+})
+
+test('maintenance today follows the authoritative household date near UTC midnight', () => {
+  assert.equal(maintenanceDateKey(maintenanceToday(new Date('2026-09-07T02:30:00.000Z'))), '2026-09-06')
+  assert.equal(maintenanceDateKey(maintenanceToday(new Date('2026-09-07T04:30:00.000Z'))), '2026-09-07')
 })

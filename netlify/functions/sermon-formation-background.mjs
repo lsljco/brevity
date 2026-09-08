@@ -1,34 +1,65 @@
-import { getStore } from '@netlify/blobs'
-import { handler as generateSermonFormation } from './sermon-formation.mjs'
+import householdAuth from './household-auth.js'
+import { randomUUID } from 'node:crypto'
+import { analyzeSermonFormation } from './sermon-formation.mjs'
+import { productionSermonSourceRepository, SERMON_JOB_LEASE_MS } from '../lib/sermon-source-repository.mjs'
 import spiritualLanguage from '../lib/spiritual-language.cjs'
 
-const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
-const STORE_NAME='brevity-household'
-const ACTIVE_SERMON_KEY=`${HOUSEHOLD_ID}/spiritual/active-sermon`
-const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
-const jobKey=id=>`${HOUSEHOLD_ID}/sermon-jobs/${id}`
+const { readSession } = householdAuth
+const { sharedSpiritualValue:sharedValue } = spiritualLanguage
+const validJobId = value => /^sermon-[a-f0-9]{40}-v\d+-[a-z0-9_-]{1,80}$/.test(String(value || ''))
 
-const { sharedSpiritualValue: sharedValue } = spiritualLanguage
-
-export default async function handler(request){
-  let body={}
-  try{body=await request.json()}catch{return}
-  const jobId=String(body.jobId||'')
-  if(!/^[a-zA-Z0-9-]{20,80}$/.test(jobId))return
-  const dataStore=store()
-  await dataStore.setJSON(jobKey(jobId),{state:'processing',updatedAt:new Date().toISOString()})
-  try{
-    const result=await generateSermonFormation({httpMethod:'POST',headers:{cookie:request.headers.get('cookie')||''},body:JSON.stringify(body.request||{})})
-    const rawPayload=JSON.parse(result.body||'{}')
-    if(result.statusCode!==200)throw new Error(rawPayload.error||`Brevity sermon analysis returned ${result.statusCode}.`)
-    const payload=sharedValue(rawPayload)
-    const active=await dataStore.get(ACTIVE_SERMON_KEY,{type:'json'}).catch(()=>null)
-    if(active)await dataStore.setJSON(ACTIVE_SERMON_KEY,sharedValue({...active,sermonNotes:payload.sermonNotes||active.sermonNotes}))
-    await dataStore.setJSON(jobKey(jobId),{state:'ready',result:payload,updatedAt:new Date().toISOString()})
-  }catch(error){
-    console.error('[sermon-formation-background]',error)
-    await dataStore.setJSON(jobKey(jobId),{state:'error',error:error.message||'Background sermon analysis failed.',updatedAt:new Date().toISOString()})
+export function createSermonFormationBackgroundHandler({
+  sourceRepository = null,
+  readSessionFn = readSession,
+  analyze = analyzeSermonFormation,
+  now = () => new Date(),
+} = {}) {
+  return async request => {
+    const sources = sourceRepository || productionSermonSourceRepository()
+    const session = await readSessionFn({ headers:{ cookie:request.headers.get('cookie') || '' } }).catch(() => null)
+    if (!session) return new Response(JSON.stringify({ error:'Sign in to analyze a sermon source.' }), { status:401, headers:{ 'content-type':'application/json' } })
+    const body = await request.json().catch(() => ({})), jobId = String(body.jobId || '')
+    if (!validJobId(jobId)) return new Response(JSON.stringify({ error:'A valid sermon-analysis job is required.' }), { status:400, headers:{ 'content-type':'application/json' } })
+    const workerId = randomUUID()
+    const claim = await sources.claimJob(jobId, session.member, { workerId }).catch(error => ({ error }))
+    if (claim.error) {
+      const status = claim.error.code === 'FORBIDDEN' ? 403 : claim.error.code === 'VERSION_CONFLICT' ? 409 : 500
+      return new Response(JSON.stringify({ error:claim.error.message }), { status, headers:{ 'content-type':'application/json' } })
+    }
+    if (!claim.claimed) return new Response(JSON.stringify({ accepted:true, recovered:true, state:claim.status?.state || claim.job.state }), { status:202, headers:{ 'content-type':'application/json' } })
+    const job = claim.job
+    let heartbeatError = null
+    const heartbeat = setInterval(() => {
+      sources.heartbeatJob(jobId, session.member, workerId).catch(error => { heartbeatError = error })
+    }, Math.max(10_000, Math.floor(SERMON_JOB_LEASE_MS / 3)))
+    heartbeat.unref?.()
+    try {
+      const analyzed = sharedValue(await analyze(job.request || {}))
+      if (heartbeatError) throw heartbeatError
+      await sources.heartbeatJob(jobId, session.member, workerId)
+      const source = { ...(analyzed.source || {}), sourceHash:job.sourceHash }
+      const draft = await sources.saveDraft({
+        id:job.draftId,
+        sourceHash:job.sourceHash,
+        baseActiveVersion:job.baseActiveVersion,
+        baseActiveSourceHash:job.baseActiveSourceHash || '',
+        createdBy:session.member,
+        generatedAt:analyzed.generatedAt || now().toISOString(),
+        model:analyzed.model || '',
+        source,
+        sermonNotes:analyzed.sermonNotes,
+        formation:analyzed.formation,
+      })
+      await sources.completeJob(jobId, session.member, draft, workerId)
+    } catch (error) {
+      console.error('[sermon-formation-background]', error)
+      await sources.failJob(jobId, session.member, error, { workerId }).catch(failure => console.error('[sermon-formation-background status]', failure))
+    } finally {
+      clearInterval(heartbeat)
+    }
+    return new Response(JSON.stringify({ accepted:true }), { status:202, headers:{ 'content-type':'application/json' } })
   }
 }
 
-export const config={background:true,path:'/.netlify/functions/sermon-formation-background'}
+export default createSermonFormationBackgroundHandler()
+export const config = { background:true, path:'/.netlify/functions/sermon-formation-background' }

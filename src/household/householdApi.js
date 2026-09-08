@@ -30,21 +30,6 @@ export async function fetchDailyPlan(date) {
   }
 }
 
-export async function saveDailyPlan(plan) {
-  const normalized = normalizeDailyPlan(plan)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(`${ENDPOINT}?date=${encodeURIComponent(normalized.date)}`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: headers(),
-      body: JSON.stringify({ plan: normalized, expectedVersion: Number(normalized.version || 0) }),
-      signal: controller.signal,
-    })
-    const body = await parse(response)
-    return normalizeDailyPlan(body.plan)
-  } finally {
-    clearTimeout(timeout)
-  }
+export function saveDailyPlan() {
+  throw Object.assign(new Error('Direct daily-plan saves are disabled. Open Action Mode to review and apply this change.'), { code:'ACTION_REVIEW_REQUIRED' })
 }

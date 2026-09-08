@@ -1,24 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildUnifiedHouseholdIntelligence } from './householdIntelligence.js'
 import { SHARED_STATE_EVENT } from './sharedState.js'
+import { fetchEstateWorkspace } from '../estate/estateApi.js'
 import './HouseholdIntelligencePanel.css'
 
 const money = value => Number(value || 0).toLocaleString('en-US', { style:'currency', currency:'USD', maximumFractionDigits:0 })
 
 export default function HouseholdIntelligencePanel({ currentMember = 'Family', onOpenPillar }) {
   const [revision, setRevision] = useState(0)
-  const model = useMemo(() => buildUnifiedHouseholdIntelligence({ currentMember }), [currentMember, revision])
+  const [estateWorkspace,setEstateWorkspace]=useState(null)
+  const model = useMemo(() => buildUnifiedHouseholdIntelligence({ currentMember, estateWorkspace }), [currentMember, revision, estateWorkspace])
   useEffect(() => {
+    let active=true
+    fetchEstateWorkspace().then(value=>{if(active)setEstateWorkspace(value)}).catch(()=>{})
     const refresh = () => setRevision(value => value + 1)
     window.addEventListener('storage', refresh)
     window.addEventListener(SHARED_STATE_EVENT, refresh)
-    window.addEventListener('brevity-household-finance-updated', refresh)
     window.addEventListener('brevity-family-calendar-updated', refresh)
     return () => {
       window.removeEventListener('storage', refresh)
       window.removeEventListener(SHARED_STATE_EVENT, refresh)
-      window.removeEventListener('brevity-household-finance-updated', refresh)
       window.removeEventListener('brevity-family-calendar-updated', refresh)
+      active=false
     }
   }, [])
   const open = action => onOpenPillar?.(action === 'finance' ? 'finance' : 'household')

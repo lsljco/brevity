@@ -5,7 +5,7 @@ const makeCommitment = (planDate, prefix) => createPlanItem({
   id: `${prefix}-${crypto.randomUUID()}`,
   date: planDate,
   owner: 'Family',
-  calendarSync: true,
+  calendarSync: false,
 })
 
 export default function TimedCommitmentsEditor({ items = [], planDate, prefix = 'commitment', onChange }) {
@@ -24,7 +24,7 @@ export default function TimedCommitmentsEditor({ items = [], planDate, prefix = 
       </select>
       <label className="timed-calendar-toggle">
         <input type="checkbox" checked={Boolean(item.calendarSync)} onChange={event => updateItem(item.id, { calendarSync: event.target.checked })} />
-        <span>Calendar</span>
+        <span>Calendar intent</span>
       </label>
       <button type="button" className="timed-remove" onClick={() => removeItem(item.id)} aria-label={`Remove ${item.title || 'commitment'}`}><i className="ti ti-x" /></button>
     </div>)}

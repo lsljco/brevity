@@ -1346,6 +1346,23 @@ select option { background: var(--graphite); color: var(--white); }
 
 /* ── Non-dashboard views ─────────────────────────────── */
 .finance-inner { padding: 28px 32px; }
+.finance-access-shell { min-width: 0; }
+.finance-read-only-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 28px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(197,164,109,.32);
+  border-radius: 12px;
+  background: rgba(197,164,109,.09);
+  color: var(--soft-white);
+}
+.finance-read-only-notice > i { color: var(--gold); margin-top: 2px; }
+.finance-read-only-notice strong,
+.finance-read-only-notice span { display: block; }
+.finance-read-only-notice strong { font-size: 13px; }
+.finance-read-only-notice span { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 
 .dash-grid {
   display: grid;
@@ -1358,10 +1375,10 @@ select option { background: var(--graphite); color: var(--white); }
 
 /* ── Responsive ─────────────────────────────────────── */
 @media (max-width: 1200px) {
-  .transaction-list-controls { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .transaction-list-controls { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 }
 @media (max-width: 900px) {
-  .transaction-list-controls { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .transaction-list-controls { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .app-sidebar { width: 60px; min-width: 60px; }
   .app-sidebar.is-expanded { width: 240px; min-width: 240px; }
   .sidebar-nav-item span, .sidebar-footer-item span,
@@ -1379,7 +1396,14 @@ select option { background: var(--graphite); color: var(--white); }
   .app-main::before { left: 60px; }
 }
 @media (max-width: 640px) {
-  .transaction-list-controls { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .transaction-list-controls { grid-template-columns: 1fr !important; }
+  .finance-reconciliation {
+    margin-inline: 12px !important;
+    padding: 15px 13px !important;
+  }
+  .finance-reconciliation-rows {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
   .metric-value { font-size: 20px; }
   .external-site-toolbar { align-items: flex-start; padding: 14px; }
   .external-site-toolbar h1 { font-size: 21px; }
@@ -1390,4 +1414,5 @@ select option { background: var(--graphite); color: var(--white); }
   .settings-page { padding: 28px 16px !important; }
   .settings-card-row { align-items: flex-start !important; flex-direction: column !important; }
   .settings-card-row > button { width: 100%; min-height: 44px; font-size: 15px !important; }
+  .finance-read-only-notice { margin-inline: 12px; }
 }

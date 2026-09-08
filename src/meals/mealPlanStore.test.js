@@ -4,10 +4,19 @@ import { createMealPlanRepository } from '../../netlify/lib/meal-plan-store.mjs'
 
 function memoryStore() {
   const records = new Map()
+  const etags = new Map()
+  let sequence = 0
   return {
     records,
-    async get(key) { return records.get(key) || null },
-    async setJSON(key, value) { records.set(key, structuredClone(value)) },
+    async get(key) { return structuredClone(records.get(key) || null) },
+    async getWithMetadata(key) { return records.has(key) ? { data:structuredClone(records.get(key)), etag:etags.get(key) } : null },
+    async setJSON(key, value, options = {}) {
+      if (options.onlyIfNew && records.has(key)) return { modified:false, etag:etags.get(key) }
+      if (options.onlyIfMatch && options.onlyIfMatch !== etags.get(key)) return { modified:false, etag:etags.get(key) }
+      const etag=`etag-${++sequence}`
+      records.set(key, structuredClone(value));etags.set(key,etag)
+      return { modified:true, etag }
+    },
   }
 }
 
@@ -34,7 +43,7 @@ test('read-only meal windows never create missing records', async () => {
   assert.equal(memory.size, 0)
 })
 
-test('substitution is category-safe, versioned and audited', async () => {
+test('legacy direct substitutions cannot bypass Action Mode review', async () => {
   const store = memoryStore()
   const repository = createMealPlanRepository({
     store,
@@ -44,30 +53,15 @@ test('substitution is category-safe, versioned and audited', async () => {
   const plan = await repository.getWindow({ startDate: '2026-08-24' })
   const current = plan.days[0]
   const alternate = plan.library.find(meal => meal.mealType === 'dinner' && meal.id !== current.meals.dinner)
-  const updated = await repository.substitute({
-    date: current.date,
-    mealType: 'dinner',
-    mealId: alternate.id,
-    expectedVersion: current.version,
-    actor: 'Larry',
-  })
-
-  assert.equal(updated.version, 2)
-  assert.equal(updated.resolvedMeals.dinner.id, alternate.id)
-  assert.equal(updated.substitutions.dinner.changedBy, 'Larry')
-  assert.equal(store.records.get('lslj-family/audit/2026-08-24/audit-1').previousMealId, current.meals.dinner)
+  await assert.rejects(repository.substitute({ date:current.date,mealType:'dinner',mealId:alternate.id,expectedVersion:current.version,actor:'Larry' }),error=>error.code==='REVIEW_REQUIRED')
+  assert.equal((await repository.getDay(current.date)).meals.dinner,current.meals.dinner)
 })
 
-test('stale substitutions cannot overwrite a newer household choice', async () => {
+test('concurrent rolling-day initialization converges on one conditionally created record', async () => {
   const store = memoryStore()
   const repository = createMealPlanRepository({ store, now: () => new Date('2026-08-24T16:00:00.000Z') })
-  const plan = await repository.getWindow({ startDate: '2026-08-24' })
-  const current = plan.days[0]
-  const alternate = plan.library.find(meal => meal.mealType === 'lunch' && meal.id !== current.meals.lunch)
-  await repository.substitute({ date: current.date, mealType: 'lunch', mealId: alternate.id, expectedVersion: 1 })
-
-  await assert.rejects(
-    repository.substitute({ date: current.date, mealType: 'lunch', mealId: alternate.id, expectedVersion: 1 }),
-    error => error.code === 'VERSION_CONFLICT',
-  )
+  const [first,second]=await Promise.all([repository.ensureDay('2026-08-24'),repository.ensureDay('2026-08-24')])
+  assert.deepEqual(second,first)
+  assert.equal(store.records.size,1)
+  assert.equal(first.version,1)
 })

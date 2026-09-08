@@ -6,11 +6,12 @@ const householdTodaySource = readFileSync(new URL('./HouseholdToday.jsx', import
 const dashboardSource = readFileSync(new URL('./TodayDashboard.jsx', import.meta.url), 'utf8')
 const alignmentSource = readFileSync(new URL('./MorningAlignment.jsx', import.meta.url), 'utf8')
 
-test('alignment loads and saves the next daily plan instead of today', () => {
+test('alignment loads the next daily plan and stages its exact reviewed version', () => {
   assert.match(householdTodaySource, /useDailyPlan\(alignmentDate\)/)
   assert.match(householdTodaySource, /plan=\{alignmentPlanWithMeals\}/)
-  assert.match(householdTodaySource, /onSaveDraft=\{saveAlignmentPlan\}/)
-  assert.match(householdTodaySource, /persistAndSync\(nextPlan, saveAlignmentPlan\)/)
+  assert.match(householdTodaySource, /buildAlignmentOperations\(original, nextPlan, \{ completedAt \}\)/)
+  assert.match(householdTodaySource, /expectedVersion \}/)
+  assert.doesNotMatch(householdTodaySource, /onSaveDraft|saveAlignmentPlan|persistAndSync/)
 })
 
 test('the dashboard and alignment screen identify tomorrow as the target', () => {
@@ -20,13 +21,14 @@ test('the dashboard and alignment screen identify tomorrow as the target', () =>
   assert.match(alignmentSource, /formatDailyPlanDate\(draft\.date\)/)
 })
 
-test('today alignment is a separate action that saves only today’s plan', () => {
+test('today alignment is a separate reviewed action scoped only to today', () => {
   assert.match(dashboardSource, /Start Today’s Alignment/)
   assert.match(dashboardSource, /Adjust Today’s Alignment/)
   assert.match(householdTodaySource, /mode === 'today-alignment'/)
   assert.match(householdTodaySource, /timing="today" plan=\{planWithMeals\}/)
-  assert.match(householdTodaySource, /onSaveDraft=\{savePlan\}/)
   assert.match(householdTodaySource, /onComplete=\{completeTodayAlignment\}/)
+  assert.match(householdTodaySource, /stageDailyPlanReview/)
+  assert.doesNotMatch(householdTodaySource, /savePlan\(/)
   assert.match(alignmentSource, /Today’s Alignment/)
   assert.match(alignmentSource, /These updates apply only to today/)
 })

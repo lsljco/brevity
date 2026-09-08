@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildRefreshIssues } from './appRefresh.js'
+import { applicationRefreshDate, buildRefreshIssues } from './appRefresh.js'
+
+test('application refresh requests the authoritative household date across UTC boundaries', () => {
+  assert.equal(applicationRefreshDate(new Date('2026-09-07T02:30:00.000Z')), '2026-09-06')
+  assert.equal(applicationRefreshDate(new Date('2026-09-07T04:30:00.000Z')), '2026-09-07')
+})
 
 test('refresh issues identify their source and remain separate from daily decisions', () => {
   const issues=buildRefreshIssues({

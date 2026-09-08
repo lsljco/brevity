@@ -5,6 +5,7 @@ import SpiritualFormationStudio from './SpiritualFormationStudio.jsx'
 import HealthAlertBanner from './HealthAlertBanner.jsx'
 import { compactEditableLines, compactTitledItems, joinEditableLines, splitEditableLines } from './lineEditing.js'
 import { formatDailyPlanDate } from './alignmentDate.js'
+import { loadLocalAlignmentDraft, saveLocalAlignmentDraft } from './dailyPlanLocalDraft.js'
 import './MorningAlignment.css'
 import './MorningAlignmentAutosave.css'
 
@@ -90,7 +91,7 @@ function HouseholdStep({ draft, update }) {
   const value = draft.household
   return <div className="alignment-form-grid">
     <Field label="Today's Top Household Outcomes" hint="One outcome per line"><textarea value={joinLines(value.priorities.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { priorities: splitLines(e.target.value).map((title, index) => ({ id: `household-priority-${index}`, title, owner: 'Larry', status: 'pending' })) })} /></Field>
-    <Field label="Appointments" hint="Add date/time and keep Calendar on only when an Apple alert is useful">
+    <Field label="Appointments" hint="Calendar marks intent only; publishing an Apple event requires its own reviewed Calendar action.">
       <TimedCommitmentsEditor items={value.appointments} planDate={draft.date} prefix="appointment" onChange={appointments => update('household', { appointments })} />
     </Field>
     <Field label="Errands"><textarea value={joinLines(value.errands)} onChange={e => update('household', { errands: splitLines(e.target.value) })} /></Field>
@@ -124,7 +125,7 @@ function MinistryStep({ draft, update }) {
   const value = draft.ministry
   return <div className="alignment-form-grid">
     <Field label="Content / teaching focus"><textarea value={value.contentFocus} onChange={e => update('ministry', { contentFocus: e.target.value })} /></Field>
-    <Field label="Meetings / ministry commitments" hint="Only keep Calendar enabled for fixed-time commitments">
+    <Field label="Meetings / ministry commitments" hint="Calendar marks intent only; publishing an Apple event requires its own reviewed Calendar action.">
       <TimedCommitmentsEditor items={value.meetings} planDate={draft.date} prefix="ministry-meeting" onChange={meetings => update('ministry', { meetings })} />
     </Field>
     <Field label="Fellowship follow-ups"><textarea value={joinLines(value.fellowshipFollowUps.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('ministry', { fellowshipFollowUps: splitLines(e.target.value).map((title, index) => ({ id: `fellowship-${index}`, title, status: 'pending' })) })} /></Field>
@@ -134,53 +135,51 @@ function MinistryStep({ draft, update }) {
 
 const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
-export default function MorningAlignment({ plan, timing = 'tomorrow', onSaveDraft, onCancel, onComplete, onOpenMealPlan }) {
-  const [draft, setDraft] = useState(() => normalizeDailyPlan(plan))
+export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly = false, readOnlyMessage = '', financeReadOnly = false, onCancel, onComplete, onOpenMealPlan }) {
+  const openedVersionRef = useRef(Number(plan?.version || 0))
+  const [draft, setDraft] = useState(() => loadLocalAlignmentDraft(globalThis.localStorage, plan, openedVersionRef.current))
   const [stepIndex, setStepIndex] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [draftSaveState, setDraftSaveState] = useState('saved')
-  const autosaveReady = useRef(false)
   const exiting = useRef(false)
-  const saveChain = useRef(Promise.resolve())
-  const saveDraftRef = useRef(onSaveDraft)
-  const versionRef = useRef(Number(plan?.version || 0))
+  const protectedFinanceRef = useRef(normalizeDailyPlan(plan).finance)
   const [id, label, icon] = STEPS[stepIndex]
   const Step = STEP_COMPONENTS[id]
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100)
   const isToday = timing === 'today'
+  const stepReadOnly = readOnly || (id === 'finance' && financeReadOnly)
 
-  const update = (section, patch) => setDraft(current => ({ ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }))
+  const update = (section, patch) => {
+    if (readOnly || (section === 'finance' && financeReadOnly)) return
+    setDraft(current => ({ ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }))
+  }
   const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner'].filter(Boolean), [draft])
 
-  useEffect(() => { saveDraftRef.current = onSaveDraft }, [onSaveDraft])
-
   useEffect(() => {
+    if (readOnly) return
     if (exiting.current) return
-    if (!autosaveReady.current) { autosaveReady.current = true; return }
-    if (!saveDraftRef.current) return
     setDraftSaveState('pending')
     const snapshot = draft
     const timer = setTimeout(() => {
       if (exiting.current) return
-      setDraftSaveState('saving')
-      saveChain.current = saveChain.current
-        .catch(() => undefined)
-        .then(() => saveDraftRef.current({ ...snapshot, version: versionRef.current }))
-        .then(saved => { versionRef.current = Number(saved?.version || versionRef.current); setDraftSaveState('saved') })
-        .catch(err => { setDraftSaveState('error'); setError(err.message || 'Draft autosave failed.') })
-    }, 900)
+      try {
+        saveLocalAlignmentDraft(globalThis.localStorage, snapshot, openedVersionRef.current)
+        setDraftSaveState('saved')
+      } catch (err) {
+        setDraftSaveState('error')
+        setError(err.message || 'This device could not retain the local alignment draft.')
+      }
+    }, 500)
     return () => clearTimeout(timer)
-  }, [draft])
+  }, [draft, readOnly])
 
   const saveAndExit = async () => {
-    if (!saveDraftRef.current) { onCancel(); return }
+    if (readOnly) { onCancel(); return }
     exiting.current = true
     setSaving(true); setError('')
     try {
-      await saveChain.current.catch(() => undefined)
-      const saved = await saveDraftRef.current({ ...draft, version: versionRef.current })
-      versionRef.current = Number(saved?.version || versionRef.current)
+      saveLocalAlignmentDraft(globalThis.localStorage, draft, openedVersionRef.current)
       onCancel()
     } catch (err) {
       exiting.current = false
@@ -190,12 +189,18 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', onSaveDraf
   }
 
   const finish = async () => {
+    if (readOnly) { onCancel(); return }
     exiting.current = true
     setSaving(true); setError('')
     try {
-      await saveChain.current.catch(() => undefined)
       const cleanedDraft = cleanLineLists(draft)
-      await onComplete({ ...cleanedDraft, version: versionRef.current, morningAlignment: { ...cleanedDraft.morningAlignment, completedAt: new Date().toISOString() } })
+      if (financeReadOnly) cleanedDraft.finance = protectedFinanceRef.current
+      const completedAt = new Date().toISOString()
+      saveLocalAlignmentDraft(globalThis.localStorage, cleanedDraft, openedVersionRef.current)
+      await onComplete(cleanedDraft, { expectedVersion:openedVersionRef.current, completedAt })
+      exiting.current = false
+      setSaving(false)
+      setDraftSaveState('reviewing')
     } catch (err) {
       exiting.current = false
       setError(err.message || 'Could not complete household alignment.')
@@ -206,21 +211,25 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', onSaveDraf
   return <div className="morning-alignment">
     <header className="morning-alignment-header">
       <div><span>Seven Pillars · {formatDailyPlanDate(draft.date)}</span><h1>{isToday ? 'Today’s Alignment' : 'Next-Day Alignment'}</h1><p>{isToday ? 'Adjust today’s direction as circumstances change. These updates apply only to today.' : 'Set tomorrow’s direction the day before—before food, fitness, errands, or outside activity begins.'}</p></div>
-      <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${draftSaveState}`}>{draftSaveState==='pending'?'Changes pending':draftSaveState==='saving'?'Saving…':draftSaveState==='error'?'Save needs attention':'Draft saved'}</span><button type="button" disabled={saving} onClick={saveAndExit}>Save &amp; Exit</button></div>
+      <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${readOnly ? 'readonly' : draftSaveState}`}>{readOnly?'View only':draftSaveState==='pending'?'Saving on this device…':draftSaveState==='reviewing'?'Review opened · draft retained':draftSaveState==='error'?'Local draft needs attention':'Draft saved on this device'}</span><button type="button" disabled={saving} onClick={readOnly ? onCancel : saveAndExit}>{readOnly ? 'Return to Today' : 'Save Local Draft & Exit'}</button></div>
     </header>
+    {readOnly && <div className="alignment-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>This alignment is view-only</strong><span>{readOnlyMessage || 'Plans & decisions permission is required to change the shared household plan.'}</span></div></div>}
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
     <nav className="alignment-step-nav" aria-label="Alignment progress">
       {STEPS.map(([stepId, stepLabel, stepIcon], index) => <button type="button" key={stepId} className={`${index === stepIndex ? 'is-active' : ''}${index < stepIndex ? ' is-complete' : ''}`} onClick={() => setStepIndex(index)}><i className={`ti ${stepIcon}`} /><span>{index + 1}</span><small>{stepLabel}</small></button>)}
     </nav>
     <section className="alignment-workspace">
       <div className="alignment-workspace-heading"><div className="alignment-step-icon"><i className={`ti ${icon}`} /></div><div><span>Pillar {stepIndex + 1} of {STEPS.length}</span><h2>{label}</h2></div></div>
-      <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} />
+      {id === 'finance' && financeReadOnly && !readOnly && <div className="alignment-read-only-notice alignment-read-only-notice--section" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Finance is view-only</strong><span>Only the household administrator can change financial details in Morning Alignment. You can continue editing every planning section your permission allows.</span></div></div>}
+      <fieldset className="alignment-step-fields" disabled={stepReadOnly} aria-disabled={stepReadOnly}>
+        <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} />
+      </fieldset>
     </section>
     {error && <div className="alignment-error">{error}</div>}
     <footer className="alignment-footer">
       <button type="button" className="alignment-secondary" disabled={stepIndex === 0 || saving} onClick={() => setStepIndex(i => i - 1)}>Previous</button>
       <div>{stepIndex === STEPS.length - 1 && unresolved.length > 0 && <span className="alignment-unresolved">Still open: {unresolved.join(' · ')}</span>}</div>
-      {stepIndex < STEPS.length - 1 ? <button type="button" className="alignment-primary" onClick={() => setStepIndex(i => i + 1)}>Next Pillar</button> : <button type="button" className="alignment-primary" disabled={saving} onClick={finish}>{saving ? 'Saving…' : 'Complete Alignment'}</button>}
+      {stepIndex < STEPS.length - 1 ? <button type="button" className="alignment-primary" onClick={() => setStepIndex(i => i + 1)}>Next Pillar</button> : readOnly ? <button type="button" className="alignment-primary" onClick={onCancel}>Return to Today</button> : <button type="button" className="alignment-primary" disabled={saving} onClick={finish}>{saving ? 'Opening review…' : 'Review & Complete Alignment'}</button>}
     </footer>
   </div>
 }

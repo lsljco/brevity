@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import { generateAndSaveDailyPlan } from '../lib/household-plan-generator.mjs';
+import { generateDailyPlanDraft } from '../lib/household-plan-generator.mjs';
+import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs';
 import householdAuth from './household-auth.js';
 
 const { readSession } = householdAuth;
@@ -13,25 +14,34 @@ function safeEqual(left, right) {
 async function authorized(request) {
   const cookie = request.headers.get('cookie') || '';
   const session = await readSession({ headers: { cookie } }).catch(() => null);
-  if (session) return true;
-  return safeEqual(request.headers.get('x-brevity-automation-key'), process.env.BREVITY_AUTOMATION_KEY);
+  if (session) return { session, automation:false };
+  return safeEqual(request.headers.get('x-brevity-automation-key'), process.env.BREVITY_AUTOMATION_KEY)
+    ? { session:null, automation:true }
+    : null;
 }
 
 export default async function handler(request) {
   try {
-    if (!(await authorized(request))) return new Response(JSON.stringify({ error: 'Sign in to generate a household plan.' }), { status: 401, headers: { 'content-type': 'application/json' } });
+    if (request.method !== 'POST') return new Response(JSON.stringify({ error:'Method not allowed.' }), { status:405, headers:{ 'content-type':'application/json' } });
+    const authorization = await authorized(request);
+    if (!authorization) return new Response(JSON.stringify({ error: 'Sign in to generate a household plan.' }), { status: 401, headers: { 'content-type': 'application/json' } });
+    if (authorization.session?.role !== 'admin' && !authorization.automation) {
+      const permissions = await productionAssistantActionRepository().getPermissions();
+      const canPlan = permissions?.[authorization.session.member]?.planning === true;
+      return new Response(JSON.stringify({ error:canPlan ? 'A generated daily-plan draft includes protected financial planning and requires household-administrator review.' : `Planning changes are not enabled for ${authorization.session.member}.`, domain:canPlan ? 'finance' : 'planning' }), { status:403, headers:{ 'content-type':'application/json' } });
+    }
     let body = {};
-    if (request.method === 'POST') body = await request.json().catch(() => ({}));
-    await generateAndSaveDailyPlan({
+    body = await request.json().catch(() => ({}));
+    await generateDailyPlanDraft({
       targetDate: body.date,
       targetWeekday: body.weekday,
-      overwrite: Boolean(body.overwrite),
       requestId: String(body.requestId || ''),
     });
-    return new Response(JSON.stringify({ accepted: true }), { status: 202, headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ accepted: true, authority:'draft-only' }), { status: 202, headers: { 'content-type': 'application/json' } });
   } catch (error) {
     console.error('[daily-household-plan-background]', error);
-    return new Response(JSON.stringify({ error: error.message || 'Daily plan generation failed.' }), { status: 500, headers: { 'content-type': 'application/json' } });
+    const status = error.code === 'VERSION_CONFLICT' ? 409 : 500;
+    return new Response(JSON.stringify({ error: error.message || 'Daily plan generation failed.' }), { status, headers: { 'content-type': 'application/json' } });
   }
 }
 

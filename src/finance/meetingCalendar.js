@@ -1,9 +1,10 @@
-import { FAMILY_CALENDAR_KEY, readJson, writeJson } from '../homehq/projectData.js'
+export const FINANCE_MEETINGS_KEY='brevity_finance_meetings_v1'
 
 const clean=value=>String(value||'').trim()
 const isoToday=()=>new Date().toISOString().slice(0,10)
 
 export function meetingActionCalendarEvent(action={}){
+  action=canonicalMeetingAction(action)
   const date=clean(action.due)||clean(action.meetingDate)||isoToday()
   const owner=clean(action.owner)||'Family'
   const participants=owner==='Family'?['Family']:[owner]
@@ -20,21 +21,26 @@ export function meetingActionCalendarEvent(action={}){
     members:participants,
     participants,
     calendarName:'Family',
-    calendarSyncEnabled:true,
+    calendarSyncEnabled:false,
     status:action.status||'open',
     priority:'normal',
-    notes:action.due?'Created from a Finance Meeting assignment.':'Created from a Finance Meeting assignment with no explicit due date; placed on the meeting date.',
-    updatedAt:new Date().toISOString(),
+    notes:action.due?'Derived from the authoritative Finance Meeting commitment.':'Derived from a Finance Meeting commitment with no explicit due date; shown on the meeting date.',
+    updatedAt:action.updatedAt||action.createdAt||'',
   }
 }
 
-export function syncMeetingActionToCalendar(storage,action){
-  if(!action?.id||!clean(action.text))return{ok:false,error:new Error('A valid finance meeting action is required.')}
-  const existing=readJson(storage,FAMILY_CALENDAR_KEY,[])
-  const events=Array.isArray(existing)?existing:[]
-  const nextEvent=meetingActionCalendarEvent(action)
-  const next=[...events.filter(event=>event.id!==nextEvent.id),nextEvent]
-  const result=writeJson(storage,FAMILY_CALENDAR_KEY,next)
-  if(result.ok&&typeof window!=='undefined')window.dispatchEvent(new CustomEvent('brevity-family-calendar-updated',{detail:next}))
-  return{...result,event:nextEvent,events:next}
+// Finance Meeting commitments have one authoritative record. Family Calendar
+// derives these entries at read time instead of maintaining a second mutable
+// copy that can drift after an edit, completion, or Undo.
+export function meetingActionsCalendarEvents(storage=localStorage){
+  let workspace
+  try{workspace=JSON.parse(storage?.getItem(FINANCE_MEETINGS_KEY)||'{}')}catch{return[]}
+  return (Array.isArray(workspace?.openActions)?workspace.openActions:[])
+    .filter(action=>action?.id&&clean(action.text)&&action.status!=='done')
+    .map(meetingActionCalendarEvent)
 }
+
+export function isLegacyMeetingCalendarCopy(event={}){
+  return event.source==='finance-meeting'||String(event.id||event.sourceId||'').startsWith('finance-action-')
+}
+import { canonicalMeetingAction } from './meetingNames.js'

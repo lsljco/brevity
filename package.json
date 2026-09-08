@@ -17,7 +17,7 @@
     "@netlify/blobs": "^10.7.9",
     "chart.js": "^4.4.1",
     "docx": "^9.5.1",
-    "mammoth": "^1.10.0",
+    "mammoth": "^1.12.2",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "plaid": "^42.2.0",

@@ -22,10 +22,10 @@ export function createEstateHandler({
   try {
     const session = await authenticate(event)
     if (!session) return response(401, { error: 'Sign in to access Estate records.' })
-    const repository = await repositoryFactory()
     const propertyId = String(event.queryStringParameters?.propertyId || MALBEC_PROPERTY_ID)
 
     if (event.httpMethod === 'GET') {
+      const repository = await repositoryFactory()
       const workspace = await repository.getWorkspace(propertyId)
       return response(200, { propertyId, workspace })
     }
@@ -35,21 +35,12 @@ export function createEstateHandler({
       if (Buffer.byteLength(event.body || '', 'utf8') > 5_000_000) return response(413, { error: 'This structured-data import is too large. Embedded files must be migrated through the Estate document pipeline.' })
       let body
       try { body = JSON.parse(event.body || '{}') } catch { return response(400, { error: 'Invalid JSON body.' }) }
-      const transformed = transform(body.backup, { propertyId, sourceInspection: body.sourceInspection })
-      if (body.commit !== true) return response(200, { dryRun: true, ...transformed })
-      if (!transformed.report.sourceInspection?.sourceChecksum) return response(400, { error: 'A verified source export checksum is required before import.' })
-      if (transformed.report.sourceInspection?.preparedChecksumVerified !== true) return response(400, { error: 'The structured migration payload must pass checksum verification before import.' })
-      if (transformed.report.validation?.recordCountMatches !== true) return response(400, { error: 'The inspected and transformed property record counts must reconcile before import.' })
-      if (Number(transformed.report.counts.workOrders || 0) + Number(transformed.report.counts.projects || 0) === 0) return response(400, { error: 'At least one maintenance or project record is required for the initial import.' })
-      if (transformed.report.sourceInspection?.blockingIssues?.length) return response(400, { error: transformed.report.sourceInspection.blockingIssues.join(' ') })
-      if (await repository.getWorkspace(propertyId)) return response(409, { error: 'Malbec Estate already has a durable workspace. Use reconciliation instead of replacing the existing import.' })
-      const saved = await repository.saveWorkspace({
-        workspace: transformed.workspace,
-        expectedVersion: body.expectedVersion,
-        actor: session.member,
-        reason: 'estate.malbec-imported',
+      if (body.commit === true) return response(423, {
+        code: 'ACTION_REVIEW_REQUIRED',
+        error: 'Creating or replacing Estate records is unavailable in this release because the import is not yet protected by Action Mode review, audit history, safe Undo, and version-conflict recovery. No Estate records were changed.',
       })
-      return response(201, { dryRun: false, workspace: saved, report: transformed.report })
+      const transformed = transform(body.backup, { propertyId, sourceInspection: body.sourceInspection })
+      return response(200, { dryRun: true, ...transformed })
     }
 
     return response(405, { error: 'Method not allowed.' })

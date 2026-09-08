@@ -34,7 +34,7 @@ export function findPossibleRecurringDuplicates(transactions = []) {
 }
 
 export function summarizeActualActivity(transactions = []) {
-  const rows = transactions.filter(transaction => !isTransferTransaction(transaction))
+  const rows = transactions.filter(transaction => !transaction?.pending && !isTransferTransaction(transaction))
   const expenses = rows.filter(transaction => transactionDirection(transaction) === 'expense')
   const income = rows.filter(transaction => transactionDirection(transaction) === 'income')
   const spent = expenses.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount) || 0), 0)

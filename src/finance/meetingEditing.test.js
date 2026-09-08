@@ -5,18 +5,33 @@ import { readFileSync } from 'node:fs'
 const app=readFileSync(new URL('../App.jsx',import.meta.url),'utf8')
 const planner=readFileSync(new URL('./FinancePlanner.jsx',import.meta.url),'utf8')
 const meetings=readFileSync(new URL('./FinanceMeetingsWorkspace.jsx',import.meta.url),'utf8')
+const assistant=readFileSync(new URL('../assistant/BrevityAssistant.jsx',import.meta.url),'utf8')
+const meetingReview=readFileSync(new URL('./meetingActionReview.js',import.meta.url),'utf8')
+const actionExecutor=readFileSync(new URL('../../netlify/lib/assistant-action-executor.mjs',import.meta.url),'utf8')
+const actionFunction=readFileSync(new URL('../../netlify/functions/brevity-assistant-actions.mjs',import.meta.url),'utf8')
 const { canonicalMeetingNameText }=await import('./meetingNames.js')
 
 test('finance greeting receives the authenticated household member',()=>{
   assert.match(app,/FinancePlanner[^>]+currentMember=\{currentMember\}/)
-  assert.match(planner,/\{getGreeting\(\)\}, \{currentMember\}/)
-  assert.doesNotMatch(planner,/\{getGreeting\(\)\}, Larry/)
+  assert.match(planner,/\{getHouseholdGreeting\(\)\}, \{currentMember\}/)
+  assert.doesNotMatch(planner,/\{getHouseholdGreeting\(\)\}, Larry/)
 })
 
-test('meeting-created text exposes editors and records the editing member',()=>{
-  for(const label of ['Commitment text','Correction name','Correction rationale','Meeting summary','Meeting notes','Meeting transcript','Brevity meeting summary'])assert.match(meetings,new RegExp(`aria-label="${label}"`))
-  assert.match(meetings,/updatedBy:currentMember/)
-  assert.match(meetings,/updatedAt:new Date\(\)\.toISOString\(\)/)
+test('meeting-created text exposes editors and routes saves through reviewed Action Mode',()=>{
+  for(const label of ['Commitment text','Correction name','Correction rationale','Correction source detail','Meeting summary','Meeting notes','Meeting transcript','Brevity meeting summary'])assert.match(meetings,new RegExp(`aria-label="${label}"`))
+  assert.match(meetings,/requestMeetingActionReview\(\{summary,operation\}\)/)
+  assert.match(meetings,/pendingReviewsRef\.current\.set\(proposal\.id,\{label,onApplied\}\)/)
+  assert.match(meetings,/pending\.onApplied\?\.\(\)/)
+  assert.match(meetings,/Preparing review…':'Review changes'/)
+  assert.match(meetingReview,/getAcknowledgedSharedStateVersion\(storage,FINANCE_MEETINGS_STORAGE_KEY\)/)
+  assert.match(actionFunction,/DIRECT_REVIEW_TYPES=new Set\(\[[^\]]*'meeting\.action\.update'/)
+  assert.match(actionExecutor,/updatedBy:context\.actor\|\|'Household member'/)
+})
+
+test('Action Mode renders extracted meeting records as reviewable fields',()=>{
+  assert.match(assistant,/Object\.entries\(item\)/)
+  assert.match(assistant,/actionFieldLabel\(field\).*actionFieldValue\(fieldValue\)/)
+  assert.doesNotMatch(assistant,/Array\.isArray\(value\)\?value\.join\(', '\)/)
 })
 
 test('meeting commitments repair known household-name transcription errors',()=>{
@@ -24,6 +39,17 @@ test('meeting commitments repair known household-name transcription errors',()=>
   assert.equal(canonicalMeetingNameText('Benjamin met Taran'),'Benjamin met Taran')
   assert.match(meetings,/HOUSEHOLD_MEMBERS\.map\(member=>/)
   assert.match(meetings,/SHARED_STATE_EVENT/)
+  assert.match(meetingReview,/const next=canonicalMeetingAction\(/)
+  assert.match(meetingReview,/next\.text=next\.text\.trim\(\);next\.owner=next\.owner\.trim\(\)/)
+})
+
+test('daily commitments are summarized once and edited in one authoritative list',()=>{
+  assert.match(meetings,/className="fm-kiss-card fm-commitments-summary"/)
+  assert.match(meetings,/href="#finance-decisions-assignments"/)
+  assert.match(meetings,/id="finance-decisions-assignments"/)
+  assert.match(meetings,/The authoritative list for reviewing and editing commitments\./)
+  assert.doesNotMatch(meetings,/openActions\.slice\(0,3\)\.map/)
+  assert.equal((meetings.match(/<Action key=/g)||[]).length,1)
 })
 
 test('finance defaults to the operating account and projected vision',()=>{
@@ -39,4 +65,44 @@ test('transaction filters use responsive non-overlapping columns',()=>{
   assert.match(planner,/@media \(max-width: 1120px\)[\s\S]*transaction-list-controls\.is-compact \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
   assert.match(planner,/@media \(max-width: 768px\)[\s\S]*transaction-list-controls\.is-compact \{ grid-template-columns: 1fr/)
   assert.doesNotMatch(planner,/className="transaction-list-controls"[^>]+gridTemplateColumns/)
+})
+
+test('finance meetings separate member planning edits from administrator financial edits',()=>{
+  assert.match(meetings,/currentMember='Household member',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly/)
+  assert.doesNotMatch(meetings,/localStorage\.setItem\(STORAGE_KEY/)
+  assert.doesNotMatch(meetings,/setWorkspace\(current=>/)
+  assert.match(meetings,/const setCadence=next=>\{setSelectedCadence\(next\);invalidateAnalysis\(\)\}/)
+  for(const mutation of ['appendTranscript','runSegment','startMeeting','endMeeting','saveRecording','importTranscript','addDecision','analyze','finalize']){
+    assert.match(meetings,new RegExp(`const ${mutation}=[\\s\\S]{0,100}if\\(meetingPlanningReadOnly`),`${mutation} must require planning access`)
+  }
+  assert.match(meetings,/const addCorrection=async\(\)=>\{\s*if\(financeReadOnly/)
+  assert.match(meetings,/if\(financeReadOnly&&\['meeting\.correction\.create','meeting\.correction\.update','meeting\.workspace\.update'\]\.includes\(operation\.type\)\)/)
+  assert.match(meetings,/!meetingPlanningReadOnly&&<div className="fm-header-actions"/)
+  assert.match(meetings,/!meetingPlanningReadOnly&&<div className="fm-form-grid"/)
+  assert.match(meetings,/!financeReadOnly&&<div className="fm-correction-grid"/)
+  assert.match(meetings,/!meetingPlanningReadOnly&&<section className="fm-capture"/)
+  assert.match(meetings,/!meetingPlanningReadOnly&&showReconcile&&<section className="fm-reconcile"/)
+  assert.match(meetings,/<Action[^>]+readOnly=\{meetingPlanningReadOnly\}/)
+  assert.match(meetings,/<CorrectionRow[^>]+readOnly=\{financeReadOnly\}/)
+  assert.match(meetings,/<HistoryRow[^>]+readOnly=\{meetingPlanningReadOnly\}/)
+})
+
+test('member Finance stays visible while only planning-authorized meeting narrative is editable',()=>{
+  assert.match(app,/Financial records are read-only for \{currentMember\}/)
+  assert.match(app,/<FinancePlanner[^>]+readOnly=\{auth\.role!=='admin'\}/)
+  assert.match(app,/meetingPlanningReadOnly=\{!canEditPlanning\}/)
+  assert.match(app,/planning access still allows reviewed edits to Finance Meeting narrative/)
+  assert.doesNotMatch(planner,/useEffect\(\(\) => \{\s*if \(readOnly\) return[\s\S]{0,300}persistSharedSourceImport\(localStorage, LS_KEY, candidate\)/)
+  assert.match(planner,/const fetchActuals = useCallback\(async \(\) => \{\s*if \(readOnly\)/)
+  assert.doesNotMatch(planner,/addDashboardProjectWithImage|updateDashboardProjectImage|localStorage\.setItem\('homehq_items_v1'/)
+  assert.match(planner,/Project images are view-only until reviewed image changes support Audit History and safe Undo/)
+  assert.match(planner,/\{!readOnly && <PlaidConnect/)
+  assert.match(planner,/\{!readOnly && view === 'tx-form'/)
+  assert.doesNotMatch(planner,/view === 'acct-form'/)
+  assert.match(planner,/\{!readOnly && selActualTx && \(/)
+  for(const child of ['DailyAlignment','ScenarioModeling','BudgetView','CalendarView']){
+    assert.match(planner,new RegExp(`<${child}[\\s\\S]{0,800}readOnly=\\{readOnly\\}`),`${child} must inherit Finance read-only state`)
+  }
+  assert.match(planner,/<DailyAlignment[\s\S]{0,300}financeReadOnly=\{readOnly\}/)
+  assert.match(planner,/<DailyAlignment[\s\S]{0,300}meetingPlanningReadOnly=\{meetingPlanningReadOnly\}/)
 })

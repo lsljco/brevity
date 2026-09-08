@@ -1,4 +1,5 @@
 const ENDPOINT = '/.netlify/functions/meal-plans'
+const ACTION_ENDPOINT = '/.netlify/functions/brevity-assistant-actions'
 const REQUEST_TIMEOUT_MS = 20000
 
 async function request(url, options = {}) {
@@ -23,10 +24,18 @@ export function fetchRollingMealPlan(startDate) {
   return request(`${ENDPOINT}${query}`)
 }
 
-export function substituteMeal({ date, mealType, mealId, expectedVersion }) {
-  return request(ENDPOINT, {
-    method: 'PUT',
+export function prepareMealSubstitution({ date, mealType, mealId, expectedVersion }) {
+  return request(`${ACTION_ENDPOINT}?action=prepare-meal`, {
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ date, mealType, mealId, expectedVersion }),
+  })
+}
+
+export function executeMealSubstitution(proposalId) {
+  return request(`${ACTION_ENDPOINT}?action=execute`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ proposalId, confirmed: true }),
   })
 }

@@ -2,10 +2,10 @@ import { useMemo } from 'react'
 import { buildCanonicalFinanceModel } from './financeDomain.js'
 import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
 
-export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},projection,currentMember='Household member'}){
+export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
   const today=useMemo(()=>new Date(),[])
   const model=useMemo(()=>{
-    const canonical=buildCanonicalFinanceModel({accounts,scheduled,cashFlowScheduled,actuals,budget,projection,today})
+    const canonical=buildCanonicalFinanceModel({accounts,scheduled,cashFlowScheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,projection,today})
     const {metrics,breakdowns,sources}=canonical
     const liveSnapshot={
       currentMonthlyNet:metrics.actualMonthlyNet,
@@ -21,8 +21,8 @@ export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlow
       monthForecast:metrics.monthForecast,
     }
     const drilldowns={
-      currentMonthlyNet:{label:'Actual monthly net cash flow',amount:metrics.actualMonthlyNet,note:'Posted month-to-date income minus posted month-to-date expenses. Transfers are excluded.',source:'Canonical Finance ledger',children:[{label:'Income',amount:metrics.actualMonthlyIncome,meta:'Posted this month · transfers excluded',children:breakdowns.actual.income},{label:'Expenses',amount:metrics.actualMonthlyExpenses,meta:'Posted this month · transfers excluded',children:breakdowns.actual.expenses}]},
-      actualMonthlyNet:{label:'Actual monthly net cash flow',amount:metrics.actualMonthlyNet,note:'Posted month-to-date income minus posted month-to-date expenses. Transfers are excluded.',source:'Canonical Finance ledger',children:[{label:'Income',amount:metrics.actualMonthlyIncome,children:breakdowns.actual.income},{label:'Expenses',amount:metrics.actualMonthlyExpenses,children:breakdowns.actual.expenses}]},
+      currentMonthlyNet:{label:'Actual monthly net cash flow',amount:metrics.actualMonthlyNet,note:'Posted month-to-date cash inflows minus posted expenses. Pending activity and transfers are excluded.',source:'Canonical Finance ledger',children:[{label:'Realized income',amount:metrics.actualMonthlyIncome,meta:'Posted this month · transfers excluded',children:breakdowns.actual.income},{label:'Refunds and other cash inflows',amount:metrics.actualMonthlyOtherInflows,meta:'Posted cash credits that are not earned income',children:breakdowns.actual.otherInflows},{label:'Posted expenses',amount:metrics.actualMonthlyExpenses,meta:'Posted this month · transfers excluded',children:breakdowns.actual.expenses}]},
+      actualMonthlyNet:{label:'Actual monthly net cash flow',amount:metrics.actualMonthlyNet,note:'Posted month-to-date cash inflows minus posted expenses. Pending activity and transfers are excluded.',source:'Canonical Finance ledger',children:[{label:'Realized income',amount:metrics.actualMonthlyIncome,children:breakdowns.actual.income},{label:'Refunds and other cash inflows',amount:metrics.actualMonthlyOtherInflows,children:breakdowns.actual.otherInflows},{label:'Posted expenses',amount:metrics.actualMonthlyExpenses,children:breakdowns.actual.expenses}]},
       projectedMonthlyNet:{label:'Projected monthly net cash flow',amount:metrics.projectedMonthlyNet,note:'All projected income minus all projected expenses for the calendar month. Transfers are excluded.',source:'Canonical Finance forecast',children:[{label:'Projected income',amount:metrics.projectedMonthlyIncome,children:breakdowns.projected.income},{label:'Projected expenses',amount:metrics.projectedMonthlyExpenses,children:breakdowns.projected.expenses}]},
       operatingAvailable:{label:'Available cash',amount:metrics.operatingAvailable,source:'Canonical Finance accounts',children:breakdowns.cashRows},
       operatingBalance:{label:'Current balance',amount:metrics.operatingBalance,source:'Canonical Finance accounts',children:breakdowns.cashRows},
@@ -35,8 +35,8 @@ export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlow
       recurringMonthForecast:{label:'Recurring-only monthly net',amount:metrics.recurringMonthlyNet,note:'Recurring scheduled income minus recurring scheduled expenses.',source:'Canonical recurring plan',children:[]},
     }
     return {liveSnapshot,drilldowns}
-  },[today,accounts,scheduled,cashFlowScheduled,actuals,budget,projection])
+  },[today,accounts,scheduled,cashFlowScheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,projection])
 
   const accountScope=useMemo(()=>!accounts.length?'No selected accounts':accounts.length===1?(accounts[0].name||accounts[0].accountName||'Selected account'):`${accounts.length} selected accounts`,[accounts])
-  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember}/>
+  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember} readOnly={readOnly} financeReadOnly={financeReadOnly} meetingPlanningReadOnly={meetingPlanningReadOnly}/>
 }

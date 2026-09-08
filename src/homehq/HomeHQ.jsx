@@ -5,11 +5,14 @@ import {
   normalizeProjectItem,
   parseProjectDate,
   projectDateKey,
-  publishProjectEvents,
   readJson,
-  writeJson,
 } from './projectData.js'
-import { syncProjectEventsToICloud } from './projectIcloudSync.js'
+import {
+  projectCreateOperation,
+  projectDeleteOperation,
+  projectUpdateOperation,
+  requestProjectActionReview,
+} from './projectActionReview.js'
 import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 
 const ROOMS      = ["Kitchen","Bathroom","Living Room","Bedroom","Basement","Garage","Exterior","Attic","Yard"];
@@ -24,6 +27,17 @@ const EMPTY_FORM = {
   bizLicense:false, coi:false, workersComp:false,
   notes:"", photos:[], files:[]
 };
+const newProjectForm = currentMember => ({
+  ...EMPTY_FORM,
+  raci:{
+    responsible:MEMBERS.includes(currentMember)?[currentMember]:[],
+    accountable:[],
+    consulted:[],
+    informed:[],
+  },
+  photos:[],
+  files:[],
+});
 
 // ── Glass card styles ────────────────────────────────────────────────────────
 const HQ_STYLES = `
@@ -75,6 +89,82 @@ const HQ_STYLES = `
     height: 1.5px;
     background: linear-gradient(90deg, transparent, rgba(197,164,109,0.45), transparent);
     pointer-events: none;
+  }
+  .hq-topbar {
+    min-width: 0;
+    position: relative !important;
+    top: auto !important;
+  }
+  .hq-topbar-actions,
+  .hq-content,
+  .hq-stats,
+  .hq-filters,
+  .hq-proj-grid,
+  .hq-modal-form { min-width: 0; }
+  .hq-proj-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)) !important;
+  }
+  .hq-project-costs { flex-wrap: wrap; }
+  .hq-modal-backdrop { z-index: 1700 !important; }
+  .hq-lightbox { z-index: 1800 !important; }
+  .hq-lightbox-header { z-index: 1801 !important; }
+  .hq-toast { z-index: 1750 !important; }
+  .hq-project-calendar-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  @media (max-width: 900px) {
+    .hq-topbar { flex-wrap: wrap; padding: 16px 20px !important; }
+    .hq-topbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+    .hq-content { padding: 20px !important; }
+    .hq-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+  }
+  @media (max-width: 640px) {
+    .hq-topbar { align-items: stretch !important; flex-direction: column; padding: 14px 16px !important; }
+    .hq-topbar-actions { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+    .hq-topbar-actions button { width: 100%; min-height: 44px; padding: 8px 10px !important; }
+    .hq-tabs { padding-inline: 12px !important; }
+    .hq-tabs > div { min-height: 48px; padding: 13px 15px !important; }
+    .hq-content { width: 100%; padding: 18px 14px calc(112px + env(safe-area-inset-bottom)) !important; }
+    .hq-stats { gap: 8px !important; }
+    .hq-stat-card { min-width: 0; padding: 13px 12px; }
+    .hq-filters > input,
+    .hq-filters > select { flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; }
+    .hq-project-card-actions button,
+    .hq-project-calendar-toolbar button { min-width: 44px !important; height: 44px !important; }
+    .hq-project-costs > div:last-child { margin-left: 0 !important; }
+    .hq-project-calendar-scroll { margin-inline: -2px; }
+    .hq-project-calendar-grid { min-width: 680px; }
+    .hq-modal-backdrop {
+      align-items: stretch !important;
+      padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)) !important;
+    }
+    .hq-modal-card {
+      max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))) !important;
+      padding: 22px 16px calc(20px + env(safe-area-inset-bottom)) !important;
+      border-radius: 16px !important;
+    }
+    .hq-modal-close { width: 44px !important; height: 44px !important; top: 8px !important; right: 8px !important; }
+    .hq-modal-form { grid-template-columns: minmax(0, 1fr) !important; }
+    .hq-modal-form > * { grid-column: auto !important; min-width: 0; }
+    .hq-room-fields { flex-direction: column; }
+    .hq-modal-footer { position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom)); padding: 12px 0 calc(20px + env(safe-area-inset-bottom)); background: rgba(12,12,12,.98); }
+    .hq-modal-footer button { flex: 1; min-height: 44px; padding-inline: 12px !important; }
+    .hq-attachment-row { flex-wrap: wrap; }
+    .hq-attachment-row > div { flex-basis: calc(100% - 44px); }
+    .hq-attachment-row > button,
+    .hq-attachment-row > a { display: inline-flex; min-width: 44px !important; min-height: 44px !important; align-items: center; justify-content: center; }
+    .hq-lightbox { padding: max(72px, calc(52px + env(safe-area-inset-top))) 12px calc(20px + env(safe-area-inset-bottom)) !important; }
+    .hq-lightbox-header { padding: max(14px, env(safe-area-inset-top)) 12px 12px !important; gap: 8px; }
+    .hq-lightbox-header button,
+    .hq-lightbox-header a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+    .hq-toast { left: 12px !important; right: 12px !important; bottom: calc(92px + env(safe-area-inset-bottom)) !important; text-align: center; }
+  }
+  @media (max-width: 380px) {
+    .hq-topbar-actions,
+    .hq-stats { grid-template-columns: minmax(0, 1fr) !important; }
   }
 `
 
@@ -190,8 +280,6 @@ function loadItems(){
   const items=readJson(localStorage,STORAGE_KEY,[]);
   return Array.isArray(items)?items.map(normalizeProjectItem):[];
 }
-function saveItems(items){ return writeJson(localStorage,STORAGE_KEY,items); }
-function uid(){ return "item-"+Date.now()+"-"+Math.random().toString(36).slice(2); }
 function fmtPhone(val){
   const d = val.replace(/\D/g,"").slice(0,10);
   if(d.length<=3) return d;
@@ -212,7 +300,7 @@ function roomLabel(item){
 }
 
 // ── GANTT ──────────────────────────────────────────────────────────────────
-function GanttView({items,onEdit}){
+function GanttView({items,onEdit,readOnly=false}){
   const [groupBy,setGroupBy]=useState("room");
   const [colorBy,setColorBy]=useState("status");
   const today=new Date(); today.setHours(0,0,0,0);
@@ -300,14 +388,14 @@ function GanttView({items,onEdit}){
                 const bc=barColor(item);
                 return(
                   <div key={item.id} style={{display:"flex",borderBottom:`1px solid rgba(255,255,255,0.04)`,minHeight:44,alignItems:"center"}}>
-                    <div onClick={()=>onEdit(item)} style={{width:LABEL_W,minWidth:LABEL_W,borderRight:`1px solid ${BORDER}`,padding:"8px 14px",fontSize:13,fontWeight:500,color:W,display:"flex",alignItems:"center",gap:6,cursor:"pointer",overflow:"hidden"}}>
+                    <div onClick={()=>{if(!readOnly)onEdit(item)}} style={{width:LABEL_W,minWidth:LABEL_W,borderRight:`1px solid ${BORDER}`,padding:"8px 14px",fontSize:13,fontWeight:500,color:W,display:"flex",alignItems:"center",gap:6,cursor:readOnly?"default":"pointer",overflow:"hidden"}}>
                       <span style={{width:9,height:9,borderRadius:"50%",background:bc,flexShrink:0}}/>
                       <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{item.title}</span>
                       {isOverdue&&<span title="Overdue" style={{color:RED,fontSize:11}}>!</span>}
                     </div>
                     <div style={{flex:1,position:"relative",height:44}}>
                       <div style={{position:"absolute",left:todayLeft,top:0,bottom:0,width:2,background:G,opacity:.25,pointerEvents:"none",zIndex:1}}/>
-                      <div onClick={()=>onEdit(item)} title={item.title+"\n"+item.due+"\n"+item.status} style={{position:"absolute",left:barLeft+4,top:"50%",transform:"translateY(-50%)",width:barW,height:24,background:bc,borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center",paddingLeft:8,fontSize:11,fontWeight:700,color:"rgba(0,0,0,0.85)",overflow:"hidden",whiteSpace:"nowrap",boxShadow:"0 2px 8px rgba(0,0,0,.4)",opacity:item.status==="Done"?.55:1,textDecoration:item.status==="Done"?"line-through":"none",border:isOverdue?`2px solid ${RED}`:"none",zIndex:2}}>
+                      <div onClick={()=>{if(!readOnly)onEdit(item)}} title={item.title+"\n"+item.due+"\n"+item.status} style={{position:"absolute",left:barLeft+4,top:"50%",transform:"translateY(-50%)",width:barW,height:24,background:bc,borderRadius:6,cursor:readOnly?"default":"pointer",display:"flex",alignItems:"center",paddingLeft:8,fontSize:11,fontWeight:700,color:"rgba(0,0,0,0.85)",overflow:"hidden",whiteSpace:"nowrap",boxShadow:"0 2px 8px rgba(0,0,0,.4)",opacity:item.status==="Done"?.55:1,textDecoration:item.status==="Done"?"line-through":"none",border:isOverdue?`2px solid ${RED}`:"none",zIndex:2}}>
                         {barW>70?item.title:""}
                       </div>
                     </div>
@@ -318,7 +406,7 @@ function GanttView({items,onEdit}){
           ))}
         </div>
       </div>
-      <div style={{marginTop:10,fontSize:12,color:W3}}>Click any task name or bar to edit. Items need a due date to appear here.</div>
+      <div style={{marginTop:10,fontSize:12,color:W3}}>{readOnly?'Items need a due date to appear here.':'Click any task name or bar to edit. Items need a due date to appear here.'}</div>
     </div>
   );
 }
@@ -420,7 +508,7 @@ function ContractorsView({items}){
 }
 
 // ── CALENDAR ───────────────────────────────────────────────────────────────
-function CalendarView({items, onEdit}){
+function CalendarView({items, onEdit, readOnly=false}){
   const today = new Date();
   const [viewYear,  setViewYear]  = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -457,7 +545,7 @@ function CalendarView({items, onEdit}){
 
   return(
     <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
+      <div className="hq-project-calendar-toolbar" style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:W}}>{monthNames[viewMonth]} {viewYear}</div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={prevMonth} style={navBtn}>‹</button>
@@ -475,14 +563,15 @@ function CalendarView({items, onEdit}){
         ))}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:2}}>
-        {dayNames.map(d=>(
-          <div key={d} style={{textAlign:"center",padding:"8px 0",fontSize:11,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:W3}}>{d}</div>
-        ))}
-      </div>
+      <div className="hq-project-calendar-scroll" tabIndex="0" aria-label="Project calendar; scroll horizontally on small screens">
+        <div className="hq-project-calendar-grid" style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:2}}>
+          {dayNames.map(d=>(
+            <div key={d} style={{textAlign:"center",padding:"8px 0",fontSize:11,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:W3}}>{d}</div>
+          ))}
+        </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
-        {cells.map((day,idx)=>{
+        <div className="hq-project-calendar-grid" style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+          {cells.map((day,idx)=>{
           if(!day) return <div key={idx} style={{minHeight:100,background:"transparent"}}/>;
           const dateStr = viewYear+"-"+String(viewMonth+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
           const dayItems = dateMap[dateStr]||[];
@@ -506,9 +595,9 @@ function CalendarView({items, onEdit}){
                 const itemCost = parseFloat(item.actcost)||parseFloat(item.estcost)||0;
                 const isAct = parseFloat(item.actcost)>0;
                 return(
-                  <div key={item.id} onClick={()=>onEdit(item)}
+                  <div key={item.id} onClick={()=>{if(!readOnly)onEdit(item)}}
                     title={item.title}
-                    style={{background:TYPE_BG[item.type]||GLASS2,borderLeft:`2px solid `+(TYPE_COLOR[item.type]||W3),borderRadius:"0 4px 4px 0",padding:"4px 6px",fontSize:13,cursor:"pointer",lineHeight:1.4}}>
+                    style={{background:TYPE_BG[item.type]||GLASS2,borderLeft:`2px solid `+(TYPE_COLOR[item.type]||W3),borderRadius:"0 4px 4px 0",padding:"4px 6px",fontSize:13,cursor:readOnly?"default":"pointer",lineHeight:1.4}}>
                     <div style={{fontWeight:700,color:TYPE_COLOR[item.type]||W,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.title}</div>
                     {itemCost>0&&(
                       <div style={{fontWeight:600,color:isAct?GREEN:G,fontSize:13}}>
@@ -520,15 +609,16 @@ function CalendarView({items, onEdit}){
               })}
             </div>
           );
-        })}
+          })}
+        </div>
       </div>
-      <div style={{marginTop:12,fontSize:12,color:W3}}>Click any item to edit. Items appear on their due date.</div>
+      <div style={{marginTop:12,fontSize:12,color:W3}}>{readOnly?'Items appear on their due date.':'Click any item to edit. Items appear on their due date.'}</div>
     </div>
   );
 }
 
 // ── MAIN APP ───────────────────────────────────────────────────────────────
-function App(){
+function App({readOnly=false,canDelete=false,currentMember=''}){
   const [items,setItems]         = useState(loadItems);
   const [tab,setTab]             = useState("all");
   const [search,setSearch]       = useState("");
@@ -542,12 +632,15 @@ function App(){
   const [form,setForm]           = useState(EMPTY_FORM);
   const [lightbox,setLightbox]   = useState(null);
   const [toast,setToast]         = useState("");
-  const fileRef   = useRef();
-  const fileRef2  = useRef();
-  const importRef = useRef();
+  const [stagingAction,setStagingAction] = useState(false);
   const toastTmr  = useRef();
 
-  useEffect(()=>{ saveItems(items); },[items]);
+  useEffect(()=>{
+    if(!readOnly)return;
+    setModal(false);
+    setEditId(null);
+    setForm(EMPTY_FORM);
+  },[readOnly]);
   useEffect(()=>{
     const receiveSharedUpdate=event=>{
       if(!event.detail?.keys?.includes(STORAGE_KEY))return;
@@ -558,81 +651,41 @@ function App(){
   },[]);
 
   function showToast(msg){ setToast(msg); clearTimeout(toastTmr.current); toastTmr.current=setTimeout(()=>setToast(""),3000); }
-  function openAdd(){ setEditId(null); setForm(EMPTY_FORM); setModal(true); }
+  function denyWrite(){ showToast("Projects are read-only for this household member"); }
+  function openAdd(){ if(readOnly){denyWrite();return;} setEditId(null); setForm(newProjectForm(currentMember)); setModal(true); }
   function openEdit(item){
+    if(readOnly){denyWrite();return;}
     const normalized=normalizeProjectItem(item);
     setEditId(item.id);
     setForm({...EMPTY_FORM,...normalized,raci:normalized.raci,photos:item.photos||[],files:item.files||[]});
     setModal(true);
   }
 
-  function saveItem(){
+  async function saveItem(){
+    if(readOnly){denyWrite();return;}
     if(!form.title.trim()){ showToast("Title is required"); return; }
-    const now=new Date().toISOString();
     const cleaned=normalizeProjectItem({...form,estcost:fmtCost(form.estcost),actcost:fmtCost(form.actcost)});
-    if(cleaned.pushToFamilyCalendar&&!cleaned.startDate&&!cleaned.due){ showToast("Add a start or due date before publishing to Family Calendar"); return; }
-    let nextItems;
-    if(editId){
-      nextItems=items.map(i=>i.id===editId?{...cleaned,id:editId,updatedAt:now}:i);
-      showToast("Item updated");
-    } else {
-      nextItems=[{...cleaned,id:uid(),createdAt:now,updatedAt:now},...items];
-      showToast("Item added");
-    }
-    const saved=saveItems(nextItems);
-    if(!saved.ok){ showToast("Change not saved — browser storage error"); return; }
-    const published=publishProjectEvents(localStorage,nextItems);
-    if(!published.ok){ showToast("Project saved, but Family Calendar could not be updated"); return; }
-    setItems(nextItems);
-    setModal(false);
-    if(nextItems.some(item=>item.pushToFamilyCalendar)) syncProjectEventsToICloud(nextItems).catch(()=>showToast("Project saved; Apple Calendar sync needs attention"));
-  }
-
-  async function pushAllProjectEvents(){
-    const eligible=items.filter(item=>item.startDate||item.due);
-    if(!eligible.length){ showToast("Add dates to a project before publishing"); return; }
-    const next=items.map(item=>(item.startDate||item.due)?{...item,pushToFamilyCalendar:true}:item);
-    if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Project events could not be published"); return; }
-    setItems(next);
+    const current=editId?items.find(item=>item.id===editId):null;
+    setStagingAction(true);
     try{
-      await syncProjectEventsToICloud(next);
-      showToast(`${eligible.length} project event${eligible.length===1?'':'s'} pushed to Family Calendar and Apple`);
-    }catch{
-      showToast("Family Calendar updated; Apple Calendar sync needs attention");
-    }
+      const operation=editId?projectUpdateOperation(current,cleaned):projectCreateOperation(cleaned);
+      const summary=editId?`Review changes to ${current.title}`:`Review new project ${cleaned.title}`;
+      await requestProjectActionReview({summary,operation});
+      setModal(false);
+      showToast("Action Mode review opened. No project data has changed yet.");
+    }catch(error){showToast(error?.message||"Project review could not be prepared. Refresh Projects and try again.");}
+    finally{setStagingAction(false);}
   }
 
-  function deleteItem(id){
-    if(!window.confirm("Delete this item?")) return;
-    const next=items.filter(i=>i.id!==id);
-    if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Delete could not be saved"); return; }
-    setItems(next); showToast("Deleted");
-    syncProjectEventsToICloud(next).catch(()=>showToast("Project deleted; Apple Calendar sync needs attention"));
-  }
-
-  function removeStoredAsset(id, field, index){
-    const next=items.map(item=>item.id===id?{...item,[field]:(item[field]||[]).filter((_,assetIndex)=>assetIndex!==index),updatedAt:new Date().toISOString()}:item);
-    if(!saveItems(next).ok||!publishProjectEvents(localStorage,next).ok){ showToast("Attachment change could not be saved"); return; }
-    setItems(next);
-    showToast(field==="photos"?"Photo removed":"Attachment removed");
-  }
-
-  function handlePhoto(e){
-    Array.from(e.target.files).forEach(f=>{
-      const r=new FileReader();
-      r.onload=ev=>setForm(p=>({...p,photos:[...(p.photos||[]),ev.target.result]}));
-      r.readAsDataURL(f);
-    });
-    e.target.value="";
-  }
-
-  function handleFile(e){
-    Array.from(e.target.files).forEach(f=>{
-      const r=new FileReader();
-      r.onload=ev=>setForm(p=>({...p,files:[...(p.files||[]),{name:f.name,size:f.size,type:f.type,data:ev.target.result}]}));
-      r.readAsDataURL(f);
-    });
-    e.target.value="";
+  async function deleteItem(item){
+    if(readOnly){denyWrite();return;}
+    if(!canDelete){showToast("Only a household administrator can delete a project.");return;}
+    setStagingAction(true);
+    try{
+      await requestProjectActionReview({summary:`Review deletion of ${item.title}`,operation:projectDeleteOperation(item)});
+      showToast("Action Mode review opened. The project has not been deleted.");
+    }catch(error){showToast(error?.message||"Project deletion review could not be prepared. Refresh Projects and try again.");}
+    finally{setStagingAction(false);}
   }
 
   function exportData(){
@@ -640,23 +693,6 @@ function App(){
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
     a.download="Projects-backup-"+new Date().toISOString().slice(0,10)+".json"; a.click();
     showToast("Exported");
-  }
-
-  function importData(e){
-    const f=e.target.files[0]; if(!f) return;
-    const r=new FileReader();
-    r.onload=ev=>{
-      try{
-        const data=JSON.parse(ev.target.result);
-        if(!Array.isArray(data)) throw new Error();
-        if(window.confirm("Import "+data.length+" items? This will replace your current data.")){
-          const normalized=data.map(normalizeProjectItem);
-          if(!saveItems(normalized).ok||!publishProjectEvents(localStorage,normalized).ok){ showToast("Import could not be saved"); return; }
-          setItems(normalized); showToast("Imported "+normalized.length+" items");
-        }
-      }catch(err){ showToast("Invalid file"); }
-    };
-    r.readAsText(f); e.target.value="";
   }
 
   const assignees=[...new Set(items.flatMap(i=>i.raci?.responsible||[]).filter(Boolean))];
@@ -684,32 +720,34 @@ function App(){
       <style>{HQ_STYLES}</style>
 
       {/* HEADER */}
-      <div style={{background:"rgba(0,0,0,0.92)",borderBottom:`1px solid ${BORDER}`,padding:"18px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(20px)"}}>
+      <div className="hq-topbar" style={{background:"rgba(0,0,0,0.92)",borderBottom:`1px solid ${BORDER}`,padding:"18px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(20px)"}}>
         <div>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:500,color:W,letterSpacing:-.5}}>Projects</div>
           <div style={{fontSize:11,color:W3,letterSpacing:2,textTransform:"uppercase",marginTop:2}}>Property Management</div>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>importRef.current.click()} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer",fontSize:12,fontWeight:600,background:GLASS,color:W2}}>Import</button>
-          <input ref={importRef} type="file" accept=".json" style={{display:"none"}} onChange={importData}/>
+        <div className="hq-topbar-actions" style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button type="button" disabled title="Project import is unavailable until a reviewed, auditable batch-restore workflow is supported." style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:GLASS,color:W3}}>Import unavailable</button>
           <button onClick={exportData} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer",fontSize:12,fontWeight:600,background:GLASS,color:W2}}>Export</button>
-          <button onClick={pushAllProjectEvents} style={{padding:"8px 14px",borderRadius:8,border:`1px solid rgba(197,164,109,0.3)`,cursor:"pointer",fontSize:12,fontWeight:600,background:"rgba(197,164,109,0.09)",color:G}}>Push Project Events</button>
-          <button onClick={openAdd} style={{padding:"9px 20px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G,letterSpacing:.3}}>+ Add Item</button>
+          {!readOnly&&<><button type="button" disabled title="Multi-project calendar publishing is unavailable until Projects and Family Calendar can be reviewed and applied atomically." style={{padding:"8px 14px",borderRadius:8,border:`1px solid rgba(197,164,109,0.2)`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:"rgba(197,164,109,0.05)",color:W3}}>Calendar push unavailable</button>
+          <button onClick={openAdd} style={{padding:"9px 20px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G,letterSpacing:.3}}>+ Add Item</button></>}
         </div>
       </div>
 
+      {readOnly&&<div role="note" className="hq-read-only-notice" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.35)`,borderRadius:10,background:"rgba(197,164,109,0.08)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Projects are read-only.</strong> You can review, filter, navigate, preview attachments, and export project information. A household administrator can restore project editing access.</div>}
+      {!readOnly&&<div role="note" className="hq-action-safety-note" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.25)`,borderRadius:10,background:"rgba(197,164,109,0.06)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Review required.</strong> Creating, editing, or deleting a project opens Action Mode before anything changes. Project import, file and image changes, and multi-project calendar publishing remain unavailable until Brevity can audit and safely undo them.</div>}
+
       {/* TABS */}
-      <div style={{display:"flex",background:"rgba(0,0,0,0.6)",borderBottom:`1px solid ${BORDER}`,padding:"0 28px",overflowX:"auto",backdropFilter:"blur(10px)"}}>
+      <div className="hq-tabs" style={{display:"flex",background:"rgba(0,0,0,0.6)",borderBottom:`1px solid ${BORDER}`,padding:"0 28px",overflowX:"auto",backdropFilter:"blur(10px)"}}>
         {TABS.map(([k,l])=>(
           <div key={k} onClick={()=>setTab(k)} style={{padding:"14px 20px",cursor:"pointer",fontSize:17,fontWeight:500,whiteSpace:"nowrap",borderBottom:"2px solid",marginBottom:-1,transition:"all .15s",color:tab===k?G:W3,borderBottomColor:tab===k?G:"transparent",letterSpacing:.2}}>{l}</div>
         ))}
       </div>
 
-      <div style={{padding:"24px 32px",maxWidth:1400,margin:"0 auto"}}>
+      <div className="hq-content" style={{padding:"24px 32px",maxWidth:1400,margin:"0 auto"}}>
 
         {/* STATS */}
         {showFilters&&(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
+          <div className="hq-stats" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
             {[["Total Items",items.length,W],["In Progress",items.filter(i=>i.status==="In Progress").length,G],["Completed",items.filter(i=>i.status==="Done").length,GREEN],["Total Budget",displayCost(totalBudget),G]].map(([l,v,c])=>(
               <div key={l} className="hq-stat-card">
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:W3,marginBottom:6}}>{l}</div>
@@ -721,7 +759,7 @@ function App(){
 
         {/* FILTERS */}
         {showFilters&&(
-          <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+          <div className="hq-filters" style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{...FI,flex:1,minWidth:160,width:"auto"}}/>
             {[[fStatus,setFStatus,STATUSES,"Status"],[fRoom,setFRoom,ROOMS,"Room"],[fPriority,setFPriority,PRIORITIES,"Priority"]].map(([val,setter,opts,lbl])=>(
               <select key={lbl} value={val} onChange={e=>setter(e.target.value)} style={selectStyle}>
@@ -739,7 +777,7 @@ function App(){
               <div style={{textAlign:"center",padding:"80px 20px",color:W3}}>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,marginBottom:8,color:W2}}>{items.length?'No projects match these filters':'No projects have been defined yet'}</div>
                 <div style={{fontSize:14,maxWidth:520,margin:'0 auto 16px',lineHeight:1.5}}>{items.length?'Clear or change the filters to return to the active project portfolio.':'Create the first item around a concrete outcome, then add its room, decision owner, target date, and budget so Brevity can surface the real constraint.'}</div>
-                {!items.length&&<button type="button" onClick={openAdd} style={{padding:"9px 18px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G}}>Create first project</button>}
+                {!items.length&&!readOnly&&<button type="button" onClick={openAdd} style={{padding:"9px 18px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G}}>Create first project</button>}
               </div>
             )}
             <div className="hq-proj-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
@@ -787,14 +825,14 @@ function App(){
                             {item.pushToFamilyCalendar&&<Badge text="Family Calendar" fg={G} bg="rgba(197,164,109,0.14)"/>}
                           </div>
                         </div>
-                        <div style={{display:"flex",gap:4,flexShrink:0}}>
-                          <button onClick={e=>{e.stopPropagation();openEdit(item);}} style={{width:28,height:28,border:`1px solid ${BORDER}`,background:GLASS,cursor:"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:W2}} title="Edit">✎</button>
-                          <button onClick={e=>{e.stopPropagation();deleteItem(item.id);}} style={{width:28,height:28,border:`1px solid rgba(248,113,113,0.2)`,background:"rgba(248,113,113,0.08)",cursor:"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:RED}} title="Delete">×</button>
-                        </div>
+                        {!readOnly&&<div className="hq-project-card-actions" style={{display:"flex",gap:4,flexShrink:0}}>
+                          <button disabled={stagingAction} onClick={e=>{e.stopPropagation();openEdit(item);}} style={{width:28,height:28,border:`1px solid ${BORDER}`,background:GLASS,cursor:stagingAction?"wait":"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:W2}} title="Edit through Action Mode">✎</button>
+                          <button disabled={!canDelete||stagingAction} onClick={e=>{e.stopPropagation();deleteItem(item);}} style={{width:28,height:28,border:`1px solid rgba(248,113,113,0.2)`,background:"rgba(248,113,113,0.08)",cursor:!canDelete?"not-allowed":stagingAction?"wait":"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:!canDelete?W3:RED}} title={canDelete?"Delete through Action Mode":"Only a household administrator can delete projects"}>×</button>
+                        </div>}
                       </div>
 
                       {/* Costs */}
-                      <div style={{display:"flex",gap:12,paddingTop:10,borderTop:`1px solid ${BORDER}`}}>
+                      <div className="hq-project-costs" style={{display:"flex",gap:12,paddingTop:10,borderTop:`1px solid ${BORDER}`}}>
                         {item.estcost&&<div style={{fontSize:12}}><span style={{color:W3}}>Est </span><span style={{fontWeight:600,color:G}}>{displayCost(item.estcost)}</span></div>}
                         {item.actcost&&<div style={{fontSize:12}}><span style={{color:W3}}>Act </span><span style={{fontWeight:600,color:GREEN}}>{displayCost(item.actcost)}</span></div>}
                         {item.due&&<div style={{fontSize:12,marginLeft:"auto"}}><span style={{color:isOverdue?RED:W3}}>Due {item.due}</span></div>}
@@ -834,7 +872,6 @@ function App(){
                                 {item.photos.map((p,i)=>(
                                   <div key={i} style={{position:"relative"}}>
                                     <img src={p} onClick={()=>setLightbox({type:"image",data:p,name:"Photo",download:false})} style={{width:68,height:68,objectFit:"cover",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer"}}/>
-                                    <button aria-label="Remove photo" onClick={()=>removeStoredAsset(item.id,"photos",i)} style={{position:"absolute",top:-6,right:-6,width:20,height:20,borderRadius:"50%",background:RED,color:"#000",border:"none",cursor:"pointer",fontWeight:700}}>×</button>
                                   </div>
                                 ))}
                               </div>
@@ -847,7 +884,7 @@ function App(){
                                 {item.files.map((f,i)=>{
                                   const icons={"application/pdf":"PDF","application/vnd.openxmlformats-officedocument.wordprocessingml.document":"DOC","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"XLS","text/csv":"CSV","text/plain":"TXT"};
                                   return(
-                                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:GLASS2,borderRadius:8,padding:"8px 12px",border:`1px solid ${BORDER}`}}>
+                                    <div key={i} className="hq-attachment-row" style={{display:"flex",alignItems:"center",gap:10,background:GLASS2,borderRadius:8,padding:"8px 12px",border:`1px solid ${BORDER}`}}>
                                       <span style={{fontSize:11,fontWeight:700,color:G,background:'rgba(197,164,109,0.14)',borderRadius:4,padding:"2px 6px"}}>{icons[f.type]||"FILE"}</span>
                                       <div style={{flex:1,minWidth:0}}>
                                         <div style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:W}}>{f.name}</div>
@@ -860,7 +897,6 @@ function App(){
                                         else setLightbox({type:"unsupported",data:f.data,name:f.name,icon:icons[f.type]||"FILE",download:true});
                                       }} style={{fontSize:12,fontWeight:600,color:G,cursor:"pointer",padding:"4px 8px",borderRadius:6,background:'rgba(197,164,109,0.14)',border:"none",whiteSpace:"nowrap"}}>Preview</button>
                                       <a href={f.data} download={f.name} style={{fontSize:12,fontWeight:600,color:W2,textDecoration:"none",padding:"4px 8px",borderRadius:6,background:GLASS}}>Save</a>
-                                      <button aria-label="Remove attachment" onClick={()=>removeStoredAsset(item.id,"files",i)} style={{width:20,height:20,borderRadius:"50%",background:'rgba(248,113,113,0.15)',color:RED,border:"none",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>×</button>
                                     </div>
                                   );
                                 })}
@@ -877,20 +913,20 @@ function App(){
           </>
         )}
 
-        {tab==="gantt"       && <GanttView items={items} onEdit={openEdit}/>}
-        {tab==="calendar"    && <CalendarView items={items} onEdit={openEdit}/>}
+        {tab==="gantt"       && <GanttView items={items} onEdit={openEdit} readOnly={readOnly}/>}
+        {tab==="calendar"    && <CalendarView items={items} onEdit={openEdit} readOnly={readOnly}/>}
         {tab==="budget"      && <BudgetView items={items}/>}
         {tab==="contractors" && <ContractorsView items={items}/>}
       </div>
 
       {/* MODAL */}
-      {modal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.80)",backdropFilter:"blur(12px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setModal(false);}}>
-          <div style={{background:"rgba(12,12,12,0.97)",border:`1px solid ${BORDER}`,borderRadius:20,padding:28,width:"100%",maxWidth:700,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.7)",position:"relative"}}>
-            <button onClick={()=>setModal(false)} style={{position:"absolute",top:14,right:14,background:"none",border:"none",fontSize:22,cursor:"pointer",color:W3,lineHeight:1}}>✕</button>
+      {modal&&!readOnly&&(
+        <div className="hq-modal-backdrop" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.80)",backdropFilter:"blur(12px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setModal(false);}}>
+          <div className="hq-modal-card" style={{background:"rgba(12,12,12,0.97)",border:`1px solid ${BORDER}`,borderRadius:20,padding:28,width:"100%",maxWidth:700,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.7)",position:"relative"}}>
+            <button className="hq-modal-close" aria-label="Close project editor" onClick={()=>setModal(false)} style={{position:"absolute",top:14,right:14,background:"none",border:"none",fontSize:22,cursor:"pointer",color:W3,lineHeight:1}}>✕</button>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:500,marginBottom:22,color:W}}>{editId?"Edit Item":"Add New Item"}</div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <div className="hq-modal-form" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
 
               <FField label="Title *" full>
                 <input style={FI} value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="e.g. Replace kitchen faucet"/>
@@ -903,7 +939,7 @@ function App(){
               </FField>
 
               <FField label="Room / Area" full>
-                <div style={{display:"flex",gap:10}}>
+                <div className="hq-room-fields" style={{display:"flex",gap:10}}>
                   <select style={{...FI,flex:1}} value={form.room} onChange={e=>setForm(p=>({...p,room:e.target.value,roomCustom:e.target.value==="Other"?p.roomCustom:""}))}>
                     {ROOMS.map(r=><option key={r}>{r}</option>)}
                     <option value="Other">Other (specify below)</option>
@@ -949,9 +985,9 @@ function App(){
               ].map(([label,role,key])=><MemberMultiSelect key={key} label={label} role={role} value={form.raci?.[key]||[]} onChange={value=>setForm(p=>({...p,raci:{...p.raci,[key]:value}}))}/>)}
 
               <FField label="Family Calendar" full>
-                <label style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 14px",background:GLASS,borderRadius:8,border:`1.5px solid ${form.pushToFamilyCalendar?'rgba(197,164,109,0.4)':BORDER}`,cursor:"pointer"}}>
-                  <input type="checkbox" checked={form.pushToFamilyCalendar||false} onChange={e=>setForm(p=>({...p,pushToFamilyCalendar:e.target.checked}))} style={{width:17,height:17,accentColor:G,marginTop:1}}/>
-                  <span><span style={{display:"block",fontSize:13,fontWeight:600,color:W}}>Push this project event to Family Calendar</span><span style={{display:"block",fontSize:11,color:W3,marginTop:3}}>Uses the start and due dates, includes all RACI members, and defaults ownerless events to Family.</span></span>
+                <label title="Project and Family Calendar records cannot yet be changed in one atomic reviewed action." style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 14px",background:GLASS,borderRadius:8,border:`1.5px solid ${form.pushToFamilyCalendar?'rgba(197,164,109,0.4)':BORDER}`,cursor:"not-allowed"}}>
+                  <input type="checkbox" disabled checked={form.pushToFamilyCalendar||false} style={{width:17,height:17,accentColor:G,marginTop:1}}/>
+                  <span><span style={{display:"block",fontSize:13,fontWeight:600,color:W2}}>Family Calendar publication unavailable</span><span style={{display:"block",fontSize:11,color:W3,marginTop:3}}>The current setting is preserved. Use a separate reviewed Family Calendar action until project and calendar changes can be applied atomically.</span></span>
                 </label>
               </FField>
 
@@ -992,16 +1028,14 @@ function App(){
               </FField>
 
               <FField label="Photos" full>
-                <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${BORDER}`,borderRadius:8,padding:14,textAlign:"center",cursor:"pointer",color:W3,fontSize:13,background:GLASS}}>
-                  Click to add photos (JPG, PNG, GIF)
-                  <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={handlePhoto}/>
+                <div aria-disabled="true" title="Photo changes are unavailable until reviewed uploads can be audited and safely undone." style={{border:`2px dashed ${BORDER}`,borderRadius:8,padding:14,textAlign:"center",cursor:"not-allowed",color:W3,fontSize:13,background:GLASS}}>
+                  Photo changes are temporarily unavailable. Existing photos remain viewable and are preserved by this edit.
                 </div>
                 {(form.photos||[]).length>0&&(
                   <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
                     {form.photos.map((p,i)=>(
                       <div key={i} style={{position:"relative"}}>
                         <img src={p} onClick={()=>setLightbox({type:"image",data:p,name:"Photo",download:false})} style={{width:64,height:64,objectFit:"cover",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer"}}/>
-                        <button onClick={()=>setForm(prev=>({...prev,photos:prev.photos.filter((_,j)=>j!==i)}))} style={{position:"absolute",top:-6,right:-6,width:18,height:18,borderRadius:"50%",background:RED,color:"#000",border:"none",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>×</button>
                       </div>
                     ))}
                   </div>
@@ -1009,16 +1043,15 @@ function App(){
               </FField>
 
               <FField label="File Attachments (PDF, Word, Excel, etc.)" full>
-                <div onClick={()=>fileRef2.current.click()} style={{border:`2px dashed ${BORDER}`,borderRadius:8,padding:14,textAlign:"center",cursor:"pointer",color:W3,fontSize:13,background:GLASS}}>
-                  Click to attach files (PDF, DOCX, XLSX, etc.)
-                  <input ref={fileRef2} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip" multiple style={{display:"none"}} onChange={handleFile}/>
+                <div aria-disabled="true" title="Attachment changes are unavailable until reviewed uploads can be audited and safely undone." style={{border:`2px dashed ${BORDER}`,borderRadius:8,padding:14,textAlign:"center",cursor:"not-allowed",color:W3,fontSize:13,background:GLASS}}>
+                  Attachment changes are temporarily unavailable. Existing files remain viewable and are preserved by this edit.
                 </div>
                 {(form.files||[]).length>0&&(
                   <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
                     {form.files.map((f,i)=>{
                       const icons={"application/pdf":"PDF","application/vnd.openxmlformats-officedocument.wordprocessingml.document":"DOC","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"XLS","text/csv":"CSV","text/plain":"TXT"};
                       return(
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:GLASS2,borderRadius:8,padding:"8px 12px",border:`1px solid ${BORDER}`}}>
+                        <div key={i} className="hq-attachment-row" style={{display:"flex",alignItems:"center",gap:10,background:GLASS2,borderRadius:8,padding:"8px 12px",border:`1px solid ${BORDER}`}}>
                           <span style={{fontSize:11,fontWeight:700,color:G,background:'rgba(197,164,109,0.14)',borderRadius:4,padding:"2px 6px"}}>{icons[f.type]||"FILE"}</span>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:W}}>{f.name}</div>
@@ -1031,7 +1064,6 @@ function App(){
                             else setLightbox({type:"unsupported",data:f.data,name:f.name,icon:icons[f.type]||"FILE",download:true});
                           }} style={{fontSize:12,fontWeight:600,color:G,cursor:"pointer",padding:"4px 8px",borderRadius:6,background:'rgba(197,164,109,0.14)',border:"none",whiteSpace:"nowrap"}}>Preview</button>
                           <a href={f.data} download={f.name} style={{fontSize:12,fontWeight:600,color:W2,textDecoration:"none",padding:"4px 8px",borderRadius:6,background:GLASS}}>Save</a>
-                          <button onClick={()=>setForm(prev=>({...prev,files:prev.files.filter((_,j)=>j!==i)}))} style={{width:20,height:20,borderRadius:"50%",background:'rgba(248,113,113,0.15)',color:RED,border:"none",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>×</button>
                         </div>
                       );
                     })}
@@ -1041,9 +1073,9 @@ function App(){
 
             </div>
 
-            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:22}}>
-              <button onClick={()=>setModal(false)} style={{padding:"10px 22px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,background:GLASS,color:W2,border:`1px solid ${BORDER}`}}>Cancel</button>
-              <button onClick={saveItem} style={{padding:"10px 22px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.18)",color:G,border:`1px solid rgba(197,164,109,0.4)`}}>Save Item</button>
+            <div className="hq-modal-footer" style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:22}}>
+              <button disabled={stagingAction} onClick={()=>setModal(false)} style={{padding:"10px 22px",borderRadius:8,cursor:stagingAction?"wait":"pointer",fontSize:13,fontWeight:600,background:GLASS,color:W2,border:`1px solid ${BORDER}`}}>Cancel</button>
+              <button disabled={stagingAction} onClick={saveItem} style={{padding:"10px 22px",borderRadius:8,cursor:stagingAction?"wait":"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.18)",color:G,border:`1px solid rgba(197,164,109,0.4)`}}>{stagingAction?"Preparing review…":"Review in Action Mode"}</button>
             </div>
           </div>
         </div>
@@ -1051,8 +1083,8 @@ function App(){
 
       {/* LIGHTBOX */}
       {lightbox&&(
-        <div onClick={e=>{if(e.target===e.currentTarget)setLightbox(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.95)",zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{position:"fixed",top:0,left:0,right:0,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px",background:"rgba(0,0,0,.8)",zIndex:301,borderBottom:`1px solid ${BORDER}`}}>
+        <div className="hq-lightbox" onClick={e=>{if(e.target===e.currentTarget)setLightbox(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.95)",zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div className="hq-lightbox-header" style={{position:"fixed",top:0,left:0,right:0,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px",background:"rgba(0,0,0,.8)",zIndex:301,borderBottom:`1px solid ${BORDER}`}}>
             <div style={{color:W,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70vw"}}>{lightbox.name||"Preview"}</div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               {lightbox.download&&<a href={lightbox.data} download={lightbox.name} style={{padding:"6px 14px",borderRadius:6,background:'rgba(197,164,109,0.18)',color:G,fontSize:12,fontWeight:600,textDecoration:"none",border:`1px solid rgba(197,164,109,0.3)`}}>Download</a>}
@@ -1087,7 +1119,7 @@ function App(){
 
       {/* TOAST */}
       {toast&&(
-        <div style={{position:"fixed",bottom:24,right:24,background:"rgba(12,12,12,0.95)",color:"rgba(247,243,234,0.90)",padding:"12px 20px",borderRadius:10,fontSize:14,fontWeight:500,zIndex:400,boxShadow:"0 4px 20px rgba(0,0,0,.5)",border:"1px solid rgba(255,255,255,0.08)",backdropFilter:"blur(20px)"}}>
+        <div className="hq-toast" style={{position:"fixed",bottom:24,right:24,background:"rgba(12,12,12,0.95)",color:"rgba(247,243,234,0.90)",padding:"12px 20px",borderRadius:10,fontSize:14,fontWeight:500,zIndex:400,boxShadow:"0 4px 20px rgba(0,0,0,.5)",border:"1px solid rgba(255,255,255,0.08)",backdropFilter:"blur(20px)"}}>
           {toast}
         </div>
       )}

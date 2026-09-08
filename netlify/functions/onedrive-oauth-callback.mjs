@@ -1,4 +1,7 @@
-import { completeOneDriveAuthorization } from '../lib/onedrive.mjs'
-const appUrl=(status,message='')=>{const query=new URLSearchParams({onedrive:status});if(message)query.set('message',message.slice(0,180));return `https://brevityoflife.netlify.app/?${query}`}
-export default async function handler(request){const url=new URL(request.url);if(url.searchParams.get('error'))return Response.redirect(appUrl('error',url.searchParams.get('error_description')||'Microsoft authorization was cancelled.'),302);try{await completeOneDriveAuthorization({code:url.searchParams.get('code')||'',state:url.searchParams.get('state')||''});return Response.redirect(appUrl('connected'),302)}catch(error){console.error('[onedrive-oauth-callback]',error);return Response.redirect(appUrl('error',error.message||'Could not connect OneDrive.'),302)}}
+const disabled=()=>new Response(JSON.stringify({
+  code:'CONNECTION_MUTATIONS_DISABLED',
+  error:'OneDrive authorization callbacks are disabled in this release. No repository credentials or connection state were changed.',
+}),{status:423,headers:{'content-type':'application/json','cache-control':'no-store'}})
+
+export default async function handler(){return disabled()}
 export const config={path:'/.netlify/functions/onedrive-oauth-callback'}

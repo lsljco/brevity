@@ -1,6 +1,7 @@
 import { addDays, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { calculateMonthlyCashFlow, calculateTransactionAmountForMonth } from './monthlyCashFlow.js'
-import { transactionDirection } from './reportingData.js'
+import { budgetTargetForLine, buildBudgetLines, buildLegacyBudgetOwners } from './budgetBreakdown.js'
+import { isRecognizedIncomeTransaction, isTransferTransaction, summarizeActualCashActivity } from './reportingData.js'
 
 export const ALIGNMENT_PEOPLE = ['Larry', 'Lorenzo', 'Terica', 'Nyla']
 export const DEFAULT_MONTHLY_SURPLUS_VISION = 50000
@@ -26,7 +27,9 @@ export function normalizeDailyAlignmentRecord(value = {}) {
 }
 
 function directionOfActual(transaction) {
-  return Number(transaction?.amount) < 0 ? 'income' : 'expense'
+  if (isTransferTransaction(transaction)) return 'transfer'
+  if (Number(transaction?.amount) >= 0) return 'expense'
+  return isRecognizedIncomeTransaction(transaction) ? 'income' : 'other-inflow'
 }
 
 function money(value) {
@@ -72,18 +75,20 @@ export function calculateActualMonthToDateCashFlow(actuals = [], date = new Date
   const dateKey = toISO(selectedDate)
   const monthPrefix = dateKey.slice(0, 7)
 
-  return actuals.reduce((totals, transaction) => {
-    if (!transaction.date?.startsWith(monthPrefix) || transaction.date > dateKey) return totals
-    const direction = transactionDirection(transaction)
-    if (direction === 'transfer') return totals
-
-    const amount = money(transaction.amount)
-    if (direction === 'income') totals.income += amount
-    if (direction === 'expense') totals.expenses += amount
-    totals.transactionCount += 1
-    totals.cashFlow = totals.income - totals.expenses
-    return totals
-  }, { income: 0, expenses: 0, cashFlow: 0, transactionCount: 0 })
+  const rows = actuals.filter(transaction => (
+    !transaction.pending
+    && transaction.date?.startsWith(monthPrefix)
+    && transaction.date <= dateKey
+    && !isTransferTransaction(transaction)
+  ))
+  const activity = summarizeActualCashActivity(rows)
+  return {
+    income:activity.income,
+    otherInflows:activity.otherInflows,
+    expenses:activity.expenses,
+    cashFlow:activity.net,
+    transactionCount:rows.length,
+  }
 }
 
 function outstandingForDate(transactions, actuals, date) {
@@ -92,17 +97,27 @@ function outstandingForDate(transactions, actuals, date) {
   return pairScheduledWithActuals(scheduled, actual).pairs.filter(pair => !pair.actual).map(pair => pair.transaction)
 }
 
-function plannedDiscretionaryBudget(transactions, budget, selectedDate) {
+function plannedDiscretionaryBudget(transactions, budget, selectedDate, { legacyYear, legacyAccountId } = {}) {
   const monthIndex = selectedDate.getMonth()
-  return transactions
-    .filter(transaction => transaction.type === 'expense' && transaction.freq !== 'once' && isDiscretionary(transaction))
-    .reduce((total, transaction) => {
-      const plannedValue = budget?.[transaction.name]?.[monthIndex]
-      const hasPlan = plannedValue !== undefined && plannedValue !== null && plannedValue !== ''
-      return total + (hasPlan
-        ? Math.max(Number(plannedValue) || 0, 0)
-        : calculateTransactionAmountForMonth(transaction, selectedDate, { recurringOnly: true }))
-    }, 0)
+  const year = selectedDate.getFullYear()
+  const eligible = transactions.filter(transaction => transaction.type === 'expense' && transaction.freq !== 'once' && isDiscretionary(transaction))
+  const accountIds = new Set(eligible.map(transaction => String(transaction.acct || transaction.accountId || 'unassigned')))
+  const lines = buildBudgetLines(eligible, budget, { accountIds })
+  const legacyOwners = buildLegacyBudgetOwners(lines)
+  return lines.reduce((total, line) => {
+    const plannedValue = budgetTargetForLine({
+      budget,
+      line,
+      year,
+      month:monthIndex,
+      legacyYear:legacyYear ?? year,
+      legacyAccountId:legacyAccountId || line.accountId,
+      legacyOwners,
+    })
+    return total + (plannedValue !== undefined
+      ? Math.max(Number(plannedValue) || 0, 0)
+      : line.transactions.reduce((lineTotal, transaction) => lineTotal + calculateTransactionAmountForMonth(transaction, selectedDate, { recurringOnly:true }), 0))
+  }, 0)
 }
 
 export function buildDailyAlignmentSnapshot({
@@ -112,6 +127,8 @@ export function buildDailyAlignmentSnapshot({
   monthlyScheduled = scheduled,
   actuals = [],
   budget = {},
+  budgetLegacyYear,
+  budgetLegacyAccountId,
   projectedBalance,
 } = {}) {
   const selectedDate = parseISODate(date) || new Date()
@@ -148,9 +165,9 @@ export function buildDailyAlignmentSnapshot({
   const monthPrefix = dateKey.slice(0, 7)
   const actualMonthToDate = actuals.filter(transaction => transaction.date?.startsWith(monthPrefix) && transaction.date <= dateKey)
   const discretionarySpent = actualMonthToDate
-    .filter(transaction => directionOfActual(transaction) === 'expense' && isDiscretionary(transaction))
+    .filter(transaction => !transaction.pending && directionOfActual(transaction) === 'expense' && isDiscretionary(transaction))
     .reduce((sum, transaction) => sum + money(transaction.amount), 0)
-  const discretionaryBudget = plannedDiscretionaryBudget(scheduled, budget, selectedDate)
+  const discretionaryBudget = plannedDiscretionaryBudget(scheduled, budget, selectedDate, { legacyYear:budgetLegacyYear, legacyAccountId:budgetLegacyAccountId })
   const discretionaryRemaining = Math.max(discretionaryBudget - discretionarySpent, 0)
   const daysRemaining = Math.max(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() - selectedDate.getDate() + 1, 1)
   const approvedDiscretionary = discretionaryRemaining / daysRemaining

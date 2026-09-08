@@ -57,7 +57,7 @@ export async function reconcilePlanWithICloud(plan, api = {}) {
       continue
     }
 
-    if (sameEvent(candidate, current)) {
+    if (current.sourceId === candidate.sourceId && sameEvent(candidate, current)) {
       summary.unchanged += 1
       continue
     }

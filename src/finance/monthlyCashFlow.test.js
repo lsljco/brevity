@@ -7,6 +7,7 @@ import {
   calculateTransactionAmountForRange,
   calculateTransactionAmountForMonth,
   selectOperatingTransactions,
+  transactionOccurrencesForRange,
 } from './monthlyCashFlow.js'
 
 test('selects the operating account independently of the visible account filter', () => {
@@ -36,6 +37,7 @@ test('selected-timeframe totals count only occurrences inside the requested rang
   const range = { from: '2026-09-07', to: '2026-09-13' }
 
   assert.equal(calculateTransactionAmountForRange(transactions[0], range), 100)
+  assert.deepEqual(transactionOccurrencesForRange(transactions[0], range), [{ date:'2026-09-11', amount:100 }])
   assert.deepEqual(calculateScheduledTotalsForRange(transactions, range), { income: 350, expenses: 130, net: 220 })
   assert.deepEqual(calculateScheduledTotalsForRange(transactions, range, { recurringOnly: true }), { income: 100, expenses: 40, net: 60 })
 })

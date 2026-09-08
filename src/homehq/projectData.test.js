@@ -1,8 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PROJECT_STORAGE_KEY, normalizeProjectItem, parseProjectDate, projectCalendarEvent, projectDateKey, syncProjectCalendarEvents, writeJson } from './projectData.js'
-
-function memoryStorage(){const data=new Map();return{getItem:key=>data.has(key)?data.get(key):null,setItem:(key,value)=>data.set(key,String(value))}}
+import { normalizeProjectItem, parseProjectDate, projectCalendarEvent, projectDateKey, syncProjectCalendarEvents } from './projectData.js'
 
 test('migrates the legacy single assignee into Responsible without losing it', () => {
   const item = normalizeProjectItem({ id: 'p1', assignee: 'Terica' })
@@ -40,13 +38,4 @@ test('project dates remain local calendar dates instead of shifting through UTC'
   assert.equal(date.getMonth(), 7)
   assert.equal(date.getDate(), 21)
   assert.equal(projectDateKey(date), '2026-08-21')
-})
-
-test('HomeHQ writes prepare a versioned household-state record',()=>{
-  const storage=memoryStorage(), items=[{id:'p1',title:'Paint kitchen'}]
-  const result=writeJson(storage,PROJECT_STORAGE_KEY,items)
-  assert.equal(result.ok,true)
-  assert.equal(result.record.key,PROJECT_STORAGE_KEY)
-  assert.equal(result.record.expectedVersion,0)
-  assert.equal(storage.getItem(PROJECT_STORAGE_KEY),JSON.stringify(items))
 })

@@ -1,4 +1,4 @@
-import { currentNewYorkHour } from '../lib/household-plan-generator.mjs';
+import { currentNewYorkDate, currentNewYorkHour } from '../lib/household-plan-generator.mjs';
 
 export default async function handler() {
   const hour = currentNewYorkHour();
@@ -9,10 +9,11 @@ export default async function handler() {
 
   const endpoint = 'https://brevityoflife.netlify.app/.netlify/functions/daily-household-plan-background';
   if (!process.env.BREVITY_AUTOMATION_KEY) throw new Error('BREVITY_AUTOMATION_KEY must be configured for scheduled plan generation.');
+  const date = currentNewYorkDate();
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-brevity-automation-key': process.env.BREVITY_AUTOMATION_KEY },
-    body: JSON.stringify({ overwrite: false }),
+    body: JSON.stringify({ date, requestId:`scheduled-${date}`, authority:'draft-only' }),
   });
 
   if (!response.ok && response.status !== 202) {

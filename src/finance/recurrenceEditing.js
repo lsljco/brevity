@@ -1,4 +1,4 @@
-import { addDays, parseISODate, toISO } from './projection.js'
+import { addDays, parseISODate, toISO, txOccursOnDate } from './projection.js'
 
 const cleanOccurrenceFields = transaction => {
   const { _occurrenceDate, _fromActual, ...clean } = transaction
@@ -10,17 +10,36 @@ const previousDate = date => {
   return parsed ? toISO(addDays(parsed, -1)) : date
 }
 
-export function editRecurringOccurrence(original, updated, occurrenceDate, scope, createId) {
+const assertReviewedOccurrence = (transaction, occurrenceDate, allowSeriesAnchor = false) => {
+  const parsed = parseISODate(occurrenceDate)
+  const isSeriesAnchor = allowSeriesAnchor && occurrenceDate === transaction.start
+  if (!parsed || (!isSeriesAnchor && !txOccursOnDate(transaction, parsed))) {
+    throw new Error('That reviewed occurrence is no longer part of this recurring series. Refresh and choose a current item.')
+  }
+}
+
+export function editRecurringOccurrence(original, updated, occurrenceDate, scope, createId, destinationDate = occurrenceDate) {
   const base = cleanOccurrenceFields(original)
   const changes = cleanOccurrenceFields(updated)
 
-  if (base.freq === 'once') return { upserts: [{ ...base, ...changes }], deleteIds: [] }
+  assertReviewedOccurrence(base, occurrenceDate, scope === 'future')
+
+  if (destinationDate < occurrenceDate && scope === 'future') {
+    throw new Error('A future series cannot begin before the occurrence where the reviewed change takes effect.')
+  }
+
+  if (base.freq === 'once') {
+    const next = { ...base, ...changes, start:destinationDate }
+    if (next.freq === 'once') next.end = destinationDate
+    else if (!Object.hasOwn(changes, 'end') || changes.end === base.end) next.end = ''
+    return { upserts: [next], deleteIds: [] }
+  }
 
   if (scope === 'one') {
     return {
       upserts: [
         { ...base, skips: [...new Set([...(base.skips || []), occurrenceDate])] },
-        { ...base, ...changes, id: createId(), freq: 'once', start: occurrenceDate, end: occurrenceDate, skips: [] },
+        { ...base, ...changes, id: createId(), freq: 'once', start: destinationDate, end: destinationDate, skips: [] },
       ],
       deleteIds: [],
     }
@@ -30,10 +49,13 @@ export function editRecurringOccurrence(original, updated, occurrenceDate, scope
     ...base,
     ...changes,
     id: createId(),
-    start: occurrenceDate,
+    start: destinationDate,
     skips: (changes.skips || base.skips || []).filter(date => date >= occurrenceDate),
   }
-  if (future.end && future.end < occurrenceDate) future.end = ''
+  if (future.freq === 'once') future.end = destinationDate
+  else if (future.end && future.end < destinationDate) {
+    throw new Error('The reviewed series end date cannot be before its new effective date.')
+  }
 
   if (occurrenceDate <= base.start) return { upserts: [future], deleteIds: [base.id] }
   return {
@@ -47,6 +69,7 @@ export function editRecurringOccurrence(original, updated, occurrenceDate, scope
 
 export function deleteRecurringOccurrence(original, occurrenceDate, scope) {
   const base = cleanOccurrenceFields(original)
+  assertReviewedOccurrence(base, occurrenceDate, scope === 'future')
   if (base.freq === 'once') return { upserts: [], deleteIds: [base.id] }
 
   if (scope === 'one') {

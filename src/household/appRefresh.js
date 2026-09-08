@@ -2,6 +2,7 @@ import { fetchICloudCalendarEvents } from '../family/icloudCalendarApi.js'
 import { mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
 import { stampCalendarFailure, stampCalendarSuccess } from '../family/calendarSnapshot.js'
 import { refreshFinanceData } from '../finance/financeRefresh.js'
+import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { fetchDailyPlan } from './householdApi.js'
 import { retryRefresh } from './retry.js'
 import { fetchSystemHealth, systemHealthIssues } from './systemHealth.js'
@@ -9,10 +10,7 @@ import { fetchSystemHealth, systemHealthIssues } from './systemHealth.js'
 export const APP_REFRESH_EVENT = 'brevity-app-refreshed'
 export const ICLOUD_CACHE_KEY = 'brevity_icloud_calendar_cache_v1'
 
-const todayKey = () => {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
+export const applicationRefreshDate = (now = new Date()) => getHouseholdDateKey(now)
 
 let activeRefresh = null
 
@@ -38,9 +36,9 @@ export function buildRefreshIssues({ financeResult, planResult, calendar, health
   return Array.from(new Map(issues.map(issue=>[`${issue.source}:${issue.message}`,issue])).values())
 }
 
-async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdate = false } = {}) {
-  const date = todayKey()
-  const financePromise = retryRefresh(()=>refreshFinanceData(window.localStorage,{ requestBankUpdate }))
+async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdate = false, financeReadOnly = false } = {}) {
+  const date = applicationRefreshDate()
+  const financePromise = retryRefresh(()=>refreshFinanceData(window.localStorage,{ requestBankUpdate:financeReadOnly ? false : requestBankUpdate, persist:!financeReadOnly }))
   const planPromise = retryRefresh(()=>fetchDailyPlan(date))
   const healthPromise = retryRefresh(()=>fetchSystemHealth())
   const calendarPromise = retryRefresh(()=>fetchICloudCalendarEvents())

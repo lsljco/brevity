@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CALENDAR_DATA_VERSION, financeBackupKey, loadFinanceData, migrateFinanceData, saveFinanceData } from './financeData.js'
+import { CALENDAR_DATA_VERSION, financeBackupKey, loadFinanceData, migrateFinanceData, restorePersistedFinanceData, saveFinanceData } from './financeData.js'
 
 function memoryStorage() {
   const values = new Map()
@@ -91,6 +91,64 @@ test('repairs version 3 records that still contain Ameripro or monthly property 
   ])
 })
 
+test('repairs the exact corrupted Oldcastle income name and category without rewriting similar records', () => {
+  const data = {
+    calendarDataVersion: 4,
+    transactions: [
+      { id: 'known-corruption', name: 'JS Old Castle Iincome', type: 'income', cat: 'Housing', freq: 'weekly', start: '2026-09-04' },
+      { id: 'custom', name: 'JS Old Castle Consulting', type: 'income', cat: 'Other', freq: 'once', start: '2026-09-04' },
+    ],
+  }
+
+  const migrated = migrateFinanceData(data)
+
+  assert.deepEqual(migrated.transactions, [
+    { id: 'known-corruption', name: 'JS CRH Oldcastle Income', type: 'income', cat: 'Income', freq: 'weekly', start: '2026-09-04' },
+    { id: 'custom', name: 'JS Old Castle Consulting', type: 'income', cat: 'Other', freq: 'once', start: '2026-09-04' },
+  ])
+})
+
+test('repairs the exact corrupted Oldcastle income in a version 5 record during the version 6 migration', () => {
+  const migrated = migrateFinanceData({
+    calendarDataVersion: 5,
+    transactions: [
+      { id: 'known-corruption', name: 'JS Old Castle Iincome', type: 'income', cat: 'Housing', freq: 'weekly', start: '2026-09-04' },
+    ],
+  })
+
+  assert.equal(migrated.calendarDataVersion, CALENDAR_DATA_VERSION)
+  assert.deepEqual(migrated.transactions, [
+    { id: 'known-corruption', name: 'JS CRH Oldcastle Income', type: 'income', cat: 'Income', freq: 'weekly', start: '2026-09-04' },
+  ])
+})
+
+test('idempotently repairs the exact corrupted Oldcastle income even in a current-version record', () => {
+  const migrated = migrateFinanceData({
+    calendarDataVersion: CALENDAR_DATA_VERSION,
+    transactions: [
+      { id: 'known-corruption', name: 'JS Old Castle Iincome', type: 'income', cat: 'Housing' },
+    ],
+  })
+
+  assert.deepEqual(migrated.transactions, [
+    { id: 'known-corruption', name: 'JS CRH Oldcastle Income', type: 'income', cat: 'Income' },
+  ])
+})
+
+test('repairs property taxes saved under data version 5 without changing a custom tax series', () => {
+  const migrated = migrateFinanceData({
+    calendarDataVersion:5,
+    transactions:[
+      { id:'t_h6', name:'Property Taxes', type:'expense', freq:'monthly', amount:30337.59 },
+      { id:'custom-tax', name:'Property Taxes', type:'expense', freq:'monthly', amount:250 },
+    ],
+  })
+
+  assert.equal(migrated.calendarDataVersion, CALENDAR_DATA_VERSION)
+  assert.equal(migrated.transactions[0].freq, 'yearly')
+  assert.equal(migrated.transactions[1].freq, 'monthly')
+})
+
 test('reports browser storage failures instead of claiming a save succeeded', () => {
   const error = new Error('quota exceeded')
   const storage = { setItem() { throw error } }
@@ -107,6 +165,31 @@ test('round-trips every custom change through persistent storage', () => {
 
   assert.equal(saveFinanceData(storage, 'finance', changed).ok, true)
   assert.deepEqual(loadFinanceData(storage, 'finance'), { data: changed, source: 'primary' })
+})
+
+test('a persisted empty transaction list stays empty instead of restoring sample data', () => {
+  const defaults = {
+    accounts: [{ id: 'a1', name: 'Operating Account' }],
+    transactions: [{ id: 'sample-expense', amount: 100 }],
+  }
+
+  const restored = restorePersistedFinanceData({ transactions: [] }, defaults)
+
+  assert.deepEqual(restored.transactions, [])
+  assert.deepEqual(restored.accounts, defaults.accounts)
+  assert.notEqual(restored.accounts, defaults.accounts)
+})
+
+test('a persisted empty account list stays empty instead of restoring sample accounts', () => {
+  const defaults = {
+    accounts: [{ id: 'a1', name: 'Operating Account' }],
+    transactions: [{ id: 'sample-expense', amount: 100, acct: 'a1' }],
+  }
+
+  const restored = restorePersistedFinanceData({ accounts: [], transactions: [] }, defaults)
+
+  assert.deepEqual(restored.accounts, [])
+  assert.deepEqual(restored.transactions, [])
 })
 
 test('recovers the latest saved data from backup if the primary record is damaged', () => {

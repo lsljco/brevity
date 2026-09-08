@@ -14,18 +14,20 @@ function Macros({ meal }) {
   return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{meal.macros.calories}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
 }
 
-function MealChoice({ meal, mealType, onChoose, selected }) {
+function MealChoice({ meal, onChoose, selected, current }) {
   return <button type="button" className={`meal-choice${selected ? ' is-selected' : ''}`} onClick={onChoose}>
     <img src={meal.image} alt="" loading="lazy" />
     <span className="meal-choice-mark"><i className={`ti ${selected ? 'ti-circle-check-filled' : 'ti-circle'}`} /></span>
     <span><strong>{meal.name}</strong><small>{meal.description}</small><Macros meal={meal} /></span>
-    <em>{meal.prepMinutes} min</em>
+    <em>{current ? 'Current' : selected ? 'Selected' : `${meal.prepMinutes} min`}</em>
   </button>
 }
 
-function ReplaceDialog({ selection, library, saving, onClose, onReplace }) {
+function ReplaceDialog({ selection, library, saving, onClose, onChoose, onReview, onApply }) {
   const [query, setQuery] = useState('')
   const candidates = useMemo(() => library.filter(meal => meal.mealType === selection.mealType && `${meal.name} ${meal.description}`.toLowerCase().includes(query.toLowerCase())), [library, query, selection.mealType])
+  const currentMeal=library.find(meal=>meal.id===selection.day.meals[selection.mealType])
+  const selectedMeal=library.find(meal=>meal.id===selection.mealId)
   useEffect(() => {
     const close = event => { if (event.key === 'Escape' && !saving) onClose() }
     window.addEventListener('keydown', close)
@@ -36,7 +38,11 @@ function ReplaceDialog({ selection, library, saving, onClose, onReplace }) {
     <section className="meal-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-dialog-title">
       <header><div><span>Meal library · 30 options</span><h2 id="meal-dialog-title">Replace {LABELS[selection.mealType]}</h2><p>{formatDay(selection.day.date)}</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
       <label className="meal-search"><i className="ti ti-search" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${LABELS[selection.mealType].toLowerCase()} options`} /></label>
-      <div className="meal-choice-list">{candidates.map(meal => <MealChoice key={meal.id} meal={meal} mealType={selection.mealType} selected={meal.id === selection.day.meals[selection.mealType]} onChoose={() => onReplace(meal.id)} />)}</div>
+      <div className="meal-choice-list">{candidates.map(meal => <MealChoice key={meal.id} meal={meal} current={meal.id === selection.day.meals[selection.mealType]} selected={meal.id === selection.mealId} onChoose={() => onChoose(meal.id)} />)}</div>
+      <footer className="meal-dialog-review">
+        <div><span>{selection.proposal?'Reviewed change':'Selection'}</span><strong>{currentMeal?.name||'Current meal'} <i className="ti ti-arrow-right" /> {selectedMeal?.name||'Choose a replacement'}</strong>{selection.proposal&&<small>This exact replacement and meal-plan version are ready to apply. It will be recorded in Audit History and can be safely undone.</small>}</div>
+        <div><button type="button" onClick={onClose} disabled={saving}>Cancel</button>{selection.proposal?<button type="button" className="is-primary" onClick={()=>onApply(selection.proposal.id)} disabled={saving}>{saving?'Applying…':'Apply reviewed change'}</button>:<button type="button" className="is-primary" onClick={onReview} disabled={saving||!selectedMeal||selectedMeal.id===currentMeal?.id}>{saving?'Preparing review…':'Review change'}</button>}</div>
+      </footer>
     </section>
   </div>
 }
@@ -58,20 +64,33 @@ function LibraryView({ library, onSelect }) {
 }
 
 export default function MealPlanner() {
-  const { data, state, error, reload, replace } = useRollingMealPlan()
+  const { data, state, error, reload, prepareReplacement, applyReplacement } = useRollingMealPlan()
   const [view, setView] = useState('plan')
   const [selection, setSelection] = useState(null)
   const [message, setMessage] = useState('')
   const planInsight = useMemo(() => summarizeMealPlan(data?.days), [data])
 
-  const chooseReplacement = async mealId => {
+  const chooseReplacement = mealId => setSelection(current=>({...current,mealId,proposal:null}))
+
+  const reviewReplacement = async () => {
     setMessage('')
     try {
-      await replace({ date: selection.day.date, mealType: selection.mealType, mealId, expectedVersion: selection.day.version })
-      setSelection(null)
-      setMessage('Meal replaced for the household. The change is saved across devices.')
+      const proposal=await prepareReplacement({date:selection.day.date,mealType:selection.mealType,mealId:selection.mealId,expectedVersion:selection.day.version})
+      setSelection(current=>current&&current.mealId===selection.mealId?{...current,proposal}:current)
     } catch (replaceError) {
       setMessage(replaceError.status === 409 ? 'The plan changed on another device. Refreshing the latest version…' : replaceError.message)
+      if (replaceError.status === 409) await reload().catch(() => undefined)
+    }
+  }
+
+  const applyReviewedReplacement = async proposalId => {
+    setMessage('')
+    try {
+      await applyReplacement(proposalId)
+      setSelection(null)
+      setMessage('Meal replaced after review. The change is recorded in Action Mode Audit History and can be safely undone.')
+    } catch (replaceError) {
+      setMessage(replaceError.status === 409 ? 'The plan changed after review. Refreshing the latest version…' : replaceError.message)
       if (replaceError.status === 409) await reload().catch(() => undefined)
     }
   }
@@ -83,7 +102,7 @@ export default function MealPlanner() {
     {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Plan insight</span><strong>{planInsight.tomorrowDinner ? `Tomorrow’s dinner is ${planInsight.tomorrowDinner.name}.` : `${planInsight.mealCount} meals are planned.`}</strong><p>{planInsight.tomorrowDinner ? `It is scheduled for ${planInsight.tomorrowDinner.prepMinutes} minutes, so the useful preparation is making sure its main ingredients are available before tomorrow.` : `The plan represents about ${planInsight.totalPrepMinutes} minutes of preparation.`}</p></div><dl><div><dt>Planned prep</dt><dd>{planInsight.totalPrepMinutes} min</dd></div><div><dt>Avg. planned protein</dt><dd>{planInsight.averageProteinGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are plan estimates, not evidence that a meal was prepared or eaten.</small></section>}
     {state === 'loading' && !data && <div className="meal-planner-state"><i className="ti ti-loader-2" /> Preparing the household meal plan…</div>}
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
-    {data && (view === 'plan' ? <PlanView days={data.days} onSelect={setSelection} /> : <LibraryView library={data.library} onSelect={setSelection} />)}
-    {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} onClose={() => setSelection(null)} onReplace={chooseReplacement} />}
+    {data && (view === 'plan' ? <PlanView days={data.days} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onSelect={setSelection} />)}
+    {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} onClose={() => setSelection(null)} onChoose={chooseReplacement} onReview={reviewReplacement} onApply={applyReviewedReplacement} />}
   </main>
 }
