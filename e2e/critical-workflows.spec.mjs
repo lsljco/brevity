@@ -34,7 +34,7 @@ test('Finance workspaces fit phone and tablet viewports without overlapping filt
   for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){
     await openMenuIfMobile(page,testInfo)
     await page.getByRole('button',{name:label,exact:true}).click()
-    await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
+    await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth),`${label} workspace should not overflow .app-main`).toBeLessThanOrEqual(1)
   }
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Transactions',exact:true}).click()

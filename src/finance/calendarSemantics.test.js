@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-import { bankBalanceMovement, buildUniquePlaidAccountMap, cashForecastScope, hasCompatiblePlaidAccountLink, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
+import { bankActivityPreview, bankBalanceMovement, buildUniquePlaidAccountMap, cashForecastScope, hasCompatiblePlaidAccountLink, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
 
 const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
 const agenda = readFileSync(new URL('./CashForecastAgenda.jsx', import.meta.url), 'utf8')
@@ -55,6 +55,17 @@ test('Cash Forecast includes only cash accounts and their balance-moving transfe
 test('bank balance movement includes boundary transfers and lets two in-scope sides cancel', () => {
   assert.equal(bankBalanceMovement([{amount:125},{amount:75,type:'transfer'}]),-200)
   assert.equal(bankBalanceMovement([{amount:75,type:'transfer'},{amount:-75,type:'transfer'}]),0)
+})
+
+test('Cash Forecast bank preview reserves a row for pending evidence', () => {
+  const rows = [
+    {id:'posted-transfer'},
+    {id:'posted-purchase'},
+    {id:'pending-authorization',pending:true},
+  ]
+  assert.deepEqual(bankActivityPreview(rows).map(transaction => transaction.id),['posted-transfer','pending-authorization'])
+  assert.deepEqual(bankActivityPreview(rows.slice(0,2)).map(transaction => transaction.id),['posted-transfer','posted-purchase'])
+  assert.deepEqual(bankActivityPreview([rows[2],...rows.slice(0,2)]).map(transaction => transaction.id),['pending-authorization','posted-transfer'])
 })
 
 test('historical reconstruction follows Plaid signs and ignores pending rows', () => {

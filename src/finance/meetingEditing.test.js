@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 const app=readFileSync(new URL('../App.jsx',import.meta.url),'utf8')
 const planner=readFileSync(new URL('./FinancePlanner.jsx',import.meta.url),'utf8')
 const meetings=readFileSync(new URL('./FinanceMeetingsWorkspace.jsx',import.meta.url),'utf8')
+const meetingsCss=readFileSync(new URL('./FinanceMeetings.css',import.meta.url),'utf8')
 const meetingsBridge=readFileSync(new URL('./FinanceMeetingsBridge.jsx',import.meta.url),'utf8')
 const meetingTruth=readFileSync(new URL('./financeMeetingTruth.js',import.meta.url),'utf8')
 const assistant=readFileSync(new URL('../assistant/BrevityAssistant.jsx',import.meta.url),'utf8')
@@ -96,6 +97,11 @@ test('transaction filters use responsive non-overlapping columns',()=>{
   assert.match(planner,/@media \(max-width: 1120px\)[\s\S]*transaction-list-controls\.is-compact \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
   assert.match(planner,/@media \(max-width: 768px\)[\s\S]*transaction-list-controls\.is-compact \{ grid-template-columns: 1fr/)
   assert.doesNotMatch(planner,/className="transaction-list-controls"[^>]+gridTemplateColumns/)
+})
+
+test('Finance Meetings shrink to the phone workspace while cadence tabs scroll internally',()=>{
+  assert.match(meetingsCss,/\.finance-meetings\{[^}]*width:100%;[^}]*min-width:0;/)
+  assert.match(meetingsCss,/\.fm-tabs\{[^}]*overflow:auto;/)
 })
 
 test('finance meetings separate member planning edits from administrator financial edits',()=>{

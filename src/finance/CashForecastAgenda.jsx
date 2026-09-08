@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { fmtMoney } from './projection.js'
-import { bankBalanceMovement } from './calendarSemantics.js'
+import { bankActivityPreview, bankBalanceMovement } from './calendarSemantics.js'
 import { isTransferTransaction } from './reportingData.js'
 import { transactionDescription } from './transactionList.js'
 
@@ -107,11 +107,12 @@ export default function CashForecastAgenda({
     <div ref={agendaRef} className="finance-calendar-mobile-agenda" aria-label={`${monthName} cash forecast agenda`}>
       {days.length > 0 ? days.map(day => {
         const plannedPreview = day.planned.map(transactionDescription).filter(Boolean).slice(0, 2)
-        const bankPreview = day.bank.map(transaction => {
+        const namedBankTransactions = day.bank.filter(transaction => transactionDescription(transaction))
+        const bankPreview = bankActivityPreview(namedBankTransactions).map(transaction => {
           const label = transactionDescription(transaction)
           const tags = [transaction?.pending ? 'Pending' : 'Posted', isTransferTransaction(transaction) ? 'Transfer' : ''].filter(Boolean)
           return label ? `${tags.join(' · ')} · ${label}` : ''
-        }).filter(Boolean).slice(0, 2)
+        }).filter(Boolean)
         const selected = day.key === selectedDay
         const dateLabel = new Date(`${day.key}T12:00:00`).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
         const plannedNetLabel = `${day.plannedNet >= 0 ? 'plus' : 'minus'} ${fmtMoney(Math.abs(day.plannedNet))}`

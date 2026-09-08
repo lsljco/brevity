@@ -16,6 +16,17 @@ export function bankBalanceMovement(transactions = []) {
   return Object.is(movement, -0) ? 0 : movement
 }
 
+export function bankActivityPreview(transactions = [], limit = 2) {
+  const rows = Array.isArray(transactions) ? transactions : []
+  const previewLimit = Math.max(0, Math.floor(Number(limit) || 0))
+  const preview = rows.slice(0, previewLimit)
+  if (!preview.length || preview.some(transaction => transaction?.pending)) return preview
+
+  const pending = rows.find(transaction => transaction?.pending)
+  if (pending) preview[preview.length - 1] = pending
+  return preview
+}
+
 export function reconstructHistoricalCashBalances({ transactions = [], currentBalance = 0, todayKey = '' } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(todayKey || '')) || !Number.isFinite(Number(currentBalance))) return {}
   const posted = (Array.isArray(transactions) ? transactions : [])
