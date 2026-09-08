@@ -18,8 +18,38 @@ function read(storage,key,fallback){return sanitizeForAssistant(safeJson(storage
 function transactionText(transaction){return[transaction?.name,transaction?.merchant_name,transaction?.originalStatement,transaction?.original_description,transaction?.category,transaction?.cat,transaction?.accountName,transaction?.institution,transaction?.date].filter(Boolean).join(' ').toLowerCase()}
 function meaningfulTerms(query=''){const ignored=new Set(['what','when','where','which','with','from','that','this','have','does','about','show','tell','please','could','would']);return[...new Set(String(query).toLowerCase().match(/[a-z0-9]{3,}/g)||[])].filter(term=>!ignored.has(term)).slice(0,12)}
 export function summarizeTransactions(transactions=[]){
-  const summary={count:0,firstDate:null,lastDate:null,income:0,otherInflows:0,pendingInflows:0,inflows:0,expenses:0,transfers:0,byCategory:{},byMerchant:{},byMonth:{},byAccount:{}}
-  transactions.forEach(transaction=>{const amount=Number(transaction?.amount)||0;const absoluteAmount=Math.abs(amount);const date=String(transaction?.date||'');const category=String(transaction?.category||transaction?.cat||'Uncategorized');const merchant=String(transaction?.merchant_name||transaction?.name||'Unknown');const account=String(transaction?.accountName||transaction?.account_name||transaction?.institution||transaction?.account_id||'Unknown');summary.count+=1;if(date){summary.firstDate=!summary.firstDate||date<summary.firstDate?date:summary.firstDate;summary.lastDate=!summary.lastDate||date>summary.lastDate?date:summary.lastDate}if(isTransferTransaction(transaction))summary.transfers+=absoluteAmount;else if(amount<0){summary.inflows+=absoluteAmount;if(transaction?.pending)summary.pendingInflows+=absoluteAmount;else if(isRealizedIncomeTransaction(transaction))summary.income+=absoluteAmount;else summary.otherInflows+=absoluteAmount}else summary.expenses+=amount;summary.byCategory[category]=(summary.byCategory[category]||0)+absoluteAmount;summary.byMerchant[merchant]=(summary.byMerchant[merchant]||0)+absoluteAmount;summary.byAccount[account]=(summary.byAccount[account]||0)+absoluteAmount;if(date&&!isTransferTransaction(transaction))summary.byMonth[date.slice(0,7)]=(summary.byMonth[date.slice(0,7)]||0)+(amount<0?absoluteAmount:-amount)})
+  const summary={count:0,firstDate:null,lastDate:null,income:0,otherInflows:0,pendingInflows:0,inflows:0,expenses:0,pendingExpenses:0,transfers:0,byCategory:{},byMerchant:{},byMonth:{},byAccount:{}}
+  transactions.forEach(transaction=>{
+    const amount=Number(transaction?.amount)||0
+    const absoluteAmount=Math.abs(amount)
+    const date=String(transaction?.date||'')
+    const category=String(transaction?.category||transaction?.cat||'Uncategorized')
+    const merchant=String(transaction?.merchant_name||transaction?.name||'Unknown')
+    const account=String(transaction?.accountName||transaction?.account_name||transaction?.institution||transaction?.account_id||'Unknown')
+    const transfer=isTransferTransaction(transaction)
+    const pendingExpense=!transfer&&amount>=0&&Boolean(transaction?.pending)
+    summary.count+=1
+    if(date){
+      summary.firstDate=!summary.firstDate||date<summary.firstDate?date:summary.firstDate
+      summary.lastDate=!summary.lastDate||date>summary.lastDate?date:summary.lastDate
+    }
+    if(transfer)summary.transfers+=absoluteAmount
+    else if(amount<0){
+      if(transaction?.pending)summary.pendingInflows+=absoluteAmount
+      else{
+        summary.inflows+=absoluteAmount
+        if(isRealizedIncomeTransaction(transaction))summary.income+=absoluteAmount
+        else summary.otherInflows+=absoluteAmount
+      }
+    }else if(pendingExpense)summary.pendingExpenses+=amount
+    else summary.expenses+=amount
+    if(!transaction?.pending&&!transfer){
+      summary.byCategory[category]=(summary.byCategory[category]||0)+absoluteAmount
+      summary.byMerchant[merchant]=(summary.byMerchant[merchant]||0)+absoluteAmount
+      summary.byAccount[account]=(summary.byAccount[account]||0)+absoluteAmount
+      if(date)summary.byMonth[date.slice(0,7)]=(summary.byMonth[date.slice(0,7)]||0)+(amount<0?absoluteAmount:-amount)
+    }
+  })
   const ranked=(object,limit)=>Object.entries(object).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,limit).map(([name,amount])=>({name,amount}))
   return{...summary,net:summary.inflows-summary.expenses,byCategory:ranked(summary.byCategory,30),byMerchant:ranked(summary.byMerchant,30),byMonth:ranked(summary.byMonth,24),byAccount:ranked(summary.byAccount,20)}
 }

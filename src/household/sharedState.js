@@ -497,7 +497,7 @@ export function installSharedStateWriteThrough({ storage = window.localStorage, 
   return () => { if (prototype.setItem !== original) prototype.setItem = original }
 }
 
-export function startSharedStateSync({ storage = window.localStorage, intervalMs = 10000, onRemoteChange, onError } = {}) {
+export function startSharedStateSync({ storage = window.localStorage, intervalMs = 10000, onRemoteChange, onError, onSuccess } = {}) {
   let stopped = false
   let running = false
   const stopWriteThrough = installSharedStateWriteThrough({ storage, onError })
@@ -507,7 +507,7 @@ export function startSharedStateSync({ storage = window.localStorage, intervalMs
     try {
       const result = await syncSharedState(storage, onError)
       if (result.applied.length) onRemoteChange?.(result.applied)
-      if (result.rejected.length) onError?.(result.rejected[0].reason)
+      if (!result.rejected.length) onSuccess?.(result)
     } catch (error) { onError?.(error) }
     finally { running = false }
   }

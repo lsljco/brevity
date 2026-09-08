@@ -13,13 +13,31 @@ const scheduled = [
 test('daily alignment separates posted cash from expected and near-term obligations', () => {
   const snapshot = buildDailyAlignmentSnapshot({
     date: '2026-08-18', accounts, scheduled,
-    actuals: [{ id: 'actual-pay', name: 'Payroll deposit', amount: -500, date: '2026-08-18', pending: false }],
+    actuals: [{ id: 'actual-pay', name: 'Payroll deposit', amount: -500, date: '2026-08-18', pending: false, scheduledTransactionId:'pay', scheduledOccurrenceDate:'2026-08-18' }],
   })
   assert.equal(snapshot.availableOperatingCash, 1000)
   assert.equal(snapshot.expectedInflows, 0)
   assert.equal(snapshot.dueTodayTomorrow, 610)
   assert.equal(snapshot.movements.find(item => item.id === 'actual-pay').status, 'Posted')
   assert.equal(snapshot.movements.some(item => item.id === 'expected-pay'), false)
+})
+
+test('amount coincidence and pending activity cannot mark a scheduled item complete', () => {
+  const amountOnly = buildDailyAlignmentSnapshot({
+    date:'2026-08-18', accounts,
+    scheduled:[{id:'planned-bill',name:'Planned bill',amount:100,type:'expense',freq:'once',start:'2026-08-18'}],
+    actuals:[{id:'unrelated',name:'Unrelated purchase',amount:100,date:'2026-08-18',pending:false}],
+  })
+  assert.equal(amountOnly.dueTodayTomorrow,100)
+  assert.equal(amountOnly.movements.some(item=>item.id==='expected-planned-bill'),true)
+
+  const pendingLink = buildDailyAlignmentSnapshot({
+    date:'2026-08-18', accounts,
+    scheduled:[{id:'planned-bill',name:'Planned bill',amount:100,type:'expense',freq:'once',start:'2026-08-18'}],
+    actuals:[{id:'pending',name:'Planned bill',amount:100,date:'2026-08-18',pending:true,scheduledTransactionId:'planned-bill',scheduledOccurrenceDate:'2026-08-18'}],
+  })
+  assert.equal(pendingLink.dueTodayTomorrow,100)
+  assert.equal(pendingLink.movements.some(item=>item.id==='expected-planned-bill'),true)
 })
 
 test('daily discretionary amount uses the remaining monthly budget and days', () => {

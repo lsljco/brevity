@@ -1,11 +1,25 @@
 import { test, expect } from '@playwright/test'
 
-const dateKey=()=>new Date().toISOString().slice(0,10)
-const plan=()=>({id:`daily-plan-${dateKey()}`,date:dateKey(),theme:'Steady stewardship',dayObjective:'Execute today well.',governingPrinciple:'Do the known work.',successStandard:'Critical commitments complete.',topPriorities:[{id:'p1',title:'Protect the household rhythm',owner:'Family',status:'pending',priority:'high',participants:[]},{id:'p2',title:'Complete today’s essential commitments',owner:'Larry',status:'pending',priority:'high',participants:[]},{id:'p3',title:'Prepare tomorrow before closeout',owner:'Family',status:'pending',priority:'normal',participants:[]}],spiritual:{owner:'Family',scope:'household',scripture:['Psalm 1:3'],devotionFocus:'Shared household devotion',prayerFocus:['Wisdom'],discussionPrompts:[],obedienceAction:'Practice the teaching.'},health:{owner:'Terica',breakfast:'Eggs',lunch:'Chicken and vegetables',dinner:'Fish and vegetables',snacks:'Fruit',hydration:'Water',groceries:[],nextDayPrep:''},fitness:{owner:'Larry',location:'Lifetime Gym',participants:[],workout:'Strength',objective:'Train',departureTime:'',returnTime:'',stepGoal:10000,recovery:'',requiresDecision:false},household:{owner:'Larry',appointments:[],priorities:[],errands:[],openItems:[]},education:{owner:'Larry',thinkTankTopic:'',thinkTankDeliverable:'',isaiah:{owner:'Family',readingMinutes:20,sightWordsMinutes:10,comprehensionMinutes:10,mathMinutes:10,notes:''}},finance:{owner:'Larry',bills:[],purchases:[],transfers:[],accountsToFund:[],incomePipeline:[],decisionRule:''},ministry:{owners:['Larry','Lorenzo'],meetings:[],contentFocus:'',fellowshipFollowUps:[],prayerNeeds:[]},assignments:[],decisions:[],dayparts:[],recap:{wins:[],carryovers:[],lessons:[],tomorrowPrep:[],completedAt:''},version:1})
-async function mockBackend(page){await page.route('**/.netlify/functions/**',async route=>{const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action');let body={};if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:'Larry',role:'admin',bootstrapRequired:false};else if(path.endsWith('/household-auth')&&action==='members')body={members:[]};else if(path.endsWith('/household-state')){if(route.request().method()==='PUT'){const payload=route.request().postDataJSON();body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}}else body={records:{},serverTime:new Date().toISOString()}}else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()};else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()};else if(path.endsWith('/plaid-accounts'))body={connected:false,accounts:[],errors:[],syncedAt:new Date().toISOString()};else if(path.endsWith('/plaid-transactions'))body={transactions:[],errors:[]};else if(path.endsWith('/health-alerts'))body={alerts:[]};else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}};else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]};await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})})}
+const dateKey=()=>{
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+const plan=()=>{const today=dateKey();return{id:`daily-plan-${today}`,date:today,theme:'Steady stewardship',dayObjective:'Execute today well.',governingPrinciple:'Do the known work.',successStandard:'Critical commitments complete.',topPriorities:[{id:'p1',title:'Protect the household rhythm',owner:'Family',status:'pending',priority:'high',participants:[]},{id:'p2',title:'Complete today’s essential commitments',owner:'Larry',status:'pending',priority:'high',participants:[]},{id:'p3',title:'Prepare tomorrow before closeout',owner:'Family',status:'pending',priority:'normal',participants:[]}],spiritual:{owner:'Family',scope:'household',scripture:['Psalm 1:3'],devotionFocus:'Shared household devotion',prayerFocus:['Wisdom'],discussionPrompts:[],obedienceAction:'Practice the teaching.'},health:{owner:'Terica',breakfast:'Eggs',lunch:'Chicken and vegetables',dinner:'Fish and vegetables',snacks:'Fruit',hydration:'Water',groceries:[],nextDayPrep:''},fitness:{owner:'Larry',location:'Lifetime Gym',participants:[],workout:'Strength',objective:'Train',departureTime:'',returnTime:'',stepGoal:10000,recovery:'',requiresDecision:false},household:{owner:'Larry',appointments:[],priorities:[],errands:[],openItems:[]},education:{owner:'Larry',thinkTankTopic:'',thinkTankDeliverable:'',isaiah:{owner:'Family',readingMinutes:20,sightWordsMinutes:10,comprehensionMinutes:10,mathMinutes:10,notes:''}},finance:{owner:'Larry',bills:[],purchases:[],transfers:[],accountsToFund:[],incomePipeline:[],decisionRule:''},ministry:{owners:['Larry','Lorenzo'],meetings:[],contentFocus:'',fellowshipFollowUps:[],prayerNeeds:[]},assignments:[],decisions:[],dayparts:[],recap:{wins:[],carryovers:[],lessons:[],tomorrowPrep:[],completedAt:''},version:1}}
+const cashForecastRecords=()=>{
+  const updatedAt=new Date().toISOString()
+  const today=dateKey()
+  const finance={calendarDataVersion:6,accounts:[{id:'a1',name:'Operating Account',type:'checking',balance:1000,plaidAccountId:'plaid-operating',plaidType:'depository',plaidSubtype:'checking',plaidCurrentBalance:1000}],transactions:[{id:'planned-grocery',name:'Planned groceries',type:'expense',amount:40,acct:'a1',freq:'once',start:today,end:today}]}
+  const actuals=[
+    {id:'bank-transfer',accountId:'plaid-operating',name:'Capital One payment',originalStatement:'PAYMENT TO CAPITAL ONE',category:'TRANSFER_OUT',amount:75,date:today,pending:false},
+    {id:'bank-grocery',accountId:'plaid-operating',name:'Neighborhood Market',category:'FOOD_AND_DRINK',amount:25,date:today,pending:false},
+    {id:'bank-pending',accountId:'plaid-operating',name:'Gas station authorization',category:'TRANSPORTATION',amount:30,date:today,pending:true},
+  ]
+  return Object.fromEntries(Object.entries({lslj_finance_v9:finance,plaid_actuals_cache:actuals}).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt}]))
+}
+async function mockBackend(page,{financeFixture=false}={}){await page.route('**/.netlify/functions/**',async route=>{const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action');let body={};if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:'Larry',role:'admin',bootstrapRequired:false};else if(path.endsWith('/household-auth')&&action==='members')body={members:[]};else if(path.endsWith('/household-state')){if(route.request().method()==='PUT'){const payload=route.request().postDataJSON();body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}}else body={records:financeFixture?cashForecastRecords():{},serverTime:new Date().toISOString()}}else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()};else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()};else if(path.endsWith('/plaid-accounts'))body={connected:false,accounts:[],errors:[],syncedAt:new Date().toISOString()};else if(path.endsWith('/plaid-transactions'))body={connected:false,transactions:[],errors:[]};else if(path.endsWith('/health-alerts'))body={alerts:[]};else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}};else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]};await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})})}
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page})=>{await mockBackend(page);await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('iPhone Cash Forecast')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -37,6 +51,46 @@ test('Finance workspaces fit phone and tablet viewports without overlapping filt
       expect(overlapX>1&&overlapY>1,`transaction controls ${left} and ${right} overlap`).toBe(false)
     }
   }
+})
+
+test('iPhone Cash Forecast clearly separates its monthly plan without a sticky account overlap',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='iphone','iPhone Cash Forecast contract')
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Cash Forecast',exact:true}).click()
+
+  await expect(page.getByRole('heading',{name:'Cash Forecast',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:/Show \d+ bank transactions? for /})).toBeVisible()
+  await expect(page.getByText('Dates / Timeframe',{exact:true})).toHaveCount(0)
+  await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText('Planned activity')
+  await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText(/(?:Reconstructed posted close|Estimated historical cash balance|Current bank liquidity|Latest stored cash balance|Projected cash balance)/)
+  await page.getByRole('button',{name:/Show 3 bank transactions for /}).click()
+  const agenda=page.locator('.finance-calendar-mobile-agenda')
+  await expect(agenda).toContainText('Bank activity')
+  await expect(agenda).toContainText('Posted · Transfer · PAYMENT TO CAPITAL ONE')
+  await expect(agenda).toContainText('Pending · Gas station authorization')
+  await expect(agenda).toContainText(/Pending authorizations\s*−\$30\.00\s*· excluded from posted movement/)
+  await expect(agenda).toContainText(/Posted movement\s*−\$100\.00/)
+  await agenda.locator(':scope > button').filter({hasText:'PAYMENT TO CAPITAL ONE'}).click()
+  await expect(page.getByText(/Transfer · included in bank balance movement, excluded from income and expense totals/)).toBeVisible()
+  await page.getByRole('button',{name:'Next financial calendar month'}).click()
+  await expect(agenda.locator(':scope > button.is-selected')).toHaveCount(0)
+  await expect(page.locator('.finance-calendar-day-header')).toHaveCount(0)
+
+  const layout=await page.evaluate(()=>{
+    const account=document.querySelector('.finance-account-filter')
+    const intro=document.querySelector('.finance-calendar-intro')
+    const root=document.querySelector('.finance-root')
+    const accountBox=account?.getBoundingClientRect()
+    const introBox=intro?.getBoundingClientRect()
+    return{
+      accountPosition:account?getComputedStyle(account).position:'missing',
+      rootOverflow:root?getComputedStyle(root).overflowY:'missing',
+      overlaps:Boolean(accountBox&&introBox&&Math.min(accountBox.bottom,introBox.bottom)-Math.max(accountBox.top,introBox.top)>1),
+    }
+  })
+  expect(layout).toEqual({accountPosition:'static',rootOverflow:'visible',overlaps:false})
 })
 
 test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})

@@ -324,6 +324,16 @@ test('production resources use an atomic etag condition and reject a concurrent 
   await assert.rejects(()=>resources.write('shared:homehq_items_v1',[],2,'Larry'),error=>error.code==='VERSION_CONFLICT')
 })
 
+test('reviewed shared-record writes preserve the last applied Plaid balance watermark',async()=>{
+  const store=versionedBlobStore()
+  const key='lslj-family/records/lslj_finance_v9'
+  const watermark={issuedAt:200,receiptId:'d'.repeat(64)}
+  await store.setJSON(key,{key:'lslj_finance_v9',value:JSON.stringify({accounts:[],transactions:[]}),hash:'seed',version:2,plaidAccountReceipt:watermark})
+  const resources=createProductionActionResources({sharedStore:store,planStore:store})
+  await resources.write('shared:lslj_finance_v9',{accounts:[],transactions:[{id:'reviewed'}]},2,'Larry','action-1')
+  assert.deepEqual(store.values.get(key).data.plaidAccountReceipt,watermark)
+})
+
 test('existing Action resources without an ETag fail closed before every store write',async()=>{
   const store=versionedBlobStore(),date='2026-09-07'
   store.values.set('lslj-family/records/homehq_items_v1',{data:{key:'homehq_items_v1',value:'[]',version:2},etag:null})

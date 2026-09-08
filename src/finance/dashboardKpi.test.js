@@ -58,8 +58,12 @@ test('realized-income labels consistently describe posted income only', () => {
 
 test('scoped account views disclose unmapped bank activity and offer an all-activity path', () => {
   assert.match(source, /unmappedActuals\.length > 0/)
-  assert.match(source, /not linked to a Brevity account/)
-  assert.match(source, /Show all bank activity/)
+  assert.match(source, /not linked to a unique Brevity account/)
+  assert.match(source, /Account-linkage status:/)
+  assert.match(source, /across all available history/)
+  assert.match(source, /Open all bank activity/)
+  assert.match(source, /view === 'transactions' && unmappedActuals\.length > 0/)
+  assert.match(source, /setSelectedAccts\(null\)[\s\S]*openFilteredTransactions\(\)/)
 })
 
 test('phone KPI cards reserve separate space for captions and trends', () => {

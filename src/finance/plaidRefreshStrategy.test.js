@@ -11,18 +11,38 @@ const financeRefresh=readFileSync(new URL('./financeRefresh.js',import.meta.url)
 test('automatic account refresh is cached while Sync now explicitly requests live balances',()=>{
   assert.match(accountsFunction,/liveBalance\s*\?\s*await plaidClient\.accountsBalanceGet/)
   assert.match(accountsFunction,/:\s*await plaidClient\.accountsGet/)
+  assert.match(accountsFunction,/\.\.\.\(liveBalance \? \{ accountSourceReceipt:createAccountSourceReceipt\(allAccounts\) \} : \{\}\)/)
+  assert.match(accountsFunction,/balanceProvenance = liveBalance \? LIVE_BALANCE_PROVENANCE : 'plaid\.accountsGet'/)
+  assert.match(financeRefresh,/requestLiveBalances \? '\/plaid-accounts\?live=1' : '\/plaid-accounts'/)
+  assert.match(financeRefresh,/fetchAccounts\(\{ requestBankUpdate \}\)/)
   assert.match(plaidConnect,/apiFetch\('\/plaid-accounts\?live=1'\)/)
   assert.match(plaidConnect,/onTransactionsSync/)
   assert.match(plaidConnect,/refreshTransactions:true/)
   assert.match(plaidConnect,/Balances checked/)
   assert.match(plaidConnect,/REQUEST_TIMEOUT_MS\s*=\s*45000/)
-  assert.match(plaidConnect,/No bank connected — source-managed balances unavailable/)
+  assert.match(plaidConnect,/No cached bank connection on this device/)
+  assert.match(plaidConnect,/Check existing connection/)
+  assert.match(plaidConnect,/Checks for an existing server-managed bank connection without adding or changing one/)
+  assert.match(plaidConnect,/onClick=\{\(\) => syncAccounts\(\{ refreshTransactions:true \}\)\}/)
+  assert.match(plaidConnect,/Bank changes unavailable/)
   assert.doesNotMatch(plaidConnect,/balances are manual/i)
 })
 
 test('Finance mount does not duplicate the shared application transaction refresh',()=>{
   assert.doesNotMatch(financePlanner,/useEffect\(\(\)\s*=>\s*\{\s*fetchActuals\(\)\s*\}/)
   assert.match(financePlanner,/FINANCE_REFRESH_EVENT/)
+  assert.match(financePlanner,/useState\(\(\) => readLatestBalanceRefreshStatus\(\)\.status\)/)
+  assert.match(financePlanner,/useState\(\(\) => readLatestBalanceRefreshStatus\(\)\.errors\)/)
+  assert.match(financePlanner,/\['ambiguous','incompatible','unmatched','unverified'\]\.includes\(balanceDataStatus\)/)
+})
+
+test('an open Finance screen revalidates aged claims and remote balance snapshots',()=>{
+  assert.match(financePlanner,/const revalidateFreshness = \(\) => \{[\s\S]*readTransactionFreshness\(localStorage\)[\s\S]*readLatestBalanceRefreshStatus\(\)/)
+  assert.match(financePlanner,/setInterval\(revalidateFreshness, 60_000\)/)
+  assert.match(financePlanner,/addEventListener\('visibilitychange', revalidateWhenVisible\)/)
+  assert.match(financePlanner,/addEventListener\('focus', revalidateFreshness\)/)
+  assert.match(financePlanner,/keys\.has\('lslj_finance_v9'\)[\s\S]*invalidateLatestBalanceRefreshStatus\(\)/)
+  assert.match(financePlanner,/recordLatestBalanceRefreshStatus\(\{/)
 })
 
 test('explicit transaction refresh requests a Plaid institution update without blocking cached reads',()=>{
@@ -45,14 +65,108 @@ test('manual Finance refresh preserves failed-institution history and discloses 
 })
 
 test('Plaid balance success waits for versioned household persistence',()=>{
-  assert.match(financePlanner,/const handlePlaidSync = useCallback\(async \(plaidAccounts, syncedAt, accountSourceReceipt\)/)
-  assert.match(financePlanner,/await persistSharedSourceImport\(localStorage, LS_KEY, next, \{ accountSourceReceipt \}\)[\s\S]*setData\(next\)[\s\S]*Balances synced from Plaid/)
-  assert.match(plaidConnect,/await onAccountsSync\(data\.accounts, data\.syncedAt, data\.accountSourceReceipt\)[\s\S]*balanceResult\?\.ok !== true[\s\S]*setSyncedAt\(data\.syncedAt\)/)
-  assert.match(plaidConnect,/localStorage\.setItem\('plaid_synced_at', data\.syncedAt\)[\s\S]*setSyncedAt\(data\.syncedAt\)/)
+  assert.match(financePlanner,/const handlePlaidSync = useCallback\(async \(plaidAccounts, syncedAt, accountSourceReceipt, sourceErrors = \[\]\)/)
+  assert.match(financePlanner,/buildPlaidBalanceSourceResult\(localStorage, plaidAccounts, LS_KEY\)[\s\S]*missingLinkedCount[\s\S]*await persistSharedSourceImport\(localStorage, LS_KEY, next, \{ accountSourceReceipt \}\)[\s\S]*const current = loadData\(\)[\s\S]*setData\(current\)[\s\S]*synced from Plaid/)
+  assert.doesNotMatch(financePlanner,/const next = mergePlaidBalances\(dataRef\.current, plaidAccounts\)/)
+  assert.match(plaidConnect,/await onAccountsSync\(plaidAccounts, data\.syncedAt, data\.accountSourceReceipt, balanceAttemptErrors\)[\s\S]*balanceResult\?\.ok !== true[\s\S]*cacheCompleteConnectionSnapshot\(localStorage, conns, data\.syncedAt\)[\s\S]*setSyncedAt\(data\.syncedAt\)/)
   assert.match(plaidConnect,/Bank balances were received but could not be saved safely/)
   assert.match(plaidConnect,/Bank balances were saved, but connection status could not be cached/)
-  assert.match(plaidConnect,/transaction view is marked partial/)
+  assert.match(plaidConnect,/Transaction refresh is partial/)
+  assert.match(plaidConnect,/balancePartial/)
+  assert.match(plaidConnect,/previously linked Brevity account/)
+  assert.match(plaidConnect,/Prior connection details and the last complete balance-check time are unchanged/)
+  assert.match(plaidConnect,/last complete time was preserved/)
+  assert.doesNotMatch(plaidConnect,/Balances are current/)
+  assert.match(plaidConnect,/balanceState === 'complete' && \['complete','skipped'\]\.includes\(transactionState\)[\s\S]*brevity-finance-sync-recovered/)
   assert.doesNotMatch(financePlanner,/useEffect\(\(\) => \{\s*if \(readOnly\) return\s*const result = saveData\(data\)/)
+})
+
+test('a failed balance write cannot suppress the independently requested transaction refresh',()=>{
+  const syncHandler=plaidConnect.match(/const syncAccounts = useCallback\(async[\s\S]*?\n  \}, \[onAccountsSync, onTransactionsSync\]\)/)?.[0] || ''
+  assert.ok(syncHandler)
+  assert.match(syncHandler,/try \{[\s\S]*await onAccountsSync[\s\S]*balanceFailure = cause\?\.message[\s\S]*Transactions are an independent requested source refresh[\s\S]*await onTransactionsSync\(\)/)
+  assert.match(syncHandler,/Bank balances were received but could not be saved safely/)
+  assert.match(syncHandler,/Transaction refresh did not complete/)
+  assert.match(syncHandler,/setError\(\[balanceHasIssue \? balanceDetail : '', transactionHasIssue \? transactionDetail : ''\]/)
+  assert.match(syncHandler,/Balances were not changed/)
+  assert.match(syncHandler,/The latest available transactions were checked/)
+})
+
+test('manual balance non-results revoke a prior fresh claim without suppressing transaction refresh',async()=>{
+  const helperSource=plaidConnect.match(/async function reportUnverifiedBalanceAttempt\([\s\S]*?\n\}/)?.[0] || ''
+  assert.ok(helperSource)
+  const reportAttempt=new Function(`${helperSource}; return reportUnverifiedBalanceAttempt`)()
+  let reportedArgs=null
+  const result=await reportAttempt(async (...args)=>{
+    reportedArgs=args
+    return { ok:false }
+  },{
+    status:'disconnected',
+    message:'No existing server bank connection was found.',
+    checkedAt:'2026-09-08T12:00:00.000Z',
+  })
+  assert.deepEqual(result,{ ok:false })
+  assert.deepEqual(reportedArgs,[
+    [],
+    '2026-09-08T12:00:00.000Z',
+    null,
+    [{
+      institution:'Plaid',
+      code:'BALANCE_DISCONNECTED',
+      balanceDataStatus:'disconnected',
+      message:'No existing server bank connection was found.',
+    }],
+  ])
+
+  const syncHandler=plaidConnect.match(/const syncAccounts = useCallback\(async[\s\S]*?\n  \}, \[onAccountsSync, onTransactionsSync\]\)/)?.[0] || ''
+  assert.ok(syncHandler)
+  assert.match(syncHandler,/const plaidAccounts = Array\.isArray\(data\.accounts\) \? data\.accounts : \[\][\s\S]*await onAccountsSync\(plaidAccounts, data\.syncedAt, data\.accountSourceReceipt, balanceAttemptErrors\)/)
+  assert.match(syncHandler,/BALANCE_EMPTY_LIVE_RESPONSE/)
+  assert.match(syncHandler,/status:'disconnected'[\s\S]*message:balanceDetail/)
+  assert.match(syncHandler,/status:'stale'[\s\S]*message:balanceDetail/)
+  assert.match(syncHandler,/status:'stale'[\s\S]*Transactions are an independent requested source refresh[\s\S]*await onTransactionsSync\(\)/)
+
+  await assert.doesNotReject(()=>reportAttempt(async()=>{ throw new Error('state receiver failed') },{
+    status:'stale',
+    message:'Balance request failed.',
+  }))
+})
+
+test('connection cache commits the roster before its timestamp so a second-write failure is conservative',()=>{
+  const helperSource=plaidConnect.match(/function cacheCompleteConnectionSnapshot\([\s\S]*?\n\}/)?.[0] || ''
+  assert.ok(helperSource)
+  const commit=new Function(`${helperSource}; return cacheCompleteConnectionSnapshot`)()
+  const values=new Map([
+    ['plaid_connections','[{"itemId":"old"}]'],
+    ['plaid_synced_at','2026-09-01T10:00:00.000Z'],
+  ])
+  const writes=[]
+  const storage={
+    setItem(key,value) {
+      writes.push(key)
+      if (key === 'plaid_synced_at') throw new Error('quota exceeded on second write')
+      values.set(key,String(value))
+    },
+  }
+  assert.throws(()=>commit(storage,[{itemId:'new'}],'2026-09-08T10:00:00.000Z'),/quota exceeded/)
+  assert.deepEqual(writes,['plaid_connections','plaid_synced_at'])
+  assert.equal(values.get('plaid_connections'),'[{"itemId":"new"}]')
+  assert.equal(values.get('plaid_synced_at'),'2026-09-01T10:00:00.000Z')
+})
+
+test('Plaid balance failures use the inline bank status instead of duplicating a fixed finance alert',()=>{
+  const handler=financePlanner.match(/const handlePlaidSync = useCallback\([\s\S]*?\n  \}, \[adoptBalanceAttempt, readOnly\]\)/)?.[0] || ''
+  assert.ok(handler)
+  assert.doesNotMatch(handler,/setStorageError/)
+  assert.doesNotMatch(handler,/setStorageError\(error\.message/)
+  assert.doesNotMatch(handler,/showToast\('⚠ Balances not updated/)
+  assert.match(plaidConnect,/Bank balances were received but could not be saved safely/)
+})
+
+test('bank refresh status cannot erase an unrelated reviewed Finance error',()=>{
+  const receiver=financePlanner.match(/const receiveRefresh = event => \{[\s\S]*?\n    \}/)?.[0] || ''
+  assert.ok(receiver)
+  assert.doesNotMatch(receiver,/setStorageError/)
 })
 
 test('dashboard bank controls wrap safely at phone width',()=>{

@@ -10,6 +10,7 @@ import {
   persistSharedSourceImport,
   reconcileSharedRecords,
   shouldUploadSharedWrite,
+  startSharedStateSync,
   syncSharedState,
   writeSharedJson,
 } from './sharedState.js'
@@ -80,6 +81,80 @@ test('sync quarantines a local-only shared record without uploading it or repeat
     assert.deepEqual(retry.rejected, [])
   } finally {
     globalThis.fetch = originalFetch
+    restore()
+  }
+})
+
+test('background shared-state sync reports recovery after a transient failure', async () => {
+  const originalFetch = globalThis.fetch
+  const originalDocument = globalThis.document
+  const restore = installBrowserGlobals()
+  const storage = memoryStorage()
+  let requests = 0
+  let errors = 0
+  let stop = () => {}
+  globalThis.document = { visibilityState:'visible', addEventListener() {}, removeEventListener() {} }
+  globalThis.window.addEventListener = () => {}
+  globalThis.window.removeEventListener = () => {}
+  globalThis.fetch = async () => {
+    requests += 1
+    if(requests === 1) throw new Error('network timeout')
+    return { ok:true, json:async () => ({ records:{} }) }
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      const guard = setTimeout(() => reject(new Error('background sync did not recover')), 500)
+      stop = startSharedStateSync({
+        storage,
+        intervalMs:2,
+        onError:() => { errors += 1 },
+        onSuccess:() => { clearTimeout(guard); stop(); resolve() },
+      })
+    })
+    assert.equal(requests, 2)
+    assert.equal(errors, 1)
+    assert.equal(getSharedStateHealth(storage).status, 'healthy')
+    assert.equal(getSharedStateHealth(storage).lastError, '')
+  } finally {
+    stop()
+    globalThis.fetch = originalFetch
+    if(originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
+    restore()
+  }
+})
+
+test('background shared-state sync reports one error for a rejected local record', async () => {
+  const originalFetch = globalThis.fetch
+  const originalDocument = globalThis.document
+  const restore = installBrowserGlobals()
+  const storage = memoryStorage({ homehq_items_v1:'[{"id":"browser-only"}]' })
+  let errors = 0
+  let stop = () => {}
+  globalThis.document = { visibilityState:'visible', addEventListener() {}, removeEventListener() {} }
+  globalThis.window.addEventListener = () => {}
+  globalThis.window.removeEventListener = () => {}
+  globalThis.fetch = async () => ({ ok:true, json:async () => ({ records:{} }) })
+  try {
+    await new Promise((resolve, reject) => {
+      const guard = setTimeout(() => reject(new Error('background sync did not report the rejected record')), 500)
+      stop = startSharedStateSync({
+        storage,
+        intervalMs:2,
+        onError:() => {
+          errors += 1
+          clearTimeout(guard)
+          stop()
+          resolve()
+        },
+      })
+    })
+    assert.equal(errors, 1)
+  } finally {
+    stop()
+    globalThis.fetch = originalFetch
+    if(originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
     restore()
   }
 })

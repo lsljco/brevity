@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getHouseholdCalendarDate, getHouseholdDateKey, getHouseholdDateLabel, getHouseholdGreeting, getHouseholdMinuteOfDay, getHouseholdTimeLabel, HOUSEHOLD_TIME_ZONE } from './financeTime.js'
+import { getHouseholdCalendarDate, getHouseholdDateKey, getHouseholdDateLabel, getHouseholdDateTimeLabel, getHouseholdGreeting, getHouseholdMinuteOfDay, getHouseholdTimeLabel, HOUSEHOLD_TIME_ZONE } from './financeTime.js'
 
 test('finance greeting follows the authoritative household time zone', () => {
   assert.equal(HOUSEHOLD_TIME_ZONE, 'America/New_York')
@@ -26,5 +26,6 @@ test('finance calendar anchors follow the household date across a UTC boundary',
   )
   assert.equal(getHouseholdDateLabel(instant), 'Sunday, September 6, 2026')
   assert.equal(getHouseholdTimeLabel(instant), '10:30 PM')
+  assert.equal(getHouseholdDateTimeLabel(instant), 'Sep 6, 2026, 10:30 PM')
   assert.equal(getHouseholdMinuteOfDay(instant), 22 * 60 + 30)
 })

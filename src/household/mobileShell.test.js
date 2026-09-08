@@ -104,7 +104,15 @@ test('mobile refresh status stays in the page flow instead of covering page cont
 test('drill-down screens expose a labeled Back control sized for phone use', () => {
   assert.match(appSource, /aria-label={`Back to \$\{navigationHistory\.at\(-1\)\.label\}`}/)
   assert.match(appSource, /Back to \{navigationHistory\.at\(-1\)\.label\}/)
+  assert.match(appSource, /return pillar \? `\$\{pillar\.label\} overview` : 'Pillar overview'/)
   assert.match(mobileShellSource, /\.app-context-navigation button\s*\{[^}]*min-height:\s*40px;/s)
+})
+
+test('a successful background household sync clears only its stale warning', () => {
+  assert.match(appSource, /onSuccess:clearRecoveredHouseholdSyncWarning/)
+  assert.match(appSource, /brevity-finance-sync-recovered/)
+  assert.match(appSource, /issues\.filter\(issue=>issue\.source!=='Finance & Plaid'\)/)
+  assert.match(appSource, /current\.issues\.filter\(issue=>issue\.id!=='household-sync'\)/)
 })
 
 test('background household sync preserves every active drill-down and editor', () => {

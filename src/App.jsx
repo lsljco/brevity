@@ -68,7 +68,7 @@ function navigationLabel(pillarId, viewId) {
   if (viewId === 'today') return 'Today'
   if (viewId === 'settings') return 'Settings'
   const pillar = PILLARS.find(item => item.id === pillarId)
-  if (viewId === 'pillar-analysis') return pillar?.label || 'Pillar overview'
+  if (viewId === 'pillar-analysis') return pillar ? `${pillar.label} overview` : 'Pillar overview'
   return pillar?.items.find(item => item.id === viewId)?.label || pillar?.label || 'Previous screen'
 }
 
@@ -127,6 +127,19 @@ export default function App() {
   const [actionPermissionState,setActionPermissionState]=useState({status:'loading',member:'',permissions:null,error:''})
   const [actionPermissionRevision,setActionPermissionRevision]=useState(0)
 
+  const clearRecoveredHouseholdSyncWarning=()=>setRefreshState(current=>{
+    if(!current.issues?.some(issue=>issue.id==='household-sync'))return current
+    const issues=current.issues.filter(issue=>issue.id!=='household-sync')
+    if(issues.length)return {...current,status:'warning',message:`Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`,issues,expanded:current.expanded}
+    return {status:'ready',message:`Household synchronization restored at ${new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`,issues:[],expanded:false}
+  })
+  const clearRecoveredFinanceWarning=()=>setRefreshState(current=>{
+    if(!current.issues?.some(issue=>issue.source==='Finance & Plaid'))return current
+    const issues=current.issues.filter(issue=>issue.source!=='Finance & Plaid')
+    if(issues.length)return {...current,status:'warning',message:`Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`,issues,expanded:current.expanded}
+    return {status:'ready',message:`Finance synchronization restored at ${new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`,issues:[],expanded:false}
+  })
+
   const refreshAll=(member,{requestBankUpdate=false}={})=>{
     const financeReadOnly=auth.role!=='admin'
     const shouldRequestBankUpdate=requestBankUpdate&&!financeReadOnly
@@ -176,8 +189,13 @@ export default function App() {
     if(!auth.authenticated||!sharedReady)return
     return startSharedStateSync({
       onError:error=>setRefreshState({status:'warning',message:error.message||'Household records could not be synchronized. Local changes remain on this device.',issues:[{id:'household-sync',source:'Household Sync',message:error.message||'Household records could not be synchronized.',action:'Retry the refresh. Local changes remain protected on this device.'}],expanded:false}),
+      onSuccess:clearRecoveredHouseholdSyncWarning,
     })
   },[auth.authenticated,sharedReady])
+  useEffect(()=>{
+    window.addEventListener('brevity-finance-sync-recovered',clearRecoveredFinanceWarning)
+    return()=>window.removeEventListener('brevity-finance-sync-recovered',clearRecoveredFinanceWarning)
+  },[])
   useEffect(()=>{
     if(!auth.authenticated||!auth.member){setActionPermissionState({status:'loading',member:'',permissions:null,error:''});return}
     if(auth.role==='admin'){
