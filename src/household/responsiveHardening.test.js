@@ -8,6 +8,7 @@ const homeHqSource = readFileSync(new URL('../homehq/HomeHQ.jsx', import.meta.ur
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const mobileShellCss = readFileSync(new URL('../MobileShell.css', import.meta.url), 'utf8')
 const financeSource = readFileSync(new URL('../finance/FinancePlanner.jsx', import.meta.url), 'utf8')
+const dashboardFooterSource = readFileSync(new URL('../finance/DashboardFooter.jsx', import.meta.url), 'utf8')
 const metricDrilldownCss = readFileSync(new URL('../finance/MetricDrilldown.css', import.meta.url), 'utf8')
 const scenarioSource = readFileSync(new URL('../finance/ScenarioModeling.jsx', import.meta.url), 'utf8')
 const familyCalendarSource = readFileSync(new URL('../family/FamilyCalendar.jsx', import.meta.url), 'utf8')
@@ -85,7 +86,7 @@ test('Budget, Reporting, Cash Flow, Accounts, and dashboard footer have responsi
     'finance-accounts-forecast',
     'dash-footer',
   ]) {
-    assert.match(financeSource, new RegExp(`className="${className}"`), `${className} must be present in Finance`)
+    assert.match(`${financeSource}\n${dashboardFooterSource}`, new RegExp(`className="${className}"`), `${className} must be present in Finance`)
     assert.ok(responsiveCss.includes(`.${className}`), `${className} must be covered by responsive safeguards`)
   }
   assert.match(responsiveCss, /@media \(max-width:\s*520px\)[\s\S]*?\.finance-budget-line\s*\{[^}]*display:\s*grid\s*!important;/)
