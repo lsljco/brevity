@@ -436,9 +436,11 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
 
       if (localValue == null) return
       // A local record with no server counterpart is not acknowledged truth.
-      // Keep it available for recovery, but remove any stale version metadata
-      // so Action preparation and source ingestion both fail closed.
+      // Preserve it under an explicit recovery key, then remove it from the
+      // live key. Otherwise every refresh re-reports the same browser-only
+      // value and feature readers can mistake it for synchronized truth.
       try { storage.setItem(`${key}_local_backup_before_cloud`, localValue) } catch {}
+      try { storage.removeItem(key) } catch {}
       delete meta[key]
       blockedLocal.push(key)
     })
@@ -455,7 +457,7 @@ export async function syncSharedState(storage = window.localStorage, onError) {
     dispatchRemoteChange(result.applied)
     const rejected = []
     if (result.blockedLocal.length) {
-      const error = new Error(`${result.blockedLocal.length} local household record${result.blockedLocal.length === 1 ? '' : 's'} could not be verified on the server. Those records are read-only until they are recreated through reviewed Action Mode.`)
+      const error = new Error(`${result.blockedLocal.length} browser-only household record${result.blockedLocal.length === 1 ? ' was' : 's were'} moved out of live views and preserved in the recovery cache. Synchronized household data remains authoritative.`)
       error.status = 409
       error.code = 'UNACKNOWLEDGED_LOCAL_STATE'
       error.keys = result.blockedLocal

@@ -92,6 +92,8 @@ export function scopePlaidTransactionsByAccount(transactions = [], plaidIdToLoca
   const unmapped = []
   for (const transaction of transactions) {
     const localAccountId = plaidIdToLocal[transaction?.accountId]
+      || plaidIdToLocal[`item:${transaction?.itemId || ''}`]
+      || plaidIdToLocal[`institution:${normalizedInstitution(transaction?.institution)}`]
     if (!localAccountId) {
       unmapped.push(transaction)
       if (includeUnmapped) included.push(transaction)
@@ -207,6 +209,7 @@ export function mergePlaidBalances(financeData, plaidAccounts = []) {
     matchedPlaidIds.add(match.accountId)
     account.balance = match.balance
     account.plaidAccountId = match.accountId
+    if (match.itemId) account.plaidItemId = match.itemId
     // Keep Brevity's household-facing account label/type stable while
     // retaining the bank's source identity for traceability and support.
     account.plaidName = match.name || ''

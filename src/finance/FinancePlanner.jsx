@@ -882,7 +882,9 @@ const LUXURY_CSS = `
   .plaid-connect-disconnected { flex-wrap: wrap !important; }
   .plaid-connect-disconnected > * { max-width: 100%; }
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
-  .kpi-card { height: auto !important; min-height: 140px !important; padding: 16px !important; }
+  .kpi-card { height: auto !important; min-height: 178px !important; padding: 16px 16px 54px !important; }
+  .kpi-sub { max-width: calc(100% - 6px) !important; line-height: 1.35 !important; }
+  .kpi-trend { left: 16px !important; right: 16px !important; bottom: 15px !important; gap: 6px !important; font-size: 11px !important; line-height: 1.25 !important; }
   .kpi-sparkline { display: none !important; }
   .dash-search { width: 100% !important; }
   .hq-proj-grid { grid-template-columns: 1fr !important; }
@@ -1384,6 +1386,17 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const plaidIdToLocal = useMemo(() => {
     const m = {}
     data.accounts.forEach(a => { if (a.plaidAccountId) m[a.plaidAccountId] = a.id })
+    const uniqueSource = (field, prefix, normalize = value => String(value || '')) => {
+      const groups = new Map()
+      data.accounts.forEach(account => {
+        const value = normalize(account[field])
+        if (!value) return
+        groups.set(value, [...(groups.get(value) || []), account.id])
+      })
+      groups.forEach((ids, value) => { if (ids.length === 1) m[`${prefix}:${value}`] = ids[0] })
+    }
+    uniqueSource('plaidItemId', 'item')
+    uniqueSource('institution', 'institution', value => String(value || '').trim().toLowerCase())
     return m
   }, [data.accounts])
 

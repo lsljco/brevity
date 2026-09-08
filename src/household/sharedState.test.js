@@ -52,7 +52,7 @@ test('server state wins first sync and an unreviewed local value is backed up', 
   assert.equal(JSON.parse(storage.getItem('brevity_shared_state_meta_v1')).lslj_finance_v9.version, 4)
 })
 
-test('sync never uploads a local-only shared record and removes stale acknowledgement metadata', async () => {
+test('sync quarantines a local-only shared record without uploading it or repeatedly warning', async () => {
   const value = '[{"id":"local-project"}]'
   const storage = memoryStorage({
     homehq_items_v1:value,
@@ -72,8 +72,12 @@ test('sync never uploads a local-only shared record and removes stale acknowledg
     assert.deepEqual(result.blockedLocal, ['homehq_items_v1'])
     assert.equal(result.rejected[0].reason.code, 'UNACKNOWLEDGED_LOCAL_STATE')
     assert.equal(storage.getItem('homehq_items_v1_local_backup_before_cloud'), value)
+    assert.equal(storage.getItem('homehq_items_v1'), null)
     assert.equal(JSON.parse(storage.getItem('brevity_shared_state_meta_v1')).homehq_items_v1, undefined)
     assert.equal(getSharedStateHealth(storage).status, 'degraded')
+    const retry = await syncSharedState(storage)
+    assert.deepEqual(retry.blockedLocal, [])
+    assert.deepEqual(retry.rejected, [])
   } finally {
     globalThis.fetch = originalFetch
     restore()

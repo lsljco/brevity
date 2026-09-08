@@ -62,6 +62,12 @@ test('scoped account views disclose unmapped bank activity and offer an all-acti
   assert.match(source, /Show all bank activity/)
 })
 
+test('phone KPI cards reserve separate space for captions and trends', () => {
+  assert.match(source, /min-height: 178px/)
+  assert.match(source, /padding: 16px 16px 54px/)
+  assert.match(source, /\.kpi-trend \{ left: 16px[^}]+font-size: 11px/s)
+})
+
 test('every finance drilldown starts unfiltered and discloses any later subtotal', () => {
   assert.match(source, /const openFilteredTransactions = \(filter = null\) => \{\s*setTransactionListOptions\(\{ \.\.\.DEFAULT_TRANSACTION_LIST_OPTIONS \}\)/)
   assert.match(source, /const openScheduledTransactions = \(filter = null\) => \{\s*setTransactionListOptions\(\{ \.\.\.DEFAULT_TRANSACTION_LIST_OPTIONS \}\)/)
