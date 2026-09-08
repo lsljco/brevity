@@ -53,6 +53,11 @@ test('explicit transaction refresh requests a Plaid institution update without b
   assert.doesNotMatch(financeRefresh,/start_date=2000-01-01/)
   assert.match(transactionsFunction,/refreshOnly/)
   assert.match(financeRefresh,/stillProcessing:true/)
+  assert.match(transactionsFunction,/refresh_status/)
+  assert.match(transactionsFunction,/last_successful_update/)
+  assert.match(financeRefresh,/waitForPlaidTransactionRefresh/)
+  assert.match(financePlanner,/Brevity is waiting for the bank to confirm completion/)
+  assert.match(plaidConnect,/const transactionHasIssue = \['failed','partial'\]\.includes\(transactionState\)/)
   assert.match(financePlanner,/Refresh bank data/)
 })
 

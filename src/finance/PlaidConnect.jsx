@@ -222,7 +222,10 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
       }
 
       const balanceHasIssue = balanceState !== 'complete'
-      const transactionHasIssue = ['failed','partial','processing'].includes(transactionState)
+      // An accepted asynchronous refresh is progress, not a failure. Keep it
+      // in the ordinary sync notice; reserve the orange alert for a confirmed
+      // failure or partial institution result.
+      const transactionHasIssue = ['failed','partial'].includes(transactionState)
       setError([balanceHasIssue ? balanceDetail : '', transactionHasIssue ? transactionDetail : ''].filter(Boolean).join(' ') || null)
 
       const balanceSummary = balanceState === 'complete'

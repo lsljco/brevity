@@ -8,15 +8,25 @@ const {
   SYNC_MUTATION_CODE,
   buildPendingDelta,
   consolidateTransactionDelta,
+  lastSuccessfulTransactionUpdate,
   mapPlaidTransaction,
   responseBody,
   syncAndStageItem,
   syncItemTransactions,
+  transactionRefreshCompleted,
 } = require('../../netlify/functions/plaid-transactions.js')
 const {
   ackTransactionSyncBatch,
   verifyTransactionSyncReceipts,
 } = require('../../netlify/functions/storage.js')
+
+test('transaction refresh completion requires a successful Item update at or after the request', () => {
+  const response={data:{item:{status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z'}}}}}
+  assert.equal(lastSuccessfulTransactionUpdate(response),'2026-09-08T23:00:05.000Z')
+  assert.equal(transactionRefreshCompleted(lastSuccessfulTransactionUpdate(response),'2026-09-08T23:00:00.000Z'),true)
+  assert.equal(transactionRefreshCompleted('2026-09-08T22:59:59.000Z','2026-09-08T23:00:00.000Z'),false)
+  assert.equal(transactionRefreshCompleted('','2026-09-08T23:00:00.000Z'),false)
+})
 
 test('Plaid transaction sync consumes every page and returns one complete cursor advancement', async () => {
   const calls = []

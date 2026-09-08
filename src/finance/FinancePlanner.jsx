@@ -26,7 +26,7 @@ import {
   calculateTransactionAmountForRange,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
-import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, compatiblePlaidAccountType, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount } from './financeRefresh.js'
+import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, compatiblePlaidAccountType, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount, waitForPlaidTransactionRefresh } from './financeRefresh.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
@@ -1370,9 +1370,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     setActualsError(null)
     setActualsNotice('Requesting the latest transactions from your bank…')
     try {
-      const json = await fetchLatestPlaidTransactions({ requestBankUpdate: true })
-      const syncErrors = json.errors || []
-      const refreshErrors = json.refresh?.errors || []
+      let json = await fetchLatestPlaidTransactions({ requestBankUpdate: true })
       // A successful HTTP response may still be a partial multi-institution
       // snapshot. Retain the last-known rows for failed institutions instead
       // of silently erasing them from KPIs and reconciliation.
@@ -1384,9 +1382,22 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
         setActualsNotice('')
         return { ...json, transactions:plaidActuals || [], error:message }
       }
-      const txns = mergePlaidTransactionResponse(plaidActuals || [], json)
+      let txns = mergePlaidTransactionResponse(plaidActuals || [], json)
       console.log('[Brevity] Plaid actuals fetched:', txns.length, 'transactions')
       await persistSharedSourceImport(localStorage, PLAID_ACTUALS_KEY, txns, { sourceReceipts:json.sourceReceipts })
+      if (json.refresh?.stillProcessing) {
+        setActualsNotice('Plaid accepted the update. Brevity is waiting for the bank to confirm completion…')
+        const completionStatus = await waitForPlaidTransactionRefresh(json.refresh)
+        if (completionStatus?.refresh?.stillProcessing === false) {
+          const completedSnapshot = await fetchLatestPlaidTransactions({ requestBankUpdate:false })
+          const completedTransactions = mergePlaidTransactionResponse(txns, completedSnapshot)
+          await persistSharedSourceImport(localStorage, PLAID_ACTUALS_KEY, completedTransactions, { sourceReceipts:completedSnapshot.sourceReceipts })
+          txns = completedTransactions
+          json = { ...completedSnapshot, refresh:{ ...json.refresh, ...completionStatus.refresh, stillProcessing:false } }
+        }
+      }
+      const syncErrors = json.errors || []
+      const refreshErrors = json.refresh?.errors || []
       const allErrors = [...syncErrors, ...refreshErrors]
       const freshness = recordTransactionFreshness(localStorage, {
         status:allErrors.length || json.refresh?.stillProcessing ? 'partial' : 'fresh',
