@@ -32,6 +32,7 @@ export function resourceForOperation(operation) {
   if (operation.type === 'transaction.rule.create') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
+  if (operation.type === 'finance.account.link') return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
   throw new Error(`No action resource exists for ${operation.type}.`)
 }
@@ -47,6 +48,7 @@ export function recordForOperation(value, operation) {
   if (operation.type === 'plan.recap.update') return value?.recap || null
   if (operation.type === 'project.update' || operation.type === 'project.delete') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
   if (operation.type === 'forecast.update') return ['model','planningExpense','expenseMode'].includes(operation.targetId) ? value : (value?.scenarios || []).find(item => item.id === operation.targetId)
+  if (operation.type === 'finance.account.link') return (value?.accounts || []).find(item => item.id === operation.targetId)
   if (operation.type.startsWith('recurring.') && operation.type !== 'recurring.create') return (value?.transactions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.action.update') return (value?.openActions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.correction.update') return (value?.corrections || []).find(item => item.id === operation.targetId)
@@ -250,6 +252,24 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     }) }
     if (!found) throw new Error('That forecast scenario no longer exists. Refresh Brevity and ask again.')
     return { before, after }
+  }
+  if (operation.type === 'finance.account.link') {
+    const accounts = [...(value?.accounts || [])]
+    const sourceId = String(payload.plaidAccountId || '')
+    const original = accounts.find(account => account.id === operation.targetId)
+    if (!original) throw new Error('That Brevity account no longer exists. Refresh Finance and review the current account list.')
+    if (!sourceId) throw new Error('Choose a returned bank account before reviewing this link.')
+    const alreadyUsed = accounts.find(account => account.id !== operation.targetId && account.plaidAccountId === sourceId)
+    if (alreadyUsed) throw new Error(`That bank account is already linked to ${alreadyUsed.name || 'another Brevity account'}.`)
+    if (original.plaidAccountId === sourceId) throw new Error('That bank account is already linked here. Refresh balances instead.')
+    const sourceFields = ['plaidItemId','plaidName','plaidOfficialName','plaidType','plaidSubtype','institution','mask','plaidCurrentBalance','plaidAvailableBalance']
+    const afterAccounts = accounts.map(account => {
+      if (account.id !== operation.targetId) return account
+      const next = { ...account, plaidAccountId:sourceId }
+      sourceFields.forEach(field => { delete next[field] })
+      return next
+    })
+    return { before, after:{ ...(value || {}), accounts:afterAccounts } }
   }
   if (operation.type === 'recurring.create') {
     const transactions = [...(value?.transactions || [])]

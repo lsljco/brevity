@@ -27,7 +27,7 @@ test('finance navigation and dialog icon controls expose explicit accessible nam
   assert.ok(planner.includes('aria-label={`Delete ${tx.name}`}'))
   assert.equal(planner.includes('aria-label={`Edit ${acct.name} account`}'), false)
   assert.equal(planner.includes('aria-label={`Delete ${acct.name} account`}'), false)
-  assert.match(planner, /Account identity, type, and current balance are source-managed/)
+  assert.ok(planner.includes('aria-label={`Bank source for ${acct.name}`}'))
 })
 
 test('actual transaction and legacy rule controls describe close, remove, and toggle actions', () => {
