@@ -247,12 +247,13 @@ test('Plaid balance ingestion updates only source-owned fields on an existing fi
   }
   const value=JSON.stringify(finance)
   const existing={key:'lslj_finance_v9',value,hash:hashValue(value),version:4,updatedBy:'Larry'}
-  const next={...finance,accounts:[{...finance.accounts[0],balance:756.74,plaidAccountId:'source-account',plaidName:'Bank Checking',plaidOfficialName:'',plaidType:'depository',plaidSubtype:'checking',institution:'Pinnacle',mask:'607'}]}
+  const next={...finance,accounts:[{...finance.accounts[0],balance:756.74,plaidAccountId:'source-account',plaidItemId:'source-item',plaidName:'Bank Checking',plaidOfficialName:'',plaidType:'depository',plaidSubtype:'checking',institution:'Pinnacle',mask:'607'}]}
   const dataStore=memoryStore(existing)
-  const plaidAccounts=[{accountId:'source-account',name:'Bank Checking',officialName:'',type:'depository',subtype:'checking',institution:'Pinnacle',mask:'607',balance:756.74}]
+  const plaidAccounts=[{accountId:'source-account',itemId:'source-item',name:'Bank Checking',officialName:'',type:'depository',subtype:'checking',institution:'Pinnacle',mask:'607',balance:756.74}]
   const result=await writePlaidSourceRecord({dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',next,4),now,...verifiedAccounts(plaidAccounts)})
   assert.equal(result.statusCode,200)
   assert.equal(result.body.record.version,5)
+  assert.equal(JSON.parse(result.body.record.value).accounts[0].plaidItemId,'source-item')
   assert.deepEqual(dataStore.writes[0].options,{onlyIfMatch:'etag-current'})
 })
 
