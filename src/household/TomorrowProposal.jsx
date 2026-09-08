@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { createEmptyDailyPlan, createPlanItem, isStandingRoutineDecision, normalizeDailyPlan } from './dailyPlan.js'
 import { generateDailyProposal } from './dailyProposalApi.js'
-import { saveDailyPlan } from './householdApi.js'
+import { buildPlanDraftOperations, stageDailyPlanReview } from './dailyPlanActionReview.js'
 
 const nextDateKey = dateKey => {
   const date = new Date(`${dateKey}T12:00:00`)
@@ -9,16 +9,16 @@ const nextDateKey = dateKey => {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
 }
 
-const seedTomorrow = sourcePlan => {
+const seedTomorrow = (sourcePlan, targetPlan) => {
   const source = normalizeDailyPlan(sourcePlan)
   const targetDate = nextDateKey(source.date)
-  const next = createEmptyDailyPlan(targetDate)
+  const next = targetPlan?.date === targetDate ? normalizeDailyPlan(targetPlan) : createEmptyDailyPlan(targetDate)
   next.topPriorities = (source.recap.carryovers || []).slice(0, 3).map((title, index) => createPlanItem({ id: `carryover-${targetDate}-${index}`, title, owner: 'Family', status: 'pending' }))
   next.recap.tomorrowPrep = [...(source.recap.tomorrowPrep || [])]
   return next
 }
 
-export default function TomorrowProposal({ plan }) {
+export default function TomorrowProposal({ plan, targetPlan, readOnly = false }) {
   const targetDate = useMemo(() => nextDateKey(plan.date), [plan.date])
   const [proposal, setProposal] = useState(null)
   const [state, setState] = useState('idle')
@@ -39,7 +39,7 @@ export default function TomorrowProposal({ plan }) {
     if (!proposal) return
     setState('saving'); setMessage('')
     try {
-      const next = seedTomorrow(plan)
+      const next = seedTomorrow(plan, targetPlan)
       next.theme = proposal.theme
       next.governingPrinciple = proposal.governingPrinciple
       next.topPriorities = proposal.topPriorities.map((title, index) => createPlanItem({ id: `ai-priority-${targetDate}-${index}`, title, owner: 'Family', status: 'pending' }))
@@ -47,8 +47,9 @@ export default function TomorrowProposal({ plan }) {
       next.education.thinkTankTopic = proposal.thinkTankTopic
       next.ministry.contentFocus = proposal.ministryFocus
       next.decisions = proposal.decisionPrompts.filter(title => !isStandingRoutineDecision(title)).map((title, index) => createPlanItem({ id: `ai-decision-${targetDate}-${index}`, title, owner: 'Family', status: 'needs-decision', requiresDecision: true, notificationLevel: 'action' }))
-      await saveDailyPlan(next)
-      setState('saved'); setMessage(`Tomorrow’s proposed plan was saved for ${targetDate}. Review it during Morning Alignment before it becomes authoritative.`)
+      const operations = buildPlanDraftOperations(targetPlan || createEmptyDailyPlan(targetDate), next, { pillars:['spiritual', 'education', 'ministry'], includeRecap:true })
+      await stageDailyPlanReview({ summary:`Review tomorrow’s proposed daily brief for ${targetDate}`, operations, expectedVersion:Number(targetPlan?.version || 0) })
+      setState('reviewing'); setMessage(`Tomorrow’s proposal is ready for Action Mode review. Nothing has changed in the shared plan yet.`)
     } catch (error) {
       setState('error'); setMessage(error.message || 'Could not save tomorrow’s proposal.')
     }
@@ -60,7 +61,7 @@ export default function TomorrowProposal({ plan }) {
       <span>Theme</span><h3>{proposal.theme}</h3><p>{proposal.governingPrinciple}</p>
       <ol>{proposal.topPriorities.map(item=><li key={item}>{item}</li>)}</ol>
       <div className="tomorrow-proposal-notes"><div><strong>Spiritual</strong><p>{proposal.spiritualFocus}</p></div><div><strong>Think Tank</strong><p>{proposal.thinkTankTopic}</p></div><div><strong>Ministry</strong><p>{proposal.ministryFocus}</p></div></div>
-      <div className="tomorrow-proposal-actions"><button type="button" className="alignment-secondary" onClick={generate}>Regenerate</button><button type="button" className="alignment-primary" disabled={state==='saving'||state==='saved'} onClick={accept}>{state==='saving'?'Saving…':state==='saved'?'Saved':'Accept as Tomorrow Draft'}</button></div>
+      <div className="tomorrow-proposal-actions"><button type="button" className="alignment-secondary" onClick={generate}>Regenerate</button><button type="button" className="alignment-primary" disabled={readOnly||state==='saving'} onClick={accept}>{state==='saving'?'Opening review…':state==='reviewing'?'Review Again':readOnly?'Administrator review required':'Review Tomorrow Draft'}</button></div>
     </div>}
     {message&&<div className={`today-sync-banner${state==='error'?' today-sync-banner--error':''}`}>{message}</div>}
   </section>

@@ -1,0 +1,521 @@
+/* Cross-module responsive safeguards loaded after feature styles. */
+
+/* Today and all seven pillar overview pages */
+.today-sync-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 14px 30px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(197, 164, 109, .22);
+  border-radius: 12px;
+  background: rgba(197, 164, 109, .07);
+  color: var(--soft-white);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.today-sync-banner > div { flex: 1; min-width: 0; }
+.today-sync-banner strong,
+.today-sync-banner span { display: block; overflow-wrap: anywhere; }
+.today-sync-banner span { margin-top: 3px; color: var(--muted); }
+.today-sync-banner > i { flex: 0 0 auto; color: var(--gold); font-size: 20px; }
+.today-sync-banner > button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid rgba(197, 164, 109, .28);
+  border-radius: 9px;
+  background: rgba(197, 164, 109, .09);
+  color: var(--gold);
+  cursor: pointer;
+}
+.today-sync-banner--error { border-color: rgba(209, 135, 120, .35); background: rgba(209, 135, 120, .08); }
+.today-assignment > div,
+.pillar-analysis-page :is(h1, h2, h3, p, li, blockquote, strong, small) { min-width: 0; overflow-wrap: anywhere; }
+.today-decision-overlay { z-index: 1700 !important; }
+.today-decision-dialog { max-height: min(720px, calc(100dvh - 48px)) !important; overscroll-behavior: contain; }
+
+/* Household Operations, schedule, routines, and inventory */
+.household-operations-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.household-operations-tabs button { flex: 0 0 auto; min-height: 44px; }
+.schedule-hero > button,
+.schedule-save,
+.schedule-choice-group button,
+.schedule-invitations button,
+.routine-actions button,
+.maintenance-week-controls > button,
+.maintenance-toolbar button,
+.operations-signoff-queue button,
+.operations-actions button,
+.inventory-hero button,
+.inventory-form button,
+.inventory-actions button { min-height: 44px; }
+.schedule-form > *,
+.schedule-command > *,
+.maintenance-summary > *,
+.inventory-metrics > *,
+.inventory-list > article > *,
+.operations-signoff-queue article > div,
+.routine-list article > div { min-width: 0; }
+.schedule-form input,
+.schedule-form select,
+.schedule-command input,
+.operations-actions select,
+.inventory-form input,
+.inventory-form select,
+.inventory-toolbar input,
+.inventory-toolbar select { min-height: 44px; }
+.schedule-block { min-width: 0; }
+.schedule-block > div:first-child { min-width: 0; }
+.schedule-block :is(strong, small, span) { overflow: hidden; text-overflow: ellipsis; }
+.maintenance-stat strong,
+.inventory-metrics strong { overflow-wrap: anywhere; }
+
+/* Meals and dialogs */
+.meal-planner,
+.meal-planner > *,
+.meal-day,
+.meal-slot,
+.meal-library > section { min-width: 0; }
+.meal-planner-controls button,
+.meal-slot button,
+.meal-planner-state button { min-height: 44px; }
+.meal-dialog-backdrop { z-index: 1700 !important; }
+.meal-dialog { max-height: min(820px, calc(100dvh - 48px)); }
+.meal-dialog > header button { flex: 0 0 44px; width: 44px; height: 44px; }
+.meal-choice { min-height: 88px; }
+.meal-choice > * { min-width: 0; }
+
+/* Estate workflows and empty states */
+.estate-workspace,
+.estate-workspace > *,
+.estate-command-grid > *,
+.estate-maintenance-form > *,
+.estate-maintenance-list article > *,
+.estate-source-item > *,
+.estate-seed-item > *,
+.estate-vault-list > * { min-width: 0; }
+.estate-workspace :is(h1, h2, h3, p, span, small, strong, code) { overflow-wrap: anywhere; }
+.estate-command-grid > button,
+.estate-maintenance button,
+.estate-migration-console button,
+.estate-source-item > button { min-height: 44px; }
+.estate-maintenance-form input,
+.estate-maintenance-form select,
+.estate-maintenance-form textarea,
+.estate-maintenance-actions input { min-height: 44px; }
+.estate-vendor-grid footer { flex-wrap: wrap; }
+.estate-vault-list > a { min-height: 48px; }
+
+/* Assistant overlays, keyboard-safe composer, and action review */
+.brevity-assistant-header { padding-top: max(18px, env(safe-area-inset-top)); }
+.brevity-assistant-header-actions button,
+.brevity-assistant-composer-actions button,
+.brevity-action-review header > button,
+.brevity-action-center > header > button { min-width: 44px; width: 44px; height: 44px; }
+.brevity-assistant-composer {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  scroll-margin-bottom: env(safe-area-inset-bottom);
+}
+.brevity-assistant-composer textarea { padding-right: 112px; }
+.brevity-action-review,
+.brevity-action-center { overscroll-behavior: contain; }
+.brevity-action-review { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+.brevity-action-center { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+.brevity-action-review footer button,
+.brevity-action-center > nav button,
+.brevity-action-history article > div:last-child button,
+.brevity-action-proposal > button { min-height: 44px; }
+
+/* Settings, sign-in, and recovery empty states */
+.settings-page { box-sizing: border-box; width: 100%; min-width: 0; }
+.settings-page :is(p, span, strong) { overflow-wrap: anywhere; }
+.settings-card-row > div,
+.settings-preference-row > div { min-width: 0; }
+.household-auth-card,
+.household-account-form > *,
+.household-account-grid > *,
+.sermon-rescue-settings,
+.sermon-rescue-steps li > * { min-width: 0; }
+.sermon-rescue-steps button,
+.sermon-rescue-steps a,
+.sermon-rescue-imports a { min-height: 44px; }
+
+/* Spiritual source/repository controls used from Today. */
+.spiritual-studio,
+.spiritual-studio > *,
+.sermon-source-heading > *,
+.sermon-document-actions > *,
+.sermon-cloud-panel > * { min-width: 0; }
+.sermon-source-heading p,
+.transcript-filename,
+.sermon-document-actions small,
+.sermon-cloud-panel small { overflow-wrap: anywhere; }
+.transcript-upload,
+.transcript-clear,
+.sermon-generate,
+.sermon-document-actions a,
+.sermon-document-actions button,
+.sermon-cloud-panel a,
+.sermon-cloud-panel button { min-height: 44px; }
+
+@media (max-width: 640px) {
+  .today-sync-banner { align-items: flex-start; flex-wrap: wrap; margin: 12px 14px 0; }
+  .today-sync-banner > div { flex-basis: calc(100% - 34px); }
+  .today-sync-banner > button { flex: 1 1 140px; }
+  .today-decision-overlay {
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+  .today-decision-dialog {
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - env(safe-area-inset-bottom)) !important;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .today-decision-dialog-list footer { align-items: flex-start; flex-direction: column; }
+  .today-decision-dialog > header button { flex-basis: 44px; width: 44px; height: 44px; }
+
+  .schedule-block { left: 4px; right: 4px; gap: 6px; }
+  .schedule-block > div:last-child { gap: 3px; }
+  .schedule-block button { min-width: 36px; min-height: 36px; padding: 4px !important; }
+  .maintenance-check { width: 44px; height: 44px; }
+  .maintenance-task { grid-template-columns: 44px minmax(0, 1fr); }
+  .inventory-actions { flex-wrap: wrap; }
+  .inventory-actions button { min-width: 44px; height: 44px !important; }
+
+  .meal-dialog-backdrop {
+    place-items: stretch;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)) !important;
+  }
+  .meal-dialog {
+    width: 100%;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))) !important;
+  }
+  .meal-choice-list { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+
+  .estate-empty,
+  .estate-safety,
+  .estate-maintenance-empty { align-items: flex-start; }
+  .estate-key-list > div { grid-template-columns: minmax(0, 1fr) auto !important; }
+  .estate-key-list > div > em { grid-column: 1 / -1; justify-self: start; }
+  .estate-maintenance-actions button,
+  .estate-maintenance-actions input { flex: 1 1 120px; }
+
+  .brevity-action-review footer { align-items: stretch; flex-direction: column-reverse; }
+  .brevity-action-review footer button { width: 100%; }
+  .brevity-action-history article > div:last-child { align-items: stretch; flex-direction: column; }
+  .brevity-action-history article > div:last-child button { width: 100%; }
+
+  .settings-page > div:not(.sermon-rescue-settings) { padding: 20px 18px !important; }
+  .settings-card-row > div:last-child { width: 100%; }
+  .settings-card-row > div:last-child > button { width: 100%; min-height: 44px; }
+  .sermon-cloud-panel { align-items: flex-start; flex-direction: column; }
+  .sermon-cloud-panel > div:last-child,
+  .sermon-cloud-panel a,
+  .sermon-cloud-panel button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .pillar-analysis-page { padding-inline: 14px !important; }
+  .pillar-analysis-command,
+  .pillar-analysis-section { padding: 16px !important; }
+  .pillar-action-grid small { grid-template-columns: 1fr; }
+  .today-assignment { align-items: flex-start; flex-direction: column; }
+  .today-calendar-empty { align-items: flex-start; }
+
+  .schedule-command,
+  .schedule-form { grid-template-columns: minmax(0, 1fr) !important; }
+  .schedule-command > label,
+  .schedule-form .wide { grid-column: auto !important; }
+  .schedule-hero > button,
+  .schedule-save { width: 100%; }
+  .schedule-invitations article > div:last-child,
+  .routine-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-invitations button,
+  .routine-actions button { width: 100%; margin: 0; }
+  .maintenance-summary,
+  .inventory-metrics { grid-template-columns: minmax(0, 1fr) !important; }
+
+  .meal-planner { padding-inline: 14px !important; }
+  .meal-planner-controls nav { display: grid; grid-template-columns: 1fr; }
+  .meal-planner-controls nav button { width: 100%; }
+  .meal-dialog > header { padding: 16px; }
+  .meal-search { margin-inline: 14px; }
+  .meal-choice-list { padding-inline: 14px; }
+  .meal-choice { grid-template-columns: 64px minmax(0, 1fr); gap: 10px; }
+  .meal-choice > img { width: 64px; height: 58px; }
+  .meal-choice-mark { display: none; }
+
+  .estate-workspace { padding-inline: 14px !important; }
+  .estate-command-grid,
+  .estate-migration-stats,
+  .estate-preview-result dl,
+  .estate-maintenance-metrics { grid-template-columns: minmax(0, 1fr) !important; }
+  .estate-empty { flex-direction: column; padding: 20px; }
+  .estate-maintenance,
+  .estate-migration-console,
+  .estate-vault-list,
+  .estate-vendor-intelligence { padding: 16px; }
+  .estate-seed-item { grid-template-columns: minmax(0, 1fr) !important; }
+  .estate-seed-item > span { grid-column: auto !important; }
+  .estate-vault-list > header { align-items: flex-start; flex-direction: column; gap: 5px; }
+
+  .brevity-action-permissions article > div { grid-template-columns: minmax(0, 1fr); }
+  .brevity-action-fields > div { grid-template-columns: minmax(0, 1fr); }
+
+  .household-account-grid { grid-template-columns: minmax(0, 1fr); }
+  .settings-page { padding-inline: 14px !important; }
+}
+
+@supports not (height: 100dvh) {
+  .today-decision-dialog,
+  .meal-dialog { max-height: calc(100vh - 32px) !important; }
+}
+
+/* Finance layouts, mobile forecast agenda, and overlay safety */
+.finance-budget-summary > *,
+.finance-budget-category-header > *,
+.finance-budget-category-metrics > *,
+.finance-budget-line > *,
+.finance-budget-category-total > *,
+.finance-budget-plan-header > *,
+.finance-cashflow-summary > *,
+.finance-cashflow-breakdowns > *,
+.finance-accounts-forecast > *,
+.finance-calendar-header > *,
+.dash-footer > * { min-width: 0; }
+
+.finance-report-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.finance-report-tabs > button { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+.finance-calendar-mobile-agenda { display: none; }
+.finance-calendar-mobile-agenda > button {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 74px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.finance-calendar-mobile-agenda > button.is-selected {
+  border-color: rgba(197,164,109,.62);
+  background: rgba(197,164,109,.10);
+}
+.finance-calendar-agenda-date,
+.finance-calendar-agenda-preview,
+.finance-calendar-agenda-values { min-width: 0; }
+.finance-calendar-agenda-date strong,
+.finance-calendar-agenda-date small,
+.finance-calendar-agenda-preview small,
+.finance-calendar-agenda-values strong,
+.finance-calendar-agenda-values small { display: block; overflow-wrap: anywhere; }
+.finance-calendar-agenda-date small,
+.finance-calendar-agenda-preview small,
+.finance-calendar-agenda-values small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.finance-calendar-agenda-values { text-align: right; }
+.finance-calendar-agenda-values strong { color: var(--gold); font-variant-numeric: tabular-nums; }
+.finance-calendar-agenda-empty {
+  padding: 22px 16px;
+  border: 1px dashed rgba(197,164,109,.22);
+  border-radius: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.finance-insight-overlay,
+.finance-calendar-editor-overlay,
+.calendar-scope-overlay,
+.finance-calendar-move-overlay { z-index: 1700 !important; }
+.finance-insight-edit-overlay { z-index: 1710 !important; }
+.finance-insight-dialog,
+.finance-calendar-editor-dialog,
+.calendar-scope-dialog,
+.finance-calendar-move-dialog {
+  max-height: min(850px, calc(100dvh - 48px)) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.finance-root .toast,
+.finance-storage-error { z-index: 1750 !important; }
+
+@media (max-width: 1100px) {
+  .finance-budget-summary,
+  .finance-cashflow-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .finance-cashflow-breakdowns { grid-template-columns: minmax(0, 1fr) !important; }
+  .finance-budget-plan-header { align-items: flex-start !important; flex-wrap: wrap; }
+  .finance-budget-plan-actions { flex: 1 1 100%; flex-wrap: wrap; }
+  .dash-footer { flex-wrap: wrap; }
+}
+
+@media (max-width: 720px) {
+  .finance-root .finance-inner {
+    box-sizing: border-box !important;
+    width: calc(100% - 24px) !important;
+    margin: 12px !important;
+    padding: 16px !important;
+  }
+  .finance-card { padding: 16px !important; }
+  .finance-accounts-forecast { grid-template-columns: minmax(0, 1fr) !important; }
+  .finance-report-tabs { margin-inline: -2px; padding-bottom: 4px; }
+
+  .finance-calendar-header {
+    display: grid !important;
+    grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+    align-items: center !important;
+  }
+  .finance-calendar-header > button { min-width: 44px; min-height: 44px; }
+  .finance-calendar-header > p { grid-column: 2; grid-row: 1; }
+  .finance-calendar-header > button:nth-of-type(1) { grid-column: 1; grid-row: 1; }
+  .finance-calendar-header > button:nth-of-type(2) { grid-column: 3; grid-row: 1; }
+  .finance-calendar-header > button:nth-of-type(3) { grid-column: 1 / 2; grid-row: 2; }
+  .finance-calendar-header > button:nth-of-type(4) { grid-column: 2 / 4; grid-row: 2; justify-content: center; }
+  .finance-calendar-month-head,
+  .finance-calendar-month-grid { display: none !important; }
+  .finance-calendar-mobile-agenda { display: grid; gap: 8px; }
+  .finance-calendar-mobile-agenda > button {
+    display: grid;
+    grid-template-columns: minmax(88px, .8fr) minmax(0, 1.35fr) minmax(92px, .8fr);
+    align-items: start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .dash-footer { align-items: flex-start !important; gap: 12px !important; padding: 16px !important; }
+  .dash-footer > i { margin-top: 2px; }
+  .dash-footer > p { flex-basis: calc(100% - 32px) !important; }
+  .dash-footer > span { margin-left: 30px; }
+  .dash-footer > div:last-child {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 0 0 30px !important;
+    border-top: 1px solid var(--glass-border);
+    border-left: 0 !important;
+  }
+  .dash-footer > div:last-child > div { width: 100%; }
+  .dash-footer > div:last-child > div > div:last-child { width: 100% !important; max-width: 240px; }
+
+  .finance-insight-overlay,
+  .finance-calendar-editor-overlay,
+  .calendar-scope-overlay,
+  .finance-calendar-move-overlay {
+    align-items: flex-end !important;
+    padding: max(8px, env(safe-area-inset-top)) 0 0 !important;
+  }
+  .finance-insight-dialog,
+  .finance-calendar-editor-dialog,
+  .calendar-scope-dialog,
+  .finance-calendar-move-dialog {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top))) !important;
+    padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+    border-radius: 18px 18px 0 0 !important;
+  }
+  .finance-root .toast {
+    right: 12px !important;
+    bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    left: 12px !important;
+  }
+  .finance-storage-error {
+    top: max(10px, env(safe-area-inset-top)) !important;
+    width: calc(100% - 24px) !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .finance-budget-summary,
+  .finance-cashflow-summary { grid-template-columns: minmax(0, 1fr) !important; }
+  .finance-budget-category-header { align-items: flex-start !important; flex-wrap: wrap; }
+  .finance-budget-category-metrics {
+    display: grid !important;
+    box-sizing: border-box;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 6px 10px !important;
+  }
+  .finance-budget-category-metrics > div:first-child { width: auto !important; }
+  .finance-budget-category-metrics > span:nth-child(2) { min-width: 0 !important; }
+  .finance-budget-category-metrics > span:nth-child(3) { grid-column: 1 / -1; min-width: 0 !important; }
+  .finance-budget-line {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 8px 12px !important;
+    padding: 12px !important;
+  }
+  .finance-budget-line-name { grid-column: 1; }
+  .finance-budget-line-name { overflow-wrap: anywhere; }
+  .finance-budget-line-meter { grid-column: 1 / -1; grid-row: 2; width: 100% !important; }
+  .finance-budget-line-percent { grid-column: 2; grid-row: 1; min-width: 0 !important; }
+  .finance-budget-line-actual,
+  .finance-budget-line-budget { grid-row: 3; }
+  .finance-budget-line-actual { grid-column: 1; width: auto !important; min-width: 0 !important; text-align: left !important; }
+  .finance-budget-line-budget { grid-column: 2; min-width: 0 !important; }
+  .finance-budget-line-actual::before,
+  .finance-budget-line-budget::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .finance-budget-category-total {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto auto !important;
+    align-items: end;
+    padding: 10px 12px 12px !important;
+  }
+  .finance-budget-category-total-actual,
+  .finance-budget-category-total-budget { min-width: 0 !important; }
+  .finance-budget-category-total-actual::before,
+  .finance-budget-category-total-budget::before {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .finance-budget-category-total-actual::before { content: 'Actual'; }
+  .finance-budget-category-total-budget::before { content: 'Budget'; }
+  .finance-budget-plan-actions { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; }
+  .finance-budget-plan-actions > * { width: 100%; }
+  .finance-budget-plan-actions > div { display: grid !important; grid-template-columns: 1fr 1fr; }
+  .finance-calendar-mobile-agenda > button { grid-template-columns: minmax(0, 1fr) auto; }
+  .finance-calendar-agenda-preview { grid-column: 1 / -1; grid-row: 2; }
+  .finance-calendar-day-header { flex-wrap: wrap; gap: 12px; }
+  .finance-day-reconciliation-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .finance-day-reconciliation-grid > div {
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,.03);
+  }
+}
+
+@media (max-width: 400px) {
+  .finance-calendar-day-header > div:last-child { width: 100%; text-align: left !important; }
+}
+
+@supports not (height: 100dvh) {
+  .finance-insight-dialog,
+  .finance-calendar-editor-dialog,
+  .calendar-scope-dialog,
+  .finance-calendar-move-dialog { max-height: calc(100vh - 32px) !important; }
+}

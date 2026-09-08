@@ -30,6 +30,24 @@
 .family-calendar-mobile-agenda.is-selected { display: block; }
 @media (max-width: 720px) {
   .family-calendar-view-toggle { display: none; }
+  .family-calendar-month-navigation { display: none !important; }
   .family-calendar-scroll { display: none !important; }
   .family-calendar-mobile-agenda { display: block; }
+}
+
+@media (pointer: coarse) {
+  .family-calendar-event-title-row button {
+    width: 44px;
+    height: 44px;
+    margin: -4px -4px 0 0;
+  }
+  .family-calendar-agenda-edit { min-height: 44px; }
+}
+
+@supports (padding: max(0px)) {
+  @media (max-width: 720px) {
+    .family-calendar-editor > footer {
+      padding-bottom: max(15px, env(safe-area-inset-bottom));
+    }
+  }
 }

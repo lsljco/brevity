@@ -82,3 +82,18 @@ test('calendar failures become prioritized signals without hiding cached commitm
   assert.equal(model.signals[0].priority, 'critical')
   assert.equal(model.commitments.length, 1)
 })
+
+test('next commitment follows the household date and clock rather than the device zone', () => {
+  const model = buildTodayReadModel({
+    plan:{ ...plan, date:'2026-09-06' },
+    currentMember:'Larry',
+    now:new Date('2026-09-07T03:30:00.000Z'), // 11:30 PM on Sep 6 in New York
+    calendarHealth:{ state:'ready', usable:true },
+    calendarAppointments:[
+      { id:'past', title:'Past commitment', date:'2026-09-06', startTime:'11:00 PM', owner:'Larry' },
+      { id:'next', title:'Household-zone next commitment', date:'2026-09-06', startTime:'11:45 PM', owner:'Larry' },
+    ],
+  })
+
+  assert.equal(model.nextCommitment.title, 'Household-zone next commitment')
+})

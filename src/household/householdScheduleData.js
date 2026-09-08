@@ -1,4 +1,5 @@
-import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson, writeJson } from '../homehq/projectData.js'
+import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
+import { getHouseholdDateKey } from '../finance/financeTime.js'
 
 export const HOUSEHOLD_SCHEDULE_STORAGE_KEY = 'brevity_household_schedule_v1'
 export const HOUSEHOLD_SCHEDULE_SOURCE = 'household-schedule'
@@ -11,6 +12,8 @@ const dateKey = value => {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
 }
 const addDays = (value, amount) => { const date = new Date(`${dateKey(value)}T12:00:00`); date.setDate(date.getDate()+amount); return dateKey(date) }
+
+export const householdScheduleDate = (now = new Date()) => getHouseholdDateKey(now)
 
 export function normalizeHouseholdScheduleState(value = {}) {
   return {
@@ -28,7 +31,7 @@ export function createScheduleBlock(state, input, currentMember) {
   return normalizeHouseholdScheduleState({
     ...state,
     blocks: [...state.blocks, {
-      id: uid('schedule'), title: String(input.title || '').trim(), date: dateKey(input.date || new Date()),
+      id: uid('schedule'), title: String(input.title || '').trim(), date: dateKey(input.date || householdScheduleDate()),
       startTime: input.startTime || '09:00', endTime: input.endTime || '10:00', owner,
       participants, attendance, pillar: input.pillar || 'Household Management', notes: input.notes || '',
       createdBy: currentMember, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -112,7 +115,7 @@ export function invitationsForMember(state, member) {
   return state.blocks.filter(block => block.participants?.includes(member) && block.owner !== member && (block.attendance?.[member] || 'pending') === 'pending')
 }
 
-function calendarEventForBlock(block) {
+export function calendarEventForScheduleBlock(block) {
   const accepted = unique([block.owner, ...(block.participants || []).filter(member => (block.attendance?.[member] || 'pending') === 'accepted')])
   return {
     id: `${HOUSEHOLD_SCHEDULE_SOURCE}-${block.id}`, sourceId: `${HOUSEHOLD_SCHEDULE_SOURCE}-${block.id}`, source: HOUSEHOLD_SCHEDULE_SOURCE,
@@ -122,7 +125,7 @@ function calendarEventForBlock(block) {
   }
 }
 
-function calendarEventForRoutine(item) {
+export function calendarEventForScheduleRoutine(item) {
   const members = unique([item.owner, ...(item.participants || [])])
   return {
     id:`${HOUSEHOLD_SCHEDULE_SOURCE}-${item.id}`, sourceId:`${HOUSEHOLD_SCHEDULE_SOURCE}-${item.id}`, source:HOUSEHOLD_SCHEDULE_SOURCE,
@@ -132,16 +135,31 @@ function calendarEventForRoutine(item) {
   }
 }
 
+export const isHouseholdScheduleCalendarCopy = event => event?.source === HOUSEHOLD_SCHEDULE_SOURCE
+
+// Calendar reads this projection from the authoritative Schedule record. It is
+// deliberately pure: approving a Schedule change never performs a second
+// client-side write to the Family Calendar record.
+export function householdScheduleCalendarEvents(state, { start = householdScheduleDate(), days = 42 } = {}) {
+  const normalized=normalizeHouseholdScheduleState(state)
+  const first=dateKey(start)
+  const count=Math.max(1,Math.min(370,Number(days)||42))
+  const last=addDays(first,count-1)
+  const routineEvents=[]
+  for(let index=0;index<count;index+=1){
+    routineOccurrencesForDate(normalized,addDays(first,index)).forEach(item=>routineEvents.push(calendarEventForScheduleRoutine(item)))
+  }
+  const manualEvents=normalized.blocks.filter(block=>block.date>=first&&block.date<=last).map(calendarEventForScheduleBlock)
+  return [...manualEvents,...routineEvents]
+}
+
 export function publishHouseholdScheduleEvents(storage, state, days = 42) {
-  const normalized = normalizeHouseholdScheduleState(state)
-  const start = dateKey(new Date())
-  const routineEvents = []
-  for (let index = 0; index < days; index += 1) routineOccurrencesForDate(normalized, addDays(start,index)).forEach(item => routineEvents.push(calendarEventForRoutine(item)))
-  const manualEvents = normalized.blocks.filter(block => block.date >= start && block.date <= addDays(start,days)).map(calendarEventForBlock)
-  const prior = readJson(storage,FAMILY_CALENDAR_KEY,[])
-  const other = (Array.isArray(prior) ? prior : []).filter(event => event.source !== HOUSEHOLD_SCHEDULE_SOURCE)
-  const events = [...manualEvents,...routineEvents]
-  const result = writeJson(storage,FAMILY_CALENDAR_KEY,[...other,...events])
-  if (result.ok && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('brevity-family-calendar-updated',{detail:events}))
-  return { ...result, events }
+  void storage
+  const events = householdScheduleCalendarEvents(state,{start:householdScheduleDate(),days})
+  return {
+    ok:false,
+    blocked:true,
+    events,
+    error:new Error('Household Schedule is projected into Family Calendar at read time; copied Calendar writes are disabled.'),
+  }
 }

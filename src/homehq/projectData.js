@@ -52,15 +52,9 @@ export function readJson(storage, key, fallback) {
   catch { return fallback }
 }
 
+// Shared household modules use this low-level helper for their own reviewed
+// write paths. HomeHQ project mutations intentionally do not call it directly.
 export function writeJson(storage, key, value) {
   try { return writeSharedJson(storage, key, value) }
   catch (error) { return { ok:false, error } }
-}
-
-export function publishProjectEvents(storage, items) {
-  const existing = readJson(storage, FAMILY_CALENDAR_KEY, [])
-  const events = syncProjectCalendarEvents(items, Array.isArray(existing) ? existing : [])
-  const result = writeJson(storage, FAMILY_CALENDAR_KEY, events)
-  if (result.ok && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('brevity-family-calendar-updated', { detail:events }))
-  return { ...result, events }
 }

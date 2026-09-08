@@ -1,5 +1,7 @@
 import { getStore } from '@netlify/blobs'
 import { productionMealPlanRepository } from './meal-plan-store.mjs'
+import { canonicalizeCalendarReadEvent } from '../../src/family/calendarNames.js'
+import { budgetLineId } from '../../src/finance/budgetBreakdown.js'
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const HOUSEHOLD_STORE = 'brevity-household'
@@ -8,6 +10,17 @@ const ACTION_SHARED_KEYS = ['lslj_finance_v9','lslj_budget_v1','brevity_finance_
 const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`
 const SENSITIVE_KEY = /token|secret|password|credential|api.?key|access.?key|client.?id|private.?key/i
 const LARGE_VALUE = /^(?:data:|[A-Za-z0-9+/]{300,}={0,2}$)/
+const missingBlob = error => error?.status === 404 || error?.statusCode === 404 || error?.name === 'NotFoundError'
+
+export async function readOptionalAuthoritativeRecord(dataStore, key) {
+  try {
+    const entry = await dataStore.getWithMetadata(key, { type:'json' })
+    return entry?.data || null
+  } catch (error) {
+    if (missingBlob(error)) return null
+    throw error
+  }
+}
 
 export function householdDate(now = new Date(), timeZone = process.env.BREVITY_TIME_ZONE || 'America/New_York') {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
@@ -78,8 +91,11 @@ const sourceStatus = (id, label, result, asOf = '') => ({
 const parseSharedValue=record=>{try{return record?.value==null?null:JSON.parse(record.value)}catch{return null}}
 const pick=(value,fields)=>Object.fromEntries(fields.filter(field=>value?.[field]!==undefined).map(field=>[field,value[field]]))
 const compactProject=item=>pick(item,['id','title','notes','status','priority','startDate','due','raci','pushToFamilyCalendar','updatedAt'])
-const compactCalendarEvent=item=>pick(item,['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'])
-const compactRecurring=item=>pick(item,['id','name','title','notes','amount','type','cat','category','accountId','freq','start','end','skips','owner','updatedAt'])
+const compactCalendarEvent=item=>pick(canonicalizeCalendarReadEvent(item),['id','uid','sourceId','title','description','notes','date','time','endDate','endTime','allDay','owner','participants','members','priority','href','etag','updatedAt'])
+const compactRecurring=item=>({
+  ...pick(item,['id','name','title','notes','amount','type','cat','category','acct','accountId','freq','start','end','skips','owner','updatedAt']),
+  budgetLineId:budgetLineId(item),
+})
 const compactForecast=model=>({expenseMode:model?.expenseMode,planningExpense:model?.planningExpense,scenarios:(model?.scenarios||[]).map(scenario=>({...pick(scenario,['id','title','description']),incomes:(scenario.incomes||[]).map(income=>pick(income,['id','description','monthlyNet','annualGross','contribution','remote','employment','notes']))}))})
 const compactSharedRecords=records=>{
   const finance=parseSharedValue(records?.lslj_finance_v9)
@@ -112,10 +128,15 @@ export async function buildAuthoritativeAssistantContext({
     loadActiveSermon(),
     loadSharedRecords(),
   ])
+  // An unavailable active-sermon source is not equivalent to having no
+  // sermon. Stop Assistant context construction so it cannot replace retained
+  // spiritual truth with generic content during a storage outage.
+  if (sermonResult.status === 'rejected') throw sermonResult.reason
   const dailyPlanRecord = dailyPlanResult.status === 'fulfilled' ? dailyPlanResult.value : null
   const dailyPlan = compactDailyPlan(dailyPlanRecord)
   const mealWindow = mealResult.status === 'fulfilled' ? mealResult.value : null
-  const activeSermon = sermonResult.status === 'fulfilled' ? sermonResult.value : null
+  const activeSermonRecord = sermonResult.status === 'fulfilled' ? sermonResult.value : null
+  const activeSermon = activeSermonRecord?.deleted ? null : activeSermonRecord
   const mealDays = (mealWindow?.days || []).map(compactMealDay)
   const sharedRecords=sharedResult.status==='fulfilled'?sharedResult.value:{}
 
@@ -164,7 +185,7 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
     now,
     loadDailyPlan: targetDate => dataStore.get(`${HOUSEHOLD_ID}/daily-plans/${targetDate}`, { type: 'json' }).catch(() => null),
     loadMealWindow: startDate => meals.getWindowReadOnly({ startDate, count: 7 }),
-    loadActiveSermon: () => dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null),
+    loadActiveSermon: () => readOptionalAuthoritativeRecord(dataStore, ACTIVE_SERMON_KEY),
     loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await sharedStore.get(`${HOUSEHOLD_ID}/records/${key}`,{type:'json'}).catch(()=>null)]))),
   })
 }

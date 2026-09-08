@@ -15,10 +15,19 @@ test('Calendar exposes an agenda-first phone flow and correctly labels its timef
 
 test('Operations offers a direct all-overdue view and uses honest empty copy', () => {
   const operations = read('./HouseholdMaintenance.jsx')
+  assert.match(operations, /useState\('operations'\)/, 'Household Operations should open on its Operations workspace')
   assert.match(operations, /Show all.*overdue.*responsibilit/)
   assert.match(operations, /overdueOnly/)
   assert.doesNotMatch(operations, /responsibility\{visibleTasks\.length === 1 \? '' : 'ies'\}/)
   assert.match(operations, /No responsibilities are assigned to or covered by/)
+})
+
+test('Settings keeps account status visible but disables credential mutations', () => {
+  const accounts = read('./HouseholdAuth.jsx')
+  assert.match(accounts, /Household account status remains visible/)
+  assert.match(accounts, /Password changes unavailable/)
+  assert.match(accounts, /type="button" disabled title="Household password changes are disabled in this release\."/)
+  assert.doesNotMatch(accounts, /setHouseholdMemberPassword|onSubmit=\{save\}|Set \/ reset/)
 })
 
 test('Projects distinguish an empty portfolio from an empty filter result', () => {

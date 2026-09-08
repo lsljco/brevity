@@ -1,4 +1,5 @@
 const { getStore } = require('@netlify/blobs')
+const { isDeepStrictEqual } = require('node:util')
 const { readSession } = require('./household-auth')
 const { sharedSpiritualValue } = require('../lib/spiritual-language.cjs')
 
@@ -10,7 +11,7 @@ const headers = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
   'access-control-allow-headers': 'content-type',
-  'access-control-allow-methods': 'GET,PUT,OPTIONS',
+  'access-control-allow-methods': 'GET,OPTIONS',
 }
 
 function response(statusCode, body) { return { statusCode, headers, body: JSON.stringify(body) } }
@@ -20,6 +21,70 @@ const clean = value => String(value || '').replace(/\s+/g, ' ').trim()
 const values = value => Array.isArray(value) ? value.filter(Boolean) : value ? [value] : []
 const addDays = (date, count) => { const value = new Date(`${date}T12:00:00-04:00`); value.setDate(value.getDate() + count); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}` }
 const itemText = item => typeof item === 'string' ? clean(item) : clean(item?.detail || item?.description || item?.text || item?.label || item?.stage)
+const missingBlob = error => error?.status === 404 || error?.statusCode === 404 || error?.name === 'NotFoundError'
+
+async function readOptionalJSON(dataStore, key) {
+  try {
+    const entry = await dataStore.getWithMetadata(key, { type:'json' })
+    return entry?.data || null
+  } catch (error) {
+    if (missingBlob(error)) return null
+    throw error
+  }
+}
+
+async function loadMemberPermissions(session) {
+  if (session.role === 'admin') return null
+  const { productionAssistantActionRepository } = await import('../lib/assistant-action-repository.mjs')
+  const matrix = await productionAssistantActionRepository().getPermissions()
+  return matrix?.[session.member] || {}
+}
+
+function hasFinancialPlanContent(value) {
+  if (Array.isArray(value)) return value.length > 0
+  if (value && typeof value === 'object') {
+    return Object.entries(value).some(([key, nested]) => key !== 'owner' && hasFinancialPlanContent(nested))
+  }
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'boolean') return value
+  return clean(value) !== ''
+}
+
+function canonicalFinancialPlanContent(value) {
+  if (Array.isArray(value)) {
+    const items = value.map(canonicalFinancialPlanContent).filter(item => item !== undefined)
+    return items.length ? items : undefined
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+      .filter(([key]) => key !== 'owner')
+      .map(([key, nested]) => [key, canonicalFinancialPlanContent(nested)])
+      .filter(([, nested]) => nested !== undefined)
+    return entries.length ? Object.fromEntries(entries.sort(([left], [right]) => left.localeCompare(right))) : undefined
+  }
+  if (typeof value === 'number') return value === 0 ? undefined : value
+  if (typeof value === 'boolean') return value ? true : undefined
+  const normalized = clean(value)
+  return normalized || undefined
+}
+
+function financialPlanChanged(currentPlan, nextPlan) {
+  const current = currentPlan?.finance && typeof currentPlan.finance === 'object' ? currentPlan.finance : {}
+  const next = nextPlan?.finance && typeof nextPlan.finance === 'object' ? nextPlan.finance : {}
+  if (!hasFinancialPlanContent(current) && !hasFinancialPlanContent(next)) return false
+  return !isDeepStrictEqual(canonicalFinancialPlanContent(current), canonicalFinancialPlanContent(next))
+}
+
+function dailyPlanWritePermission({ session, memberPermissions, currentPlan, nextPlan }) {
+  if (session?.role === 'admin') return { allowed:true, domain:'planning' }
+  if (!memberPermissions?.planning) {
+    return { allowed:false, domain:'planning', reason:`Planning changes are not enabled for ${session?.member || 'this member'}.` }
+  }
+  if (financialPlanChanged(currentPlan, nextPlan)) {
+    return { allowed:false, domain:'finance', reason:'Financial administration requires household-administrator access.' }
+  }
+  return { allowed:true, domain:'planning' }
+}
 
 const scriptureReference = item => clean(typeof item === 'string' ? item : item?.reference || item?.scripture || item?.title)
 function sermonScripturePool(activeSermon) {
@@ -50,29 +115,50 @@ function sermonDevotion(activeSermon, date) {
   if (date < days[0].date) return days[0]
   return days[days.length - 1]
 }
-async function getPlan(date) {
-  const dataStore = store(), value = await dataStore.get(planKey(date), { type: 'json' })
+async function getPlan(date, dataStore = store()) {
+  const value = await readOptionalJSON(dataStore, planKey(date))
   if (!value) return null
-  const activeSermon = await dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null), devotion = sermonDevotion(activeSermon, date)
+  const activeSermonRecord = await readOptionalJSON(dataStore, ACTIVE_SERMON_KEY), activeSermon=activeSermonRecord?.deleted?null:activeSermonRecord, devotion = sermonDevotion(activeSermon, date)
   const existingSpiritual = sharedSpiritualValue(value.spiritual || {})
   if (!activeSermon?.sermonNotes) return value
-  const retained={ ...existingSpiritual, owner: '', sermonNotes: sharedSpiritualValue(activeSermon.sermonNotes), sermonSource: { ...activeSermon.source, generatedAt: activeSermon.activatedAt, model: activeSermon.model, active: true, sharedHouseholdDevotion: true, devotionStartDate: daysStart(activeSermon) } }
+  const retained={ ...existingSpiritual, owner: '', sermonNotes: sharedSpiritualValue(activeSermon.sermonNotes), sermonSource: { ...activeSermon.source, generatedAt: activeSermon.activatedAt, model: activeSermon.model, active: true, activeVersion:Number(activeSermon.version||0), sourceHash:activeSermon.source?.sourceHash||'', sharedHouseholdDevotion: true, devotionStartDate: daysStart(activeSermon) } }
   if (!devotion) return { ...value, spiritual:retained }
   return { ...value, spiritual: { ...retained, scripture: devotion.scripture, devotionFocus: devotion.devotionFocus, prayerFocus: devotion.prayerFocus, discussionPrompts: devotion.discussionPrompts, obedienceAction: devotion.obedienceAction, requiredOutput: devotion.requiredOutput, todayFocus: devotion.title, devotionDay: devotion.day, devotionDate: devotion.date, devotionTitle: devotion.title } }
 }
 function daysStart(activeSermon) { const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(sermonDate) ? addDays(sermonDate, 1) : '' }
-async function putPlan(date, plan, expectedVersion) {
-  const dataStore = store(), current = await dataStore.get(planKey(date), { type: 'json' }).catch(() => null), currentVersion = Number(current?.version || 0)
-  if (Number(expectedVersion || 0) !== currentVersion) return { conflict: true, current }
-  const now = new Date().toISOString(), normalized = { ...plan, id: plan.id || `daily-plan-${date}`, date, householdId: HOUSEHOLD_ID, createdAt: plan.createdAt || now, updatedAt: now, version: currentVersion + 1 }
-  await dataStore.setJSON(planKey(date), normalized); return { conflict: false, plan: normalized }
+async function readPlanEntry(dataStore, date) {
+  const entry = await dataStore.getWithMetadata(planKey(date), { type:'json' })
+  return entry ? { plan:entry.data, etag:entry.etag || '' } : { plan:null, etag:'' }
 }
+async function putPlan(date, plan, expectedVersion, { session, memberPermissions, dataStore = store(), now = () => new Date() } = {}) {
+  const entry = await readPlanEntry(dataStore, date)
+  const current = entry.plan, currentVersion = Number(current?.version || 0)
+  const permission = dailyPlanWritePermission({ session, memberPermissions, currentPlan:current, nextPlan:plan })
+  if (!permission.allowed) return { forbidden:true, permission }
+  if (current && (expectedVersion === undefined || expectedVersion === null)) return { conflict:true, conflictType:'missing-version', current }
+  if (!Number.isInteger(Number(expectedVersion ?? 0)) || Number(expectedVersion ?? 0) < 0) return { invalidVersion:true }
+  if (Number(expectedVersion ?? 0) !== currentVersion) return { conflict: true, conflictType:'version', current }
+  if (current && !entry.etag) throw new Error('The household plan did not include a safe version marker.')
+  // Recovery identity is server-owned. An ordinary browser save must never be
+  // able to impersonate a completed Action Mode journal write.
+  const timestamp = now().toISOString(), normalized = { ...plan, id: plan.id || `daily-plan-${date}`, date, householdId: HOUSEHOLD_ID, createdAt: plan.createdAt || timestamp, updatedAt: timestamp, updatedBy:session.member, lastActionId:'', version: currentVersion + 1 }
+  const result = await dataStore.setJSON(planKey(date), normalized, current ? { onlyIfMatch:entry.etag } : { onlyIfNew:true })
+  if (result?.modified === false) {
+    const latest = (await readPlanEntry(dataStore, date)).plan
+    return { conflict:true, conflictType:'version', current:latest }
+  }
+  return { conflict: false, plan: normalized }
+}
+exports.dailyPlanWritePermission = dailyPlanWritePermission
+exports.getPlan = getPlan
+exports.readOptionalJSON = readOptionalJSON
+exports.putPlan = putPlan
 exports.handler = async event => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' }
   try {
     const session = await readSession(event); if (!session) return response(401, { error: 'Sign in to access the household plan.' }); const date = event.queryStringParameters?.date
     if (event.httpMethod === 'GET') return response(200, { householdId: HOUSEHOLD_ID, plan: await getPlan(date) })
-    if (event.httpMethod === 'PUT') { let body; try { body = JSON.parse(event.body || '{}') } catch { return response(400, { error: 'Invalid JSON body.' }) }; const candidate = body.plan || body, result = await putPlan(date || body.date, candidate, body.expectedVersion ?? candidate.version ?? 0); if (result.conflict) return response(409, { error: 'Another device updated this household plan. Brevity loaded the latest version so you can review it before saving again.', householdId: HOUSEHOLD_ID, plan: result.current }); return response(200, { householdId: HOUSEHOLD_ID, plan: result.plan }) }
+    if (event.httpMethod === 'PUT') return response(409, { code:'ACTION_REVIEW_REQUIRED', error:'Direct daily-plan replacement is disabled. Review a granular change in Action Mode so Brevity can enforce permissions, retain audit history, support Undo, and stop on newer versions.' })
     return response(405, { error: 'Method not allowed.' })
   } catch (error) { console.error('[household-data]', error); return response(/valid YYYY-MM-DD/.test(error.message) ? 400 : 500, { error: error.message || 'Household data request failed.' }) }
 }

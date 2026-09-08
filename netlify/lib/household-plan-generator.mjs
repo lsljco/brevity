@@ -1,6 +1,5 @@
 import { getStore } from '@netlify/blobs';
-import { buildDailyDevotionPdf } from './devotion-document.mjs';
-import { getOneDriveConnection, publishDailyDevotion } from './onedrive.mjs';
+import { randomUUID } from 'node:crypto';
 import { productionMealPlanRepository } from './meal-plan-store.mjs';
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
@@ -8,9 +7,21 @@ const STORE_NAME = 'brevity-household';
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 
 const planKey = date => `${HOUSEHOLD_ID}/daily-plans/${date}`;
+export const dailyPlanDraftKey = (date, requestId) => `${HOUSEHOLD_ID}/daily-plan-drafts/${date}/${String(requestId || '').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120)}`;
 const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`;
 const DEFAULT_FITNESS_LOCATION = 'Lifetime Gym';
 const DEFAULT_EDUCATION_OWNER = 'Family';
+const missingBlob = error => error?.status === 404 || error?.statusCode === 404 || error?.name === 'NotFoundError';
+
+export async function readOptionalHouseholdRecord(dataStore, key) {
+  try {
+    const entry = await dataStore.getWithMetadata(key, { type: 'json' });
+    return entry?.data || null;
+  } catch (error) {
+    if (missingBlob(error)) return null;
+    throw error;
+  }
+}
 
 function store() {
   return getStore({
@@ -19,6 +30,31 @@ function store() {
     siteID: process.env.NETLIFY_SITE_ID,
     token: process.env.NETLIFY_TOKEN,
   });
+}
+
+export async function readDailyPlanDraft(dataStore, date, requestId) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) || !requestId) return null;
+  return readOptionalHouseholdRecord(dataStore, dailyPlanDraftKey(date, requestId));
+}
+
+export async function saveGeneratedDailyPlanDraft({ dataStore, date, requestId, draft, basePlanVersion, now = () => new Date() }) {
+  const record = {
+    id:`daily-plan-draft-${requestId}`,
+    requestId,
+    date,
+    state:'proposed',
+    basePlanVersion:Number(basePlanVersion || 0),
+    version:1,
+    createdAt:now().toISOString(),
+    draft,
+  };
+  const result = await dataStore.setJSON(dailyPlanDraftKey(date, requestId), record, { onlyIfNew:true });
+  if (result?.modified === false) {
+    const existing = await readDailyPlanDraft(dataStore, date, requestId);
+    if (!existing) throw new Error('The generated daily-plan draft could not be safely verified.');
+    return { draftRecord:existing, skipped:true, reason:'request-already-generated' };
+  }
+  return { draftRecord:record, skipped:false };
 }
 
 const timelineItem = {
@@ -183,6 +219,8 @@ function localDateParts(now = new Date()) {
   return { date: `${get('year')}-${get('month')}-${get('day')}`, weekday: get('weekday') };
 }
 
+export const currentNewYorkDate = (now = new Date()) => localDateParts(now).date;
+
 function outputText(response) {
   return (response.output || []).flatMap(item => item.content || []).map(part => part.text || '').join('').trim();
 }
@@ -210,7 +248,7 @@ export function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = nu
     topPriorities: generated.topPriorities.map((item, index) => itemWithId(item, 'top-priority', index, date)),
     morningAlignment: { ...generated.morningAlignment, completedAt: '' },
     dayparts: generated.dayparts,
-    spiritual: { owner: 'Lorenzo', ...generated.spiritual, ...(activeSermon?{sermonNotes:activeSermon.sermonNotes,sermonSource:{...activeSermon.source,generatedAt:activeSermon.activatedAt,model:activeSermon.model,active:true}}:{}) },
+    spiritual: { owner: 'Lorenzo', ...generated.spiritual, ...(activeSermon?{sermonNotes:activeSermon.sermonNotes,sermonSource:{...activeSermon.source,generatedAt:activeSermon.activatedAt,model:activeSermon.model,active:true,activeVersion:Number(activeSermon.version||0),sourceHash:activeSermon.source?.sourceHash||''}}:{}) },
     health: {
       owner: 'Terica',
       ...generated.health,
@@ -235,27 +273,32 @@ export function hydrateGeneratedPlan(generated, date, mealDay, activeSermon = nu
   };
 }
 
-export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, overwrite = false, requestId = '' } = {}) {
+export async function generateDailyPlanDraft({ targetDate, targetWeekday, requestId = '', dataStore:providedStore, mealRepository:providedMealRepository } = {}) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured.');
   const local = localDateParts();
   const date = targetDate || local.date;
   const weekday = targetWeekday || new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'long' }).format(new Date(`${date}T12:00:00-04:00`));
-  const dataStore = store();
-  const existing = await dataStore.get(planKey(date), { type: 'json' }).catch(() => null);
-  if (existing && !overwrite && existing.generatedBy === 'brevity-daily-household-plan') return { plan: existing, skipped: true, reason: 'already-generated' };
+  const dataStore = providedStore || store();
+  const entry = await dataStore.getWithMetadata(planKey(date), { type: 'json' }).catch(error => { if (missingBlob(error)) return null; throw error; });
+  const existing = entry?.data || null;
+  const reviewedBaseVersion = Number(existing?.version || 0);
+  const reviewedRequestId = String(requestId || randomUUID());
+  const alreadyGenerated = await readDailyPlanDraft(dataStore, date, reviewedRequestId);
+  if (alreadyGenerated) return { draftRecord:alreadyGenerated, skipped:true, reason:'request-already-generated' };
 
   const yesterday = new Date(`${date}T12:00:00-04:00`);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
-  const priorPlan = await dataStore.get(planKey(yesterdayKey), { type: 'json' }).catch(() => null);
-  const activeSermon = await dataStore.get(ACTIVE_SERMON_KEY, { type: 'json' }).catch(() => null);
+  const priorPlan = await readOptionalHouseholdRecord(dataStore, planKey(yesterdayKey));
+  const activeSermonRecord = await readOptionalHouseholdRecord(dataStore, ACTIVE_SERMON_KEY);
+  const activeSermon = activeSermonRecord?.deleted ? null : activeSermonRecord;
   const priorPlanContext = priorPlan ? { ...priorPlan, spiritual: { ...priorPlan.spiritual, sermonNotes: undefined } } : null;
-  const mealRepository = await productionMealPlanRepository();
-  const mealWindow = await mealRepository.getWindow({ startDate: date, count: 1 });
+  const mealRepository = providedMealRepository || await productionMealPlanRepository();
+  const mealWindow = await mealRepository.getWindowReadOnly({ startDate: date, count: 1 });
   const mealDay = mealWindow.days[0];
   const scheduledMeals = Object.fromEntries(Object.entries(mealDay.resolvedMeals).map(([mealType, meal]) => [mealType, meal.name]));
 
-  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nBrevity's already-selected meals for this date are authoritative and must be copied exactly into the health fields:\n${JSON.stringify(scheduledMeals)}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article. Never put the Lifetime Gym location or Isaiah's education-block accountability on the decision board; both are established standing commitments.\n\nDo not announce pillar ownership in narrative content. Spiritual Maturity is shared formation: never say Lorenzo must lead or is responsible for another household member's devotion or prayer. ${activeSermon?'The ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until it is replaced by a new successful transcript upload. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No active sermon transcript is stored. Mark the sermon source CONFIRM without assigning responsibility to a particular member.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics.\n\nACTIVE SERMON SOURCE, retained until replaced:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
+  const prompt = `Produce the household's Seven Pillars Household Command Schedule for ${weekday}, ${date}.\n\n${HOUSEHOLD_CONTEXT}\n\nBrevity's already-selected meals for this date are authoritative and must be copied exactly into the health fields:\n${JSON.stringify(scheduledMeals)}\n\nGenerate the same level of specificity as a premium daily household briefing: exact daily theme, a concise day objective, ANCHOR/FOCUS/FLEX/WIND DOWN timeline, all seven pillar sections, decision board, evening close, success standard and governing principle. Treat Brevity as the source of truth. Populate structured fields rather than writing a prose article. Never put the Lifetime Gym location or Isaiah's education-block accountability on the decision board; both are established standing commitments.\n\nDo not announce pillar ownership in narrative content. Spiritual Maturity is shared formation: never say Lorenzo must lead or is responsible for another household member's devotion or prayer. ${activeSermon?'The REVIEWED ACTIVE SERMON SOURCE below governs Spiritual Maturity every day until an exact replacement is explicitly approved in Action Mode. An upload or analysis draft alone never replaces it. Derive today’s scripture, devotion focus, prayer focus, discussion prompts, obedience action, and required output exclusively from that sermon. Create a fresh date-specific movement through the sermon rather than repeating yesterday verbatim; preserve the sermon’s doctrine and wording, advance its sequence or deepen its application, and never substitute a generic devotion or an unrelated passage.':'No reviewed active sermon source is stored. Mark the sermon source CONFIRM without assigning responsibility to a particular member.'} For appointments or commitments not established by standing cadence or supplied prior-plan data, use CONFIRM and do not invent specifics.\n\nREVIEWED ACTIVE SERMON SOURCE, retained until explicit Action Mode replacement:\n${JSON.stringify(activeSermon||null)}\n\nYesterday's plan/recap context, if any:\n${JSON.stringify(priorPlanContext || {})}`;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -267,20 +310,18 @@ export async function generateAndSaveDailyPlan({ targetDate, targetWeekday, over
   const generated = JSON.parse(outputText(payload));
   const plan = hydrateGeneratedPlan(generated, date, mealDay, activeSermon);
   plan.createdAt = existing?.createdAt || plan.createdAt;
-  plan.version = Number(existing?.version || 0) + 1;
-  plan.generationRequestId = requestId;
-  if (await getOneDriveConnection()) {
-    try {
-      const pdf = await buildDailyDevotionPdf(plan);
-      plan.spiritual.devotionDocument = await publishDailyDevotion({ pdf, baseName: `${date}-daily-devotion` });
-    } catch (error) {
-      console.error('[daily-household-plan devotion publishing]', error);
-      plan.spiritual.devotionDocument = { state: 'error', error: error.message || 'OneDrive devotion publishing failed.' };
-    }
-  }
-  await dataStore.setJSON(planKey(date), plan);
-  return { plan, skipped: false };
+  plan.version = reviewedBaseVersion;
+  plan.generationRequestId = reviewedRequestId;
+  // External publishing is intentionally disabled until Brevity can present
+  // the exact artifact for review and restore the prior external version.
+  // Daily generation must never overwrite an external devotion implicitly.
+  return saveGeneratedDailyPlanDraft({ dataStore, date, requestId:reviewedRequestId, draft:plan, basePlanVersion:reviewedBaseVersion });
 }
+
+// Retain the prior export name for queued deployments while changing its
+// authority: it now creates an immutable proposal draft and never writes the
+// live daily-plan key.
+export const generateAndSaveDailyPlan = generateDailyPlanDraft;
 
 export function currentNewYorkHour(now = new Date()) {
   return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(now));

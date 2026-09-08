@@ -112,7 +112,7 @@ function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, on
 
   const matchCount = txCount ?? 0
 
-  const handleSave = () => {
+  const handleSave = async () => {
     onSave({ id: `rule_${Date.now()}`, conditions: cond, actions: act, splits, applyToExisting })
     onClose()
   }
@@ -123,7 +123,7 @@ function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, on
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 13, color: '#F7F6F2' }}>{label}</span>
           {/* toggle */}
-          <button onClick={() => set1(k, { on: !src[k].on })} style={{
+          <button type="button" aria-label={`${src[k].on ? 'Disable' : 'Enable'} ${label}`} aria-pressed={src[k].on} onClick={() => set1(k, { on: !src[k].on })} style={{
             width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
             background: src[k].on ? '#FF5500' : 'rgba(255,255,255,0.12)',
             position: 'relative', transition: 'background .2s', flexShrink: 0,
@@ -152,7 +152,7 @@ function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, on
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px 0', borderBottom: '1px solid #eee' }}>
           <span style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>New rule</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#666', lineHeight: 1 }}>✕</button>
+          <button type="button" aria-label="Close rule editor" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#666', lineHeight: 1 }}>✕</button>
         </div>
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, padding: '0 24px', borderBottom: '1px solid #eee' }}>
@@ -281,7 +281,7 @@ function RuleModal({ initial, accounts, allTxNames, categoryOptions, txCount, on
                       <input type="number" value={s.amount} placeholder="$0.00"
                         onChange={e => setSplits(sp => sp.map((x,j)=> j===i ? {...x,amount:e.target.value} : x))}
                         style={{ flex: 1, padding: '6px 8px', borderRadius: 7, border: '1px solid #ddd', fontSize: 13 }} />
-                      <button onClick={() => setSplits(sp => sp.filter((_,j)=>j!==i))}
+                      <button type="button" aria-label={`Remove rule split ${i + 1}`} onClick={() => setSplits(sp => sp.filter((_,j)=>j!==i))}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c00', fontSize: 16 }}>✕</button>
                     </div>
                   ))}
@@ -353,7 +353,7 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
 }
 
 // ── Main ActualTxModal ────────────────────────────────────────────────────────
-export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], txRules = [], onSave, onDelete, onSaveRule, onMakeRecurring, onClose }) {
+export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], onSave, onMakeRecurring, onClose }) {
   const [form, setForm] = useState({
     name:              tx.name || '',
     amount:            String(Math.abs(tx.amount || 0)),
@@ -366,11 +366,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
     splits:            tx.splits || [],
   })
   const [attachments, setAttachments]         = useState(tx.attachments || [])
-  const [catToast, setCatToast]               = useState(null)   // {category, merchant}
-  const [showRuleModal, setShowRuleModal]      = useState(false)
-  const [showSplits, setShowSplits]           = useState((tx.splits?.length || 0) > 0)
   const [storedCategories, setStoredCategories] = useState(() => loadStoredCategoryOptions(localStorage))
-  const fileRef = useRef()
   const committedCategoryRef = useRef(form.category)
   const categoryOptions = mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, storedCategories, transactionCategories(tx))
 
@@ -383,56 +379,25 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
 
   const commitCategory = (rawCategory) => {
     const newCat = rawCategory.trim()
-    const old = committedCategoryRef.current
     set('category', newCat)
     committedCategoryRef.current = newCat
-    if (newCat !== old && newCat) {
-      setCatToast({ category: newCat, merchant: form.name, originalStatement: form.originalStatement })
-    }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const updated = {
       ...tx,
-      ...form,
+      name: form.name.trim(),
       category: form.category.trim(),
-      splits: form.splits.map(split => ({ ...split, cat: (split.cat || split.category || '').trim() })),
-      amount: parseFloat(form.amount) * (tx.amount < 0 ? -1 : 1),
-      attachments,
     }
-    rememberCategories(updated)
-    onSave(updated)
-    onClose()
-  }
-
-  const handleDelete = () => {
-    if (window.confirm('Remove this transaction from your records?')) {
-      onDelete(tx.id)
+    const prepared = await onSave(updated)
+    if (prepared !== false) {
+      rememberCategories(updated)
       onClose()
     }
   }
 
-  const handleFile = (e) => {
-    const files = Array.from(e.target.files)
-    files.forEach(file => {
-      const reader = new FileReader()
-      reader.onload = ev => setAttachments(a => [...a, { name: file.name, data: ev.target.result }])
-      reader.readAsDataURL(file)
-    })
-  }
-
-  const addSplit = () => {
-    setShowSplits(true)
-    set('splits', [...form.splits, { cat: form.category, amount: '' }])
-  }
-
   // Find local account for this Plaid transaction
   const localAcct = accounts?.find(a => a.plaidAccountId === tx.accountId)
-
-  // Count how many existing transactions would match a rule for this merchant
-  const matchCount = (allTxNames || []).filter(n =>
-    n.toLowerCase() === form.name.toLowerCase()
-  ).length
 
   const isIncome = tx.amount < 0
 
@@ -450,7 +415,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
         }}>
           {/* Header row: close */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 18px 0' }}>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 22, lineHeight: 1 }}>✕</button>
+            <button type="button" aria-label="Close transaction details" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 22, lineHeight: 1 }}>✕</button>
           </div>
 
           {/* Amount + account */}
@@ -503,17 +468,19 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
               <label style={labelStyle}>Original Statement</label>
               <textarea
                 value={form.originalStatement}
-                onChange={e => set('originalStatement', e.target.value)}
+                readOnly
+                aria-readonly="true"
                 rows={2}
                 style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
                 placeholder="Bank transaction description"
               />
+              <span style={{ fontSize: 10, color: '#888884' }}>Original bank statement text is preserved as received.</span>
             </div>
 
             {/* Date */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Date</label>
-              <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
+              <input type="date" value={form.date} readOnly aria-readonly="true"
                 style={inputStyle} />
             </div>
 
@@ -532,97 +499,87 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
                   ariaLabel="Transaction category"
                   style={{ ...inputStyle, paddingLeft: form.category ? 34 : 12 }} />
               </div>
-              <span style={{ fontSize: 10, color: '#888884' }}>Type a new category or choose a saved one.</span>
+              <span style={{ fontSize: 10, color: '#888884' }}>
+                Type a new category or choose a saved one. Name and Category changes require Action Mode review. To create a future categorization rule, ask Brevity.
+              </span>
             </div>
 
-            {/* Amount (editable) */}
+            {/* Bank amount is immutable; corrections belong in reconciliation. */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Amount</label>
               <div style={{ position: 'relative' }}>
                 <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#888884', fontSize: 13, pointerEvents: 'none' }}>$</span>
-                <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)}
+                <input type="number" step="0.01" min="0" value={form.amount} readOnly aria-readonly="true"
                   style={{ ...inputStyle, paddingLeft: 24 }} />
               </div>
+              <span style={{ fontSize: 10, color: '#888884' }}>Amount and date remain tied to the bank record. Use reconciliation to explain a variance.</span>
             </div>
 
             {/* Goal */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Goal</label>
-              <select value={form.goal} onChange={e => set('goal', e.target.value)}
-                style={{ ...inputStyle, cursor: 'pointer' }}>
+              <select value={form.goal} disabled aria-disabled="true"
+                style={{ ...inputStyle, cursor: 'not-allowed' }}>
                 <option value="">Select goal...</option>
                 {goals.map(g => <option key={g.id || g} value={g.id || g}>{g.name || g}</option>)}
               </select>
+              <span style={{ fontSize: 10, color: '#888884' }}>Goal changes are unavailable in this reviewed metadata editor.</span>
             </div>
 
             {/* Split Transaction */}
             <div style={sectionStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={labelStyle}>Split Transaction</label>
-                <button onClick={addSplit} style={{ fontSize: 12, color: '#90AADE', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                  + Add split
-                </button>
-              </div>
-              {showSplits && form.splits.length > 0 && (
+              <label style={labelStyle}>Split Transaction</label>
+              {form.splits.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
                   {form.splits.map((s, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <CategoryInput value={s.cat || s.category || ''} onChange={e => set('splits', form.splits.map((x,j)=> j===i?{...x,cat:e.target.value}:x))}
-                        options={categoryOptions} ariaLabel={`Split ${i + 1} category`} placeholder="Type category…"
-                        style={{ flex: 2, minWidth: 0, padding: '6px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#F7F6F2', fontSize: 13 }} />
-                      <div style={{ position: 'relative', flex: 1 }}>
-                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#888884', fontSize: 12 }}>$</span>
-                        <input type="number" step="0.01" value={s.amount} placeholder="0.00"
-                          onChange={e => set('splits', form.splits.map((x,j)=> j===i?{...x,amount:e.target.value}:x))}
-                          style={{ width: '100%', padding: '6px 8px 6px 20px', borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#F7F6F2', fontSize: 13, boxSizing: 'border-box' }} />
-                      </div>
-                      <button onClick={() => set('splits', form.splits.filter((_,j)=>j!==i))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C4785A', fontSize: 16, padding: '0 4px' }}>✕</button>
+                    <div key={i} style={{ display: 'flex', gap: 8, justifyContent: 'space-between', color: '#B8B7B1', fontSize: 12 }}>
+                      <span>{s.cat || s.category || 'Uncategorized'}</span>
+                      <span>${Number(s.amount || 0).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
-              )}
+              ) : <span style={{ fontSize: 12, color: '#888884' }}>No splits</span>}
+              <span style={{ fontSize: 10, color: '#888884' }}>Split changes are unavailable in this reviewed metadata editor.</span>
             </div>
 
             {/* Notes */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Notes</label>
-              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3}
-                placeholder="Add notes to this transaction..."
+              <textarea value={form.notes} readOnly aria-readonly="true" rows={3}
+                placeholder="No notes"
                 style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
+              <span style={{ fontSize: 10, color: '#888884' }}>Note changes are unavailable in this reviewed metadata editor.</span>
             </div>
 
             {/* Needs Review By */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Needs Review By</label>
-              <select value={form.needsReview} onChange={e => set('needsReview', e.target.value)}
-                style={{ ...inputStyle, cursor: 'pointer' }}>
+              <select value={form.needsReview} disabled aria-disabled="true"
+                style={{ ...inputStyle, cursor: 'not-allowed' }}>
                 <option value="">Assign to...</option>
                 {FAMILY.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
+              <span style={{ fontSize: 10, color: '#888884' }}>Review assignment changes are unavailable in this reviewed metadata editor.</span>
             </div>
 
             {/* Attachments */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Attachments</label>
               <div style={{ border: '1px dashed rgba(255,255,255,0.18)', borderRadius: 10, padding: '12px 16px', textAlign: 'center' }}>
-                <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleFile} />
                 {attachments.length === 0 ? (
-                  <button onClick={() => fileRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888884', fontFamily: 'inherit', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, margin: '0 auto' }}>
+                  <span style={{ color: '#888884', fontFamily: 'inherit', fontSize: 12 }}>
                     <i className="ti ti-paperclip" style={{ fontSize: 16 }} aria-hidden="true" />
-                    Add an attachment
-                  </button>
+                    {' '}Attachment changes are unavailable in reviewed bank metadata editing.
+                  </span>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {attachments.map((a, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
                         <span style={{ fontSize: 12, color: '#C5A46D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{a.name}</span>
-                        <button onClick={() => setAttachments(ats => ats.filter((_,j)=>j!==i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C4785A', fontSize: 14, marginLeft: 8 }}>✕</button>
+                        <span aria-hidden="true" style={{ color: '#888884', fontSize: 11, marginLeft: 8 }}>Read only</span>
                       </div>
                     ))}
-                    <button onClick={() => fileRef.current?.click()} style={{ fontSize: 12, color: '#888884', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4 }}>
-                      + Add another
-                    </button>
+                    <span style={{ fontSize: 10, color: '#888884', marginTop: 4 }}>Existing attachments are preserved.</span>
                   </div>
                 )}
               </div>
@@ -637,7 +594,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
                 flex: 1, padding: '10px', borderRadius: 10, border: 'none',
                 background: '#C5A46D', color: '#1a1a1a', fontSize: 14, fontWeight: 700,
                 cursor: 'pointer', fontFamily: 'inherit',
-              }}>Save Changes</button>
+              }}>Review Changes</button>
               {onMakeRecurring && (
                 <button onClick={() => { onMakeRecurring(form); onClose() }} style={{
                   flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer',
@@ -646,41 +603,15 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], tx
                 }}>Make Recurring</button>
               )}
             </div>
-            <button onClick={handleDelete} style={{
-              width: '100%', padding: '10px', borderRadius: 10, border: '1px solid rgba(196,120,90,0.3)',
-              background: 'none', color: '#C4785A', fontSize: 13, fontWeight: 500,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}>Delete Transaction</button>
+            <button type="button" disabled title="Bank activity remains part of the immutable actuals record." style={{
+              width: '100%', padding: '10px', borderRadius: 10, border: '1px solid rgba(136,136,132,0.2)',
+              background: 'none', color: '#888884', fontSize: 13, fontWeight: 500,
+              cursor: 'not-allowed', fontFamily: 'inherit',
+            }}>Bank Transaction Cannot Be Deleted</button>
           </div>
         </div>
       </div>
 
-      {/* Category toast */}
-      {catToast && (
-        <CategoryToast
-          category={catToast.category}
-          merchant={catToast.merchant}
-          originalStatement={catToast.originalStatement}
-          onCreateRule={() => { setCatToast(null); setShowRuleModal(true) }}
-          onDismiss={() => setCatToast(null)}
-        />
-      )}
-
-      {/* Rule modal */}
-      {showRuleModal && (
-        <RuleModal
-          initial={{ merchant: form.name, category: form.category, originalStatement: form.originalStatement }}
-          accounts={accounts}
-          allTxNames={allTxNames}
-          categoryOptions={categoryOptions}
-          txCount={matchCount}
-          onSave={rule => {
-            rememberCategories({ category: rule.actions?.updateCategory?.value, splits: rule.splits })
-            onSaveRule?.(rule)
-          }}
-          onClose={() => setShowRuleModal(false)}
-        />
-      )}
     </>,
     document.body
   )

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseISODate, txOccursOnDate } from './projection.js'
+import { parseISODate, today0, toISO, txOccursOnDate } from './projection.js'
+import { getHouseholdDateKey } from './financeTime.js'
 
 const weekly = {
   id: 'weekly-friday',
@@ -22,4 +23,8 @@ test('treats the recurrence end date as inclusive and stops afterward', () => {
 test('rejects invalid ISO calendar dates', () => {
   assert.equal(parseISODate('2026-02-29'), null)
   assert.equal(parseISODate('2026-08-14')?.getDate(), 14)
+})
+
+test('projection today follows the authoritative household calendar date', () => {
+  assert.equal(toISO(today0()), getHouseholdDateKey())
 })

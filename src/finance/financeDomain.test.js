@@ -9,7 +9,10 @@ test('canonical finance model keeps actual and projected monthly truth aligned a
     accounts:[{id:'a1',name:'Operating Account',available:5000,balance:5200}],
     actuals:[
       {id:'i1',date:'2026-09-01',amount:-2500,category:'INCOME'},
+      {id:'r1',date:'2026-09-01',amount:-25,name:'Purchase refund',category:'GENERAL_MERCHANDISE'},
       {id:'e1',date:'2026-09-02',amount:1000,category:'GENERAL_MERCHANDISE'},
+      {id:'pending-income',date:'2026-09-02',amount:-900,category:'INCOME',pending:true},
+      {id:'pending-expense',date:'2026-09-02',amount:300,category:'GENERAL_MERCHANDISE',pending:true},
       {id:'t1',date:'2026-09-03',amount:500,category:'TRANSFER_OUT'},
     ],
     scheduled:[
@@ -20,8 +23,10 @@ test('canonical finance model keeps actual and projected monthly truth aligned a
     budget:{},
   })
   assert.equal(model.metrics.actualMonthlyIncome,2500)
+  assert.equal(model.metrics.actualMonthlyOtherInflows,25)
+  assert.equal(model.metrics.actualMonthlyCashInflows,2525)
   assert.equal(model.metrics.actualMonthlyExpenses,1000)
-  assert.equal(model.metrics.actualMonthlyNet,1500)
+  assert.equal(model.metrics.actualMonthlyNet,1525)
   assert.equal(model.metrics.projectedMonthlyIncome,3000)
   assert.equal(model.metrics.projectedMonthlyExpenses,1200)
   assert.equal(model.metrics.projectedMonthlyNet,1800)

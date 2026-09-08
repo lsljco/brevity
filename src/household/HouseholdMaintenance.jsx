@@ -8,14 +8,18 @@ import {
   householdOccurrence,
   householdOperationZones,
   maintenanceDateKey,
+  maintenanceToday,
   maintenanceWeekStart,
   normalizeHouseholdMaintenanceState,
   occurrenceStatus,
-  publishHouseholdOperationEvents,
   summarizeHouseholdMaintenance,
 } from './householdMaintenanceData.js'
 import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { SHARED_STATE_EVENT } from './sharedState.js'
+import {
+  maintenanceCompletionOperation, maintenanceCoverageOperation,
+  maintenanceExceptionOperation, requestHouseholdActionReview,
+} from './householdActionReview.js'
 import HouseholdInventory from './HouseholdInventory.jsx'
 import HouseholdIntelligencePanel from './HouseholdIntelligencePanel.jsx'
 import HouseholdSchedule from './HouseholdSchedule.jsx'
@@ -39,14 +43,23 @@ function OperationsTabs({ workspace, setWorkspace }) {
   </nav>
 }
 
-export default function HouseholdMaintenance({ currentMember }) {
-  const [workspace, setWorkspace] = useState('schedule')
-  const [weekStart, setWeekStart] = useState(() => maintenanceWeekStart(new Date()))
+function MutationNotice({ canEdit, error, notice }){
+  if(error)return <div className="household-operations-read-only" role="alert"><strong>Review could not be prepared.</strong> {error}</div>
+  if(notice)return <div className="household-operations-read-only" role="status"><strong>Review required.</strong> {notice}</div>
+  return <div className="household-operations-read-only" role="note"><strong>{canEdit ? 'Every operations change requires review.' : 'Household operations are read-only for this account.'}</strong>{' '}{canEdit ? 'Action Mode preserves the exact version, actor, Audit History, and safe Undo before any responsibility changes.' : 'You can review operations, but your account does not have household planning permission.'}</div>
+}
+
+export default function HouseholdMaintenance({ currentMember, canEdit=true, isAdmin=false }) {
+  const [workspace, setWorkspace] = useState('operations')
+  const [weekStart, setWeekStart] = useState(() => maintenanceWeekStart(maintenanceToday()))
   const [state, setState] = useState(loadState)
   const [ownerFilter, setOwnerFilter] = useState('Mine')
   const [zoneFilter, setZoneFilter] = useState('All Zones')
   const [overdueOnly, setOverdueOnly] = useState(false)
-  const todayKey = maintenanceDateKey(new Date())
+  const [reviewBusy,setReviewBusy]=useState('')
+  const [reviewError,setReviewError]=useState('')
+  const [reviewNotice,setReviewNotice]=useState('')
+  const todayKey = maintenanceDateKey(maintenanceToday())
   const days = useMemo(() => buildHouseholdMaintenanceWeek(weekStart), [weekStart])
   const summary = useMemo(() => summarizeHouseholdMaintenance(days, state), [days, state])
   const zones = useMemo(() => householdOperationZones(days), [days])
@@ -65,61 +78,22 @@ export default function HouseholdMaintenance({ currentMember }) {
     return () => { window.removeEventListener('storage', refresh); window.removeEventListener(SHARED_STATE_EVENT, refresh) }
   }, [])
 
-  useEffect(() => {
-    if (!localStorage.getItem(HOUSEHOLD_MAINTENANCE_STORAGE_KEY)) localStorage.setItem(HOUSEHOLD_MAINTENANCE_STORAGE_KEY, JSON.stringify(state))
-    publishHouseholdOperationEvents(localStorage, state)
-  }, [])
-
-  const persist = next => {
-    const normalized = normalizeHouseholdMaintenanceState(next)
-    setState(normalized)
-    localStorage.setItem(HOUSEHOLD_MAINTENANCE_STORAGE_KEY, JSON.stringify(normalized))
-    publishHouseholdOperationEvents(localStorage, normalized)
+  const stage=async(summary,operation,key=operation.targetId)=>{
+    if(!canEdit)return false
+    setReviewBusy(key);setReviewError('');setReviewNotice('')
+    try{
+      await requestHouseholdActionReview({summary,operation})
+      setReviewNotice('Action Mode has the proposal. The responsibility remains unchanged until approval; Audit History and safe Undo will remain available.')
+      return true
+    }catch(error){setReviewError(error.message||'Brevity could not prepare this Operations change for review.');return false}
+    finally{setReviewBusy('')}
   }
-  const patchOccurrence = (task, patch, action = 'updated') => {
-    const prior = householdOccurrence(state, task)
-    const now = new Date().toISOString()
-    const history = [...(Array.isArray(prior.history) ? prior.history : []), { action, by:currentMember, at:now, note:patch.returnReason || patch.exception || '' }]
-    const nextOccurrence = { ...prior, ...patch, history, updatedAt: now, updatedBy: currentMember }
-    persist({ ...state, occurrences: { ...state.occurrences, [task.occurrenceId]: nextOccurrence } })
-  }
-  const submitTask = task => {
-    const prior = householdOccurrence(state, task)
-    if (prior.approvedAt) return
-    if (prior.submittedAt && !prior.returnedAt) return
-    const now = new Date().toISOString()
-    patchOccurrence(task, {
-      complete: !task.signoffRequired,
-      completedAt: now,
-      completedBy: currentMember,
-      submittedAt: task.signoffRequired ? now : '',
-      submittedBy: task.signoffRequired ? currentMember : '',
-      approvedAt:'', approvedBy:'', returnedAt:'', returnedBy:'', returnReason:'', exception:'',
-    }, task.signoffRequired ? 'submitted-for-signoff' : 'completed')
-  }
-  const approveTask = task => {
-    if (!isVerifier) return
-    const now = new Date().toISOString()
-    patchOccurrence(task, { complete:true, approvedAt:now, approvedBy:currentMember, returnedAt:'', returnedBy:'', returnReason:'' }, 'approved')
-  }
-  const returnTask = task => {
-    if (!isVerifier) return
-    const occurrence = householdOccurrence(state,task)
-    const reason = window.prompt(`Why is “${task.title}” being returned?`, occurrence.returnReason || '')
-    if (reason === null || !reason.trim()) return
-    patchOccurrence(task, { complete:false, submittedAt:'', submittedBy:'', approvedAt:'', approvedBy:'', returnedAt:new Date().toISOString(), returnedBy:currentMember, returnReason:reason.trim() }, 'returned')
-  }
-  const reopenTask = task => {
-    if (!isVerifier) return
-    patchOccurrence(task, { complete:false, completedAt:'', completedBy:'', submittedAt:'', submittedBy:'', approvedAt:'', approvedBy:'', returnedAt:'', returnedBy:'', returnReason:'' }, 'reopened')
-  }
-  const updateCoverage = (task, coveredBy) => patchOccurrence(task, { coveredBy: coveredBy === 'Original owner' ? '' : coveredBy, coverageConfirmedBy: coveredBy && coveredBy !== 'Original owner' ? currentMember : '' }, 'coverage-updated')
-  const reportException = task => {
-    const prior = householdOccurrence(state, task)
-    const message = window.prompt(`What is preventing “${task.title}” from being completed?`, prior.exception || '')
-    if (message === null) return
-    patchOccurrence(task, { exception: message.trim(), exceptionReportedBy: message.trim() ? currentMember : '' }, message.trim() ? 'exception-reported' : 'exception-cleared')
-  }
+  const submitTask=task=>stage(`Review completion of ${task.title}`,maintenanceCompletionOperation(task,'submit'),task.occurrenceId)
+  const approveTask=task=>stage(`Review approval of ${task.title}`,maintenanceCompletionOperation(task,'approve'),task.occurrenceId)
+  const returnTask=task=>{const reason=window.prompt(`Why is “${task.title}” being returned?`,householdOccurrence(state,task).returnReason||'');if(reason===null||!reason.trim())return;return stage(`Review return of ${task.title}`,maintenanceCompletionOperation(task,'return',reason),task.occurrenceId)}
+  const reopenTask=task=>stage(`Review reopening of ${task.title}`,maintenanceCompletionOperation(task,'reopen'),task.occurrenceId)
+  const updateCoverage=(task,coveredBy)=>stage(`Review coverage for ${task.title}`,maintenanceCoverageOperation(task,coveredBy),task.occurrenceId)
+  const reportException=task=>{const prior=householdOccurrence(state,task);const message=window.prompt(`What is preventing “${task.title}” from being completed?`,prior.exception||'');if(message===null)return;return stage(`Review exception for ${task.title}`,maintenanceExceptionOperation(task,message),task.occurrenceId)}
 
   const ownerMatches = task => {
     const occurrence = householdOccurrence(state, task)
@@ -129,12 +103,13 @@ export default function HouseholdMaintenance({ currentMember }) {
     return task.owners.includes(ownerFilter) || occurrence.coveredBy === ownerFilter
   }
 
-  if (workspace === 'schedule') return <div className="household-operations-shell"><OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/><HouseholdSchedule currentMember={currentMember} mode="schedule"/></div>
-  if (workspace === 'routines') return <div className="household-operations-shell"><OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/><HouseholdSchedule currentMember={currentMember} mode="routines"/></div>
-  if (workspace === 'inventory') return <div className="household-operations-shell"><OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/><HouseholdInventory currentMember={currentMember}/></div>
+  if (workspace === 'schedule') return <div className="household-operations-shell"><OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/><HouseholdSchedule currentMember={currentMember} mode="schedule" canEdit={canEdit} isAdmin={isAdmin}/></div>
+  if (workspace === 'routines') return <div className="household-operations-shell"><OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/><HouseholdSchedule currentMember={currentMember} mode="routines" canEdit={canEdit} isAdmin={isAdmin}/></div>
+  if (workspace === 'inventory') return <div className="household-operations-shell"><OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/><HouseholdInventory currentMember={currentMember} canEdit={canEdit}/></div>
 
   return <div className="household-maintenance household-operations">
     <OperationsTabs workspace={workspace} setWorkspace={setWorkspace}/>
+    <MutationNotice canEdit={canEdit} error={reviewError} notice={reviewNotice}/>
     <HouseholdIntelligencePanel currentMember={currentMember} />
     <header className="maintenance-hero">
       <div>
@@ -146,7 +121,7 @@ export default function HouseholdMaintenance({ currentMember }) {
         <button type="button" onClick={() => setWeekStart(addWeeks(weekStart, -1))} aria-label="Previous week"><i className="ti ti-chevron-left" /></button>
         <div><span>Operating week</span><strong>{weekLabel(weekStart)}</strong></div>
         <button type="button" onClick={() => setWeekStart(addWeeks(weekStart, 1))} aria-label="Next week"><i className="ti ti-chevron-right" /></button>
-        <button className="maintenance-this-week" type="button" onClick={() => setWeekStart(maintenanceWeekStart(new Date()))}>This week</button>
+        <button className="maintenance-this-week" type="button" onClick={() => setWeekStart(maintenanceWeekStart(maintenanceToday()))}>This week</button>
       </div>
     </header>
 
@@ -161,7 +136,7 @@ export default function HouseholdMaintenance({ currentMember }) {
 
     {summary.overdue > 0 && <button className="maintenance-show-overdue" type="button" onClick={() => { setOwnerFilter('All'); setZoneFilter('All Zones'); setOverdueOnly(true) }}>Show all {summary.overdue} overdue {summary.overdue === 1 ? 'responsibility' : 'responsibilities'}</button>}
 
-    {isVerifier && awaitingApproval.length > 0 && <section className="operations-signoff-queue"><header><div><p>Verification queue</p><h2>{awaitingApproval.length} chore{awaitingApproval.length===1?'':'s'} awaiting your sign-off</h2></div><span>Either Larry or Terica may approve.</span></header>{awaitingApproval.map(({day,task,occurrence})=><article key={task.occurrenceId}><div><strong>{task.title}</strong><span>{day.label} · {task.zone} · submitted by {occurrence.submittedBy || occurrence.completedBy}</span></div><div><button className="approve" onClick={()=>approveTask(task)}>Approve</button><button onClick={()=>returnTask(task)}>Return</button></div></article>)}</section>}
+    {isVerifier && awaitingApproval.length > 0 && <section className="operations-signoff-queue"><header><div><p>Verification queue</p><h2>{awaitingApproval.length} chore{awaitingApproval.length===1?'':'s'} awaiting your sign-off</h2></div><span>Either Larry or Terica may review; approval is never automatic.</span></header>{awaitingApproval.map(({day,task,occurrence})=><article key={task.occurrenceId}><div><strong>{task.title}</strong><span>{day.label} · {task.zone} · submitted by {occurrence.submittedBy || occurrence.completedBy}</span></div>{canEdit&&<div><button className="approve" disabled={Boolean(reviewBusy)} onClick={()=>approveTask(task)}>Review approval</button><button disabled={Boolean(reviewBusy)} onClick={()=>returnTask(task)}>Review return</button></div>}</article>)}</section>}
 
     <section className="maintenance-operating-rule operations-principles">
       <div><i className="ti ti-clock" /><span><strong>Nyla · 2–4 PM</strong> Primary weekday operator: assigned zone and completion before evening.</span></div>
@@ -202,20 +177,21 @@ export default function HouseholdMaintenance({ currentMember }) {
               const isReturned = status === 'Returned'
               const isOverdue = day.date >= state.trackingStartedOn && day.date < todayKey && !isApproved
               const effectiveOwner = occurrence.coveredBy || (task.owners.includes('Everyone') ? 'Everyone' : task.owners.join(' + '))
-              const canSubmit = task.owners.includes(currentMember) || task.owners.includes('Everyone') || occurrence.coveredBy === currentMember
+              const canSubmit = task.owners.includes(currentMember) || task.owners.includes('Everyone') || occurrence.coveredBy === currentMember || isAdmin
+              const coverageOptions = isAdmin ? HOUSEHOLD_MEMBERS : [...new Set([currentMember, occurrence.coveredBy].filter(Boolean))]
               return <article className={`maintenance-task${isApproved ? ' is-complete' : ''}${isAwaiting ? ' is-awaiting' : ''}${isReturned ? ' is-returned' : ''}${isOverdue ? ' is-overdue' : ''}${occurrence.exception ? ' has-exception' : ''}`} key={task.occurrenceId}>
-                <button className="maintenance-check" type="button" disabled={!canSubmit || isAwaiting || isApproved} onClick={() => submitTask(task)} aria-label={`Submit ${task.title} for completion`}><i className={`ti ${isApproved?'ti-check':isAwaiting?'ti-clock-check':isReturned?'ti-rotate-clockwise':'ti-circle'}`} /></button>
+                <button className="maintenance-check" type="button" disabled={!canEdit||!canSubmit||isAwaiting||isApproved||Boolean(reviewBusy)} onClick={()=>submitTask(task)} aria-label={`Review completion of ${task.title}`}><i className={`ti ${isApproved?'ti-check':isAwaiting?'ti-clock-check':isReturned?'ti-rotate-clockwise':'ti-circle'}`} /></button>
                 <div className="maintenance-task-body">
                   <div className="maintenance-task-heading"><div><span>{task.zone} · {task.category}</span><h3>{task.title}</h3></div><time>{task.timing}</time></div>
                   <div className="maintenance-owners"><span><i className="ti ti-user" /> {effectiveOwner}</span><span><i className="ti ti-shield-check" /> Sign-off: {(task.verifiers || HOUSEHOLD_CHORE_VERIFIERS).join(' or ')}</span></div>
                   <div className={`operations-status operations-status--${status.toLowerCase().replace(/\s+/g,'-')}`}><strong>{status}</strong>{isAwaiting&&<span>Submitted by {occurrence.submittedBy || occurrence.completedBy}. Waiting for verification.</span>}{isApproved&&<span>Approved by {occurrence.approvedBy || 'Verifier'}.</span>}{isReturned&&<span>Returned by {occurrence.returnedBy}: {occurrence.returnReason}</span>}</div>
-                  <div className="operations-actions">
-                    <label><span>Coverage</span><select value={occurrence.coveredBy || 'Original owner'} onChange={event => updateCoverage(task, event.target.value)}><option>Original owner</option>{HOUSEHOLD_MEMBERS.map(member => <option key={member}>{member}</option>)}</select></label>
-                    {canSubmit && !isAwaiting && !isApproved && <button type="button" onClick={()=>submitTask(task)}><i className="ti ti-send" /> {isReturned?'Resubmit for sign-off':'Mark complete & submit'}</button>}
-                    {isVerifier && isAwaiting && <><button className="is-approve" type="button" onClick={()=>approveTask(task)}><i className="ti ti-check" /> Approve</button><button type="button" onClick={()=>returnTask(task)}><i className="ti ti-arrow-back-up" /> Return</button></>}
-                    {isVerifier && isApproved && <button type="button" onClick={()=>reopenTask(task)}><i className="ti ti-lock-open" /> Reopen</button>}
-                    <button type="button" className={occurrence.exception ? 'is-active' : ''} onClick={() => reportException(task)}><i className="ti ti-alert-triangle" /> {occurrence.exception ? 'Edit exception' : 'Report exception'}</button>
-                  </div>
+                  {canEdit&&(canSubmit||isVerifier)&&<div className="operations-actions">
+                    <label><span>Coverage</span><select value={occurrence.coveredBy||'Original owner'} disabled={Boolean(reviewBusy)} onChange={event=>updateCoverage(task,event.target.value)}><option>Original owner</option>{coverageOptions.map(member=><option key={member}>{member}</option>)}</select></label>
+                    {canSubmit&&!isAwaiting&&!isApproved&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>submitTask(task)}><i className="ti ti-send"/> {isReturned?'Review resubmission':'Review completion'}</button>}
+                    {isVerifier&&isAwaiting&&<><button className="is-approve" type="button" disabled={Boolean(reviewBusy)} onClick={()=>approveTask(task)}><i className="ti ti-check"/> Review approval</button><button type="button" disabled={Boolean(reviewBusy)} onClick={()=>returnTask(task)}><i className="ti ti-arrow-back-up"/> Review return</button></>}
+                    {isVerifier&&isApproved&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>reopenTask(task)}><i className="ti ti-lock-open"/> Review reopen</button>}
+                    {(canSubmit||isVerifier)&&<button type="button" disabled={Boolean(reviewBusy)} className={occurrence.exception?'is-active':''} onClick={()=>reportException(task)}><i className="ti ti-alert-triangle"/> {occurrence.exception?'Review exception edit':'Review exception'}</button>}
+                  </div>}
                   {occurrence.exception && <div className="operations-exception"><strong>Exception</strong><span>{occurrence.exception}</span><small>Reported by {occurrence.exceptionReportedBy || occurrence.updatedBy || 'Household'}</small></div>}
                   <details><summary>Completion standard & checklist</summary><ul>{task.details.map(detail => <li key={detail}>{detail}</li>)}</ul></details>
                   {occurrence.completedAt && <small className="maintenance-completed-by">Submitted by {occurrence.completedBy || 'Household'} at {new Date(occurrence.completedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}{occurrence.approvedAt?` · signed off by ${occurrence.approvedBy}`:''}</small>}

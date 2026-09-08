@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { prepareDirectAction } from '../assistant/assistantApi.js'
+import { requestActionReview } from '../assistant/actionEvents.js'
+import { getAcknowledgedSharedStateVersion, SHARED_STATE_EVENT } from '../household/sharedState.js'
 import {
   calculateScenario,
   cloneDefaultScenarioModel,
@@ -9,16 +12,28 @@ import './ScenarioModeling.css'
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
-function loadModel() {
+function loadModel(storage = localStorage) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY) || 'null')
+    const parsed = JSON.parse(storage.getItem(SCENARIO_STORAGE_KEY) || 'null')
     if (parsed?.scenarios?.length) return parsed
   } catch {}
   return cloneDefaultScenarioModel()
 }
 
-function saveModel(model) {
-  try { localStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(model)) } catch {}
+const clone = value => JSON.parse(JSON.stringify(value))
+const same = (left, right) => JSON.stringify(left) === JSON.stringify(right)
+const quote = value => `“${String(value || '').trim().slice(0, 72)}${String(value || '').trim().length > 72 ? '…' : ''}”`
+const numericIncomeFields = new Set(['monthlyNet', 'annualGross', 'contribution'])
+
+function changedFields(before, draft, fields) {
+  return Object.fromEntries(fields.flatMap(field => {
+    let next = draft?.[field]
+    if (numericIncomeFields.has(field)) {
+      next = Number(next)
+      if (!Number.isFinite(next)) throw new Error(`${field.replace(/([A-Z])/g, ' $1').toLowerCase()} must be a valid number.`)
+    }
+    return same(before?.[field], next) ? [] : [[field, next]]
+  }))
 }
 
 function SummaryMetric({ label, value, tone = '' }) {
@@ -28,46 +43,139 @@ function SummaryMetric({ label, value, tone = '' }) {
   </div>
 }
 
-export default function ScenarioModeling({ liveOperatingExpense = 0 }) {
-  const [model, setModel] = useState(loadModel)
-  const [activeId, setActiveId] = useState(() => loadModel().scenarios[0]?.id || 'current')
+export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = false }) {
+  const initialModel = useMemo(() => loadModel(), [])
+  const [model, setModel] = useState(initialModel)
+  const [draftModel, setDraftModel] = useState(() => clone(initialModel))
+  const [activeId, setActiveId] = useState(() => initialModel.scenarios[0]?.id || 'current')
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewError, setReviewError] = useState('')
+  const [reviewNotice, setReviewNotice] = useState('')
   const activeIndex = Math.max(0, model.scenarios.findIndex(scenario => scenario.id === activeId))
   const active = model.scenarios[activeIndex]
+  const activeDraft = draftModel.scenarios.find(scenario => scenario.id === active?.id) || active
   const expense = model.expenseMode === 'operating' && liveOperatingExpense > 0
     ? liveOperatingExpense
     : Number(model.planningExpense) || 0
   const result = useMemo(() => calculateScenario(active, expense), [active, expense])
 
-  const commit = updater => {
-    setModel(current => {
-      const next = typeof updater === 'function' ? updater(current) : updater
-      saveModel(next)
-      return next
-    })
-  }
+  useEffect(() => {
+    const refresh = event => {
+      if (event?.type === 'storage' && event.key && event.key !== SCENARIO_STORAGE_KEY) return
+      if (event?.type === SHARED_STATE_EVENT && event.detail?.keys?.length && !event.detail.keys.includes(SCENARIO_STORAGE_KEY)) return
+      const next = loadModel()
+      setModel(next)
+      setDraftModel(clone(next))
+      setActiveId(current => next.scenarios.some(scenario => scenario.id === current) ? current : next.scenarios[0]?.id || 'current')
+      setReviewError('')
+      setReviewNotice('The reviewed forecast is now current.')
+    }
+    window.addEventListener(SHARED_STATE_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(SHARED_STATE_EVENT, refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
 
-  const updateModel = changes => commit(current => ({ ...current, ...changes }))
-  const updateScenario = changes => commit(current => ({
+  const updateModelDraft = changes => {
+    if (readOnly) return
+    setDraftModel(current => ({ ...current, ...changes }))
+    setReviewError('')
+    setReviewNotice('Draft only — review and approve before Brevity changes the forecast.')
+  }
+  const updateScenarioDraft = changes => {
+    if (readOnly) return
+    setDraftModel(current => ({
     ...current,
     scenarios: current.scenarios.map((scenario, index) => index === activeIndex ? { ...scenario, ...changes } : scenario),
   }))
-  const updateIncome = (rowIndex, field, value) => updateScenario({
-    incomes: active.incomes.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row),
-  })
-  const removeIncome = rowIndex => updateScenario({ incomes: active.incomes.filter((_, index) => index !== rowIndex) })
-  const addIncome = () => updateScenario({
-    incomes: [...active.incomes, {
-      id: `income-${Date.now()}`,
-      description: 'New income source', monthlyNet: 0, annualGross: 0,
-      contribution: 0, remote: false, employment: '', notes: '',
-    }],
-  })
-  const reset = () => {
-    if (!window.confirm('Reset all three scenarios to the supplied starting model?')) return
-    const next = cloneDefaultScenarioModel()
-    saveModel(next)
-    setModel(next)
-    setActiveId(next.scenarios[0].id)
+    setReviewError('')
+    setReviewNotice('Draft only — review and approve before Brevity changes the forecast.')
+  }
+  const updateIncomeDraft = (incomeId, field, value) => {
+    if (readOnly) return
+    setDraftModel(current => ({
+      ...current,
+      scenarios:current.scenarios.map(scenario => scenario.id !== active.id ? scenario : {
+        ...scenario,
+        incomes:scenario.incomes.map(row => row.id === incomeId ? { ...row, [field]:value } : row),
+      }),
+    }))
+    setReviewError('')
+    setReviewNotice('Draft only — review and approve before Brevity changes the forecast.')
+  }
+
+  const openReview = async ({ summary, operation }) => {
+    if (readOnly || reviewBusy) return
+    setReviewBusy(true)
+    setReviewError('')
+    setReviewNotice('')
+    try {
+      if (!localStorage.getItem(SCENARIO_STORAGE_KEY)) {
+        throw new Error('The shared forecast has not finished loading. Refresh Brevity before editing so Action Mode can verify its version.')
+      }
+      const expectedVersion = getAcknowledgedSharedStateVersion(localStorage, SCENARIO_STORAGE_KEY)
+      const result = await prepareDirectAction({ summary, operation, expectedVersion })
+      if (!result?.proposal?.id) throw new Error('Action Mode did not return a reviewable forecast proposal.')
+      requestActionReview(result.proposal)
+      setReviewNotice('Review opened. No forecast value changes until you approve it.')
+    } catch (error) {
+      setReviewError(error.message || 'Brevity could not prepare this forecast change for review.')
+    } finally { setReviewBusy(false) }
+  }
+
+  const reviewExpenseMode = expenseMode => {
+    if (expenseMode === model.expenseMode) return
+    void openReview({
+      summary:'Update the Scenario Modeling expense source',
+      operation:{
+        type:'forecast.update', targetId:'model', payload:{ expenseMode },
+        description:`Use the ${expenseMode === 'operating' ? 'live Operating Account expenses' : 'scenario planning baseline'} for forecast calculations.`,
+      },
+    })
+  }
+  const reviewPlanningExpense = () => {
+    const planningExpense = Number(draftModel.planningExpense)
+    if (!Number.isFinite(planningExpense) || planningExpense < 0) {
+      setReviewError('Monthly planning expense must be a non-negative number.')
+      return
+    }
+    if (planningExpense === Number(model.planningExpense)) return
+    void openReview({
+      summary:'Update the monthly Scenario Modeling expense baseline',
+      operation:{
+        type:'forecast.update', targetId:'model', payload:{ planningExpense },
+        description:`Change the monthly planning expense from ${money.format(Number(model.planningExpense) || 0)} to ${money.format(planningExpense)}.`,
+      },
+    })
+  }
+  const reviewScenario = () => {
+    try {
+      const payload = changedFields(active, activeDraft, ['title', 'description'])
+      if (!String(activeDraft.title || '').trim()) throw new Error('Scenario name is required.')
+      if (!Object.keys(payload).length) return
+      void openReview({
+        summary:`Update forecast scenario ${quote(active.title)}`,
+        operation:{ type:'forecast.update', targetId:active.id, payload, description:`Update the name or purpose of ${quote(active.title)}.` },
+      })
+    } catch (error) { setReviewError(error.message) }
+  }
+  const reviewIncome = incomeId => {
+    try {
+      const before = active.incomes.find(row => row.id === incomeId)
+      const draft = activeDraft.incomes.find(row => row.id === incomeId)
+      if (!before || !draft) throw new Error('That income source is no longer available. Refresh Brevity and try again.')
+      const payload = changedFields(before, draft, ['monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes'])
+      if (!Object.keys(payload).length) return
+      void openReview({
+        summary:`Update forecast assumptions for ${quote(before.description)}`,
+        operation:{
+          type:'forecast.update', targetId:active.id, payload:{ incomeId, ...payload },
+          description:`Update reviewed forecast assumptions for ${quote(before.description)} in ${quote(active.title)}.`,
+        },
+      })
+    } catch (error) { setReviewError(error.message) }
   }
 
   return <section className="scenario-page" aria-labelledby="scenario-title">
@@ -75,10 +183,15 @@ export default function ScenarioModeling({ liveOperatingExpense = 0 }) {
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>
         <h1 id="scenario-title">Scenario Modeling</h1>
-        <p>Compare household income paths against recurring operating expenses. Every total recalculates as assumptions change.</p>
+        <p>Compare household income paths against recurring operating expenses. Draft assumptions never alter household forecasts until Action Mode review and approval.</p>
       </div>
-      <button type="button" className="scenario-reset" onClick={reset}><i className="ti ti-restore"/> Reset supplied model</button>
+      {!readOnly && <span className="scenario-eyebrow"><i className="ti ti-shield-check"/> Review · Audit · Safe Undo</span>}
     </header>
+
+    <p className="scenario-account-scope" role="note"><i className="ti ti-building-bank" aria-hidden="true"/><span><strong>Account scope: Operating Account</strong> Scenario Modeling uses the household operating-expense baseline. Renovation / Projects and Savings are intentionally excluded from these calculations.</span></p>
+
+    {reviewError && <div className="scenario-expense-panel" role="alert">{reviewError}</div>}
+    {reviewNotice && <div className="scenario-expense-panel" role="status">{reviewNotice}</div>}
 
     <div className="scenario-tabs" role="tablist" aria-label="Financial scenarios">
       {model.scenarios.map(scenario => {
@@ -99,10 +212,10 @@ export default function ScenarioModeling({ liveOperatingExpense = 0 }) {
       </div>
       <div className="scenario-expense-controls">
         <div className="scenario-segmented" aria-label="Expense source">
-          <button type="button" className={model.expenseMode === 'scenario' ? 'is-active' : ''} onClick={() => updateModel({ expenseMode: 'scenario' })}>Planning baseline</button>
-          <button type="button" disabled={liveOperatingExpense <= 0} className={model.expenseMode === 'operating' ? 'is-active' : ''} onClick={() => updateModel({ expenseMode: 'operating' })}>Live operating</button>
+          <button type="button" disabled={readOnly || reviewBusy} className={model.expenseMode === 'scenario' ? 'is-active' : ''} onClick={() => reviewExpenseMode('scenario')}>Planning baseline</button>
+          <button type="button" disabled={readOnly || reviewBusy || liveOperatingExpense <= 0} className={model.expenseMode === 'operating' ? 'is-active' : ''} onClick={() => reviewExpenseMode('operating')}>Live operating</button>
         </div>
-        {model.expenseMode === 'scenario' && <label className="scenario-money-input"><span>$</span><input aria-label="Monthly planning expense" type="number" min="0" step="0.01" value={model.planningExpense} onChange={event => updateModel({ planningExpense: event.target.value })}/></label>}
+        {model.expenseMode === 'scenario' && <div className="scenario-expense-controls"><label className="scenario-money-input"><span>$</span><input aria-label="Monthly planning expense draft" readOnly={readOnly} type="number" min="0" step="0.01" value={draftModel.planningExpense} onChange={event => updateModelDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || Number(draftModel.planningExpense) === Number(model.planningExpense)} onClick={reviewPlanningExpense}>Review baseline</button>}</div>}
       </div>
     </div>
 
@@ -116,25 +229,30 @@ export default function ScenarioModeling({ liveOperatingExpense = 0 }) {
     <section className="scenario-editor">
       <div className="scenario-section-heading">
         <div>
-          <input className="scenario-title-input" aria-label="Scenario name" value={active.title} onChange={event => updateScenario({ title: event.target.value })}/>
-          <input className="scenario-description-input" aria-label="Scenario description" value={active.description || ''} onChange={event => updateScenario({ description: event.target.value })}/>
+          <input className="scenario-title-input" aria-label="Scenario name draft" readOnly={readOnly} value={activeDraft.title} onChange={event => updateScenarioDraft({ title: event.target.value })}/>
+          <input className="scenario-description-input" aria-label="Scenario description draft" readOnly={readOnly} value={activeDraft.description || ''} onChange={event => updateScenarioDraft({ description: event.target.value })}/>
         </div>
-        <button type="button" className="scenario-add" onClick={addIncome}><i className="ti ti-plus"/> Add income</button>
+        {!readOnly && <button type="button" className="scenario-add" disabled={reviewBusy || (same(active?.title, activeDraft?.title) && same(active?.description || '', activeDraft?.description || ''))} onClick={reviewScenario}><i className="ti ti-shield-check"/> Review scenario details</button>}
       </div>
+
+      <p className="scenario-draft-guidance">Income-source names and rows are fixed record identifiers. Edit the assumptions, then review each changed row before applying it.</p>
 
       <div className="scenario-table-wrap">
         <table className="scenario-table">
-          <thead><tr><th>Description</th><th>Monthly net</th><th>Annual gross</th><th>Contribution</th><th>Work</th><th>Employment</th><th>Notes</th><th><span className="sr-only">Actions</span></th></tr></thead>
-          <tbody>{active.incomes.map((row, rowIndex) => <tr key={row.id}>
-            <td><input aria-label={`Income ${rowIndex + 1} description`} value={row.description} onChange={event => updateIncome(rowIndex, 'description', event.target.value)}/></td>
-            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${row.description} monthly net`} type="number" step="0.01" value={row.monthlyNet} onChange={event => updateIncome(rowIndex, 'monthlyNet', event.target.value)}/></label></td>
-            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${row.description} annual gross`} type="number" step="0.01" value={row.annualGross} onChange={event => updateIncome(rowIndex, 'annualGross', event.target.value)}/></label></td>
-            <td><label className="scenario-cell-percent"><input aria-label={`${row.description} contribution`} type="number" step="1" value={row.contribution} onChange={event => updateIncome(rowIndex, 'contribution', event.target.value)}/><span>%</span></label></td>
-            <td><button type="button" className={`scenario-remote${row.remote ? ' is-active' : ''}`} aria-pressed={row.remote} onClick={() => updateIncome(rowIndex, 'remote', !row.remote)}>{row.remote ? 'Remote' : 'On-site'}</button></td>
-            <td><input aria-label={`${row.description} employment type`} value={row.employment || ''} placeholder="Perm / Contract" onChange={event => updateIncome(rowIndex, 'employment', event.target.value)}/></td>
-            <td><input aria-label={`${row.description} notes`} value={row.notes || ''} placeholder="Add note" onChange={event => updateIncome(rowIndex, 'notes', event.target.value)}/></td>
-            <td><button type="button" className="scenario-delete" aria-label={`Delete ${row.description}`} onClick={() => removeIncome(rowIndex)}><i className="ti ti-trash"/></button></td>
-          </tr>)}</tbody>
+          <thead><tr><th>Description</th><th>Monthly net</th><th>Annual gross</th><th>Contribution</th><th>Work</th><th>Employment</th><th>Notes</th><th><span className="sr-only">Review</span></th></tr></thead>
+          <tbody>{active.incomes.map((row, rowIndex) => {
+            const draftRow=activeDraft.incomes.find(item=>item.id===row.id)||row
+            const rowChanged=!same(changedFields(row,draftRow,['monthlyNet','annualGross','contribution','remote','employment','notes']),{})
+            return <tr key={row.id}>
+            <td><span className="scenario-income-name" aria-label={`Income ${rowIndex + 1} description`}>{row.description}</span></td>
+            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${row.description} monthly net draft`} readOnly={readOnly} type="number" step="0.01" value={draftRow.monthlyNet} onChange={event => updateIncomeDraft(row.id, 'monthlyNet', event.target.value)}/></label></td>
+            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${row.description} annual gross draft`} readOnly={readOnly} type="number" step="0.01" value={draftRow.annualGross} onChange={event => updateIncomeDraft(row.id, 'annualGross', event.target.value)}/></label></td>
+            <td><label className="scenario-cell-percent"><input aria-label={`${row.description} contribution draft`} readOnly={readOnly} type="number" step="1" value={draftRow.contribution} onChange={event => updateIncomeDraft(row.id, 'contribution', event.target.value)}/><span>%</span></label></td>
+            <td><button type="button" disabled={readOnly} className={`scenario-remote${draftRow.remote ? ' is-active' : ''}`} aria-pressed={draftRow.remote} onClick={() => updateIncomeDraft(row.id, 'remote', !draftRow.remote)}>{draftRow.remote ? 'Remote' : 'On-site'}</button></td>
+            <td><input aria-label={`${row.description} employment type draft`} readOnly={readOnly} value={draftRow.employment || ''} placeholder="Perm / Contract" onChange={event => updateIncomeDraft(row.id, 'employment', event.target.value)}/></td>
+            <td><input aria-label={`${row.description} notes draft`} readOnly={readOnly} value={draftRow.notes || ''} placeholder="Add note" onChange={event => updateIncomeDraft(row.id, 'notes', event.target.value)}/></td>
+            <td>{!readOnly && <button type="button" className="scenario-add" disabled={reviewBusy||!rowChanged} aria-label={`Review changes to ${row.description}`} onClick={() => reviewIncome(row.id)}><i className="ti ti-shield-check"/><span>Review</span></button>}</td>
+          </tr>})}</tbody>
           <tfoot><tr><th>Total</th><th>{money.format(result.monthlyNetIncome)}</th><th>{money.format(result.annualGrossIncome)}</th><th>{result.contribution}%</th><th colSpan="4"/></tr></tfoot>
         </table>
       </div>
@@ -152,4 +270,3 @@ export default function ScenarioModeling({ liveOperatingExpense = 0 }) {
     </section>
   </section>
 }
-

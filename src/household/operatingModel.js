@@ -1,4 +1,5 @@
 import { DECISION_STATUS, ITEM_STATUS, PILLAR_IDS, normalizeDailyPlan } from './dailyPlan.js'
+import { getHouseholdDateKey, getHouseholdMinuteOfDay } from '../finance/financeTime.js'
 
 export const OPERATING_KIND = Object.freeze({ action:'action', commitment:'commitment', decision:'decision', outcome:'outcome', signal:'signal' })
 export const OPERATING_SOURCE = Object.freeze({ appleCalendar:'apple-calendar', brevityCalendar:'brevity-calendar', dailyPlan:'daily-plan', integration:'integration' })
@@ -50,7 +51,8 @@ export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth
   const outcomes=outcomeItems.slice(0,3).map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.outcome,normalized.topPriorities.length?'top-priority':'derived-outcome',index,normalized.date))
   const memberOutcomes=outcomes.filter(item=>item.owner===currentMember||item.participants.includes(currentMember))
   const signals=[...planSignals(normalized),integrationSignal(calendarHealth)].filter(Boolean).sort(byPriorityThenTime)
-  const localNowDate=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-  const nextCommitment=normalized.date===localNowDate?commitments.find(item=>item.startsAt&&new Date(item.startsAt).getTime()>=now.getTime())||commitments.find(item=>!item.startsAt)||commitments[0]||null:commitments[0]||null
+  const householdNowDate=getHouseholdDateKey(now)
+  const householdNowMinutes=getHouseholdMinuteOfDay(now)
+  const nextCommitment=normalized.date===householdNowDate?commitments.find(item=>item.startsAt&&timeMinutes(item.startsAt.slice(11,16))>=householdNowMinutes)||commitments.find(item=>!item.startsAt)||commitments[0]||null:commitments[0]||null
   return{date:normalized.date,generatedAt:now.toISOString(),theme:normalized.theme,objective:normalized.dayObjective,governingPrinciple:normalized.governingPrinciple,signals,criticalSignals:signals.filter(item=>item.priority==='critical'),nextCommitment,commitments,outcomes,memberOutcomes,actions,decisions,pillarPulse:pillarPulse(normalized,commitments,signals),schedule:arrayOrEmpty(normalized.dayparts),counts:{signals:signals.length,actions:actions.length,decisions:decisions.length,commitments:commitments.length}}
 }

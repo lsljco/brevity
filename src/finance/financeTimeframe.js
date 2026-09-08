@@ -1,3 +1,5 @@
+import { getHouseholdCalendarDate } from './financeTime.js'
+
 export const TIMEFRAME_PRESETS = [
   ['today', 'Today'], ['yesterday', 'Yesterday'], ['tomorrow', 'Tomorrow'],
   ['this-week', 'This Week'], ['last-week', 'Last Week'], ['next-week', 'Next Week'],
@@ -19,7 +21,7 @@ function add(date, days) {
   return result
 }
 
-export function resolveTimeframe(preset = 'last-12-months', now = new Date(), custom = {}) {
+export function resolveTimeframe(preset = 'last-12-months', now = getHouseholdCalendarDate(), custom = {}) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   let from = new Date(today), to = new Date(today)
   if (preset === 'yesterday') from = to = add(today, -1)
@@ -59,7 +61,7 @@ export function resolveTimeframe(preset = 'last-12-months', now = new Date(), cu
   return { preset, from: isoDate(from), to: isoDate(to) }
 }
 
-export function restoreTimeframe(saved, now = new Date(), fallback = 'last-12-months') {
+export function restoreTimeframe(saved, now = getHouseholdCalendarDate(), fallback = 'last-12-months') {
   const presetIds = new Set(TIMEFRAME_PRESETS.map(([id]) => id))
   const preset = presetIds.has(saved?.preset) ? saved.preset : fallback
   if (preset !== 'custom') return resolveTimeframe(preset, now)

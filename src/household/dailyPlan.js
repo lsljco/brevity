@@ -1,3 +1,5 @@
+import { getHouseholdDateKey } from '../finance/financeTime.js'
+
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 
 export const PILLAR_IDS = [
@@ -48,7 +50,6 @@ export const NOTIFICATION_LEVEL = {
 const arrayOrEmpty = value => Array.isArray(value) ? value : []
 const objectOrEmpty = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 const makeId = () => globalThis.crypto?.randomUUID?.() || `brevity-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const localDateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 export function normalizeDecisionStatus(value) {
   const status = String(value || '').trim().toLowerCase()
@@ -190,7 +191,7 @@ export function createEmptyDailyPlan(date) {
 
 export function normalizeDailyPlan(input = {}) {
   const plan = objectOrEmpty(input)
-  const date = typeof plan.date === 'string' && plan.date ? plan.date : localDateKey(new Date())
+  const date = typeof plan.date === 'string' && plan.date ? plan.date : getHouseholdDateKey(new Date())
   const base = createEmptyDailyPlan(date)
   const morningAlignment = objectOrEmpty(plan.morningAlignment)
   const spiritual = objectOrEmpty(plan.spiritual)

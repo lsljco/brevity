@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import {
   createRollingMealDay,
   DEFAULT_MEAL_TIME_ZONE,
@@ -14,12 +13,17 @@ const STORE_NAME = 'brevity-meals'
 
 const safeSegment = value => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '-')
 
-export function createMealPlanRepository({ store, householdId = 'lslj-family', timeZone = DEFAULT_MEAL_TIME_ZONE, now = () => new Date(), createId = randomUUID }) {
+export function createMealPlanRepository({ store, householdId = 'lslj-family', timeZone = DEFAULT_MEAL_TIME_ZONE, now = () => new Date() }) {
   const household = safeSegment(householdId)
   const dayKey = date => `${household}/days/${date}`
-  const auditKey = (date, id) => `${household}/audit/${date}/${id}`
-
-  const getDay = async date => store.get(dayKey(date), { type: 'json' })
+  const getDayEntry=async date=>{
+    if(typeof store.getWithMetadata==='function'){
+      const entry=await store.getWithMetadata(dayKey(date),{type:'json'})
+      return entry?{day:entry.data,etag:entry.etag||''}:{day:null,etag:''}
+    }
+    return{day:await store.get(dayKey(date),{type:'json'}),etag:''}
+  }
+  const getDay = async date => (await getDayEntry(date)).day
 
   const createDay = date => createRollingMealDay(date, {
     householdId,
@@ -30,7 +34,12 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     const current = await getDay(date)
     if (current) return current
     const generated = createDay(date)
-    await store.setJSON(dayKey(date), generated)
+    const created=await store.setJSON(dayKey(date),generated,{onlyIfNew:true})
+    if(created?.modified===false){
+      const winner=await getDay(date)
+      if(!winner)throw new Error('The meal plan was created concurrently but could not be reloaded.')
+      return winner
+    }
     return generated
   }
 
@@ -67,47 +76,13 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       throw error
     }
 
-    const current = await ensureDay(date)
-    if (Number(expectedVersion) !== Number(current.version)) {
-      const error = new Error('This meal plan changed on another device. Refresh and try again.')
-      error.code = 'VERSION_CONFLICT'
-      throw error
-    }
-
-    const changedAt = now().toISOString()
-    const auditId = createId()
-    const previousMealId = current.meals[mealType]
-    const audit = {
-      id: auditId,
-      householdId,
-      action: 'meal.substituted',
-      date,
-      mealType,
-      previousMealId,
-      mealId,
-      actor,
-      occurredAt: changedAt,
-      fromVersion: current.version,
-      toVersion: current.version + 1,
-    }
-    await store.setJSON(auditKey(date, auditId), audit)
-
-    const next = {
-      ...current,
-      version: current.version + 1,
-      meals: { ...current.meals, [mealType]: mealId },
-      substitutions: {
-        ...current.substitutions,
-        [mealType]: { previousMealId, mealId, changedAt, changedBy: actor, auditId },
-      },
-      updatedAt: changedAt,
-      updatedBy: actor,
-    }
-    await store.setJSON(dayKey(date), next)
-    return resolveMealDay(next)
+    void date;void mealType;void mealId;void expectedVersion;void actor
+    const error=new Error('Meal substitutions require Action Mode review and confirmation.')
+    error.code='REVIEW_REQUIRED'
+    throw error
   }
 
-  return { ensureDay, getWindow, getWindowReadOnly, substitute }
+  return { ensureDay, getDay, getDayEntry, getWindow, getWindowReadOnly, substitute }
 }
 
 export async function productionMealPlanRepository(options = {}) {

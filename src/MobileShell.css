@@ -1,6 +1,26 @@
 .mobile-app-nav,
 .mobile-sidebar-backdrop { display: none; }
 
+/* Tablet portrait keeps a compact 60px rail. Expanding the menu overlays the
+   content instead of shrinking every workspace to a phone-sized container. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .app-sidebar.is-expanded {
+    z-index: 1400;
+    width: 240px;
+    min-width: 240px;
+    margin-right: -180px;
+  }
+  .mobile-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1350;
+    border: 0;
+    background: rgba(0, 0, 0, .58);
+    backdrop-filter: blur(2px);
+  }
+}
+
 @media (max-width: 640px) {
   .app-sidebar {
     position: fixed;

@@ -13,7 +13,7 @@ export default function MetricDrilldown({node,onClose}){
     <section className="metric-drilldown" role="dialog" aria-modal="true" aria-label={`${current.label} breakdown`} onClick={event=>event.stopPropagation()}>
       <header>
         <div>
-          <button type="button" className="metric-drilldown-back" onClick={()=>stack.length>1?setStack(items=>items.slice(0,-1)):onClose()}><i className={`ti ${stack.length>1?'ti-arrow-left':'ti-x'}`}/></button>
+          <button type="button" className="metric-drilldown-back" aria-label={stack.length>1?'Back to previous breakdown':'Close breakdown'} onClick={()=>stack.length>1?setStack(items=>items.slice(0,-1)):onClose()}><i className={`ti ${stack.length>1?'ti-arrow-left':'ti-x'}`} aria-hidden="true"/></button>
           <div><span>{current.eyebrow||'How this number is built'}</span><h2>{current.label}</h2></div>
         </div>
         <strong>{money(current.amount)}</strong>

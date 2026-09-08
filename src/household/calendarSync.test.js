@@ -65,3 +65,15 @@ test('calendar sync sends owner and participant changes back to Apple', async ()
   await reconcilePlanWithICloud(plan, api)
   assert.deepEqual(calls, [['update', 'Larry', ['Larry', 'Isaiah'], 'cloud-uid']])
 })
+
+test('calendar sync upgrades an otherwise unchanged legacy unscoped source id',async()=>{
+  const calls=[]
+  const api={
+    fetch:async()=>({calendar:'Family',events:[{id:'cloud-id',uid:'cloud-uid',sourceId:'school-meeting',title:'Isaiah school meeting',date:'2026-08-21',time:'9:00 AM',allDay:false,pillar:'household',owner:'Larry',participants:['Larry','Isaiah'],priority:false,href:'/meeting.ics',etag:'1'}]}),
+    create:async event=>calls.push(['create',event.sourceId]),
+    update:async event=>calls.push(['update',event.sourceId,event.id]),
+    remove:async event=>calls.push(['remove',event.sourceId]),
+  }
+  await reconcilePlanWithICloud(plan,api)
+  assert.deepEqual(calls,[['update','daily-2026-08-21-school-meeting','cloud-uid']])
+})

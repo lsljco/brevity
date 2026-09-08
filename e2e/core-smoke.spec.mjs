@@ -78,18 +78,16 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
 
-test('shared household writes are versioned and pushed to the server immediately', async ({ page }) => {
-  const write = page.waitForRequest(request => request.method() === 'PUT' && request.url().includes('/.netlify/functions/household-state'))
+test('direct shared household writes remain local and never bypass Action Mode review', async ({ page }) => {
+  const writes = []
+  page.on('request', request => {
+    if (request.method() === 'PUT' && request.url().includes('/.netlify/functions/household-state')) writes.push(request)
+  })
   await page.evaluate(() => {
     localStorage.setItem('brevity_household_schedule_v1', JSON.stringify({ version:1, blocks:[], routines:[] }))
   })
-  const request = await write
-  const payload = request.postDataJSON()
-  expect(payload.key).toBe('brevity_household_schedule_v1')
-  expect(payload.value).toContain('"routines":[]')
-  expect(payload.hash).toBeTruthy()
-  expect(payload.expectedVersion).toBe(0)
-  expect(payload.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  await page.waitForTimeout(250)
+  expect(writes).toHaveLength(0)
 })
 
 test('Settings exposes sync health and identifies browser data as a recovery cache', async ({ page }, testInfo) => {

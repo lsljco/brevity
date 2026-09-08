@@ -29,9 +29,17 @@ async function request(method, body, query = '') {
 
 export function loginFamilyCalendar(pin) { return request('POST', { pin }, '?action=login') }
 export function fetchICloudCalendarEvents() { return request('GET') }
-export function createICloudCalendarEvent(event) { return request('POST', event) }
-export function updateICloudCalendarEvent(event) { return request('PUT', event) }
-export function deleteICloudCalendarEvent(event) { return request('DELETE', event) }
+
+function reviewedActionRequired() {
+  const error = new Error('Direct Family Calendar changes are unavailable. Use Action Mode to review and apply calendar changes with permissions, audit history, safe Undo, and version-conflict protection.')
+  error.status = 423
+  error.code = 'ACTION_REVIEW_REQUIRED'
+  throw error
+}
+
+export async function createICloudCalendarEvent() { reviewedActionRequired() }
+export async function updateICloudCalendarEvent() { reviewedActionRequired() }
+export async function deleteICloudCalendarEvent() { reviewedActionRequired() }
 
 export function isCalendarEligible(item) {
   return Boolean(item?.calendarSync && item?.title && (item?.date || item?.dueAt || item?.startTime))

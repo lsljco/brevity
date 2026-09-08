@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { createEstateHandler } from '../../netlify/functions/estate.mjs'
-import { createEstateRepository } from '../../netlify/lib/estate-store.mjs'
+import { commitMalbecBackup, importEstateVaultFile } from './estateApi.js'
 import { createEstateWorkspace } from './estateModel.js'
 import { compareMalbecExports, prepareMalbecBackup, reconciliationInspection } from './malbecBackup.js'
 
@@ -29,77 +30,54 @@ test('Estate reads are household-authenticated and do not create data', async ()
   assert.equal(JSON.parse(response.body).workspace, null)
 })
 
-test('legacy import is dry-run by default and commit is admin-only', async () => {
+test('Estate client and migration UI expose preview only and cannot start an import request',async()=>{
+  const originalFetch=global.fetch
+  let fetchCalls=0
+  global.fetch=async()=>{fetchCalls+=1;throw new Error('must not fetch')}
+  try{
+    for(const operation of [commitMalbecBackup,importEstateVaultFile]){
+      await assert.rejects(operation({}),error=>error.status===423&&error.code==='ACTION_REVIEW_REQUIRED')
+    }
+    assert.equal(fetchCalls,0)
+  }finally{global.fetch=originalFetch}
+  const ui=readFileSync(new URL('./MalbecMigrationConsole.jsx',import.meta.url),'utf8')
+  assert.match(ui,/Estate import unavailable/)
+  assert.match(ui,/Estate Vault import unavailable/)
+  assert.doesNotMatch(ui,/onClick=\{commit\}|onClick=\{importPendingFiles\}/)
+})
+
+test('legacy import remains preview-only and commit fails closed before persistence', async () => {
   const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1, projects: 0 }, validation: { recordCountMatches: true }, sourceInspection: { sourceChecksum: 'verified-source', preparedChecksumVerified: true, blockingIssues: [] } } }
-  let saves = 0
-  const repository = { getWorkspace: async () => null, saveWorkspace: async input => { saves += 1; return { ...input.workspace, version: 1 } } }
+  let transforms = 0
   const memberHandler = createEstateHandler({
     authenticate: async () => ({ member: 'Terica', role: 'member' }),
-    repositoryFactory: async () => repository,
-    transform: () => transformed,
+    repositoryFactory: async () => { throw new Error('must not open repository') },
+    transform: () => { transforms += 1; return transformed },
   })
   assert.equal((await memberHandler(event({ method: 'POST', body: { backup: {} } }))).statusCode, 403)
+  assert.equal(transforms, 0)
 
   const adminHandler = createEstateHandler({
     authenticate: async () => ({ member: 'Larry', role: 'admin' }),
-    repositoryFactory: async () => repository,
-    transform: () => transformed,
+    repositoryFactory: async () => { throw new Error('must not open repository') },
+    transform: () => { transforms += 1; return transformed },
   })
   const preview = await adminHandler(event({ method: 'POST', body: { backup: {} } }))
   assert.equal(preview.statusCode, 200)
   assert.equal(JSON.parse(preview.body).dryRun, true)
-  assert.equal(saves, 0)
+  assert.equal(transforms, 1)
 
   const committed = await adminHandler(event({ method: 'POST', body: { backup: {}, commit: true, expectedVersion: 0 } }))
-  assert.equal(committed.statusCode, 201)
-  assert.equal(JSON.parse(committed.body).workspace.version, 1)
-  assert.equal(saves, 1)
+  assert.equal(committed.statusCode, 423)
+  assert.equal(JSON.parse(committed.body).code, 'ACTION_REVIEW_REQUIRED')
+  assert.match(JSON.parse(committed.body).error, /No Estate records were changed/i)
+  assert.equal(transforms, 1)
 })
 
-test('initial import cannot overwrite an existing Estate workspace', async () => {
-  const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1 }, validation: { recordCountMatches: true }, sourceInspection: { sourceChecksum: 'verified-source', preparedChecksumVerified: true, blockingIssues: [] } } }
+test('actual Malbec export shape still completes inspect and preview without opening Estate storage', async () => {
   const handler = createEstateHandler({
     authenticate: async () => ({ member: 'Larry', role: 'admin' }),
-    repositoryFactory: async () => ({ getWorkspace: async () => ({ version: 1 }), saveWorkspace: async () => { throw new Error('must not overwrite') } }),
-    transform: () => transformed,
-  })
-  const response = await handler(event({ method: 'POST', body: { backup: {}, commit: true, expectedVersion: 1 } }))
-  assert.equal(response.statusCode, 409)
-  assert.match(JSON.parse(response.body).error, /reconciliation instead of replacing/i)
-})
-
-test('reported duplicate ids block commit before persistence', async () => {
-  const transformed = { workspace: createEstateWorkspace(), report: { counts: { workOrders: 1 }, sourceInspection: { sourceChecksum: 'verified-source', blockingIssues: ['Duplicate ids require review.'] } } }
-  const handler = createEstateHandler({
-    authenticate: async () => ({ member: 'Larry', role: 'admin' }),
-    repositoryFactory: async () => ({ getWorkspace: async () => null, saveWorkspace: async () => { throw new Error('must not save') } }),
-    transform: () => transformed,
-  })
-  const response = await handler(event({ method: 'POST', body: { backup: {}, commit: true, expectedVersion: 0 } }))
-  assert.equal(response.statusCode, 400)
-})
-
-test('commit requires a verified export checksum and at least one property record', async () => {
-  const baseOptions = {
-    authenticate: async () => ({ member: 'Larry', role: 'admin' }),
-    repositoryFactory: async () => ({ getWorkspace: async () => null, saveWorkspace: async () => { throw new Error('must not save') } }),
-  }
-  const noChecksum = createEstateHandler({ ...baseOptions, transform: () => ({ workspace: createEstateWorkspace(), report: { counts: { workOrders: 1 }, sourceInspection: { blockingIssues: [] } } }) })
-  assert.equal((await noChecksum(event({ method: 'POST', body: { backup: {}, commit: true } }))).statusCode, 400)
-  const empty = createEstateHandler({ ...baseOptions, transform: () => ({ workspace: createEstateWorkspace(), report: { counts: { workOrders: 0, projects: 0 }, sourceInspection: { sourceChecksum: 'verified', blockingIssues: [] } } }) })
-  assert.equal((await empty(event({ method: 'POST', body: { backup: {}, commit: true } }))).statusCode, 400)
-})
-
-test('actual Malbec export shape completes inspect, preview, commit and read-back', async () => {
-  const records = new Map()
-  const repository = createEstateRepository({
-    store: { get: async key => records.get(key) || null, setJSON: async (key, value) => records.set(key, structuredClone(value)) },
-    now: () => new Date('2026-08-26T14:00:00.000Z'),
-    createId: () => 'audit-e2e',
-  })
-  const handler = createEstateHandler({
-    authenticate: async () => ({ member: 'Larry', role: 'admin' }),
-    repositoryFactory: async () => repository,
+    repositoryFactory: async () => { throw new Error('preview must not open repository') },
   })
   const source = { exportedAt: '2026-08-26T13:00:00.000Z', appVersion: 'MalbecEstateHOS', data: {
     malbecHOS_maintenance_maintenance: JSON.stringify([{ id: 11, title: 'Pool service', cat: 'Pool', stage: 'Scheduled' }]),
@@ -109,19 +87,13 @@ test('actual Malbec export shape completes inspect, preview, commit and read-bac
   const preview = await handler(event({ method: 'POST', body: { backup: prepared, sourceInspection: inspection } }))
   assert.equal(preview.statusCode, 200)
   assert.equal(JSON.parse(preview.body).report.counts.workOrders, 1)
-  const committed = await handler(event({ method: 'POST', body: { backup: prepared, sourceInspection: inspection, commit: true, expectedVersion: 0 } }))
-  assert.equal(committed.statusCode, 201)
-  const readBack = await handler(event())
-  const workspace = JSON.parse(readBack.body).workspace
-  assert.equal(workspace.version, 1)
-  assert.equal(workspace.migration.sourceExportedAt, source.exportedAt)
-  assert.equal(workspace.projects[0].title, 'Terrace repair')
+  assert.equal(JSON.parse(preview.body).report.counts.projects, 1)
 })
 
 test('payload changes after inspection fail checksum and count reconciliation gates', async () => {
   const handler = createEstateHandler({
     authenticate: async () => ({ member: 'Larry', role: 'admin' }),
-    repositoryFactory: async () => ({ getWorkspace: async () => null, saveWorkspace: async () => { throw new Error('must not save') } }),
+    repositoryFactory: async () => { throw new Error('preview must not open repository') },
   })
   const { prepared, inspection } = prepareMalbecBackup({ records: {
     malbecHOS_maintenance_maintenance: [{ id: 1, title: 'Original service' }],
@@ -132,7 +104,7 @@ test('payload changes after inspection fail checksum and count reconciliation ga
   assert.equal(previewBody.report.validation.preparedChecksumVerified, false)
   assert.equal(previewBody.report.validation.recordCountMatches, false)
   const committed = await handler(event({ method: 'POST', body: { backup: prepared, sourceInspection: inspection, commit: true, expectedVersion: 0 } }))
-  assert.equal(committed.statusCode, 400)
+  assert.equal(committed.statusCode, 423)
 })
 
 test('exact Malbec code defaults stay blocked until reviewed and can be excluded without shifting source indexes', async () => {

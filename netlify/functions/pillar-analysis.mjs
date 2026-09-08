@@ -1,5 +1,7 @@
 import householdAuth from './household-auth.js';
 import { getStore } from '@netlify/blobs';
+import { PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisContextSignature } from '../../src/household/pillarAnalysisCache.js';
+import { PILLAR_ANALYSIS_GUARDRAIL_VERSION, enforcePillarAnalysisGuardrails } from '../../src/household/pillarAnalysisGuardrails.js';
 
 const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
@@ -7,9 +9,9 @@ const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6';
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
 const STORE_NAME = 'brevity-household';
 
-export const PILLAR_ANALYSIS_SCHEMA_VERSION = 5;
+export { PILLAR_ANALYSIS_SCHEMA_VERSION };
 const cacheSegment = value => String(value || '').toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-|-$/g,'') || 'unknown';
-const cacheKey = (date,pillar,planVersion,member) => `${HOUSEHOLD_ID}/pillar-analysis/v${PILLAR_ANALYSIS_SCHEMA_VERSION}/${date}/${pillar}/plan-${Number(planVersion || 0)}/${cacheSegment(member)}`;
+export const pillarAnalysisServerCacheKey = (date,pillar,planVersion,member,contextSignature) => `${HOUSEHOLD_ID}/pillar-analysis/v${PILLAR_ANALYSIS_SCHEMA_VERSION}/${date}/${pillar}/plan-${Number(planVersion || 0)}/${cacheSegment(member)}/${cacheSegment(contextSignature)}`;
 const store = () => getStore({ name:STORE_NAME, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN });
 
 export const BASE_ANALYSIS_GUIDANCE = `Produce a concise daily insight brief for one of the household's Seven Pillars. The brief must interpret the supplied facts and reveal the key message for this pillar today. It is not a schedule, an ownership report, or a task inventory.
@@ -24,6 +26,7 @@ Hard rules:
 - Provide no more than three high-value insights and no more than two meaningful next moves. Do not turn routine plan items into a checklist.
 - Keep each array item to one complete insight, prompt, signal, or decision. Never combine several entries inside one string.
 - A next move must be specific and useful, but it may be a conversation, adjustment, boundary, observation, or practice rather than a task.
+- Include one or two concise evidence entries naming whether the basis is the daily pillar plan or authoritative household context. Treat source evidence as support for interpretation, not proof that a planned behavior was completed.
 - Set decisions to an empty array unless the supplied data contains a clearly stated unresolved choice between concrete alternatives. A missing fact, a generic CONFIRM statement, or whether to perform an optional routine is not a decision.
 - Never manufacture decisions, assignments, deadlines, or facts. Use CONFIRM only for a material unknown inside the relevant insight, never as a standalone decision. Preserve human authority: AI offers perspective; household members decide.`;
 
@@ -45,13 +48,14 @@ const schema = {
     todayFocus: { type: 'string' },
     analysisPoints: { type: 'array', maxItems: 3, items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, detail:{type:'string'} }, required:['title','detail'] } },
     actionableInsights: { type: 'array', maxItems: 2, items: { type: 'object', additionalProperties: false, properties: { title:{type:'string'}, whyItMatters:{type:'string'}, nextMove:{type:'string'} }, required:['title','whyItMatters','nextMove'] } },
+    evidence: { type:'array', minItems:1, maxItems:2, items:{ type:'object', additionalProperties:false, properties:{ source:{type:'string'}, detail:{type:'string'} }, required:['source','detail'] } },
     reflectionPrompts: { type: 'array', maxItems: 3, items: { type: 'string' } },
     watchFor: { type: 'array', maxItems: 2, items: { type: 'string' } },
     decisions: { type: 'array', maxItems: 2, items: { type: 'string' } },
     growthSignal: { type: 'string' },
     governingPrinciple: { type: 'string' }
   },
-  required: ['headline','executiveSummary','todayFocus','analysisPoints','actionableInsights','reflectionPrompts','watchFor','decisions','growthSignal','governingPrinciple']
+  required: ['headline','executiveSummary','todayFocus','analysisPoints','actionableInsights','evidence','reflectionPrompts','watchFor','decisions','growthSignal','governingPrinciple']
 };
 
 const json = (statusCode, body) => ({ statusCode, headers: { 'content-type':'application/json; charset=utf-8', 'cache-control':'no-store' }, body: JSON.stringify(body) });
@@ -74,15 +78,22 @@ export const handler = async event => {
 
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error:'Invalid request body.' }); }
-  const { pillar, date, plan, localContext = {}, force = false } = body;
+  const { pillar, date, plan, localContext = {}, force = false, contextSignature:requestedContextSignature } = body;
   const currentMember = session.member;
   if (!PILLARS.has(pillar)) return json(400, { error:'Unknown Seven Pillar.' });
   if (!date || !plan) return json(400, { error:'Date and household plan are required.' });
+  const contextSignature=pillarAnalysisContextSignature({pillarData:plan?.[pillar] || {},localContext});
+  if(requestedContextSignature!==contextSignature)return json(409,{error:'The pillar analysis source changed before Brevity received it. Refresh to use the latest household data.'});
 
   const dataStore=store();
   if(!force){
-    const cached=await dataStore.get(cacheKey(date,pillar,plan.version,currentMember),{type:'json'}).catch(()=>null);
-    if(cached?.schemaVersion===PILLAR_ANALYSIS_SCHEMA_VERSION)return json(200,{...cached,cached:true});
+    const cached=await dataStore.get(pillarAnalysisServerCacheKey(date,pillar,plan.version,currentMember,contextSignature),{type:'json'}).catch(()=>null);
+    if(cached?.schemaVersion===PILLAR_ANALYSIS_SCHEMA_VERSION&&cacheSegment(cached.member)===cacheSegment(currentMember)){
+      const guarded=enforcePillarAnalysisGuardrails({analysis:cached.analysis,pillar,date,pillarData:plan?.[pillar]||{},localContext});
+      const safeCached={...cached,analysis:guarded.analysis,quality:{guardrailVersion:PILLAR_ANALYSIS_GUARDRAIL_VERSION,status:guarded.usedFallback?'fallback':'validated',issues:guarded.issues},cached:true};
+      if(guarded.usedFallback)await dataStore.setJSON(pillarAnalysisServerCacheKey(date,pillar,plan.version,currentMember,contextSignature),{...safeCached,cached:undefined}).catch(error=>console.error('[pillar-analysis cache repair]',error));
+      return json(200,safeCached);
+    }
   }
 
   const prompt = buildPillarAnalysisPrompt({ pillar, date, plan, currentMember, localContext });
@@ -109,7 +120,8 @@ export const handler = async event => {
 
   let analysis;
   try { analysis = JSON.parse(outputText(payload)); } catch { return json(502, { error:'Brevity AI returned an unreadable analysis.' }); }
-  const result={ schemaVersion:PILLAR_ANALYSIS_SCHEMA_VERSION, pillar, date, generatedAt:new Date().toISOString(), model:MODEL, analysis };
-  await dataStore.setJSON(cacheKey(date,pillar,plan.version,currentMember),result).catch(error=>console.error('[pillar-analysis cache]',error));
+  const guarded=enforcePillarAnalysisGuardrails({analysis,pillar,date,pillarData:plan?.[pillar]||{},localContext});
+  const result={ schemaVersion:PILLAR_ANALYSIS_SCHEMA_VERSION, contextSignature, member:currentMember, pillar, date, generatedAt:new Date().toISOString(), model:MODEL, quality:{guardrailVersion:PILLAR_ANALYSIS_GUARDRAIL_VERSION,status:guarded.usedFallback?'fallback':'validated',issues:guarded.issues},analysis:guarded.analysis };
+  await dataStore.setJSON(pillarAnalysisServerCacheKey(date,pillar,plan.version,currentMember,contextSignature),result).catch(error=>console.error('[pillar-analysis cache]',error));
   return json(200, { ...result, cached:false });
 };

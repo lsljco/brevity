@@ -3,13 +3,15 @@ export function summarizeActuals(transactions = [], year = new Date().getFullYea
   const expensesByCategory = {}
   const vendorSpend = {}
   transactions.forEach(transaction => {
-    if (isTransferTransaction(transaction)) return
+    if (transaction?.pending || isTransferTransaction(transaction)) return
     const date = new Date(`${transaction.date}T12:00:00`)
     if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return
     const amount = Number(transaction.amount) || 0
     const bucket = months[date.getMonth()]
-    if (amount < 0) bucket.income += Math.abs(amount)
-    else {
+    if (amount < 0) {
+      if (!isRealizedIncomeTransaction(transaction)) return
+      bucket.income += Math.abs(amount)
+    } else {
       bucket.expenses += amount
       const category = transaction.category || transaction.cat || 'Uncategorized'
       expensesByCategory[category] = (expensesByCategory[category] || 0) + amount
@@ -46,12 +48,22 @@ export function transactionDirection(transaction) {
   return Number(transaction?.amount) < 0 ? 'income' : 'expense'
 }
 
-export function isRealizedIncomeTransaction(transaction) {
-  if (isTransferTransaction(transaction) || Number(transaction?.amount) >= 0) return false
+export function isRecognizedIncomeTransaction(transaction, { allowPending = true } = {}) {
+  if ((!allowPending && transaction?.pending) || isTransferTransaction(transaction) || Number(transaction?.amount) >= 0) return false
   const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
   const name = String(transaction?.name || transaction?.merchant_name || transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
   if (/\b(?:memo credit pos|merchant credit|purchase refund|refund|reversal|cash ?back)\b/.test(name)) return false
   return /\b(?:income|payroll|salary|wages?|interest|dividend|pension|benefits?|reimbursement)\b/.test(`${category} ${name}`)
+}
+
+export function isRealizedIncomeTransaction(transaction) {
+  return isRecognizedIncomeTransaction(transaction, { allowPending:false })
+}
+
+export function actualTransactionKind(transaction) {
+  if (isTransferTransaction(transaction)) return 'transfer'
+  if (Number(transaction?.amount) >= 0) return 'expense'
+  return isRealizedIncomeTransaction(transaction) ? 'income' : 'other-inflow'
 }
 
 export function isTransferTransaction(transaction) {
@@ -63,6 +75,25 @@ export function isTransferTransaction(transaction) {
   // Plaid labels account-to-account movements as TRANSFER_IN / TRANSFER_OUT.
   // Credit-card payments are also balance movements, not household spending.
   return /\btransfer(?:s| in| out)?\b|\bcredit card payment\b|\bcard payment\b|\bpayment to (?:visa|mastercard|amex|american express|discover|capital one|chase)\b/.test(combined)
+}
+
+export function summarizeActualCashActivity(transactions = []) {
+  return transactions.reduce((totals, transaction) => {
+    if (isTransferTransaction(transaction)) return totals
+    const signedAmount = Number(transaction?.amount) || 0
+    const amount = Math.abs(signedAmount)
+    if (signedAmount < 0) {
+      totals.inflows += amount
+      if (transaction?.pending) totals.pendingInflows += amount
+      else if (isRealizedIncomeTransaction(transaction)) totals.income += amount
+      else totals.otherInflows += amount
+    } else {
+      totals.expenses += amount
+      if (transaction?.pending) totals.pendingExpenses += amount
+    }
+    totals.net = totals.inflows - totals.expenses
+    return totals
+  }, { income:0, otherInflows:0, pendingInflows:0, inflows:0, expenses:0, pendingExpenses:0, net:0 })
 }
 
 export function categoryGroup(category = '') {
@@ -89,7 +120,7 @@ export function reportKey(transaction, displayBy = 'category') {
 
 export function groupReportTransactions(transactions = [], direction = 'expense', displayBy = 'category') {
   const rows = new Map()
-  transactions.filter(transaction => transactionDirection(transaction) === direction).forEach(transaction => {
+  transactions.filter(transaction => direction === 'income' ? isRealizedIncomeTransaction(transaction) : !transaction?.pending && transactionDirection(transaction) === direction).forEach(transaction => {
     const key = reportKey(transaction, displayBy)
     const current = rows.get(key) || { name: key, amount: 0, transactions: [] }
     current.amount += Math.abs(Number(transaction.amount) || 0)
@@ -99,8 +130,20 @@ export function groupReportTransactions(transactions = [], direction = 'expense'
   return [...rows.values()].sort((a, b) => b.amount - a.amount)
 }
 
+export function groupCashInflows(transactions = [], displayBy = 'category') {
+  const rows = new Map()
+  transactions.filter(transaction => !transaction?.pending && !isTransferTransaction(transaction) && Number(transaction?.amount) < 0).forEach(transaction => {
+    const key = reportKey(transaction, displayBy)
+    const current = rows.get(key) || { name:key, amount:0, transactions:[] }
+    current.amount += Math.abs(Number(transaction.amount) || 0)
+    current.transactions.push(transaction)
+    rows.set(key, current)
+  })
+  return [...rows.values()].sort((a, b) => b.amount - a.amount)
+}
+
 export function reportStats(transactions = [], direction = 'expense') {
-  const rows = transactions.filter(transaction => transactionDirection(transaction) === direction)
+  const rows = transactions.filter(transaction => direction === 'income' ? isRealizedIncomeTransaction(transaction) : !transaction?.pending && transactionDirection(transaction) === direction)
   const total = rows.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount) || 0), 0)
   const largest = rows.reduce((max, transaction) => Math.max(max, Math.abs(Number(transaction.amount) || 0)), 0)
   return { total, count: rows.length, largest, average: rows.length ? total / rows.length : 0 }
@@ -118,6 +161,11 @@ export function matchesTransactionFilter(transaction, filter = {}) {
   if (filter.dateFrom && String(transaction.date || '') < filter.dateFrom) return false
   if (filter.dateTo && String(transaction.date || '') > filter.dateTo) return false
   if (filter.excludeTransfers && isTransferTransaction(transaction)) return false
+  if (filter.postedOnly && transaction.pending) return false
+  if (filter.profitAndLossOnly && !(
+    isRealizedIncomeTransaction(transaction)
+    || (!transaction?.pending && transactionDirection(transaction) === 'expense')
+  )) return false
   if (filter.realizedIncomeOnly && !isRealizedIncomeTransaction(transaction)) return false
   if (filter.direction && transactionDirection(transaction) !== filter.direction) return false
   if (filter.displayBy && filter.value && reportKey(transaction, filter.displayBy) !== filter.value) return false
@@ -126,8 +174,8 @@ export function matchesTransactionFilter(transaction, filter = {}) {
 }
 
 export function budgetCategoryForTransaction(transaction) {
-  if (isTransferTransaction(transaction)) return null
-  if (transactionDirection(transaction) === 'income') return 'Income'
+  if (transaction?.pending || isTransferTransaction(transaction)) return null
+  if (transactionDirection(transaction) === 'income') return isRealizedIncomeTransaction(transaction) ? 'Income' : null
   const raw = String(transaction.category || transaction.cat || '').toLowerCase().replaceAll('_', ' ')
   if (/utilit|electric|water|internet|phone|cable/.test(raw)) return 'Utilities'
   if (/mortgage|rent|home|housing/.test(raw)) return 'Housing'

@@ -21,6 +21,7 @@ test('actual activity excludes transfers and card payments from spending', () =>
     { id:'income', name:'Paycheck', amount:-500, category:'INCOME' },
     { id:'transfer', name:'Transfer to savings', amount:300, category:'TRANSFER_OUT' },
     { id:'card', name:'Payment to Visa', amount:200, category:'LOAN_PAYMENTS' },
+    { id:'pending', name:'Pending groceries', amount:75, category:'FOOD_AND_DRINK', pending:true },
   ])
   assert.equal(summary.spent, 100)
   assert.equal(summary.received, 500)

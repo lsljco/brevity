@@ -5,8 +5,6 @@ import {
 } from 'docx'
 import PDFDocument from 'pdfkit'
 import householdAuth from './household-auth.js'
-import { getOneDriveConnection, publishSermonDocuments, publishSevenDayDevotions } from '../lib/onedrive.mjs'
-import { buildSevenDayDevotionsPdf } from '../lib/devotion-document.mjs'
 import { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs } from '../lib/sermon-document-model.mjs'
 
 export { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs }
@@ -21,7 +19,6 @@ const indexKey = `${HOUSEHOLD_ID}/sermons/index`
 const fileKey = (id, format) => `${HOUSEHOLD_ID}/sermons/${id}/sermon.${format}`
 const clean = value => String(value || '').trim()
 const values = value => Array.isArray(value) ? value.filter(Boolean) : value ? [value] : []
-const slugify = value => clean(value).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80) || 'sermon-notes'
 function objectTitle(item) { return clean(item?.title || item?.reference || item?.label) }
 
 const bodyParagraph = (text, options = {}) => new Paragraph({
@@ -144,8 +141,8 @@ export const handler = async event => {
   try {
     const session=await readSession(event).catch(()=>null)
     if(!session)return json(401,{error:'Sign in to access the sermon repository.'})
-    const dataStore=store()
     if(event.httpMethod==='GET'){
+      const dataStore=store()
       const params=event.queryStringParameters||{}
       if(params.id&&['docx','pdf'].includes(params.format)){
         const bytes=await dataStore.get(fileKey(params.id,params.format),{type:'arrayBuffer'}).catch(()=>null)
@@ -159,38 +156,8 @@ export const handler = async event => {
       const entries=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
       return json(200,{documents:Array.isArray(entries)?entries:[]})
     }
-    if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
-    let body={}
-    try{body=JSON.parse(event.body||'{}')}catch{return json(400,{error:'Invalid request body.'})}
-    const notes=body.notes||{}
-    const source=body.source||{}
-    const title=clean(notes.documentTitle||notes.title||source.title)
-    if(!title)return json(400,{error:'Generated sermon notes need a title before they can be archived.'})
-    const id=`${clean(source.sermonDate)||new Date().toISOString().slice(0,10)}-${slugify(title)}`
-    const baseName=sermonGuideBaseName(title,source.sermonDate||notes.sermonDate)
-    const [docx,pdf]=await Promise.all([buildSermonDocx(notes,source),buildSermonPdf(notes,source)])
-    await Promise.all([dataStore.set(fileKey(id,'docx'),docx),dataStore.set(fileKey(id,'pdf'),pdf)])
-    const prior=await dataStore.get(indexKey,{type:'json'}).catch(()=>[])
-    let oneDrive={state:'not-connected'}
-    if(await getOneDriveConnection()){
-      try{
-        oneDrive=await publishSermonDocuments({docx,pdf,baseName})
-        if(values(notes.sevenDayFormationPlan).length){
-          try{
-            const devotionPdf=await buildSevenDayDevotionsPdf(notes,source)
-            oneDrive.devotions=await publishSevenDayDevotions({pdf:devotionPdf,baseName})
-          }catch(error){
-            console.error('[sermon-documents devotions onedrive]',error)
-            oneDrive.devotions={state:'error',error:error.message||'OneDrive devotion publishing failed.'}
-          }
-        }
-      }
-      catch(error){console.error('[sermon-documents onedrive]',error);oneDrive={state:'error',error:error.message||'OneDrive publishing failed.'}}
-    }
-    const entry={id,title,baseName,fileNames:{docx:`${baseName}.docx`,pdf:`${baseName}.pdf`},sermonDate:clean(source.sermonDate),serviceType:clean(source.serviceType),preacherTeacher:clean(notes.preacherTeacher),updatedAt:new Date().toISOString(),updatedBy:session.member,files:{docx:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=docx`,pdf:`/.netlify/functions/sermon-documents?id=${encodeURIComponent(id)}&format=pdf`},oneDrive}
-    const entries=[entry,...(Array.isArray(prior)?prior:[]).filter(item=>item.id!==id)].slice(0,200)
-    await dataStore.setJSON(indexKey,entries)
-    return json(200,{document:entry})
+    if(event.httpMethod==='POST')return json(423,{error:'Direct sermon replacement and external publishing are disabled. Generate local artifacts from the exact reviewed active sermon instead.'})
+    return json(405,{error:'Method not allowed.'})
   } catch(error) {
     console.error('[sermon-documents]',error)
     return json(500,{error:'Brevity could not create or archive the sermon documents.'})

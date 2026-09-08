@@ -1,7 +1,7 @@
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 import { calculateMonthlyCashFlow, calculateScheduledTotalsForMonth, calculateTransactionAmountForMonth } from './monthlyCashFlow.js'
 import { addDays, toISO, txOccursOnDate } from './projection.js'
-import { transactionDirection } from './reportingData.js'
+import { isRealizedIncomeTransaction, isTransferTransaction, transactionDirection } from './reportingData.js'
 
 const money=value=>Math.abs(Number(value)||0)
 const nameOf=tx=>tx?.name||tx?.merchant_name||tx?.merchantName||tx?.description||'Transaction'
@@ -22,9 +22,10 @@ function scheduledRows(transactions=[],startDate,days=7,type){
 
 function actualMonth(actuals=[],today){
   const dateKey=toISO(today), month=dateKey.slice(0,7)
-  const rows=actuals.filter(tx=>tx?.date?.startsWith(month)&&tx.date<=dateKey&&transactionDirection(tx)!=='transfer')
+  const rows=actuals.filter(tx=>!tx?.pending&&tx?.date?.startsWith(month)&&tx.date<=dateKey&&!isTransferTransaction(tx))
   return {
-    income:rows.filter(tx=>transactionDirection(tx)==='income').map(tx=>({id:tx.id,label:nameOf(tx),amount:money(tx.amount),meta:metaOf(tx)})),
+    income:rows.filter(isRealizedIncomeTransaction).map(tx=>({id:tx.id,label:nameOf(tx),amount:money(tx.amount),meta:metaOf(tx)})),
+    otherInflows:rows.filter(tx=>transactionDirection(tx)==='income'&&!isRealizedIncomeTransaction(tx)).map(tx=>({id:tx.id,label:nameOf(tx),amount:money(tx.amount),meta:metaOf(tx)})),
     expenses:rows.filter(tx=>transactionDirection(tx)==='expense').map(tx=>({id:tx.id,label:nameOf(tx),amount:money(tx.amount),meta:metaOf(tx)})),
   }
 }
@@ -42,12 +43,12 @@ function projectedMonth(transactions=[],today){
   return {income,expenses}
 }
 
-export function buildCanonicalFinanceModel({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},projection,today=new Date()}={}){
+export function buildCanonicalFinanceModel({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,today=new Date()}={}){
   const projectedSource=cashFlowScheduled||scheduled
   const dateKey=toISO(today)
-  const daily=buildDailyAlignmentSnapshot({date:dateKey,accounts,scheduled,monthlyScheduled:projectedSource,actuals,budget,projectedBalance:projection?.get?.(dateKey)?.bal})
+  const daily=buildDailyAlignmentSnapshot({date:dateKey,accounts,scheduled,monthlyScheduled:projectedSource,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,projectedBalance:projection?.get?.(dateKey)?.bal})
   const actual=actualMonth(actuals,today), projected=projectedMonth(projectedSource,today)
-  const actualIncome=sum(actual.income), actualExpenses=sum(actual.expenses), actualNet=actualIncome-actualExpenses
+  const actualIncome=sum(actual.income), actualOtherInflows=sum(actual.otherInflows), actualCashInflows=actualIncome+actualOtherInflows, actualExpenses=sum(actual.expenses), actualNet=actualCashInflows-actualExpenses
   const projectedIncome=sum(projected.income), projectedExpenses=sum(projected.expenses), projectedNet=projectedIncome-projectedExpenses
   const weekIncome=scheduledRows(scheduled,today,7,'income'), weekExpenses=scheduledRows(scheduled,today,7,'expense')
   const nearIncome=scheduledRows(scheduled,today,2,'income'), nearExpenses=scheduledRows(scheduled,today,2,'expense')
@@ -57,7 +58,7 @@ export function buildCanonicalFinanceModel({accounts=[],scheduled=[],cashFlowSch
   const approvedDiscretionary=Math.max(Number(daily.approvedDiscretionary)||0,0)
 
   const metrics={
-    actualMonthlyIncome:actualIncome, actualMonthlyExpenses:actualExpenses, actualMonthlyNet:actualNet,
+    actualMonthlyIncome:actualIncome, actualMonthlyOtherInflows:actualOtherInflows, actualMonthlyCashInflows:actualCashInflows, actualMonthlyExpenses:actualExpenses, actualMonthlyNet:actualNet,
     projectedMonthlyIncome:projectedIncome, projectedMonthlyExpenses:projectedExpenses, projectedMonthlyNet:projectedNet,
     operatingBalance:daily.availableOperatingCash, operatingAvailable:daily.availableOperatingCash,
     todayInflows:daily.expectedInflows, todayObligations:daily.dueTodayTomorrow, approvedDiscretionary,

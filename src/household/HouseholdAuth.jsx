@@ -6,7 +6,6 @@ import {
   fetchHouseholdSession,
   loginHouseholdMember,
   logoutHouseholdMember,
-  setHouseholdMemberPassword,
 } from './authApi.js'
 import { getSharedStateHealth, SHARED_STATE_HEALTH_EVENT } from './sharedState.js'
 import './HouseholdAuth.css'
@@ -67,7 +66,7 @@ export function HouseholdLogin({ bootstrapRequired, onLogin, onBootstrap, error:
       <img src="/brevity-logo.png" alt="Brevity" className="household-auth-logo" />
       <p className="household-auth-kicker">Household Operating System</p>
       <h1>{bootstrapRequired ? 'Initialize Household Access' : 'Sign in to Brevity'}</h1>
-      <p className="household-auth-copy">{bootstrapRequired ? 'Create Larry’s administrator password. After sign-in, household member accounts can be created in Settings.' : 'Use your own household account so My Day, assignments, and personal views follow you across devices.'}</p>
+      <p className="household-auth-copy">{bootstrapRequired ? 'Create Larry’s initial administrator password. Additional household account and password changes are disabled in this release.' : 'Use your own household account so My Day, assignments, and personal views follow you across devices.'}</p>
       <form onSubmit={submit}>
         {!bootstrapRequired && <label><span>Household member</span><select value={member} onChange={e => setMember(e.target.value)}>{HOUSEHOLD_MEMBERS.map(name => <option key={name}>{name}</option>)}</select></label>}
         {bootstrapRequired && <div className="household-auth-admin">Administrator: <strong>Larry</strong></div>}
@@ -109,11 +108,7 @@ function HouseholdSyncHealth() {
 
 export function HouseholdAccounts({ sessionMember, role }) {
   const [members, setMembers] = useState([])
-  const [selected, setSelected] = useState('Lorenzo')
-  const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
 
   const load = async () => {
     try { setMembers((await fetchHouseholdMembers()).members || []) } catch (err) { setError(err.message) }
@@ -122,23 +117,11 @@ export function HouseholdAccounts({ sessionMember, role }) {
 
   if (role !== 'admin') return <><div className="household-account-summary"><strong>Signed in as {sessionMember}</strong><span>Your identity is attached to this account on every device.</span></div><HouseholdSyncHealth/></>
 
-  const save = async event => {
-    event.preventDefault(); setBusy(true); setError(''); setMessage('')
-    try {
-      await setHouseholdMemberPassword(selected, password)
-      setPassword(''); setMessage(`${selected}'s account is ready.`); await load()
-    } catch (err) { setError(err.message) }
-    finally { setBusy(false) }
-  }
-
   return <div className="household-account-admin">
     <div className="household-account-grid">{members.map(item => <div key={item.member} className={`household-account-chip${item.configured ? ' is-ready' : ''}`}><strong>{item.member}</strong><span>{item.configured ? 'Account ready' : 'Not configured'}</span></div>)}</div>
-    <form onSubmit={save} className="household-account-form">
-      <label><span>Member</span><select value={selected} onChange={e => setSelected(e.target.value)}>{HOUSEHOLD_MEMBERS.map(name => <option key={name}>{name}</option>)}</select></label>
-      <label><span>Set / reset password</span><input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={8} required /></label>
-      <button disabled={busy}>{busy ? 'Saving…' : 'Save Member Account'}</button>
-    </form>
-    {message && <div className="household-auth-success">{message}</div>}{error && <div className="household-auth-error">{error}</div>}
+    <p className="household-account-target" role="note" style={{margin:0,padding:'9px 12px',borderLeft:'2px solid rgba(197,164,109,.45)',background:'rgba(197,164,109,.06)',color:'var(--muted)',fontSize:12,lineHeight:1.45}}>Household account status remains visible. Creating accounts and setting or resetting member passwords are disabled in this release so Brevity cannot change credentials outside a reviewed recovery process.</p>
+    <button type="button" disabled title="Household password changes are disabled in this release." style={{marginTop:12,padding:'9px 18px',borderRadius:10,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.08)',color:'var(--muted)',fontSize:13,cursor:'not-allowed'}}>Password changes unavailable</button>
+    {error && <div className="household-auth-error">{error}</div>}
     <HouseholdSyncHealth/>
   </div>
 }

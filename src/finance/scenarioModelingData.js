@@ -13,7 +13,7 @@ export const DEFAULT_SCENARIO_MODEL = {
         { id: 'current-lj-genesco', description: 'LJ Genesco Inc.', monthlyNet: 2870.60, annualGross: 49275.20, contribution: 4, remote: true, employment: 'Perm', notes: '' },
         { id: 'current-ts-globe', description: 'TS Globe Life', monthlyNet: 5614.46, annualGross: 87050, contribution: 7, remote: true, employment: 'Perm', notes: '' },
         { id: 'current-ts-transamerica', description: 'TS TransAmerica', monthlyNet: 6374.32, annualGross: 104000, contribution: 9, remote: false, employment: '', notes: '' },
-        { id: 'current-js-old-castle', description: 'JS Old Castle (CRH)', monthlyNet: 3529.56, annualGross: 57000, contribution: 5, remote: false, employment: 'Perm', notes: 'Ends 9/18' },
+        { id: 'current-js-old-castle', description: 'JS CRH Oldcastle', monthlyNet: 3529.56, annualGross: 57000, contribution: 5, remote: false, employment: 'Perm', notes: 'Ends 9/18' },
       ],
     },
     {
