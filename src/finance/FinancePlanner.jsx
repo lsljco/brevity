@@ -32,7 +32,7 @@ import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 import { findPossibleRecurringDuplicates, summarizeActualActivity } from './financialTruth.js'
 import FinanceReconciliation from './FinanceReconciliation.jsx'
-import { getAcknowledgedSharedStateVersion, persistSharedSourceImport, SHARED_STATE_EVENT } from '../household/sharedState.js'
+import { getAcknowledgedSharedStateVersion, persistSharedSourceImport, SHARED_STATE_EVENT, syncSharedState } from '../household/sharedState.js'
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { getHouseholdCalendarDate, getHouseholdDateKey, getHouseholdDateLabel, getHouseholdDateTimeLabel, getHouseholdGreeting, getHouseholdTimeLabel } from './financeTime.js'
@@ -47,7 +47,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, 
 const LS_KEY = 'lslj_finance_v9'
 const captureFinanceReviewVersion = () => {
   try { return getAcknowledgedSharedStateVersion(localStorage, LS_KEY) }
-  catch { return -1 }
+  catch { return undefined }
 }
 
 const FREQ_OPTS = [
@@ -1793,11 +1793,22 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       return false
     }
     try {
-      const reviewedVersion = expectedVersion === undefined
-        ? getAcknowledgedSharedStateVersion(localStorage, storageKey)
-        : expectedVersion
+      let reviewedVersion = expectedVersion
       if (!Number.isInteger(reviewedVersion) || reviewedVersion < 0) {
-        throw new Error('This editor no longer has an acknowledged household record version. Close it, refresh, and review the current record.')
+        try {
+          reviewedVersion = getAcknowledgedSharedStateVersion(localStorage, storageKey)
+        } catch (error) {
+          if (error?.code !== 'SHARED_STATE_VERSION_UNAVAILABLE') throw error
+          // The editor can open while the app-wide household sync is still
+          // reconciling local storage. Refresh once here, then prepare the
+          // field-level proposal against the exact acknowledged record instead
+          // of trapping the editor with an invalid sentinel version.
+          await syncSharedState(localStorage)
+          const current = loadData()
+          dataRef.current = current
+          setData(current)
+          reviewedVersion = getAcknowledgedSharedStateVersion(localStorage, storageKey)
+        }
       }
       const result = await prepareDirectAction({
         summary,
