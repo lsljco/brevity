@@ -214,7 +214,14 @@ async function readHouseholdRecords(dataStore) {
     // authorization, and service errors propagate so clients never mistake an
     // outage for an empty household and upload stale local state over it.
     const { record } = await readRecordEntry(dataStore, key)
-    if (record?.value != null) records[key] = { ...record, version:normalizeVersion(record) }
+    if (record?.value != null) {
+      // Action Mode releases before the hash contract was enforced stored a
+      // literal marker here. Repair only that known legacy marker on read so
+      // existing reviewed records become verifiable without weakening checks
+      // for any other malformed hash.
+      const hash = record.hash === 'assistant-action' ? hashValue(record.value) : record.hash
+      records[key] = { ...record, hash, version:normalizeVersion(record) }
+    }
   }))
   return records
 }

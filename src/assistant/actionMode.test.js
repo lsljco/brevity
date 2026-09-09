@@ -7,6 +7,7 @@ import { createAssistantActionRepository } from '../../netlify/lib/assistant-act
 import { assertExecutableProposalVersions, calendarVersion, commitPreparedCalendarOperations, createPermissionActionResources, executeActionWithJournal, prepareCalendarProposal, prepareDirectProposal, prepareMealProposal, publicAssistantAudit, reviewedExecutionSession, savePermissionsWithJournal, unchangedSinceAction, undoActionWithJournal, undoAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
 import { createMealPlanRepository } from '../../netlify/lib/meal-plan-store.mjs'
 import { MEAL_LIBRARY } from '../meals/mealLibrary.js'
+import { hashValue } from '../household/sharedState.js'
 
 function versionedBlobStore() {
   const values=new Map()
@@ -350,8 +351,11 @@ test('reviewed shared-record writes preserve the last applied Plaid balance wate
   const watermark={issuedAt:200,receiptId:'d'.repeat(64)}
   await store.setJSON(key,{key:'lslj_finance_v9',value:JSON.stringify({accounts:[],transactions:[]}),hash:'seed',version:2,plaidAccountReceipt:watermark})
   const resources=createProductionActionResources({sharedStore:store,planStore:store})
-  await resources.write('shared:lslj_finance_v9',{accounts:[],transactions:[{id:'reviewed'}]},2,'Larry','action-1')
+  const next={accounts:[],transactions:[{id:'reviewed'}]}
+  await resources.write('shared:lslj_finance_v9',next,2,'Larry','action-1')
   assert.deepEqual(store.values.get(key).data.plaidAccountReceipt,watermark)
+  assert.equal(store.values.get(key).data.hash,hashValue(JSON.stringify(next)))
+  assert.notEqual(store.values.get(key).data.hash,'assistant-action')
 })
 
 test('existing Action resources without an ETag fail closed before every store write',async()=>{

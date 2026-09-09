@@ -407,6 +407,18 @@ test('shared-state reads distinguish absent records from storage failures', asyn
   )
 })
 
+test('shared-state reads repair the known legacy Action Mode hash marker', async () => {
+  const value=JSON.stringify({accounts:[],transactions:[{id:'reviewed'}]})
+  const legacy={key:'lslj_finance_v9',value,hash:'assistant-action',version:7}
+  const records=await readHouseholdRecords({
+    async getWithMetadata(key) {
+      return key.endsWith('/lslj_finance_v9') ? {data:legacy,etag:'etag-legacy'} : null
+    },
+  })
+  assert.equal(records.lslj_finance_v9.hash,hashValue(value))
+  assert.equal(records.lslj_finance_v9.version,7)
+})
+
 test('shared-state keys map to their server-enforced permission domains', () => {
   assert.equal(KEY_WRITE_DOMAINS.plaid_actuals_cache, 'finance')
   assert.equal(KEY_WRITE_DOMAINS.homehq_items_v1, 'projects')
