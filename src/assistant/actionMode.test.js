@@ -53,6 +53,8 @@ test('each action accepts only its own fields and validates field types and enum
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'forecast.update',targetId:'expenseMode',payload:{expenseMode:'operating'}}]},{member:'Larry',role:'admin'}))
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'forecast.update',targetId:'expenseMode',payload:{expenseMode:'budget'}}]},{member:'Larry',role:'admin'}),/expenseMode is not valid/)
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'transaction.update',payload:{name:'AT&T',category:'Phone'}}]},{member:'Larry',role:'admin'}))
+  assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'transaction.rule.create',payload:{title:'Coffee',matchText:'STARBUCKS',category:'Coffee',accountId:'operating',createdDate:'2026-09-05'}}]},{member:'Larry',role:'admin'}))
+  assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'transaction.rule.delete',payload:{}}]},{member:'Larry',role:'admin'}))
   for (const field of ['amount','date','originalStatement','notes','goal','splits','needsReview']) {
     assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.update',payload:{name:'AT&T',[field]:field==='amount'?450:'changed'}}]},{member:'Larry',role:'admin'}),new RegExp(`unsupported field: ${field}`))
   }
@@ -97,6 +99,7 @@ test('reviewed actions reject empty or selector-only payloads that cannot change
   }
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.categorize',payload:{category:''}}]},{member:'Larry',role:'admin'}),/category is required/)
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.update',payload:{}}]},{member:'Larry',role:'admin'}),/at least one reviewed change/)
+  assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.rule.delete',targetId:'',payload:{}}]},{member:'Larry',role:'admin'}),/exact record id/)
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'budget.update',payload:{month:8}}]},{member:'Larry',role:'admin'}),/numeric value/)
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'forecast.update',payload:{incomeId:'income-1'}}]},{member:'Larry',role:'admin'}),/at least one reviewed income or scenario change/)
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'recurring.delete',payload:{}}]},{member:'Larry',role:'admin'}))
@@ -180,8 +183,10 @@ test('record executor updates decisions and preserves a complete before image',(
 test('Action Mode creates decisions and future-only categorization rules',()=>{
   const plan=applyRecordOperation(createEmptyDailyPlan('2026-09-05'),{type:'decision.create',targetDate:'2026-09-05',description:'Choose contractor',payload:{title:'Choose contractor',owner:'Larry'}},()=> 'decision-1')
   assert.equal(plan.after.decisions[0].id,'decision-1')
-  const rules=applyRecordOperation([],{type:'transaction.rule.create',payload:{title:'Future coffee',matchText:'STARBUCKS',category:'Dining',createdDate:'2026-09-05'}},()=> 'rule-1')
-  assert.deepEqual(rules.after[0],{id:'rule-1',name:'Future coffee',createdDate:'2026-09-05',applyToExisting:false,conditions:{originalStatement:{on:true,value:'STARBUCKS'}},actions:{updateCategory:{on:true,value:'Dining'}},splits:[]})
+  const rules=applyRecordOperation([],{type:'transaction.rule.create',payload:{title:'Future coffee',matchText:'STARBUCKS',category:'Dining',accountId:'operating',createdDate:'2026-09-05'}},()=> 'rule-1')
+  assert.deepEqual(rules.after[0],{id:'rule-1',name:'Future coffee',createdDate:'2026-09-05',applyToExisting:false,conditions:{originalStatement:{on:true,value:'STARBUCKS'},accounts:{on:true,value:'operating'}},actions:{updateCategory:{on:true,value:'Dining'}},splits:[]})
+  const removed=applyRecordOperation(rules.after,{type:'transaction.rule.delete',targetId:'rule-1',payload:{}})
+  assert.deepEqual(removed.after,[])
 })
 
 test('forecast adjustments update only an exact model or scenario record',()=>{

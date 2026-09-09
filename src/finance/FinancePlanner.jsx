@@ -7,6 +7,7 @@ import {
 } from 'chart.js'
 import PlaidConnect from './PlaidConnect.jsx'
 import ActualTxModal from './ActualTxModal.jsx'
+import TransactionRuleModal from './TransactionRuleModal.jsx'
 import { buildProjection, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, restorePersistedFinanceData } from './financeData.js'
 import { actualTransactionKind, budgetCategoryForTransaction, buildBalanceSheet, isRealizedIncomeTransaction, isRecognizedIncomeTransaction, isTransferTransaction, matchesTransactionFilter, summarizeActualCashActivity, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
@@ -1251,6 +1252,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const [txRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
   const [goals, setGoals] = useState(() => loadSavedValue('fp_goals', []))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
+  const [showTransactionRules, setShowTransactionRules] = useState(false)
 
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
@@ -1952,6 +1954,20 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       return false
     }
   }
+  const reviewTransactionRule = ({ matchText, category, accountId, createdDate }) => stageDirectFinanceReview({
+    summary:`Automatically categorize future ${matchText} transactions as ${category}`,
+    operation:{
+      type:'transaction.rule.create',
+      description:`For posted bank transactions whose original statement contains “${matchText}”, apply ${category}${accountId ? ' on the selected account' : ' across linked accounts'}`,
+      payload:{ title:`Categorize ${matchText} as ${category}`, matchText, category, accountId, createdDate },
+    },
+    storageKey:'lslj_tx_rules_v1',
+  })
+  const reviewTransactionRuleRemoval = rule => stageDirectFinanceReview({
+    summary:`Remove categorization rule ${rule.name || rule.id}`,
+    operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category for this bank-statement rule`, payload:{} },
+    storageKey:'lslj_tx_rules_v1',
+  })
   // ── Derived values (all use fd = filtered accounts + transactions) ─────────
   const t = getHouseholdCalendarDate()
   const todayKey = getHouseholdDateKey()
@@ -2966,6 +2982,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                 : `${scheduledViewTransactions.length} scheduled transaction${scheduledViewTransactions.length !== 1 ? 's' : ''}`}
             </p>
             <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+              {showActuals&&!readOnly&&<button type="button" onClick={() => setShowTransactionRules(true)} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className="ti ti-wand" aria-hidden="true"/>Categorization rules{txRules.length ? ` · ${txRules.length}` : ''}</button>}
               {showActuals&&!readOnly&&<button type="button" onClick={fetchActuals} disabled={actualsLoading} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:actualsLoading?'default':'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className={`ti ${actualsLoading?'ti-loader-2':'ti-refresh'}`} style={{animation:actualsLoading?'spin .8s linear infinite':'none'}} aria-hidden="true"/>{actualsLoading?'Checking bank…':'Refresh bank data'}</button>}
               {!readOnly && <button onClick={() => { setEditTx(null); setView('tx-form') }}
                 style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
@@ -3224,6 +3241,17 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
             setTimeout(() => setView('tx-form'), 50)
           } : undefined}
           onClose={() => setSelActualTx(null)}
+        />
+      )}
+      {!readOnly && showTransactionRules && (
+        <TransactionRuleModal
+          accounts={data.accounts}
+          transactions={plaidActuals || []}
+          rules={txRules}
+          today={todayKey}
+          onReviewCreate={reviewTransactionRule}
+          onReviewDelete={reviewTransactionRuleRemoval}
+          onClose={() => setShowTransactionRules(false)}
         />
       )}
     </div>

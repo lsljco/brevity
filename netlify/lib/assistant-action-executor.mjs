@@ -37,7 +37,7 @@ export function resourceForOperation(operation) {
   if (operation.domain === 'projects') return `shared:${SHARED_KEYS.projects}`
   if (operation.type.startsWith('calendar.')) return 'calendar:apple-family'
   if (operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return `shared:${SHARED_KEYS.overrides}`
-  if (operation.type === 'transaction.rule.create') return `shared:${SHARED_KEYS.rules}`
+  if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
   if (operation.type === 'finance.account.link') return `shared:${SHARED_KEYS.finance}`
@@ -61,6 +61,7 @@ export function recordForOperation(value, operation) {
   if (operation.type === 'meeting.action.update') return (value?.openActions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.correction.update') return (value?.corrections || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.history.update') return (value?.meetings || []).find(item => item.id === operation.targetId)
+  if (operation.type === 'transaction.rule.delete') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
   return null
 }
 
@@ -222,8 +223,13 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), ...allowed, id:operation.targetId } } }
   }
   if (operation.type === 'transaction.rule.create') {
-    const item={id:createId(),name:payload.title||`Categorize ${payload.matchText}`,createdDate:payload.createdDate,applyToExisting:false,conditions:{originalStatement:{on:true,value:payload.matchText}},actions:{updateCategory:{on:true,value:payload.category}},splits:[]}
+    const item={id:createId(),name:payload.title||`Categorize ${payload.matchText}`,createdDate:payload.createdDate,applyToExisting:false,conditions:{originalStatement:{on:true,value:payload.matchText},accounts:{on:Boolean(payload.accountId),value:payload.accountId||''}},actions:{updateCategory:{on:true,value:payload.category}},splits:[]}
     return {before,after:[...(Array.isArray(value)?value:[]),item],createdId:item.id}
+  }
+  if (operation.type === 'transaction.rule.delete') {
+    const items=Array.isArray(value)?value:[]
+    if(!items.some(item=>item.id===operation.targetId))throw new Error('That categorization rule no longer exists. Refresh Brevity and try again.')
+    return {before,after:items.filter(item=>item.id!==operation.targetId)}
   }
   if (operation.type === 'budget.update') {
     if (operation.targetId !== payload.lineId) throw new Error('The reviewed budget line no longer matches the requested target.')

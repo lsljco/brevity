@@ -34,3 +34,8 @@ test('future-only rules leave older transactions unchanged', () => {
   const tx = { id: 'old', accountId: 'plaid-1', date: '2026-08-20', name: 'Market', amount: 20 }
   assert.equal(applyTransactionRules(tx, [futureOnly], [{ id: 'operating', plaidAccountId: 'plaid-1' }]), tx)
 })
+
+test('categorization rules wait until a bank transaction is posted', () => {
+  const pending = { id: 'pending', pending: true, accountId: 'plaid-1', date: '2026-08-20', name: 'Market', amount: 20 }
+  assert.equal(applyTransactionRules(pending, [rule], [{ id: 'operating', plaidAccountId: 'plaid-1' }]), pending)
+})

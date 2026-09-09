@@ -39,6 +39,7 @@ export const ACTION_TYPES = {
   'transaction.categorize': 'finance',
   'transaction.update': 'finance',
   'transaction.rule.create': 'finance',
+  'transaction.rule.delete': 'finance',
   'meeting.action.create': 'planning',
   'meeting.action.update': 'planning',
   'meeting.correction.create': 'finance',
@@ -88,7 +89,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'calendar.delete': [],
   'transaction.categorize': ['category'],
   'transaction.update': ['name', 'category'],
-  'transaction.rule.create': ['title', 'matchText', 'category', 'createdDate'],
+  'transaction.rule.create': ['title', 'matchText', 'category', 'accountId', 'createdDate'],
+  'transaction.rule.delete': [],
   'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence'],
   'meeting.action.update': ['text', 'owner', 'due', 'status'],
   'meeting.correction.create': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin', 'meetingDate', 'cadence'],
@@ -138,7 +140,7 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['project.delete', 'calendar.delete', 'recurring.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
@@ -153,7 +155,7 @@ const resourceGroupForOperation = operation => {
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return 'shared:homehq_items_v1'
   if (operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return 'shared:brevity_transaction_overrides_v1'
-  if (operation.type === 'transaction.rule.create') return 'shared:brevity_transaction_rules_v1'
+  if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:brevity_transaction_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
   if (operation.type === 'finance.account.link') return 'shared:lslj_finance_v9'
@@ -445,6 +447,7 @@ export function normalizeActionOperation(input = {}) {
     if(!hasSnapshot&&!hasCadenceNote)throw new Error('Choose a supported Finance Meeting guidance field to update.')
   }
   if (type === 'transaction.rule.create' && (!payload.matchText || !payload.category || !isDate(payload.createdDate))) throw new Error('A future categorization rule requires match text, a category, and a YYYY-MM-DD start date.')
+  if (type === 'transaction.rule.delete' && !operation.targetId) throw new Error('Removing a categorization rule requires its exact id.')
   if (type === 'budget.update') {
     if (!Number.isInteger(payload.month) || payload.month < 0 || payload.month > 11 || (payload.value === undefined && payload.amount === undefined)) throw new Error('A budget update requires a month from 0 through 11 and a numeric value.')
     if (!Number.isInteger(payload.year) || payload.year < 2000 || payload.year > 2100) throw new Error('A budget update requires an exact year from 2000 through 2100.')
