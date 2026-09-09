@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { DECISION_STATUS, DECISION_STATUS_OPTIONS, countOpenDecisions, normalizeDailyPlan, normalizeDecisionStatus } from './dailyPlan.js'
-import { normalizeDailyPlanItemStatus } from './dailyPlanStatus.js'
+import { normalizeDailyPlanItemStatus, normalizeDailyPlanNotificationLevel, normalizeDailyPlanPriority } from './dailyPlanStatus.js'
 
 test('decision statuses expose only the four household decision states', () => {
   assert.deepEqual(Object.values(DECISION_STATUS), ['needs-decision', 'determined', 'complete', 'deferred'])
@@ -31,8 +31,19 @@ test('generated workflow status labels normalize to the Daily Plan contract', ()
   assert.equal(normalizeDailyPlanItemStatus('unexpected-state'), 'unexpected-state')
 })
 
+test('generated priority and notification labels normalize to the Daily Plan contract', () => {
+  assert.equal(normalizeDailyPlanPriority('Medium'), 'normal')
+  assert.equal(normalizeDailyPlanPriority('Urgent'), 'critical')
+  assert.equal(normalizeDailyPlanPriority('Important'), 'high')
+  assert.equal(normalizeDailyPlanPriority('unknown-priority'), 'unknown-priority')
+  assert.equal(normalizeDailyPlanNotificationLevel('Informational'), 'awareness')
+  assert.equal(normalizeDailyPlanNotificationLevel('Action Required'), 'action')
+  assert.equal(normalizeDailyPlanNotificationLevel('Urgent'), 'critical')
+  assert.equal(normalizeDailyPlanNotificationLevel('unknown-level'), 'unknown-level')
+})
+
 test('saved plan items normalize safe legacy statuses in every reviewable section', () => {
-  const item = status => ({ id:status, title:status, status })
+  const item = status => ({ id:status, title:status, status, priority:'Medium', notificationLevel:'Informational' })
   const plan = normalizeDailyPlan({
     date:'2026-09-09',
     topPriorities:[item('Not Started')],
@@ -42,6 +53,8 @@ test('saved plan items normalize safe legacy statuses in every reviewable sectio
     ministry:{ meetings:[item('active')], fellowshipFollowUps:[item('postponed')] },
   })
   assert.equal(plan.topPriorities[0].status, 'pending')
+  assert.equal(plan.topPriorities[0].priority, 'normal')
+  assert.equal(plan.topPriorities[0].notificationLevel, 'awareness')
   assert.equal(plan.assignments[0].status, 'complete')
   assert.equal(plan.household.appointments[0].status, 'in-progress')
   assert.equal(plan.household.priorities[0].status, 'pending')
