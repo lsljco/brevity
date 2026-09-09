@@ -108,6 +108,13 @@ test('drill-down screens expose a labeled Back control sized for phone use', () 
   assert.match(mobileShellSource, /\.app-context-navigation button\s*\{[^}]*min-height:\s*40px;/s)
 })
 
+test('top-level sidebar pillar links establish Today as the parent screen', () => {
+  const handler=appSource.slice(appSource.indexOf('const handlePillarClick='),appSource.indexOf('const navigateFromFinance='))
+  assert.match(handler, /setNavigationHistory\(\[\{pillarId:'',viewId:'today',label:'Today',scrollTop:0\}\]\)/)
+  assert.match(handler, /setActiveView\('pillar-analysis'\)/)
+  assert.doesNotMatch(handler, /openPillar\(pillar\.id\)/)
+})
+
 test('a successful background household sync clears only its stale warning', () => {
   assert.match(appSource, /onSuccess:clearRecoveredHouseholdSyncWarning/)
   assert.match(appSource, /brevity-finance-sync-recovered/)

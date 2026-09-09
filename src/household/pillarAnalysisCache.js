@@ -1,4 +1,4 @@
-export const PILLAR_ANALYSIS_SCHEMA_VERSION = 10
+export const PILLAR_ANALYSIS_SCHEMA_VERSION = 11
 
 const memberSegment = member => String(member || 'unknown').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-') || 'unknown'
 const PILLAR_IDS = ['spiritual', 'health', 'fitness', 'household', 'education', 'finance', 'ministry']

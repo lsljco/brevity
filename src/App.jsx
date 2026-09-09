@@ -247,7 +247,11 @@ export default function App() {
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=result.previous.scrollTop||0}))
   }
   const openPillar=pillarId=>navigateTo(pillarId,'pillar-analysis')
-  const handlePillarClick=pillar=>{openPillar(pillar.id);if(pillar.items.length)setExpandedPillar(pillar.id);else closeSidebarAfterNavigation()}
+  const handlePillarClick=pillar=>{
+    setNavigationHistory([{pillarId:'',viewId:'today',label:'Today',scrollTop:0}])
+    setActivePillar(pillar.id);setActiveView('pillar-analysis');setExpandedPillar(pillar.id)
+    closeSidebarAfterNavigation();requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=0})
+  }
   const navigateFromFinance=viewId=>navigateTo(viewId==='property'?'household':'finance',viewId)
   const handleRefreshStatus=()=>{setActionPermissionRevision(value=>value+1);return refreshAll(currentMember,{requestBankUpdate:true})}
   const activePillarRecord=PILLARS.find(pillar=>pillar.id===activePillar)

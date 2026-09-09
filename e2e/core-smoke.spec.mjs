@@ -78,6 +78,14 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
 
+test('top-level pillar navigation returns to Today instead of the previously viewed pillar', async ({ page }, testInfo) => {
+  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
+  await page.getByRole('button', { name:'Household Management' }).click()
+  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
+  await page.getByRole('button', { name:'Spiritual Maturity' }).click()
+  await expect(page.getByRole('button', { name:'Back to Today' })).toBeVisible()
+})
+
 test('direct shared household writes remain local and never bypass Action Mode review', async ({ page }) => {
   const writes = []
   page.on('request', request => {

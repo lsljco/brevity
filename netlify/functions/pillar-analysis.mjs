@@ -1,7 +1,7 @@
 import householdAuth from './household-auth.js';
 import { getStore } from '@netlify/blobs';
 import { PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisContextSignature } from '../../src/household/pillarAnalysisCache.js';
-import { PILLAR_ANALYSIS_GUARDRAIL_VERSION, buildDeterministicPillarFallback, enforcePillarAnalysisGuardrails, pillarAnalysisEvidence, pillarAnalysisFactPack } from '../../src/household/pillarAnalysisGuardrails.js';
+import { PILLAR_ANALYSIS_GUARDRAIL_VERSION, buildDeterministicPillarFallback, enforcePillarAnalysisGuardrails, operationalizePillarAnalysis, pillarAnalysisEvidence, pillarAnalysisFactPack } from '../../src/household/pillarAnalysisGuardrails.js';
 
 const { readSession } = householdAuth;
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry']);
@@ -32,7 +32,7 @@ Hard rules:
 - A next move must be specific and useful, but it may be a conversation, adjustment, boundary, observation, or practice rather than a task.
 - Evidence is attached from the ranked fact pack after generation. Do not narrate sourcing, validation, confidence, or analysis mechanics in family-facing prose.
 - Name at least one exact source fact in the headline, executive summary, or Today's Focus: a dollar amount, date, record title, meal, Scripture, workout, project, learning deliverable, meeting, or other concrete value from the supplied fact pack.
-- Every insight must contain three distinct parts: the concrete finding, why that finding matters now, and one next move that names the record or screen to review when one exists.
+- Every insight must contain three distinct parts: the concrete finding, why that finding matters now, and one next move that names the record or screen to review when one exists. Do not reuse the same sentence or paragraph across the headline, summary, focus, analysis points, actions, reflection, or growth signal; each section must answer a different question.
 - Use the supplied calculated facts for totals and comparisons. Do not perform new arithmetic over raw records, invent a trend, or introduce any amount, date, person, event, or completion status that is absent from the source facts.
 - Every declarative concrete claim must map to a ranked fact. Do not introduce an unlisted Scripture reference or doctrinal promise; person, organization, clinician, participant, location, visit, or approval; weekday or relative date; score, ratio, quantity, physiological measurement, calorie result, attendance, status change, or observed outcome. A reflection question may ask whether a planned fact occurred, but the brief may not state that it occurred without an actual source fact.
 - When the facts show a data gap, identify the exact missing input and where to record or refresh it. Honest insufficiency is useful; generic encouragement is not.
@@ -85,7 +85,7 @@ const promptFacts = facts => facts.map(({ id, source, label, value, detail, impl
 
 function withCanonicalEvidence(analysis, context) {
   const evidence=pillarAnalysisEvidence(context,analysis);
-  return evidence.length ? { ...analysis, evidence } : analysis;
+  return operationalizePillarAnalysis(evidence.length ? { ...analysis, evidence } : analysis,context);
 }
 
 function buildPillarAnalysisInstructions({pillar,currentMember,repairIssues=[]}) {
