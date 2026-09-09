@@ -48,6 +48,33 @@ test('Today read model separates outcomes, actions, decisions, commitments, and 
   assert.equal(model.commitments[0].source.system, 'apple-calendar')
   assert.equal(model.nextCommitment.title, 'Doctor appointment')
   assert.equal(model.signals.length, 0)
+  assert.equal(model.focus.headline, 'Act on what matters')
+  assert.equal(model.focus.source, 'recorded-theme')
+})
+
+test('Today derives a concrete focus when the plan theme is blank', () => {
+  const outcomeModel=buildTodayReadModel({plan:{...plan,theme:'',topPriorities:[{id:'cash',title:'Fund the operating account',owner:'Larry',status:'pending'}]}})
+  assert.deepEqual(outcomeModel.focus,{
+    headline:'Fund the operating account',
+    detail:'This is the highest recorded outcome that defines success for today.',
+    source:'daily-outcome',
+  })
+
+  const commitmentModel=buildTodayReadModel({
+    plan:{date:'2026-08-26',health:{dinner:'Salmon'}},
+    now:new Date('2026-08-26T08:00:00'),
+    calendarAppointments:[{id:'review',title:'Family Finance Meeting',date:'2026-08-26',startTime:'9:00 AM'}],
+  })
+  assert.equal(commitmentModel.focus.headline,'Prepare for Family Finance Meeting')
+  assert.match(commitmentModel.focus.detail,/9:00 AM/)
+  assert.equal(commitmentModel.focus.source,'next-commitment')
+})
+
+test('Today names a truthful next step when no focus evidence exists', () => {
+  const model=buildTodayReadModel({plan:{date:'2026-08-26'}})
+  assert.equal(model.focus.headline,'Today’s plan has no defined focus yet')
+  assert.match(model.focus.detail,/Morning Alignment/)
+  assert.equal(model.focus.source,'missing-plan')
 })
 
 test('pillar pulse communicates the daily meaning without announcing pillar owners', () => {
