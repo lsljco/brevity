@@ -18,6 +18,14 @@ const SHARED_KEYS = {
 }
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value))
 const nowIso = now => now().toISOString()
+const hashValue = (value = '') => {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
+}
 
 export function resourceForOperation(operation) {
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
@@ -404,7 +412,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
       if (resource.startsWith('shared:')) {
         const key=resource.slice(7), storageKey=sharedKey(key),entry=await readStoreEntry(shared,storageKey),current=entry?.data,version=Number(current?.version||0)
         if(version!==expectedVersion)throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
-        const serialized=JSON.stringify(value), record={key,value:serialized,hash:'assistant-action',version:version+1,updatedAt:occurredAt,updatedBy:actor,...(current?.plaidAccountReceipt?{plaidAccountReceipt:current.plaidAccountReceipt}:{}),...(mutationId?{lastActionId:mutationId}:{})}
+        const serialized=JSON.stringify(value), record={key,value:serialized,hash:hashValue(serialized),version:version+1,updatedAt:occurredAt,updatedBy:actor,...(current?.plaidAccountReceipt?{plaidAccountReceipt:current.plaidAccountReceipt}:{}),...(mutationId?{lastActionId:mutationId}:{})}
         await conditionalStoreJson(shared,storageKey,record,entry); return { version:record.version, value }
       }
       if(resource.startsWith('meal:')){
