@@ -1790,7 +1790,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     }
   }
 
-  async function stageDirectFinanceReview({ summary, operation, storageKey, expectedVersion }) {
+  async function stageDirectFinanceReview({ summary, operation, storageKey, expectedVersion, surfaceError = false }) {
     if (readOnly) {
       showToast('Finance is read-only for this household member')
       return false
@@ -1826,6 +1826,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     } catch (error) {
       setStorageError(error.message || 'This financial change could not be prepared safely.')
       showToast('⚠ Financial change not prepared')
+      if (surfaceError) throw error
       return false
     }
   }
@@ -1963,11 +1964,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       payload:{ title:`Categorize ${matchText} as ${category}`, matchText, matchField, matchMode, category, accountId, applyToExisting, createdDate },
     },
     storageKey:'lslj_tx_rules_v1',
+    surfaceError:true,
   })
   const reviewTransactionRuleRemoval = rule => stageDirectFinanceReview({
     summary:`Remove categorization rule ${rule.name || rule.id}`,
     operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category for this bank-statement rule`, payload:{} },
     storageKey:'lslj_tx_rules_v1',
+    surfaceError:true,
   })
   // ── Derived values (all use fd = filtered accounts + transactions) ─────────
   const t = getHouseholdCalendarDate()

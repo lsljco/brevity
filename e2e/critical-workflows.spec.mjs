@@ -62,6 +62,10 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
             ? {connected:true,transactions:[],errors:[],refresh:{requested:true,requestedAt:'2026-09-08T23:00:00.000Z',accepted:1,completed:1,stillProcessing:false,errors:[]}}
             : {connected:true,mode:'incremental',transactions:[],removed:[],errors:[],syncedAt:new Date().toISOString(),successfulInstitutions:['Pinnacle'],sourceReceipts:[{cursorIdentity:'item-1',batchId:'a'.repeat(64)}]}
       : {connected:false,transactions:[],errors:[]}
+    else if(path.endsWith('/brevity-assistant-actions')&&action==='prepare-direct'){
+      const input=route.request().postDataJSON(),operation=input.operation||input.operations?.[0]
+      body={proposal:{id:'direct-review-proposal',summary:input.summary,risk:operation?.payload?.applyToExisting?'strong-confirmation':'confirmation',operations:[{...operation,id:'direct-review-operation',domain:'finance',allowedScopes:['this-item'],defaultScope:'this-item',risk:operation?.payload?.applyToExisting?'strong-confirmation':'confirmation'}]}}
+    }
     else if(path.endsWith('/health-alerts'))body={alerts:[]}
     else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}}
     else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]}
@@ -110,7 +114,12 @@ test('changing a posted transaction category offers a prefilled rule with past-m
   const dialog=page.getByRole('dialog',{name:'Categorization rules'})
   await expect(dialog.getByLabel('Match text')).toHaveValue('Neighborhood Market')
   await expect(dialog.getByLabel('Apply category')).toHaveValue('Groceries')
-  await expect(dialog.getByRole('checkbox',{name:/Apply this rule to all past matching transactions/})).not.toBeChecked()
+  const pastMatches=dialog.getByRole('checkbox',{name:/Apply this rule to all past matching transactions/})
+  await expect(pastMatches).not.toBeChecked()
+  await pastMatches.check()
+  await dialog.getByRole('button',{name:'Review new rule'}).click()
+  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Automatically categorize matching past and future Neighborhood Market transactions as Groceries/})).toBeVisible()
 })
 
 test('Finance workspaces fit phone and tablet viewports without overlapping filters',async({page},testInfo)=>{
