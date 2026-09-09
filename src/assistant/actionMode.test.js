@@ -438,6 +438,27 @@ test('reviewed actual-transaction metadata uses CAS, immutable audit history, an
   }),error=>error.code==='VERSION_CONFLICT')
 })
 
+test('direct Action Mode review accepts a historical transaction categorization rule',async()=>{
+  const instant=new Date('2026-09-09T13:00:00Z')
+  const actionStore=versionedBlobStore(),sharedStore=versionedBlobStore()
+  const repository=createAssistantActionRepository({store:actionStore,householdId:'house',now:()=>instant})
+  await sharedStore.setJSON('lslj-family/records/lslj_tx_rules_v1',{
+    key:'lslj_tx_rules_v1',value:'[]',hash:'seed',version:2,
+    updatedAt:'2026-09-09T12:00:00Z',updatedBy:'Larry',
+  })
+  const resources=createProductionActionResources({sharedStore,planStore:sharedStore,now:()=>instant})
+  const proposal=await prepareDirectProposal({
+    input:{
+      summary:'Categorize past and future Prosper Marketplace transactions',expectedVersion:2,
+      operation:{type:'transaction.rule.create',description:'Apply Prosper Loan Payment to matching posted transactions',payload:{title:'Prosper loan',matchText:'PROSPER MARKETPL',matchField:'originalStatement',matchMode:'contains',category:'Prosper Loan Payment',accountId:'operating',applyToExisting:true,createdDate:'2026-09-09'}},
+    },
+    session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),repository,resources,now:instant,id:'transaction-rule-proposal',
+  })
+  assert.equal(proposal.id,'transaction-rule-proposal')
+  assert.equal(proposal.risk,'strong-confirmation')
+  assert.deepEqual(proposal.expectedVersions,{'shared:lslj_tx_rules_v1':2})
+})
+
 test('member Undo stops before journal claim when the current domain permission was revoked',async()=>{
   const instant=new Date('2026-09-07T12:00:00Z'),store=versionedBlobStore()
   const repository=createAssistantActionRepository({store,householdId:'house',now:()=>instant})

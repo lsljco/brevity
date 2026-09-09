@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
 const actualTransaction = readFileSync(new URL('./ActualTxModal.jsx', import.meta.url), 'utf8')
 const transactionRule = readFileSync(new URL('./TransactionRuleModal.jsx', import.meta.url), 'utf8')
+const actionsFunction = readFileSync(new URL('../../netlify/functions/brevity-assistant-actions.mjs', import.meta.url), 'utf8')
 const meetings = readFileSync(new URL('./FinanceMeetingsWorkspace.jsx', import.meta.url), 'utf8')
 const metricDrilldown = readFileSync(new URL('./MetricDrilldown.jsx', import.meta.url), 'utf8')
 
@@ -68,6 +69,8 @@ test('actual bank facts stay immutable and only Name and Category enter reviewed
   const handlerEnd = planner.indexOf('const updateAcct', handlerStart)
   const handler = planner.slice(handlerStart, handlerEnd)
   assert.match(handler, /prepareDirectAction\(/)
+  assert.match(actionsFunction, /'transaction\.rule\.create'/)
+  assert.match(actionsFunction, /'transaction\.rule\.delete'/)
   assert.match(handler, /type:'transaction\.update'/)
   assert.match(handler, /getAcknowledgedSharedStateVersion\(localStorage,'lslj_tx_overrides_v1'\)/)
   assert.match(handler, /requestActionReview\(result\.proposal\)/)

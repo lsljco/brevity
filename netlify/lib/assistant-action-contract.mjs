@@ -156,7 +156,7 @@ const resourceGroupForOperation = operation => {
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return 'shared:homehq_items_v1'
   if (operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return 'shared:brevity_transaction_overrides_v1'
-  if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:brevity_transaction_rules_v1'
+  if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:lslj_tx_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
   if (operation.type === 'finance.account.link') return 'shared:lslj_finance_v9'
