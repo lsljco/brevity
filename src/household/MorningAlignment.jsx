@@ -87,12 +87,12 @@ function FitnessStep({ draft, update }) {
   </div>
 }
 
-function HouseholdStep({ draft, update }) {
+function HouseholdStep({ draft, update, onReviewCalendarItem }) {
   const value = draft.household
   return <div className="alignment-form-grid">
     <Field label="Today's Top Household Outcomes" hint="One outcome per line"><textarea value={joinLines(value.priorities.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { priorities: splitLines(e.target.value).map((title, index) => ({ id: `household-priority-${index}`, title, owner: 'Larry', status: 'pending' })) })} /></Field>
-    <Field label="Appointments" hint="Calendar marks intent only; publishing an Apple event requires its own reviewed Calendar action.">
-      <TimedCommitmentsEditor items={value.appointments} planDate={draft.date} prefix="appointment" onChange={appointments => update('household', { appointments })} />
+    <Field label="Appointments" hint="Selected items open a separate Family Calendar review after the daily plan is approved.">
+      <TimedCommitmentsEditor items={value.appointments} planDate={draft.date} prefix="appointment" onChange={appointments => update('household', { appointments })} onReviewCalendar={item=>onReviewCalendarItem?.(item,draft.date)} />
     </Field>
     <Field label="Errands"><textarea value={joinLines(value.errands)} onChange={e => update('household', { errands: splitLines(e.target.value) })} /></Field>
     <Field label="Open items / confirmations"><textarea value={joinLines(value.openItems)} onChange={e => update('household', { openItems: splitLines(e.target.value) })} /></Field>
@@ -121,12 +121,12 @@ function FinanceStep({ draft, update }) {
   </div>
 }
 
-function MinistryStep({ draft, update }) {
+function MinistryStep({ draft, update, onReviewCalendarItem }) {
   const value = draft.ministry
   return <div className="alignment-form-grid">
     <Field label="Content / teaching focus"><textarea value={value.contentFocus} onChange={e => update('ministry', { contentFocus: e.target.value })} /></Field>
-    <Field label="Meetings / ministry commitments" hint="Calendar marks intent only; publishing an Apple event requires its own reviewed Calendar action.">
-      <TimedCommitmentsEditor items={value.meetings} planDate={draft.date} prefix="ministry-meeting" onChange={meetings => update('ministry', { meetings })} />
+    <Field label="Meetings / ministry commitments" hint="Selected items open a separate Family Calendar review after the daily plan is approved.">
+      <TimedCommitmentsEditor items={value.meetings} planDate={draft.date} prefix="ministry-meeting" onChange={meetings => update('ministry', { meetings })} onReviewCalendar={item=>onReviewCalendarItem?.(item,draft.date)} />
     </Field>
     <Field label="Fellowship follow-ups"><textarea value={joinLines(value.fellowshipFollowUps.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('ministry', { fellowshipFollowUps: splitLines(e.target.value).map((title, index) => ({ id: `fellowship-${index}`, title, status: 'pending' })) })} /></Field>
     <Field label="Prayer needs"><textarea value={joinLines(value.prayerNeeds)} onChange={e => update('ministry', { prayerNeeds: splitLines(e.target.value) })} /></Field>
@@ -135,7 +135,7 @@ function MinistryStep({ draft, update }) {
 
 const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
-export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly = false, readOnlyMessage = '', financeReadOnly = false, onCancel, onComplete, onOpenMealPlan }) {
+export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly = false, readOnlyMessage = '', financeReadOnly = false, onCancel, onComplete, onOpenMealPlan, onReviewCalendarItem }) {
   const openedVersionRef = useRef(Number(plan?.version || 0))
   const [draft, setDraft] = useState(() => loadLocalAlignmentDraft(globalThis.localStorage, plan, openedVersionRef.current))
   const [stepIndex, setStepIndex] = useState(0)
@@ -222,7 +222,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
       <div className="alignment-workspace-heading"><div className="alignment-step-icon"><i className={`ti ${icon}`} /></div><div><span>Pillar {stepIndex + 1} of {STEPS.length}</span><h2>{label}</h2></div></div>
       {id === 'finance' && financeReadOnly && !readOnly && <div className="alignment-read-only-notice alignment-read-only-notice--section" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Finance is view-only</strong><span>Only the household administrator can change financial details in Morning Alignment. You can continue editing every planning section your permission allows.</span></div></div>}
       <fieldset className="alignment-step-fields" disabled={stepReadOnly} aria-disabled={stepReadOnly}>
-        <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} />
+        <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={onReviewCalendarItem} />
       </fieldset>
     </section>
     {error && <div className="alignment-error">{error}</div>}

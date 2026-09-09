@@ -10,7 +10,7 @@ import { fetchScheduledDailyPlanDraft, generateDailyPlan } from './dailyPlanGene
 import { useDailyPlan } from './useDailyPlan.js'
 import { ICLOUD_CACHE_KEY } from './appRefresh.js'
 import { nextDailyPlanDate } from './alignmentDate.js'
-import { assignmentUpdateOperation, buildAlignmentOperations, buildPlanDraftOperations, buildRecapOperations, decisionUpdateOperation, stageDailyPlanReview } from './dailyPlanActionReview.js'
+import { assignmentUpdateOperation, buildAlignmentOperations, buildCalendarIntentOperations, buildPlanDraftOperations, buildRecapOperations, calendarIntentOperation, decisionUpdateOperation, stageCalendarIntentReview, stageDailyPlanReview } from './dailyPlanActionReview.js'
 import { clearLocalAlignmentDraft, clearLocalRecapDraft } from './dailyPlanLocalDraft.js'
 import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 import { clearPillarAnalyses } from './pillarAnalysisCache.js'
@@ -52,6 +52,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const [generationMessage, setGenerationMessage] = useState('')
   const [scheduledDraft, setScheduledDraft] = useState(null)
   const pendingPlanReviewRef = useRef(null)
+  const calendarReviewQueueRef = useRef([])
   const [calendarData, setCalendarData] = useState(cachedCalendar)
   const planWithMeals = useMemo(() => applyRollingMeals(plan, mealPlan.data), [mealPlan.data, plan])
   const alignmentPlanWithMeals = useMemo(() => applyRollingMeals(alignmentPlan, mealPlan.data), [alignmentPlan, mealPlan.data])
@@ -69,6 +70,21 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     : planningAccessStatus === 'error'
       ? 'Brevity could not verify your Plans & decisions permission. Today remains view-only to protect the shared household plan.'
       : `${currentMember} can review Today, but changing or generating the shared plan requires Plans & decisions permission.`
+
+  const openNextCalendarReview = async date => {
+    while(calendarReviewQueueRef.current.length){
+      const operation=calendarReviewQueueRef.current.shift()
+      const proposal=await stageCalendarIntentReview({operation,date})
+      if(!proposal)continue
+      pendingPlanReviewRef.current={proposalId:proposal.id,date,kind:'calendar'}
+      setGenerationState('calendar-reviewing')
+      setGenerationMessage(`Review “${operation.payload.title}” in Action Mode to publish it to the Family Calendar.`)
+      return proposal
+    }
+    setGenerationState('idle')
+    setGenerationMessage('Every selected event is current on the Family Calendar.')
+    return null
+  }
 
   useEffect(() => {
     const receiveCalendar = event => setCalendarData(event.detail || null)
@@ -93,12 +109,26 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     const completed = event => {
       const pending=pendingPlanReviewRef.current
       if (!pending || event?.detail?.proposalId !== pending.proposalId) return
+      if(pending.kind==='calendar'){
+        pendingPlanReviewRef.current=null
+        openNextCalendarReview(pending.date).catch(error=>{setGenerationState('error');setGenerationMessage(error.message||'The next Family Calendar review could not be prepared.')})
+        return
+      }
       if (pending.kind === 'alignment') clearLocalAlignmentDraft(globalThis.localStorage, pending.date)
       if (pending.kind === 'recap') clearLocalRecapDraft(globalThis.localStorage, pending.date)
       if (pending.kind === 'generated') setScheduledDraft(null)
       clearPillarAnalyses(pending.date)
       pendingPlanReviewRef.current=null
       setMode(pending.kind === 'recap' ? 'tomorrow' : 'today')
+      if(pending.calendarOperations?.length){
+        setGenerationState('calendar-reviewing')
+        setGenerationMessage('The daily plan is approved. Brevity is preparing the separate Family Calendar review…')
+        calendarReviewQueueRef.current=[...pending.calendarOperations]
+        openNextCalendarReview(pending.date).catch(error=>{
+          setGenerationState('error')
+          setGenerationMessage(error.message||'The daily plan was saved, but the separate Family Calendar review could not be prepared.')
+        })
+      }
     }
     window.addEventListener(ACTION_COMPLETED_EVENT, completed)
     return () => window.removeEventListener(ACTION_COMPLETED_EVENT, completed)
@@ -128,10 +158,11 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const reviewAlignment = async (original, nextPlan, { expectedVersion, completedAt }, timingLabel) => {
     if (!canEditPlanning) throw new Error('Plans & decisions permission is required to close the shared daily plan.')
     const operations = buildAlignmentOperations(original, nextPlan, { completedAt })
-    return stageDailyPlanReview({ summary:`Review ${timingLabel} for ${nextPlan.date}`, operations, expectedVersion })
+    const proposal=await stageDailyPlanReview({ summary:`Review ${timingLabel} for ${nextPlan.date}`, operations, expectedVersion })
+    return {proposal,calendarOperations:buildCalendarIntentOperations(nextPlan)}
   }
-  const completeTodayAlignment = async (nextPlan, review) => { const proposal=await reviewAlignment(planWithMeals, nextPlan, review, 'Today’s Alignment'); pendingPlanReviewRef.current={proposalId:proposal.id,date:nextPlan.date,kind:'alignment'} }
-  const completeAlignment = async (nextPlan, review) => { const proposal=await reviewAlignment(alignmentPlanWithMeals, nextPlan, review, 'Tomorrow’s Alignment'); pendingPlanReviewRef.current={proposalId:proposal.id,date:nextPlan.date,kind:'alignment'} }
+  const completeTodayAlignment = async (nextPlan, review) => { const result=await reviewAlignment(planWithMeals, nextPlan, review, 'Today’s Alignment'); pendingPlanReviewRef.current={proposalId:result.proposal.id,date:nextPlan.date,kind:'alignment',calendarOperations:result.calendarOperations} }
+  const completeAlignment = async (nextPlan, review) => { const result=await reviewAlignment(alignmentPlanWithMeals, nextPlan, review, 'Tomorrow’s Alignment'); pendingPlanReviewRef.current={proposalId:result.proposal.id,date:nextPlan.date,kind:'alignment',calendarOperations:result.calendarOperations} }
   const completeRecap = async (recap, { expectedVersion, completedAt }) => {
     if (!canEditPlanning) throw new Error('Plans & decisions permission is required to close the shared daily plan.')
     const operations = buildRecapOperations(plan, recap, completedAt)
@@ -141,11 +172,12 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
 
   const reviewDecision = async (decisionId, patch, expectedVersion) => stageDailyPlanReview({ summary:`Review a Today decision for ${plan.date}`, operations:[decisionUpdateOperation(plan, decisionId, patch)], expectedVersion })
   const reviewAssignment = async (assignmentId, patch, expectedVersion) => stageDailyPlanReview({ summary:`Review an assignment for ${plan.date}`, operations:[assignmentUpdateOperation(plan, assignmentId, patch)], expectedVersion })
+  const reviewCalendarItem = (item,date) => stageCalendarIntentReview({operation:calendarIntentOperation(item,date),date})
 
-  if (mode === 'today-alignment') return <MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} />
+  if (mode === 'today-alignment') return <MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} />
   if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
   if (mode === 'alignment' && alignmentError) return <div className="household-today-workspace"><div className="today-sync-banner today-sync-banner--error"><div><strong>Tomorrow’s plan could not be loaded</strong><span>{alignmentError}</span></div><button onClick={reloadAlignment}>Retry</button><button onClick={() => setMode('today')}>Return to Today</button></div></div>
-  if (mode === 'alignment') return <MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onCancel={() => setMode('today')} onComplete={completeAlignment} />
+  if (mode === 'alignment') return <MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} />
   if (mode === 'recap') return <EveningRecap plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} />
   if (mode === 'tomorrow') return <div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header><TomorrowProposal plan={planWithMeals} targetPlan={alignmentPlan} readOnly={!isAdministrator} /></div>
 
