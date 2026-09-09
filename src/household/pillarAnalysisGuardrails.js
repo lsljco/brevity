@@ -1,4 +1,4 @@
-export const PILLAR_ANALYSIS_GUARDRAIL_VERSION = 2
+export const PILLAR_ANALYSIS_GUARDRAIL_VERSION = 3
 
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry'])
 const PILLAR_LABELS = {
@@ -55,7 +55,7 @@ const SPIRITUAL_LEAKAGE_PATTERNS = [
 const GENERIC_ONLY = /^(?:stay aligned|stay focused|focus on what matters(?: today)?|keep moving forward|take action|be intentional|continue to grow|execute the plan|make progress|do the work|review the data|verify the signal)[.!]?$/i
 const GENERIC_ACTION = /\b(?:review|check|consider|look at|verify)\s+(?:the\s+|this\s+)?(?:data|information|situation|signal|records?|details?)\b|\buse\b.{0,80}\bto guide\b.{0,50}\b(?:decision|choice|next step)\b/i
 const VAGUE_INSIGHT_LANGUAGE = /\bdeserves?\s+(?:careful|closer|special)?\s*attention\b|\b(?:may|might|could)\s+(?:affect|shape|influence)\s+what happens next\b|\bguide\s+(?:a|the)\s+(?:careful|prudent|informed|appropriate)?\s*(?:financial\s+)?(?:decision|choice)\b|\bkeep\s+(?:this|it|the\s+(?:signal|record|information))\s+in mind\b/i
-const PROCESS_LANGUAGE = /\b(?:source-grounded safe analysis|authoritative household context|usable (?:finance|health|fitness|household|education|ministry|spiritual|pillar)?\s*signal|strongest available signal|interpretation stays within (?:those|the) records|verified financial signals guide|next prudent choice|available context supports (?:a|the) (?:cautious|careful|prudent) interpretation|based on the supplied records,? the available context)\b/i
+const PROCESS_LANGUAGE = /\b(?:source-grounded safe analysis|authoritative household context|usable (?:finance|health|fitness|household|education|ministry|spiritual|pillar)?\s*signal|strongest available signal|interpretation stays within (?:those|the) records|verified financial signals guide|next prudent choice|available context supports (?:a|the) (?:cautious|careful|prudent) interpretation|based on the supplied records,? the available context|a second relevant record is|the supported analysis is|make the recorded plan executable)\b/i
 const CLINICAL_AUTHORITY = '(?:Dr\\.?\\s+[A-Z][a-z]+|doctors?|physicians?|clinicians?|nutritionists?|dietitians?|pediatricians?|therapists?|medical providers?|family physicians?)'
 const CLINICAL_ACTION = '(?:approv(?:e|ed|es|ing)?|recommend(?:ed|s|ing)?|prescrib(?:e|ed|es|ing)?|diagnos(?:e|ed|es|ing)?|treat(?:ed|s|ing)?|cur(?:e|ed|es|ing)?|prevent(?:ed|s|ing)?|stabiliz(?:e|ed|es|ing)?|lower(?:ed|s|ing)?|rais(?:e|ed|es|ing)?|heal(?:ed|s|ing)?|reliev(?:e|ed|es|ing)?|safe)'
 const MEDICAL_CONDITION = '(?:diabetes|prediabetes|hypertension|high blood pressure|blood sugar|blood glucose|glucose|heart rate|celiac|allerg(?:y|ies|ic)|asthma|back pain|knee pain|pain|injury|disease|disorder|diagnosis|medical condition)'
@@ -171,12 +171,15 @@ function spiritualFacts(data,date,context={}) {
   const facts=[]
   const scripture=list(data.scripture).map(value=>clean(value)).filter(Boolean).join(', ') || clean(data.scriptureFocus)
   const focus=clean(data.todayFocus || data.devotionTitle || data.devotionFocus)
+  const devotionText=safeSourceText(data.devotionFocus,{spiritual:true})
   const obedience=safeSourceText(data.obedienceAction || data.requiredOutput,{spiritual:true})
   const hasDailyFormationSource=Boolean(scripture||focus||obedience)
   if(focus)facts.push(makeFact({id:'plan-devotion-focus',label:'Today’s devotion focus',value:focus,priority:1,kind:'projected',
-    implication:scripture?`The plan connects “${focus}” to ${scripture}; the supported analysis is how that truth should shape today’s response.`:`“${focus}” is the recorded formation emphasis, but its effect still depends on a personal response.`,
+    headline:focus,
+    detail:devotionText&&normalized(devotionText)!==normalized(focus)?devotionText:`Today’s formation centers on “${focus}.”`,
+    implication:scripture?`The plan pairs “${focus}” with ${scripture}, so today’s formation should move from reading the passage to naming a personal response.`:`“${focus}” gives today’s formation a clear subject, but its value still depends on a personal response.`,
     nextMove:obedience||`Write one concrete response to “${focus}” and complete it today.`,whyItMatters:'A named response keeps the devotion from remaining only an idea.',watchFor:`Discussing “${focus}” without naming a personal response.`,growth:`Progress will show when each person can connect “${focus}” to a specific lived response.`,anchors:[focus,scripture]}))
-  if(scripture)facts.push(makeFact({id:'plan-scripture',label:'Today’s Scripture',value:scripture,priority:2,kind:'projected',implication:`${scripture} gives today’s formation a defined text; the open question is which truth in it requires a personal response.`,nextMove:`Read ${scripture}, name the phrase that confronts or encourages you, and record one response.`,whyItMatters:'Using the cited passage prevents a generic theme from replacing the recorded source for today’s reflection.',anchors:[scripture]}))
+  if(scripture)facts.push(makeFact({id:'plan-scripture',label:'Today’s Scripture',value:scripture,priority:2,kind:'projected',headline:`${scripture} anchors today’s formation`,detail:`${scripture} is the Scripture selected for today’s formation.`,implication:`Read ${scripture} before drawing meaning from the theme, then identify the phrase that most directly shapes a personal response.`,nextMove:`Read ${scripture}, name the phrase that confronts or encourages you, and record one response.`,whyItMatters:'Using the cited passage prevents a generic theme from replacing the recorded source for today’s reflection.',anchors:[scripture]}))
   if(obedience)facts.push(makeFact({id:'plan-obedience',label:'Recorded act of obedience',value:obedience,priority:3,kind:'projected',implication:`“${obedience}” is the plan’s explicit test of whether today’s reflection becomes lived response.`,nextMove:`Complete the recorded response—“${obedience}”—and note what changed when it was practiced.`,whyItMatters:'This is the plan’s explicit bridge from reflection to behavior.',growth:`Progress will show when “${obedience}” is completed and reflected on honestly.`,anchors:[obedience]}))
   const emphasis=clean(data.formationEmphasis || data.keyPrinciple)
   if(emphasis)facts.push(makeFact({id:'plan-formation-emphasis',label:'Formation emphasis',value:emphasis,priority:4,kind:'projected',implication:`“${emphasis}” names the lens for connecting today’s Scripture to a personal response.`,nextMove:`Use “${emphasis}” to write one sentence describing the response today’s Scripture calls for.`,whyItMatters:'A named formation lens keeps reflection tied to the source teaching.',anchors:[emphasis]}))
@@ -756,22 +759,42 @@ export function buildDeterministicPillarFallback({pillar,date,pillarData={},loca
     return{headline:`${label}: source data is missing`,executiveSummary:`Brevity has no dated record of ${need} for ${date || 'today'}. That leaves today’s condition, result, or priority unknown.`,todayFocus:`Record ${need} before drawing a conclusion about today.`,analysisPoints:[{title:'What is missing',detail:`The ${label} record for ${date || 'today'} does not contain ${need}, so there is no supported result to compare with the plan.`}],actionableInsights:[{title:'Add the missing input',whyItMatters:`Until ${need} is recorded, the household cannot distinguish an unfinished plan from an unrecorded result.`,nextMove:action}],evidence:[{source:'Source coverage',detail:`There is no dated record of ${need} for ${date || 'today'}.`}],reflectionPrompts:[`What ${need} can be recorded now?`],watchFor:[`Treating an unrecorded ${label.toLowerCase()} result as if it were complete.`],decisions:[],growthSignal:`The next useful signal is a dated record of ${need} and its observed outcome.`,governingPrinciple:PILLAR_PRINCIPLES[pillar]||'A missing source fact should be recorded before it is interpreted.'}
   }
   const primary=facts[0],secondary=facts[1]
-  const supporting=secondary?` A second relevant record is: ${secondary.detail}`:''
-  const todayFocus=primary.kind==='data-gap'
-    ? `Close the ${primary.label.toLowerCase()} data gap: ${primary.nextMove}`
-    : primary.kind==='unresolved'
-      ? `Resolve “${clean(primary.value,140)}” and record the disposition before changing the plan.`
-      : primary.kind==='actual'
-        ? `Use the observed result for the next verification: ${primary.nextMove}`
-        : primary.kind==='recorded'
-          ? `Check the recorded condition before relying on it: ${primary.nextMove}`
-          : `Make the recorded plan executable before treating it as a result: ${primary.nextMove}`
+  const pointTitles={
+    spiritual:['The formation movement','The Scriptural anchor'],
+    health:['The execution leverage','The supporting condition'],
+    fitness:['The training implication','The readiness condition'],
+    household:['The operating constraint','The downstream dependency'],
+    education:['The learning objective','The evidence of understanding'],
+    finance:['The financial implication','The supporting financial fact'],
+    ministry:['The ministry emphasis','The preparation requirement'],
+  }[pillar]||['What this means','What supports it']
+  const actionTitles={spiritual:'Practice the response',health:'Protect the health plan',fitness:'Make the session repeatable',household:'Resolve the key dependency',education:'Demonstrate understanding',finance:'Verify the consequential record',ministry:'Prepare for the intended outcome'}
+  const reflections={
+    spiritual:`What is “${clean(primary.value,120)}” bringing into view that needs a personal response today?`,
+    health:`What would make “${clean(primary.value,120)}” easier to carry out at the planned time?`,
+    fitness:`What readiness or recovery observation should shape “${clean(primary.value,120)}” today?`,
+    household:`Which dependency is most likely to keep “${clean(primary.value,120)}” unresolved?`,
+    education:`What would demonstrate real understanding of “${clean(primary.value,120)}” today?`,
+    finance:`What fact about “${clean(primary.value,120)}” would materially change the next financial choice?`,
+    ministry:`What preparation would make “${clean(primary.value,120)}” more focused and useful today?`,
+  }
   const reflection=primary.kind==='data-gap'
-    ? `What is blocking the source update for “${clean(primary.value,120)}”?`
-    : primary.kind==='unresolved'
-      ? `What source fact will resolve “${clean(primary.value,120)}” without assuming the outcome?`
-      : `What consequence of “${clean(primary.value,120)}” needs to be understood before the plan changes?`
-  return{headline:primary.headline,executiveSummary:`${primary.detail} ${primary.whyItMatters}${supporting}`,todayFocus,analysisPoints:[{title:primary.label,detail:`${primary.detail} ${primary.implication}`},...(secondary?[{title:secondary.label,detail:`${secondary.detail} ${secondary.implication}`}]:[])],actionableInsights:[{title:`Act on ${primary.label.toLowerCase()}`,whyItMatters:primary.whyItMatters,nextMove:primary.nextMove}],evidence:facts.slice(0,2).map(fact=>({source:fact.source,detail:fact.detail})),reflectionPrompts:[reflection],watchFor:[primary.watchFor],decisions:[],growthSignal:primary.growth,governingPrinciple:PILLAR_PRINCIPLES[pillar]||'Use a named source fact, explain its consequence, and define the next observable move.'}
+    ? `What is preventing “${clean(primary.value,120)}” from being recorded or refreshed?`
+    : reflections[pillar]||`What would change if “${clean(primary.value,120)}” were addressed today?`
+  return{
+    headline:primary.headline,
+    executiveSummary:`${primary.detail} ${primary.whyItMatters}${secondary?` ${secondary.detail}`:''}`,
+    todayFocus:primary.implication,
+    analysisPoints:[
+      {title:pointTitles[0],detail:`${primary.detail} ${primary.implication}`},
+      ...(secondary?[{title:pointTitles[1],detail:`${secondary.detail} ${secondary.implication}`}]:[]),
+    ],
+    actionableInsights:[{title:actionTitles[pillar]||'Take the next grounded step',whyItMatters:primary.whyItMatters,nextMove:primary.nextMove}],
+    evidence:facts.slice(0,2).map(fact=>({source:fact.source,detail:fact.detail})),
+    reflectionPrompts:[reflection],
+    watchFor:[primary.watchFor],decisions:[],growthSignal:primary.growth,
+    governingPrinciple:PILLAR_PRINCIPLES[pillar]||'Use a named source fact, explain its consequence, and define the next observable move.',
+  }
 }
 
 export function enforcePillarAnalysisGuardrails({analysis,pillar,date,pillarData={},localContext={}}={}) {

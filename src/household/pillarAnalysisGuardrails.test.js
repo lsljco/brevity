@@ -735,27 +735,27 @@ test('Fitness rejects unsupported clinical exercise claims',()=>{
   }
 })
 
-test('deterministic focus copy follows actual, recorded, and projected fact semantics',()=>{
+test('deterministic focus copy leads with meaning instead of analysis mechanics',()=>{
   const cases=[
     {
       label:'posted transaction',kind:'actual',
       args:{pillar:'finance',date:'2026-09-08',localContext:{actualTransactions:[{name:'Payroll',date:'2026-09-08',amount:4200,pending:false}]}},
-      expected:/observed result.*Open “Payroll”/i,
+      expected:/Payroll.*posted.*changes the captured realized-cash result/i,
     },
     {
       label:'learning observation',kind:'actual',
       args:{pillar:'education',date:'2026-09-08',pillarData:{isaiah:{notes:'Fractions need another visual example'}}},
-      expected:/observed result.*Fractions need another visual example/i,
+      expected:/Fractions need another visual example.*determine.*next explanation/i,
     },
     {
       label:'account snapshot',kind:'recorded',
       args:{pillar:'finance',date:'2026-09-08',localContext:{accounts:[{name:'Operating',balance:12400}]}},
-      expected:/recorded condition.*Open Operating.*source timestamp/i,
+      expected:/Operating.*largest absolute recorded balance.*month-to-date cash flow/i,
     },
     {
       label:'meal plan',kind:'projected',
       args:{pillar:'health',date:'2026-09-08',pillarData:{breakfast:'Oatmeal',lunch:'Chicken wraps',dinner:'Herb salmon'}},
-      expected:/recorded plan executable.*ingredients.*Oatmeal/i,
+      expected:/3 of 3 meal windows.*supports preparation.*does not prove/i,
     },
   ]
 
@@ -765,9 +765,25 @@ test('deterministic focus copy follows actual, recorded, and projected fact sema
     assert.equal(primary.kind,kind,label)
     assert.match(fallback.todayFocus,expected,label)
     assert.notEqual(fallback.todayFocus,fallback.actionableInsights[0].nextMove,label)
-    assert.doesNotMatch(fallback.todayFocus,/By day’s end, record the outcome of/i,label)
+    assert.doesNotMatch(narrativeText(fallback),/second relevant record|supported analysis|recorded plan executable/i,label)
     assert.deepEqual(pillarAnalysisQualityIssues(fallback,args.pillar,args),[],label)
   }
+})
+
+test('spiritual fallback uses the sermon-derived devotion instead of repeating field labels',()=>{
+  const args={pillar:'spiritual',date:'2026-09-09',pillarData:{
+    todayFocus:'Day 3 — Welcome Exposure',
+    devotionFocus:'Welcome exposure means allowing the Word to reveal what has been hidden so that an honest response can begin.',
+    scripture:['Hebrews 4:12'],
+    obedienceAction:'Name one truth Hebrews 4:12 brings into view and write the response you will practice today.',
+  }}
+  const fallback=buildDeterministicPillarFallback(args)
+  assert.equal(fallback.headline,'Day 3 — Welcome Exposure')
+  assert.match(fallback.executiveSummary,/allowing the Word to reveal what has been hidden/i)
+  assert.match(fallback.todayFocus,/pairs.*Welcome Exposure.*Hebrews 4:12.*personal response/i)
+  assert.match(fallback.actionableInsights[0].nextMove,/Name one truth Hebrews 4:12/i)
+  assert.doesNotMatch(narrativeText(fallback),/Today’s devotion focus:|A second relevant record is|recorded plan executable|supported analysis/i)
+  assert.deepEqual(pillarAnalysisQualityIssues(fallback,'spiritual',args),[])
 })
 
 test('source restatements need an interpretation and a consequential why',()=>{
