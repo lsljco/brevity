@@ -70,13 +70,30 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('iPhone Cash Forecast'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
 test('Household Operations exposes Schedule, Routines, Operations and Inventory without crashing',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Operations'}).click();for(const label of ['Schedule','Routines','Operations','Supplies & Inventory'])await expect(page.getByRole('button',{name:label,exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
 test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
+
+test('posted transaction categorization rules are discoverable and preview exact bank matches',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await page.getByRole('button',{name:'Show bank activity'}).click()
+  await page.getByRole('button',{name:'Categorization rules'}).click()
+  const dialog=page.getByRole('dialog',{name:'Categorization rules'})
+  await expect(dialog).toBeVisible()
+  await dialog.getByLabel('Original statement contains').fill('Market')
+  await dialog.getByLabel('Apply category').fill('Groceries')
+  await expect(dialog).toContainText('1 posted sample found.')
+  await expect(dialog).toContainText('Neighborhood Market')
+  await expect(dialog.getByRole('option',{name:'Operating Account'})).toHaveCount(1)
+  await expect(dialog.getByRole('button',{name:'Review new rule'})).toBeEnabled()
+})
 
 test('Finance workspaces fit phone and tablet viewports without overlapping filters',async({page},testInfo)=>{
   test.skip(testInfo.project.name==='desktop-chromium','responsive contract')

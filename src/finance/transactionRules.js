@@ -8,6 +8,7 @@ function active(condition) {
 
 export function transactionMatchesRule(transaction, rule, accounts = []) {
   if (!rule?.conditions) return false
+  if (transaction?.pending) return false
   if (!rule.applyToExisting && rule.createdDate && String(transaction.date || '') < rule.createdDate) return false
 
   const conditions = rule.conditions
