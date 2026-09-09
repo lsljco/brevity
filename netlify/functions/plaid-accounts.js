@@ -15,6 +15,12 @@ const plaidClient = new PlaidApi(new Configuration({
     'PLAID-SECRET': process.env.PLAID_SECRET,
   }},
 }))
+const LIVE_BALANCE_TIMEOUT_MS = 20000
+const CACHED_ACCOUNT_TIMEOUT_MS = 8000
+
+const timedOut = error => error?.code === 'ECONNABORTED'
+  || error?.code === 'ETIMEDOUT'
+  || /timed?\s*out|timeout/i.test(String(error?.message || ''))
 
 exports.handler = async (event) => {
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json' }
@@ -34,15 +40,34 @@ exports.handler = async (event) => {
     const allAccounts = []
     const requiresUpdate = []  // items whose bank session has expired
     const syncErrors = []
+    let liveBalanceTimedOut = false
 
     for (const { access_token, item_id, institution } of tokens) {
       try {
         // Automatic application refreshes use Plaid's cached account endpoint,
         // which is fast and reliable. Only an explicit "Sync now" requests the
         // slower institution-facing live balance call.
-        const res = liveBalance
-          ? await plaidClient.accountsBalanceGet({ access_token })
-          : await plaidClient.accountsGet({ access_token })
+        let res
+        let returnedLiveBalance = liveBalance
+        try {
+          res = liveBalance
+            ? await plaidClient.accountsBalanceGet({ access_token }, { timeout:LIVE_BALANCE_TIMEOUT_MS })
+            : await plaidClient.accountsGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
+        } catch (err) {
+          if (!liveBalance || !timedOut(err)) throw err
+          // A slow institution must not hold the entire Finance screen open
+          // until the browser gives up. Preserve account identity from Plaid's
+          // cached roster, but never sign or import those balances as current.
+          res = await plaidClient.accountsGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
+          returnedLiveBalance = false
+          liveBalanceTimedOut = true
+          syncErrors.push({
+            itemId:item_id,
+            institution:institution || 'Connected institution',
+            code:'BALANCE_LIVE_TIMEOUT',
+            message:'The institution did not complete the live balance check in time. Its last available account snapshot was preserved; balances were not marked current.',
+          })
+        }
         const sourceAccounts = res.data.accounts.map(a => {
           // Assets stay positive, credit liabilities become negative, and
           // available credit never masquerades as spendable cash.
@@ -57,6 +82,7 @@ exports.handler = async (event) => {
           }
         })
         allAccounts.push(...sourceAccounts)
+        if (liveBalance && !returnedLiveBalance) console.warn(`Live balance timeout for item ${item_id}; returned cached account identity only.`)
       } catch (err) {
         const code = err.response?.data?.error_code
         console.error(`Error for item ${item_id}:`, err.response?.data || err.message)
@@ -87,8 +113,8 @@ exports.handler = async (event) => {
       }
     }
 
-    const balanceMode = liveBalance ? LIVE_BALANCE_MODE : 'cached'
-    const balanceProvenance = liveBalance ? LIVE_BALANCE_PROVENANCE : 'plaid.accountsGet'
+    const balanceMode = liveBalance && !liveBalanceTimedOut ? LIVE_BALANCE_MODE : 'cached'
+    const balanceProvenance = liveBalance && !liveBalanceTimedOut ? LIVE_BALANCE_PROVENANCE : 'plaid.accountsGet'
     return {
       statusCode: 200, headers,
       body: JSON.stringify({
@@ -96,13 +122,14 @@ exports.handler = async (event) => {
         // Cached accountsGet values describe connection/account metadata only.
         // Only the institution-facing live balance call can mint an importable
         // source receipt and advance durable household balance truth.
-        ...(liveBalance ? { accountSourceReceipt:createAccountSourceReceipt(allAccounts) } : {}),
+        ...(liveBalance && !liveBalanceTimedOut ? { accountSourceReceipt:createAccountSourceReceipt(allAccounts) } : {}),
         connected: true,
         requiresUpdate,  // non-empty = show "Re-connect [bank]" prompt
         errors: syncErrors,
         syncedAt: new Date().toISOString(),
         balanceMode,
         balanceProvenance,
+        liveBalanceTimedOut,
       }),
     }
   } catch (err) {
