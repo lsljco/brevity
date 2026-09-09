@@ -39,3 +39,11 @@ test('categorization rules wait until a bank transaction is posted', () => {
   const pending = { id: 'pending', pending: true, accountId: 'plaid-1', date: '2026-08-20', name: 'Market', amount: 20 }
   assert.equal(applyTransactionRules(pending, [rule], [{ id: 'operating', plaidAccountId: 'plaid-1' }]), pending)
 })
+
+test('statement rules support exact and starts-with matching', () => {
+  const exact = { ...rule, conditions:{ originalStatement:{ on:true, match:'exactly', value:'Amazon Prime' } } }
+  const starts = { ...rule, conditions:{ originalStatement:{ on:true, match:'starts', value:'Amazon' } } }
+  const transaction = { id:'amazon', date:'2026-09-01', originalStatement:'AMAZON PRIME', amount:4.99 }
+  assert.equal(transactionMatchesRule(transaction, exact), true)
+  assert.equal(transactionMatchesRule(transaction, starts), true)
+})

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
 const actualTransaction = readFileSync(new URL('./ActualTxModal.jsx', import.meta.url), 'utf8')
+const transactionRule = readFileSync(new URL('./TransactionRuleModal.jsx', import.meta.url), 'utf8')
 const meetings = readFileSync(new URL('./FinanceMeetingsWorkspace.jsx', import.meta.url), 'utf8')
 const metricDrilldown = readFileSync(new URL('./MetricDrilldown.jsx', import.meta.url), 'utf8')
 
@@ -55,7 +56,11 @@ test('actual bank facts stay immutable and only Name and Category enter reviewed
   assert.match(actualTransaction, /value=\{form\.notes\} readOnly/)
   assert.match(actualTransaction, /value=\{form\.needsReview\} disabled/)
   assert.match(actualTransaction, /Bank Transaction Cannot Be Deleted/)
-  assert.match(actualTransaction, /future categorization rule, ask Brevity/i)
+  assert.match(actualTransaction, /Save this category change as a rule\?/)
+  assert.match(actualTransaction, /Yes, set up rule/)
+  assert.match(actualTransaction, /No, just this transaction/)
+  assert.match(transactionRule, /Apply this rule to all past matching transactions/)
+  assert.match(transactionRule, /Match method/)
   assert.equal(actualTransaction.includes('<CategoryToast'), false)
   assert.equal(actualTransaction.includes('<RuleModal'), false)
 

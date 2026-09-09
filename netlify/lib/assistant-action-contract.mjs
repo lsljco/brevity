@@ -89,7 +89,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'calendar.delete': [],
   'transaction.categorize': ['category'],
   'transaction.update': ['name', 'category'],
-  'transaction.rule.create': ['title', 'matchText', 'category', 'accountId', 'createdDate'],
+  'transaction.rule.create': ['title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
   'transaction.rule.delete': [],
   'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence'],
   'meeting.action.update': ['text', 'owner', 'due', 'status'],
@@ -108,7 +108,7 @@ const ACTION_PAYLOAD_FIELDS = {
 }
 const STRING_FIELDS = new Set(['title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['amount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta'])
-const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled'])
+const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'createdDate', 'meetingDate', 'expiresOn'])
 const ACTION_ENUMS = {
   'decision.create': { status:['needs-decision', 'determined', 'complete', 'deferred'] },
@@ -120,6 +120,7 @@ const ACTION_ENUMS = {
   'calendar.create': { priority:['high', 'normal'] },
   'calendar.update': { priority:['high', 'normal'] },
   'forecast.update': { expenseMode:['scenario', 'operating'] },
+  'transaction.rule.create': { matchField:['originalStatement', 'merchantName'], matchMode:['contains', 'exactly', 'starts'] },
   'recurring.create': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
   'recurring.update': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
   'meeting.action.create': { status:['open'], cadence:['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] },
@@ -385,7 +386,7 @@ export function normalizeActionOperation(input = {}) {
     payload,
     allowedScopes,
     defaultScope,
-    risk: actionRisk(type, defaultScope),
+    risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
   if (((operation.domain === 'planning' && type !== 'sermon.activate' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)

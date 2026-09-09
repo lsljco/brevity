@@ -1253,6 +1253,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const [goals, setGoals] = useState(() => loadSavedValue('fp_goals', []))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
   const [showTransactionRules, setShowTransactionRules] = useState(false)
+  const [transactionRuleInitial, setTransactionRuleInitial] = useState(null)
 
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
@@ -1954,12 +1955,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       return false
     }
   }
-  const reviewTransactionRule = ({ matchText, category, accountId, createdDate }) => stageDirectFinanceReview({
-    summary:`Automatically categorize future ${matchText} transactions as ${category}`,
+  const reviewTransactionRule = ({ matchText, matchField, matchMode, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
+    summary:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${matchText} transactions as ${category}`,
     operation:{
       type:'transaction.rule.create',
-      description:`For posted bank transactions whose original statement contains “${matchText}”, apply ${category}${accountId ? ' on the selected account' : ' across linked accounts'}`,
-      payload:{ title:`Categorize ${matchText} as ${category}`, matchText, category, accountId, createdDate },
+      description:`For posted bank transactions whose ${matchField === 'merchantName' ? 'merchant name' : 'original statement'} ${matchMode === 'exactly' ? 'exactly matches' : matchMode === 'starts' ? 'starts with' : 'contains'} “${matchText}”, apply ${category}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ''}`,
+      payload:{ title:`Categorize ${matchText} as ${category}`, matchText, matchField, matchMode, category, accountId, applyToExisting, createdDate },
     },
     storageKey:'lslj_tx_rules_v1',
   })
@@ -2982,7 +2983,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                 : `${scheduledViewTransactions.length} scheduled transaction${scheduledViewTransactions.length !== 1 ? 's' : ''}`}
             </p>
             <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-              {showActuals&&!readOnly&&<button type="button" onClick={() => setShowTransactionRules(true)} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className="ti ti-wand" aria-hidden="true"/>Categorization rules{txRules.length ? ` · ${txRules.length}` : ''}</button>}
+              {showActuals&&!readOnly&&<button type="button" onClick={() => { setTransactionRuleInitial(null); setShowTransactionRules(true) }} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className="ti ti-wand" aria-hidden="true"/>Categorization rules{txRules.length ? ` · ${txRules.length}` : ''}</button>}
               {showActuals&&!readOnly&&<button type="button" onClick={fetchActuals} disabled={actualsLoading} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:actualsLoading?'default':'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className={`ti ${actualsLoading?'ti-loader-2':'ti-refresh'}`} style={{animation:actualsLoading?'spin .8s linear infinite':'none'}} aria-hidden="true"/>{actualsLoading?'Checking bank…':'Refresh bank data'}</button>}
               {!readOnly && <button onClick={() => { setEditTx(null); setView('tx-form') }}
                 style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
@@ -3229,6 +3230,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           allTxNames={allTxNames}
           goals={goals}
           onSave={handleSaveActualTx}
+          onCreateRule={initial => { setTransactionRuleInitial(initial); setShowTransactionRules(true) }}
           onMakeRecurring={(!isTransferTransaction(selActualTx) && (Number(selActualTx.amount) >= 0 || isRecognizedIncomeTransaction(selActualTx))) ? (form) => {
             const signedActual = {
               ...selActualTx,
@@ -3249,9 +3251,10 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           transactions={plaidActuals || []}
           rules={txRules}
           today={todayKey}
+          initial={transactionRuleInitial}
           onReviewCreate={reviewTransactionRule}
           onReviewDelete={reviewTransactionRuleRemoval}
-          onClose={() => setShowTransactionRules(false)}
+          onClose={() => { setShowTransactionRules(false); setTransactionRuleInitial(null) }}
         />
       )}
     </div>
