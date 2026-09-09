@@ -108,6 +108,20 @@ test('generated daily-plan drafts map to at most eight explicit reviewed operati
   assert.ok(operations.slice(1).every(item=>item.type==='plan.pillar.update'&&item.payload.origin==='generated-draft'))
 })
 
+test('review accepts safe generated status aliases and still rejects unknown statuses', () => {
+  const date='2026-09-09',current={...createEmptyDailyPlan(date),version:2},draft=structuredClone(current)
+  draft.topPriorities=[{id:'priority-1',title:'Confirm the day',owner:'Larry',status:'Not Started',priority:'high'}]
+  const operations=buildPlanDraftOperations(current,draft)
+  const proposal=normalizeActionProposal({operations}, {member:'Larry',role:'admin'})
+  assert.equal(proposal.operations[0].payload.patch.topPriorities[0].status, 'pending')
+
+  operations[0].payload.patch.topPriorities[0].status='unexpected-state'
+  assert.throws(
+    ()=>normalizeActionProposal({operations}, {member:'Larry',role:'admin'}),
+    /topPriorities item 1 has an invalid status/,
+  )
+})
+
 test('the generator stores an immutable versioned draft and never targets the live plan key', async () => {
   const calls=[],records=new Map()
   const dataStore={

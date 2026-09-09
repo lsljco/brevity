@@ -1,3 +1,5 @@
+import { DAILY_PLAN_ITEM_STATUSES, normalizeDailyPlanItemStatus } from '../../src/household/dailyPlanStatus.js'
+
 const MEMBERS = new Set(['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah', 'Family'])
 export const DAILY_PLAN_PILLARS = ['spiritual', 'health', 'fitness', 'household', 'education', 'finance', 'ministry']
 
@@ -29,7 +31,7 @@ function members(value, label) {
 }
 
 const ITEM_FIELDS = ['id', 'title', 'notes', 'owner', 'participants', 'status', 'priority', 'date', 'startTime', 'endTime', 'dueAt', 'requiresDecision', 'calendarSync', 'notificationLevel']
-const ITEM_STATUSES = new Set(['pending', 'needs-decision', 'ready', 'in-progress', 'determined', 'complete', 'deferred'])
+const ITEM_STATUSES = new Set(DAILY_PLAN_ITEM_STATUSES)
 const PRIORITIES = new Set(['critical', 'high', 'normal', 'low'])
 const NOTIFICATION_LEVELS = new Set(['awareness', 'action', 'critical'])
 
@@ -44,7 +46,7 @@ function planItem(value, index, label) {
     } else if (field === 'participants') result.participants = members(raw, `${label} participants`)
     else {
       if (typeof raw !== 'string') throw new Error(`${label} item ${index + 1} requires ${field} to be text.`)
-      result[field] = clean(raw, field === 'notes' ? 3000 : 500)
+      result[field] = field === 'status' ? normalizeDailyPlanItemStatus(raw, '') : clean(raw, field === 'notes' ? 3000 : 500)
     }
   }
   if (!result.title) throw new Error(`${label} item ${index + 1} requires a title.`)
