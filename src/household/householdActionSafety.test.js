@@ -75,6 +75,9 @@ test('household action review builders contain only intent and exact targets',()
   const inventory=inventoryItemCreateOperation({name:'Paper towels',category:'Paper Goods',location:'Supply Closet',quantity:'2',unit:'packs',parLevel:'1',unitCost:'12',expiresOn:'',notes:''})
   assert.equal(inventory.payload.unitCost,12)
   assert.equal(householdResourceKeyForAction(inventory.type),'brevity_household_inventory_v1')
+  const custom=inventoryItemCreateOperation({name:'Light bulbs',category:'Other',location:'Other',locationCustom:'Basement storage',quantity:'2',unit:'boxes',parLevel:'1',unitCost:'9',expiresOn:'',notes:''})
+  assert.equal(custom.payload.location,'Basement storage')
+  assert.throws(()=>inventoryItemCreateOperation({name:'Light bulbs',category:'Other',location:'Other',locationCustom:'',quantity:'2',unit:'boxes',parLevel:'1',unitCost:'9'}),/custom storage location/i)
 })
 
 test('schedule mutation uses server actor/time/id and projects Calendar without a second record write',()=>{

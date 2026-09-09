@@ -6,7 +6,7 @@ import { createAssistantActionRepository } from '../../netlify/lib/assistant-act
 import { executeActionWithJournal, prepareDirectProposal, undoActionWithJournal } from '../../netlify/functions/brevity-assistant-actions.mjs'
 import { dailyPlanDraftKey, generateDailyPlanDraft, saveGeneratedDailyPlanDraft } from '../../netlify/lib/household-plan-generator.mjs'
 import { createEmptyDailyPlan } from './dailyPlan.js'
-import { buildAlignmentOperations, buildPlanDraftOperations } from './dailyPlanActionReview.js'
+import { buildAlignmentOperations, buildCalendarIntentOperations, buildPlanDraftOperations, calendarIntentOperation } from './dailyPlanActionReview.js'
 import { clearLocalAlignmentDraft, clearLocalRecapDraft, loadLocalAlignmentDraft, loadLocalRecapDraft, saveLocalAlignmentDraft, saveLocalRecapDraft } from './dailyPlanLocalDraft.js'
 import { fetchScheduledDailyPlanDraft } from './dailyPlanGeneratorApi.js'
 
@@ -59,6 +59,17 @@ test('Morning Alignment produces granular reviewed operations and never exceeds 
   assert.ok(operations.length<=8)
   assert.equal(operations[0].payload.patch.owner,undefined)
   assert.equal(operations[0].payload.patch.sermonNotes,undefined)
+})
+
+test('calendar intent becomes a separate exact Family Calendar operation',()=>{
+  const date='2026-09-09',plan=createEmptyDailyPlan(date)
+  plan.household.appointments=[{id:'finance-review',title:'Family Finance Meeting / Brevity Review',date,startTime:'09:00',owner:'Family',participants:[],priority:'normal',notes:'',calendarSync:true}]
+  plan.ministry.meetings=[{id:'not-selected',title:'Prayer call',date,startTime:'19:00',owner:'Larry',participants:[],priority:'normal',notes:'',calendarSync:false}]
+  const operations=buildCalendarIntentOperations(plan)
+  assert.equal(operations.length,1)
+  assert.deepEqual(operations[0],calendarIntentOperation(plan.household.appointments[0],date))
+  assert.equal(operations[0].targetId,'daily-2026-09-09-finance-review')
+  assert.deepEqual(operations[0].payload,{title:'Family Finance Meeting / Brevity Review',notes:'',owner:'Family',participants:[],date,time:'09:00',allDay:false,priority:'normal'})
 })
 
 test('reviewed alignment initializes a missing day, records immutable audit, rejects stale data, and safely undoes', async () => {

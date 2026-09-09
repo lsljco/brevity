@@ -644,6 +644,12 @@ test('direct calendar review allows safe creation but rejects edits to native Ap
   const created=await prepareCalendarProposal({input:createInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:[],repository,now:new Date('2026-09-07T12:00:00Z'),id:'create-calendar'})
   assert.equal(created.operations[0].type,'calendar.create')
 
+  const planInput={summary:'Create plan appointment',operation:{...createInput.operation,targetId:'daily-2026-09-09-finance-review',payload:{title:'Family Finance Meeting',date:'2026-09-09',time:'09:00',allDay:false,owner:'Family',participants:[],notes:'',priority:'normal'}}}
+  const planProposal=await prepareCalendarProposal({input:planInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:[],repository,now:new Date('2026-09-07T12:00:00Z'),id:'plan-calendar'})
+  assert.equal(planProposal.operations[0].targetId,'daily-2026-09-09-finance-review')
+  const alreadyCurrent={id:'calendar-1',sourceId:'assistant-daily-2026-09-09-finance-review',title:'Family Finance Meeting',date:'2026-09-09',time:'09:00',allDay:false,pillar:'household',owner:'Family',participants:[],notes:'',priority:false}
+  assert.equal(await prepareCalendarProposal({input:planInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:[alreadyCurrent],repository,now:new Date('2026-09-07T12:00:00Z'),id:'plan-calendar-retry'}),null)
+
   const native=[{id:'native-1',sourceId:'native-1',etag:'native-v1',title:'Native',owner:'Family'}]
   const updateInput={summary:'Update native',expectedEventToken:'native-v1',operation:{...createInput.operation,type:'calendar.update',targetId:'native-1'}}
   await assert.rejects(()=>prepareCalendarProposal({input:updateInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:native,repository}),error=>error.code==='FORBIDDEN')

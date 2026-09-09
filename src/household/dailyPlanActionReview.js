@@ -1,4 +1,4 @@
-import { prepareDirectAction } from '../assistant/assistantApi.js'
+import { prepareCalendarAction, prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { PILLAR_IDS, normalizeDailyPlan } from './dailyPlan.js'
 
@@ -58,6 +58,37 @@ export function buildAlignmentOperations(originalInput, draftInput, { completedA
   if (Object.keys(alignmentPatch).length) operations.push(operation('plan.alignment.update', draft.date, 'morningAlignment', `Review Morning Alignment status for ${draft.date}`, { patch:alignmentPatch }))
   if (operations.length > 8) throw new Error('This alignment contains too many record groups for one safe review. Save the local draft, then review fewer pillar changes at a time.')
   return operations
+}
+
+export function buildCalendarIntentOperations(planInput) {
+  const plan=normalizeDailyPlan(planInput)
+  return [
+    ['household',plan.household.appointments],
+    ['ministry',plan.ministry.meetings],
+  ].flatMap(([,items])=>(items||[]).filter(item=>item.calendarSync&&item.title&&(item.date||plan.date)).map(item=>calendarIntentOperation(item,plan.date)))
+}
+
+export function calendarIntentOperation(item, planDate) {
+  return {
+    type:'calendar.create',
+    targetId:`daily-${planDate}-${item.id}`,
+    targetDate:item.date||planDate,
+    description:`Add “${String(item.title).trim()}” to the Family Calendar`,
+    payload:{
+      title:String(item.title).trim(), notes:String(item.notes||''), owner:item.owner||'Family', participants:item.participants||[],
+      date:item.date||planDate, time:item.startTime||'', allDay:!item.startTime,
+      priority:['high','critical'].includes(item.priority)?'high':'normal',
+    },
+    allowedScopes:['this-item'], defaultScope:'this-item',
+  }
+}
+
+export async function stageCalendarIntentReview({ operation, date }) {
+  if(!operation)return null
+  const result=await prepareCalendarAction({summary:`Add selected ${date} commitment to the Family Calendar`,operation})
+  if(!result?.proposal)return null
+  requestActionReview(result.proposal)
+  return result.proposal
 }
 
 export function buildRecapOperations(originalInput, recap, completedAt) {

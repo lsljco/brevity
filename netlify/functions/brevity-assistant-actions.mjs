@@ -41,6 +41,15 @@ export function assertExecutableProposalVersions(proposal,operations=proposal?.o
 }
 const calendarRecord=(events,targetId)=>(events||[]).find(item=>[item.id,item.uid,item.sourceId].includes(targetId))||null
 const eventToken=event=>String(event?.etag||event?.updatedAt||'')
+const calendarFields=['sourceId','actionId','title','date','time','allDay','pillar','owner','participants','notes','priority']
+const calendarTime=value=>{const match=String(value||'').trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);if(!match)return String(value||'');let hour=Number(match[1]);if(match[3]?.toUpperCase()==='PM'&&hour<12)hour+=12;if(match[3]?.toUpperCase()==='AM'&&hour===12)hour=0;return`${String(hour).padStart(2,'0')}:${match[2]}`}
+const sameCalendarValue=(current,planned)=>calendarFields.every(field=>{
+  if(!(field in (planned||{})))return true
+  if(field==='time')return calendarTime(current?.[field])===calendarTime(planned[field])
+  return JSON.stringify(current?.[field]??(Array.isArray(planned[field])?[]:''))===JSON.stringify(planned[field])
+})
+const calendarCreateSourceId=operation=>`assistant-${operation.targetId||operation.id}`
+const calendarCreateCandidate=(operation,member)=>({sourceId:calendarCreateSourceId(operation),title:operation.payload.title||operation.description,date:operation.payload.date||operation.targetDate,time:operation.payload.time||'',allDay:operation.payload.allDay!==false,pillar:'household',owner:operation.payload.owner||member,participants:operation.payload.participants||[],notes:operation.payload.notes||'',priority:operation.payload.priority==='high'})
 export const reviewedExecutionSession=(requestSession,proposal)=>{
   if(!proposal?.startedBy||!['admin','member'].includes(proposal.startedRole))throw Object.assign(new Error('This in-progress proposal does not retain the reviewed actor role. Prepare and review a new proposal.'),{code:'VERSION_CONFLICT'})
   return{...requestSession,member:proposal.startedBy,role:proposal.startedRole}
@@ -55,19 +64,31 @@ export async function prepareCalendarProposal({input,session,permissions,events,
   try{
     proposal=normalizeActionProposal({summary:input.summary,operations:[rawOperation]},{member:session.member,role:session.role,now,id})
   }catch(error){throw Object.assign(error,{code:'INVALID_ACTION'})}
-  const operation=proposal.operations[0]
-  const current=operation.type==='calendar.update'?calendarRecord(events,operation.targetId):null
-  if(operation.type==='calendar.update'){
-    if(!current)throw Object.assign(new Error('That Family Calendar event no longer exists. Refresh the calendar before reviewing this change.'),{code:'VERSION_CONFLICT'})
-    if(String(current.id||'').includes('::'))throw Object.assign(new Error('Recurring Apple Calendar occurrences must be changed in Apple Calendar so Brevity does not damage the series.'),{code:'INVALID_ACTION'})
-    if(!String(current.sourceId||'').startsWith('assistant-'))throw Object.assign(new Error('Only events created by Brevity can be edited here. Edit this event in Apple Calendar.'),{code:'FORBIDDEN'})
-    const reviewedToken=String(input.expectedEventToken||'')
-    const currentToken=eventToken(current)
-    if(!reviewedToken||!currentToken||reviewedToken!==currentToken)throw Object.assign(new Error('This calendar event changed after you opened it, or Apple did not provide a safe version marker. Refresh and review the newer version before trying again.'),{code:'VERSION_CONFLICT'})
+  const operations=[]
+  for(const operation of proposal.operations){
+    const current=operation.type==='calendar.update'?calendarRecord(events,operation.targetId):null
+    if(operation.type==='calendar.update'){
+      if(!current)throw Object.assign(new Error('That Family Calendar event no longer exists. Refresh the calendar before reviewing this change.'),{code:'VERSION_CONFLICT'})
+      if(String(current.id||'').includes('::'))throw Object.assign(new Error('Recurring Apple Calendar occurrences must be changed in Apple Calendar so Brevity does not damage the series.'),{code:'INVALID_ACTION'})
+      if(!String(current.sourceId||'').startsWith('assistant-'))throw Object.assign(new Error('Only events created by Brevity can be edited here. Edit this event in Apple Calendar.'),{code:'FORBIDDEN'})
+      const reviewedToken=String(input.expectedEventToken||'')
+      const currentToken=eventToken(current)
+      if(!reviewedToken||!currentToken||reviewedToken!==currentToken)throw Object.assign(new Error('This calendar event changed after you opened it, or Apple did not provide a safe version marker. Refresh and review the newer version before trying again.'),{code:'VERSION_CONFLICT'})
+    }
+    const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:current})
+    if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
+    if(operation.type==='calendar.create'){
+      const candidate=calendarCreateCandidate(operation,session.member)
+      const existing=calendarRecord(events,candidate.sourceId)
+      if(existing){
+        if(!sameCalendarValue(existing,candidate))throw Object.assign(new Error('This daily-plan item is already linked to a different Family Calendar event. Open Family Calendar to review it.'),{code:'VERSION_CONFLICT'})
+        continue
+      }
+    }
+    operations.push(operation)
   }
-  const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:current})
-  if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
-  proposal={...proposal,expectedCalendarVersion:calendarVersion(events)}
+  if(!operations.length)return null
+  proposal={...proposal,operations,expectedCalendarVersion:calendarVersion(events)}
   await repository.saveProposal(proposal)
   return proposal
 }
@@ -154,14 +175,6 @@ export async function prepareDirectProposal({input,session,permissions,repositor
   return proposal
 }
 
-const calendarFields=['sourceId','actionId','title','date','time','allDay','pillar','owner','participants','notes','priority']
-const calendarTime=value=>{const match=String(value||'').trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);if(!match)return String(value||'');let hour=Number(match[1]);if(match[3]?.toUpperCase()==='PM'&&hour<12)hour+=12;if(match[3]?.toUpperCase()==='AM'&&hour===12)hour=0;return`${String(hour).padStart(2,'0')}:${match[2]}`}
-const sameCalendarValue=(current,planned)=>calendarFields.every(field=>{
-  if(!(field in (planned||{})))return true
-  if(field==='time')return calendarTime(current?.[field])===calendarTime(planned[field])
-  return JSON.stringify(current?.[field]??(Array.isArray(planned[field])?[]:''))===JSON.stringify(planned[field])
-})
-
 export async function prepareCalendarOperations({event,operations,session,permissions,expectedCalendarVersion,calendarRequestFn=calendarRequest}) {
   const selected=operations.filter(operation=>operation.type.startsWith('calendar.'))
   if(!selected.length)return{prepared:[]}
@@ -175,7 +188,7 @@ export async function prepareCalendarOperations({event,operations,session,permis
     if(operation.type!=='calendar.create'&&!current)throw new Error('That Family Calendar event no longer exists. Refresh and ask again.')
     if(operation.type!=='calendar.create'&&String(current.id||'').includes('::'))throw new Error('Recurring Apple Calendar occurrences must currently be changed in Apple Calendar so Brevity does not damage the series.')
     if(operation.type==='calendar.create'){
-      const candidate={sourceId:`assistant-${operation.id}`,title:operation.payload.title||operation.description,date:operation.payload.date||operation.targetDate,time:operation.payload.time||'',allDay:operation.payload.allDay!==false,pillar:'household',owner:operation.payload.owner||session.member,participants:operation.payload.participants||[],notes:operation.payload.notes||'',priority:operation.payload.priority==='high'}
+      const candidate=calendarCreateCandidate(operation,session.member)
       const duplicate=calendarRecord(remote.events,candidate.sourceId)
       if(duplicate)throw Object.assign(new Error('A Family Calendar event already uses this Action Mode identifier. Refresh before trying again.'),{code:'VERSION_CONFLICT'})
       prepared.push({resource:'calendar:apple-family',operationType:operation.type,before:null,after:candidate})
