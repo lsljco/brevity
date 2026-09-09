@@ -117,18 +117,25 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
           let balanceFailure = null
           setRequiresUpdate(data.requiresUpdate || [])
 
-          try {
-            balanceResult = typeof onAccountsSync === 'function'
-              ? await onAccountsSync(plaidAccounts, data.syncedAt, data.accountSourceReceipt, balanceAttemptErrors)
-              : { error:'This screen cannot save bank balances.' }
-            if (balanceResult?.ok !== true) {
-              balanceFailure = balanceResult?.error || 'The versioned household balance store did not acknowledge this refresh.'
+          if (data.liveBalanceTimedOut) {
+            await reportUnverifiedBalanceAttempt(onAccountsSync, {
+              status:'stale',
+              message:'The institution did not complete the live balance check in time. Last verified balances remain unchanged.',
+            })
+          } else {
+            try {
+              balanceResult = typeof onAccountsSync === 'function'
+                ? await onAccountsSync(plaidAccounts, data.syncedAt, data.accountSourceReceipt, balanceAttemptErrors)
+                : { error:'This screen cannot save bank balances.' }
+              if (balanceResult?.ok !== true) {
+                balanceFailure = balanceResult?.error || 'The versioned household balance store did not acknowledge this refresh.'
+              }
+            } catch (cause) {
+              balanceFailure = cause?.message || 'The versioned household balance store did not acknowledge this refresh.'
             }
-          } catch (cause) {
-            balanceFailure = cause?.message || 'The versioned household balance store did not acknowledge this refresh.'
           }
 
-          const balancePartial = endpointErrors.length > 0 || !plaidAccounts.length || balanceResult?.partial === true
+          const balancePartial = data.liveBalanceTimedOut || endpointErrors.length > 0 || !plaidAccounts.length || balanceResult?.partial === true
           const missingLinkedCount = balanceResult?.missingLinkedCount || 0
           const unmatchedCount = balanceResult?.unmatchedCount || 0
           setLinkReviewCount(balanceResult?.linkReviewAvailable ? unmatchedCount : 0)
@@ -139,7 +146,10 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
             ...(!plaidAccounts.length ? ['no bank accounts were returned'] : []),
           ]
 
-          if (balanceFailure) {
+          if (data.liveBalanceTimedOut) {
+            balanceState = 'partial'
+            balanceDetail = 'The institution did not complete the live balance check in time. Brevity kept the last verified balances and balance-check time; the transaction refresh continues separately. Try Sync now again later.'
+          } else if (balanceFailure) {
             balanceState = 'failed'
             balanceDetail = plaidAccounts.length
               ? `Bank balances were received but could not be saved safely. ${balanceFailure}`
@@ -246,7 +256,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
             : transactionState === 'failed'
               ? 'Transactions were not refreshed; the last verified history remains available.'
               : ''
-      setSyncNotice([balanceSummary, transactionSummary].filter(Boolean).join(' '))
+      setSyncNotice([balanceHasIssue ? '' : balanceSummary, transactionSummary].filter(Boolean).join(' '))
 
       if (balanceState === 'complete' && ['complete','skipped'].includes(transactionState)) {
         window.dispatchEvent(new CustomEvent('brevity-finance-sync-recovered'))

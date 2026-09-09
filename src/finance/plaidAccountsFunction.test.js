@@ -177,6 +177,37 @@ test('live balance normalization treats deposits as available cash and credit as
   }
 })
 
+test('a live-balance timeout returns cached account identity without minting current-balance proof', async () => {
+  const calls=[]
+  const client={
+    accountsBalanceGet:async (requestBody,options)=>{
+      calls.push(['live',requestBody,options])
+      throw Object.assign(new Error('provider timeout'),{code:'ECONNABORTED'})
+    },
+    accountsGet:async (requestBody,options)=>{
+      calls.push(['cached',requestBody,options])
+      return {data:{accounts:[checkingAccount()]}}
+    },
+  }
+  const handler=installHandler({client,tokens:[{access_token:'slow-token',item_id:'slow-item',institution:'Slow Bank'}]})
+  const originalWarn=console.warn
+  console.warn=()=>{}
+  try{
+    const response=await handler(request('live=1'))
+    const body=bodyOf(response)
+    assert.equal(response.statusCode,200)
+    assert.equal(body.connected,true)
+    assert.equal(body.liveBalanceTimedOut,true)
+    assert.equal(body.balanceMode,'cached')
+    assert.equal(body.balanceProvenance,'plaid.accountsGet')
+    assert.equal(Object.hasOwn(body,'accountSourceReceipt'),false)
+    assert.deepEqual(body.errors.map(error=>error.code),['BALANCE_LIVE_TIMEOUT'])
+    assert.equal(body.accounts[0].accountId,'checking-1')
+    assert.equal(calls[0][2].timeout,20000)
+    assert.equal(calls[1][2].timeout,8000)
+  }finally{console.warn=originalWarn}
+})
+
 test('one institution can succeed while another reports a reauthentication failure', async () => {
   const previousKey = process.env.BREVITY_SOURCE_RECEIPT_KEY
   process.env.BREVITY_SOURCE_RECEIPT_KEY = 'plaid-handler-partial-key'
