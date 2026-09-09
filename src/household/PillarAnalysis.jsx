@@ -65,7 +65,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     const requestContextSignature=pillarAnalysisContextSignature({pillarData:currentPlan[pillar.id] || {},localContext})
     const requestKey=`${pillar.id}:${currentPlan.date}:${currentMember}:${requestContextSignature}`
     if(currentScopeRef.current!==requestKey)return
-    if(inFlightRef.current===requestKey){setState('loading');setError('');errorScopeRef.current='';return}
+    if(inFlightRef.current===requestKey)return
     const requestSequence=++requestSequenceRef.current
     inFlightRef.current=requestKey
     setState('loading'); setError(''); errorScopeRef.current=''
@@ -153,7 +153,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     <header className="pillar-analysis-hero">
       <div className="pillar-analysis-icon"><i className={`ti ${pillar.icon}`} /></div>
       <div className="pillar-analysis-title"><span>Seven Pillars · AI Analysis</span><h1>{pillar.label}</h1><p>{pillar.description}</p></div>
-      <button type="button" className="pillar-analysis-refresh" disabled={state==='loading'||planState!=='ready'||Boolean(planRefreshError)||(isHealth&&rollingMeals.state!=='ready')} onClick={refreshAnalysis}><i className="ti ti-refresh" /> {isHealth&&rollingMeals.state==='loading'?'Loading Meals…':state==='loading'?'Analyzing…':'Refresh Analysis'}</button>
+      <button type="button" className="pillar-analysis-refresh" disabled={state==='loading'||planState!=='ready'||Boolean(planRefreshError)||(isHealth&&rollingMeals.state!=='ready')} onClick={refreshAnalysis}><i className="ti ti-refresh" /> {isHealth&&rollingMeals.state==='loading'?'Loading Meals…':state==='loading'?(analysis?'Refreshing analysis…':'Analyzing…'):'Refresh Analysis'}</button>
     </header>
 
     {planError && <div className="pillar-analysis-error" role="alert"><strong>Household plan unavailable.</strong> {planError} <button type="button" onClick={reloadPlan}>Retry daily plan</button></div>}
@@ -170,7 +170,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
 
       <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Evidence & Provenance</span><h2>What This Is Based On</h2></div><div className="pillar-analysis-grid">{(analysis.evidence || []).map((item,index)=><article key={`${index}-${item.source}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.source}</h3><p>{item.detail}</p></article>)}</div></section>
 
-      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Apply It Today</span><h2>Meaningful Next Moves</h2></div><div className="pillar-action-grid">{(analysis.actionableInsights || []).map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.whyItMatters}</p><small><strong>Next move</strong>{item.nextMove}</small></article>)}</div></section>
+      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Apply It Today</span><h2>Meaningful Next Moves</h2></div><div className="pillar-action-grid">{(analysis.actionableInsights || []).map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.whyItMatters}</p><dl className="pillar-action-details"><div><dt>Next move</dt><dd>{item.nextMove}</dd></div>{item.actor&&<div><dt>Who</dt><dd>{item.actor}</dd></div>}{item.timing&&<div><dt>When</dt><dd>{item.timing}</dd></div>}{item.completionSignal&&<div><dt>Done when</dt><dd>{item.completionSignal}</dd></div>}{item.destination&&<div><dt>Where</dt><dd>{item.destination}</dd></div>}</dl></article>)}</div></section>
 
       <section className="pillar-analysis-two-column">
         <div className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Reflect & Grow</span><h2>Questions Worth Considering</h2></div><List items={analysis.reflectionPrompts} /></div>

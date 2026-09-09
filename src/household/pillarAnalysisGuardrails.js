@@ -32,6 +32,15 @@ const PILLAR_PRINCIPLES = {
   finance:'Keep posted activity, pending activity, and projections distinct before changing the plan.',
   ministry:'Let the recorded message or relationship need determine the next preparation step.',
 }
+const PILLAR_ACTION_DETAILS = {
+  spiritual:{actor:'Each household member',destination:'Morning Alignment'},
+  health:{actor:'Household member following the plan',destination:'Meal Plan'},
+  fitness:{actor:'Person completing the session',destination:'Morning Alignment'},
+  household:{actor:'Household member handling the record',destination:'Household Management'},
+  education:{actor:'Learner completing the practice',destination:'Morning Alignment'},
+  finance:{actor:'Household finance administrator',destination:'Finance'},
+  ministry:{actor:'Person preparing or following up',destination:'Morning Alignment'},
+}
 
 const REQUIRED_TEXT = ['headline','executiveSummary','todayFocus','growthSignal','governingPrinciple']
 const CORE_TEXT_LIMITS = {headline:240,executiveSummary:1600,todayFocus:800,growthSignal:800,governingPrinciple:600}
@@ -739,7 +748,10 @@ export function pillarAnalysisEvidence({pillar='',date='',pillarData={},localCon
     const visible=analysis?analysisText(analysis,{includeEvidence:false}):''
     const matched=visible?facts.filter(fact=>factAnchored(visible,[fact])):[]
     const selected=[...matched,...facts.filter(fact=>!matched.includes(fact))].slice(0,2)
-    return selected.map(fact=>({source:fact.source,detail:fact.detail}))
+    return selected.map(fact=>({
+      source:[fact.source,fact.label].filter(Boolean).join(' · '),
+      detail:[fact.value,date,`${titleCase(fact.kind)} record`].filter(Boolean).join(' · '),
+    }))
   }
   if(PILLARS.has(pillar))return[]
   const safe=item=>!OWNERSHIP_PATTERNS.some(pattern=>pattern.test(item.text))&&!SPIRITUAL_LEAKAGE_PATTERNS.some(pattern=>pattern.test(item.text))
@@ -751,12 +763,37 @@ export function pillarAnalysisEvidence({pillar='',date='',pillarData={},localCon
   return selected.slice(0,2)
 }
 
+const actionDestination=(nextMove,pillar)=>{
+  const named=['Family Calendar','Cash Forecast','Transactions','Reporting','Budget','Accounts','Meal Plan','Household Management','Morning Alignment','Sermon Builder','Finance'].find(screen=>new RegExp(`\\b${screen.replace(/ /g,'\\s+')}\\b`,'i').test(nextMove||''))
+  return named||PILLAR_ACTION_DETAILS[pillar]?.destination||'Relevant Brevity record'
+}
+
+export function operationalizePillarAnalysis(analysis,{pillar='',date='',pillarData={},localContext={}}={}) {
+  if(!analysis||typeof analysis!=='object')return analysis
+  const facts=pillarAnalysisFactPack({pillar,date,pillarData,localContext})
+  const defaults=PILLAR_ACTION_DETAILS[pillar]||{actor:'Household member completing the action',destination:'Relevant Brevity record'}
+  return{
+    ...analysis,
+    actionableInsights:list(analysis.actionableInsights).map((item,index)=>{
+      const fact=facts[index]||facts[0]
+      const value=clean(fact?.value||item?.title,140)
+      return{
+        ...item,
+        actor:defaults.actor,
+        timing:date?`Today · ${date}`:'Today',
+        completionSignal:fact?.growth||`Done when the result of “${value}” is recorded in Brevity.`,
+        destination:actionDestination(item?.nextMove,pillar)||defaults.destination,
+      }
+    }),
+  }
+}
+
 export function buildDeterministicPillarFallback({pillar,date,pillarData={},localContext={}}={}) {
   const label=PILLAR_LABELS[pillar]||'Pillar analysis'
   const facts=pillarAnalysisFactPack({pillar,date,pillarData,localContext})
   if(!facts.length){
     const need=PILLAR_DATA_NEEDS[pillar]||'a dated source record',action=PILLAR_DATA_ACTIONS[pillar]||'Record the missing source detail, then refresh this analysis.'
-    return{headline:`${label}: source data is missing`,executiveSummary:`Brevity has no dated record of ${need} for ${date || 'today'}. That leaves today’s condition, result, or priority unknown.`,todayFocus:`Record ${need} before drawing a conclusion about today.`,analysisPoints:[{title:'What is missing',detail:`The ${label} record for ${date || 'today'} does not contain ${need}, so there is no supported result to compare with the plan.`}],actionableInsights:[{title:'Add the missing input',whyItMatters:`Until ${need} is recorded, the household cannot distinguish an unfinished plan from an unrecorded result.`,nextMove:action}],evidence:[{source:'Source coverage',detail:`There is no dated record of ${need} for ${date || 'today'}.`}],reflectionPrompts:[`What ${need} can be recorded now?`],watchFor:[`Treating an unrecorded ${label.toLowerCase()} result as if it were complete.`],decisions:[],growthSignal:`The next useful signal is a dated record of ${need} and its observed outcome.`,governingPrinciple:PILLAR_PRINCIPLES[pillar]||'A missing source fact should be recorded before it is interpreted.'}
+    return operationalizePillarAnalysis({headline:`${label}: source data is missing`,executiveSummary:`Brevity has no dated record of ${need} for ${date || 'today'}. That leaves today’s condition, result, or priority unknown.`,todayFocus:`Record ${need} before drawing a conclusion about today.`,analysisPoints:[{title:'What is missing',detail:`The ${label} record for ${date || 'today'} does not contain ${need}, so there is no supported result to compare with the plan.`}],actionableInsights:[{title:'Add the missing input',whyItMatters:`Until ${need} is recorded, the household cannot distinguish an unfinished plan from an unrecorded result.`,nextMove:action}],evidence:[{source:`Source coverage · ${label}`,detail:`${date || 'Today'} · Missing ${need}`}],reflectionPrompts:[`What ${need} can be recorded now?`],watchFor:[`Treating an unrecorded ${label.toLowerCase()} result as if it were complete.`],decisions:[],growthSignal:`The next useful signal is a dated record of ${need} and its observed outcome.`,governingPrinciple:PILLAR_PRINCIPLES[pillar]||'A missing source fact should be recorded before it is interpreted.'},{pillar,date,pillarData,localContext})
   }
   const primary=facts[0],secondary=facts[1]
   const pointTitles={
@@ -781,7 +818,9 @@ export function buildDeterministicPillarFallback({pillar,date,pillarData={},loca
   const reflection=primary.kind==='data-gap'
     ? `What is preventing “${clean(primary.value,120)}” from being recorded or refreshed?`
     : reflections[pillar]||`What would change if “${clean(primary.value,120)}” were addressed today?`
-  return{
+  const includeSecondAction=pillar==='spiritual'&&primary.kind!=='data-gap'&&secondary?.whyItMatters&&normalized(secondary.nextMove)!==normalized(primary.nextMove)
+  const distinctFacts=[primary,...(includeSecondAction?[secondary]:[])].slice(0,2)
+  return operationalizePillarAnalysis({
     headline:primary.headline,
     executiveSummary:`${primary.detail} ${primary.whyItMatters}${secondary?` ${secondary.detail}`:''}`,
     todayFocus:primary.implication,
@@ -789,12 +828,12 @@ export function buildDeterministicPillarFallback({pillar,date,pillarData={},loca
       {title:pointTitles[0],detail:`${primary.detail} ${primary.implication}`},
       ...(secondary?[{title:pointTitles[1],detail:`${secondary.detail} ${secondary.implication}`}]:[]),
     ],
-    actionableInsights:[{title:actionTitles[pillar]||'Take the next grounded step',whyItMatters:primary.whyItMatters,nextMove:primary.nextMove}],
-    evidence:facts.slice(0,2).map(fact=>({source:fact.source,detail:fact.detail})),
+    actionableInsights:distinctFacts.map((fact,index)=>({title:index===0?actionTitles[pillar]||'Take the next grounded step':`Act on ${clean(fact.label,120)}`,whyItMatters:fact.whyItMatters,nextMove:fact.nextMove})),
+    evidence:pillarAnalysisEvidence({pillar,date,pillarData,localContext}),
     reflectionPrompts:[reflection],
     watchFor:[primary.watchFor],decisions:[],growthSignal:primary.growth,
     governingPrinciple:PILLAR_PRINCIPLES[pillar]||'Use a named source fact, explain its consequence, and define the next observable move.',
-  }
+  },{pillar,date,pillarData,localContext})
 }
 
 export function enforcePillarAnalysisGuardrails({analysis,pillar,date,pillarData={},localContext={}}={}) {

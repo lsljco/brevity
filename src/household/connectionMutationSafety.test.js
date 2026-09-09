@@ -99,17 +99,18 @@ test('OneDrive OAuth start and callback reject without network or repository-sta
   assert.doesNotMatch(server,/createOneDriveAuthorization|completeOneDriveAuthorization|grant_type:'authorization_code'|onedrive-states/)
 })
 
-test('OneDrive UI has no OAuth route and external sermon publishing remains unavailable',()=>{
+test('OneDrive UI reports the connection while automatic sermon uploads remain unavailable',()=>{
   const repository=read('./SermonRepository.jsx')
   const studio=read('./SpiritualFormationStudio.jsx')
   const api=read('./sermonFormationApi.js')
   assert.match(api,/getOneDriveStatus/)
   assert.doesNotMatch(api,/onedrive-oauth-start|oneDriveConnectUrl/)
   for(const source of [repository,studio]){
-    assert.match(source,/External publishing unavailable/)
-    assert.match(source,/disabled title="External publishing and connection changes are disabled in this release\."/)
+    assert.match(source,/Automatic uploads (?:are )?not enabled/)
+    assert.doesNotMatch(source,/External publishing unavailable/)
     assert.doesNotMatch(source,/oneDriveConnectUrl|authorizeRepository|changeRepository|window\.location\.assign/)
   }
+  assert.match(repository,/OneDrive connected/)
   assert.match(repository,/oneDrive\.connected&&oneDrive\.connection\?\.folderWebUrl/)
   assert.match(repository,/onClick=\{createCurrent\}/)
   assert.match(repository,/archiveSermonDocuments\(\{activeVersion,sourceHash\}\)/)

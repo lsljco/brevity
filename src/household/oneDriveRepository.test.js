@@ -13,8 +13,8 @@ const repositorySource = readFileSync(new URL('./SermonRepository.jsx', import.m
 test('the sermon repository retains the selected OneDrive folder as read-only context', () => {
   assert.ok(serverSource.includes(target))
   assert.ok(apiSource.includes(target))
-  assert.match(repositorySource, /External publishing unavailable/)
-  assert.match(repositorySource, /not used for automatic publishing/i)
+  assert.match(repositorySource, /OneDrive connected/)
+  assert.match(repositorySource, /Automatic uploads are not enabled/i)
   assert.doesNotMatch(repositorySource, /oneDriveConnectUrl|window\.location\.assign/)
 })
 
@@ -23,7 +23,7 @@ test('an old OneDrive connection cannot continue receiving new files', () => {
   assert.match(serverSource, /changeRequired:Boolean\(connection&&!activeRepositoryConnection\(connection\)\)/)
   assert.match(serverSource, /const connection=await getOneDriveConnection\(\)/)
   assert.match(statusSource, /changeRequired:repository\.changeRequired/)
-  assert.match(repositorySource, /External publishing and connection changes are disabled/)
+  assert.doesNotMatch(repositorySource, /External publishing unavailable/)
   assert.match(startSource, /CONNECTION_MUTATIONS_DISABLED/)
   assert.match(callbackSource, /CONNECTION_MUTATIONS_DISABLED/)
   assert.doesNotMatch(startSource, /createOneDriveAuthorization/)

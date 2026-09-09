@@ -98,10 +98,11 @@ test('spiritual analysis cannot assign one member responsibility for another per
 })
 
 test('fallback evidence excludes governance metadata and names its authoritative source',()=>{
-  const evidence=pillarAnalysisEvidence({pillarData:{owner:'Lorenzo',todayFocus:'Guard the heart before reacting'},localContext:{updatedBy:'Larry',sermon:{title:'The receiving soil'}}})
+  const evidence=pillarAnalysisEvidence({pillar:'spiritual',date:'2026-09-07',pillarData:{owner:'Lorenzo',todayFocus:'Guard the heart before reacting',scripture:['Proverbs 4:23']},localContext:{updatedBy:'Larry'}})
   assert.equal(evidence.length,2)
-  assert.equal(evidence[0].source,'Daily pillar plan')
-  assert.equal(evidence[1].source,'Authoritative household context')
+  assert.match(evidence[0].source,/Daily pillar plan · Today’s devotion focus/)
+  assert.match(evidence[1].source,/Daily pillar plan · Today’s Scripture/)
+  assert.match(evidence[0].detail,/Guard the heart before reacting · 2026-09-07 · Projected record/)
   assert.doesNotMatch(JSON.stringify(evidence),/owner|updated by|Lorenzo|Larry/i)
 
   const deduplicated=pillarAnalysisEvidence({pillarData:{todayFocus:'Guard the heart before reacting'},localContext:{sermon:{theme:'Guard the heart before reacting'}}})
@@ -110,6 +111,26 @@ test('fallback evidence excludes governance metadata and names its authoritative
   const fallback=buildDeterministicPillarFallback({pillar:'spiritual',date:'2026-09-07',pillarData:{todayFocus:'Lorenzo owns this pillar and must lead the household in prayer.',scriptureFocus:'Proverbs 4:23'}})
   assert.doesNotMatch(JSON.stringify(fallback),/owns this pillar|must lead the household/i)
   assert.match(JSON.stringify(fallback),/Proverbs 4:23/)
+})
+
+test('fallback actions identify who, when, completion, and destination without repeating one source fact',()=>{
+  const input={pillar:'spiritual',date:'2026-09-09',pillarData:{
+    todayFocus:'Day 3 — Welcome Exposure',
+    devotionFocus:'Welcome exposure allows the Word to reveal what has been hidden so that an honest response can begin.',
+    scripture:['Hebrews 4:12'],
+    obedienceAction:'Name one truth Hebrews 4:12 brings into view and write the response you will practice today.',
+  }}
+  const fallback=buildDeterministicPillarFallback(input)
+  assert.equal(fallback.actionableInsights.length,2)
+  for(const action of fallback.actionableInsights){
+    assert.equal(action.actor,'Each household member')
+    assert.equal(action.timing,'Today · 2026-09-09')
+    assert.ok(action.completionSignal)
+    assert.ok(action.destination)
+  }
+  assert.equal(new Set(fallback.evidence.map(item=>item.source)).size,fallback.evidence.length)
+  assert.notEqual(fallback.executiveSummary,fallback.todayFocus)
+  assert.notEqual(fallback.todayFocus,fallback.actionableInsights[0].whyItMatters)
 })
 
 test('all seven pillars have deterministic, complete, non-list fallbacks',()=>{
