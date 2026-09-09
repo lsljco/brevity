@@ -1,7 +1,14 @@
 import { getStore } from '@netlify/blobs';
 import { randomUUID } from 'node:crypto';
 import { productionMealPlanRepository } from './meal-plan-store.mjs';
-import { DAILY_PLAN_ITEM_STATUSES, normalizeDailyPlanItemStatus } from '../../src/household/dailyPlanStatus.js';
+import {
+  DAILY_PLAN_ITEM_STATUSES,
+  DAILY_PLAN_NOTIFICATION_LEVELS,
+  DAILY_PLAN_PRIORITIES,
+  normalizeDailyPlanItemStatus,
+  normalizeDailyPlanNotificationLevel,
+  normalizeDailyPlanPriority,
+} from '../../src/household/dailyPlanStatus.js';
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
 const STORE_NAME = 'brevity-household';
@@ -81,10 +88,10 @@ const planItem = {
     date: { type: 'string' },
     startTime: { type: 'string' },
     endTime: { type: 'string' },
-    priority: { type: 'string' },
+    priority: { type: 'string', enum: DAILY_PLAN_PRIORITIES },
     calendarSync: { type: 'boolean' },
     requiresDecision: { type: 'boolean' },
-    notificationLevel: { type: 'string' },
+    notificationLevel: { type: 'string', enum: DAILY_PLAN_NOTIFICATION_LEVELS },
   },
   required: ['title', 'owner', 'status', 'notes', 'date', 'startTime', 'endTime', 'priority', 'calendarSync', 'requiresDecision', 'notificationLevel'],
 };
@@ -227,7 +234,13 @@ function outputText(response) {
 }
 
 function itemWithId(item, prefix, index, date) {
-  return { id: `${prefix}-${date}-${index}`, ...item, status:normalizeDailyPlanItemStatus(item?.status) };
+  return {
+    id:`${prefix}-${date}-${index}`,
+    ...item,
+    status:normalizeDailyPlanItemStatus(item?.status),
+    priority:normalizeDailyPlanPriority(item?.priority),
+    notificationLevel:normalizeDailyPlanNotificationLevel(item?.notificationLevel),
+  };
 }
 
 const isStandingRoutineDecision = item => {

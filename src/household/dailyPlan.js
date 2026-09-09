@@ -1,5 +1,5 @@
 import { getHouseholdDateKey } from '../finance/financeTime.js'
-import { normalizeDailyPlanItemStatus } from './dailyPlanStatus.js'
+import { normalizeDailyPlanItemStatus, normalizeDailyPlanNotificationLevel, normalizeDailyPlanPriority } from './dailyPlanStatus.js'
 
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 
@@ -65,7 +65,12 @@ const normalizeDecision = decision => decision && typeof decision === 'object' &
   : decision
 
 const normalizePlanItem = item => item && typeof item === 'object' && !Array.isArray(item)
-  ? { ...item, status: normalizeDailyPlanItemStatus(item.status) }
+  ? {
+      ...item,
+      status:normalizeDailyPlanItemStatus(item.status),
+      priority:normalizeDailyPlanPriority(item.priority),
+      notificationLevel:normalizeDailyPlanNotificationLevel(item.notificationLevel),
+    }
   : item
 
 const normalizePlanItems = value => arrayOrEmpty(value).map(normalizePlanItem)
