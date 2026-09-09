@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { randomUUID } from 'node:crypto';
 import { productionMealPlanRepository } from './meal-plan-store.mjs';
+import { DAILY_PLAN_ITEM_STATUSES, normalizeDailyPlanItemStatus } from '../../src/household/dailyPlanStatus.js';
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family';
 const STORE_NAME = 'brevity-household';
@@ -75,7 +76,7 @@ const planItem = {
   properties: {
     title: { type: 'string' },
     owner: { type: 'string' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: DAILY_PLAN_ITEM_STATUSES },
     notes: { type: 'string' },
     date: { type: 'string' },
     startTime: { type: 'string' },
@@ -226,7 +227,7 @@ function outputText(response) {
 }
 
 function itemWithId(item, prefix, index, date) {
-  return { id: `${prefix}-${date}-${index}`, ...item };
+  return { id: `${prefix}-${date}-${index}`, ...item, status:normalizeDailyPlanItemStatus(item?.status) };
 }
 
 const isStandingRoutineDecision = item => {

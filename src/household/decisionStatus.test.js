@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { DECISION_STATUS, DECISION_STATUS_OPTIONS, countOpenDecisions, normalizeDailyPlan, normalizeDecisionStatus } from './dailyPlan.js'
+import { normalizeDailyPlanItemStatus } from './dailyPlanStatus.js'
 
 test('decision statuses expose only the four household decision states', () => {
   assert.deepEqual(Object.values(DECISION_STATUS), ['needs-decision', 'determined', 'complete', 'deferred'])
@@ -20,6 +21,33 @@ test('legacy decision statuses migrate without losing their workflow meaning', (
   assert.equal(normalizeDecisionStatus('in-progress'), DECISION_STATUS.determined)
   assert.equal(normalizeDecisionStatus('complete'), DECISION_STATUS.complete)
   assert.equal(normalizeDecisionStatus('deferred'), DECISION_STATUS.deferred)
+})
+
+test('generated workflow status labels normalize to the Daily Plan contract', () => {
+  assert.equal(normalizeDailyPlanItemStatus('Not Started'), 'pending')
+  assert.equal(normalizeDailyPlanItemStatus('IN_PROGRESS'), 'in-progress')
+  assert.equal(normalizeDailyPlanItemStatus('Completed'), 'complete')
+  assert.equal(normalizeDailyPlanItemStatus('Needs Decision'), 'needs-decision')
+  assert.equal(normalizeDailyPlanItemStatus('unexpected-state'), 'unexpected-state')
+})
+
+test('saved plan items normalize safe legacy statuses in every reviewable section', () => {
+  const item = status => ({ id:status, title:status, status })
+  const plan = normalizeDailyPlan({
+    date:'2026-09-09',
+    topPriorities:[item('Not Started')],
+    assignments:[item('Completed')],
+    household:{ appointments:[item('IN_PROGRESS')], priorities:[item('planned')] },
+    finance:{ bills:[item('scheduled')], purchases:[], transfers:[], accountsToFund:[] },
+    ministry:{ meetings:[item('active')], fellowshipFollowUps:[item('postponed')] },
+  })
+  assert.equal(plan.topPriorities[0].status, 'pending')
+  assert.equal(plan.assignments[0].status, 'complete')
+  assert.equal(plan.household.appointments[0].status, 'in-progress')
+  assert.equal(plan.household.priorities[0].status, 'pending')
+  assert.equal(plan.finance.bills[0].status, 'pending')
+  assert.equal(plan.ministry.meetings[0].status, 'in-progress')
+  assert.equal(plan.ministry.fellowshipFollowUps[0].status, 'deferred')
 })
 
 test('saved daily plans normalize legacy decisions and keep determined decisions active', () => {

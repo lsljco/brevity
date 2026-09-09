@@ -1,4 +1,5 @@
 import { getHouseholdDateKey } from '../finance/financeTime.js'
+import { normalizeDailyPlanItemStatus } from './dailyPlanStatus.js'
 
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 
@@ -62,6 +63,12 @@ export function normalizeDecisionStatus(value) {
 const normalizeDecision = decision => decision && typeof decision === 'object' && !Array.isArray(decision)
   ? { ...decision, status: normalizeDecisionStatus(decision.status) }
   : decision
+
+const normalizePlanItem = item => item && typeof item === 'object' && !Array.isArray(item)
+  ? { ...item, status: normalizeDailyPlanItemStatus(item.status) }
+  : item
+
+const normalizePlanItems = value => arrayOrEmpty(value).map(normalizePlanItem)
 
 export function isStandingRoutineDecision(decision) {
   const text = String(typeof decision === 'string' ? decision : decision?.title || '').trim().toLowerCase()
@@ -207,8 +214,8 @@ export function normalizeDailyPlan(input = {}) {
     ...base,
     ...plan,
     date,
-    topPriorities: arrayOrEmpty(plan.topPriorities),
-    assignments: arrayOrEmpty(plan.assignments),
+    topPriorities: normalizePlanItems(plan.topPriorities),
+    assignments: normalizePlanItems(plan.assignments),
     decisions: arrayOrEmpty(plan.decisions).filter(decision => !isStandingRoutineDecision(decision)).map(normalizeDecision),
     morningAlignment: { ...base.morningAlignment, ...morningAlignment },
     spiritual: {
@@ -235,8 +242,8 @@ export function normalizeDailyPlan(input = {}) {
     household: {
       ...base.household,
       ...household,
-      appointments: arrayOrEmpty(household.appointments),
-      priorities: arrayOrEmpty(household.priorities),
+      appointments: normalizePlanItems(household.appointments),
+      priorities: normalizePlanItems(household.priorities),
       errands: arrayOrEmpty(household.errands),
       openItems: arrayOrEmpty(household.openItems),
     },
@@ -248,18 +255,18 @@ export function normalizeDailyPlan(input = {}) {
     finance: {
       ...base.finance,
       ...finance,
-      bills: arrayOrEmpty(finance.bills),
-      purchases: arrayOrEmpty(finance.purchases),
-      transfers: arrayOrEmpty(finance.transfers),
-      accountsToFund: arrayOrEmpty(finance.accountsToFund),
+      bills: normalizePlanItems(finance.bills),
+      purchases: normalizePlanItems(finance.purchases),
+      transfers: normalizePlanItems(finance.transfers),
+      accountsToFund: normalizePlanItems(finance.accountsToFund),
       incomePipeline: arrayOrEmpty(finance.incomePipeline),
     },
     ministry: {
       ...base.ministry,
       ...ministry,
       owners: arrayOrEmpty(ministry.owners).length ? arrayOrEmpty(ministry.owners) : base.ministry.owners,
-      meetings: arrayOrEmpty(ministry.meetings),
-      fellowshipFollowUps: arrayOrEmpty(ministry.fellowshipFollowUps),
+      meetings: normalizePlanItems(ministry.meetings),
+      fellowshipFollowUps: normalizePlanItems(ministry.fellowshipFollowUps),
       prayerNeeds: arrayOrEmpty(ministry.prayerNeeds),
     },
     recap: {
