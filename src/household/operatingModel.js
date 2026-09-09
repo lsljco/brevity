@@ -42,17 +42,52 @@ const fallbackOutcomeItems=plan=>{
   const seen=new Set()
   return candidates.filter(item=>{const key=clean(item.title).toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true}).slice(0,3)
 }
+const hasOperatingPlan=plan=>Boolean(
+  clean(plan.theme)||clean(plan.dayObjective)||clean(plan.governingPrinciple)||clean(plan.successStandard)
+  ||arrayOrEmpty(plan.topPriorities).length||arrayOrEmpty(plan.assignments).length||arrayOrEmpty(plan.decisions).length||arrayOrEmpty(plan.dayparts).length
+  ||clean(plan.spiritual.todayFocus)||clean(plan.spiritual.devotionFocus)||clean(plan.spiritual.devotionTitle)
+  ||clean(plan.health.breakfast)||clean(plan.health.lunch)||clean(plan.health.dinner)||clean(plan.health.hydration)||clean(plan.health.nextDayPrep)
+  ||clean(plan.fitness.workout)||clean(plan.fitness.objective)||clean(plan.education.thinkTankTopic)||clean(plan.education.thinkTankDeliverable)
+  ||arrayOrEmpty(plan.household.priorities).length||arrayOrEmpty(plan.finance.accountsToFund).length||arrayOrEmpty(plan.finance.bills).length
+  ||clean(plan.ministry.contentFocus)
+)
+const todayFocus=(plan,{signals,outcomes,nextCommitment,actions})=>{
+  if(clean(plan.theme))return{headline:clean(plan.theme),detail:clean(plan.dayObjective),source:'recorded-theme'}
+  const critical=signals.find(item=>item.priority==='critical')
+  if(critical)return{headline:critical.title,detail:critical.detail,source:'critical-signal'}
+  const outcome=outcomes.find(item=>unresolved(item.state))||outcomes[0]
+  if(outcome)return{headline:outcome.title,detail:outcome.detail||'This is the highest recorded outcome that defines success for today.',source:'daily-outcome'}
+  const attention=signals[0]
+  if(attention)return{headline:attention.title,detail:attention.detail,source:'attention-signal'}
+  if(nextCommitment)return{headline:`Prepare for ${nextCommitment.title}`,detail:nextCommitment.startsAt?`${formatCommitmentTime(nextCommitment.startsAt)} is the next recorded commitment.`:'This is the next recorded all-day commitment.',source:'next-commitment'}
+  const action=actions[0]
+  if(action)return{headline:action.title,detail:action.detail||`${action.owner} owns this unresolved action today.`,source:'member-action'}
+  const recorded=[
+    [plan.spiritual.todayFocus||plan.spiritual.devotionFocus||plan.spiritual.devotionTitle,'spiritual-plan'],
+    [firstUseful(plan.household.priorities,''),'household-priority'],
+    [firstUseful(plan.finance.accountsToFund,'')||firstUseful(plan.finance.bills,''),'finance-plan'],
+    [plan.education.thinkTankDeliverable||plan.education.thinkTankTopic,'education-plan'],
+    [plan.fitness.objective||plan.fitness.workout,'fitness-plan'],
+    [plan.health.nextDayPrep||plan.health.dinner,'health-plan'],
+    [plan.ministry.contentFocus,'ministry-plan'],
+  ].find(([value])=>clean(value))
+  if(recorded)return{headline:concise(recorded[0],'Daily focus is not yet defined',140),detail:'This is the clearest concrete focus currently recorded in today’s plan.',source:recorded[1]}
+  return{headline:'Today’s plan has no defined focus yet',detail:'Generate or complete Morning Alignment, then review the proposed outcomes before relying on Today as the household plan.',source:'missing-plan'}
+}
+const formatCommitmentTime=startsAt=>new Date(startsAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})
 export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth,currentMember='Larry',now=new Date()}){
   const normalized=normalizeDailyPlan(plan)
+  const planEstablished=hasOperatingPlan(normalized)
   const commitments=calendarAppointments.map((item,index)=>appointmentRecord(item,index,normalized.date,calendarHealth))
   const decisions=normalized.decisions.map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.decision,'decision',index,normalized.date)).filter(item=>item.state!==DECISION_STATUS.complete&&item.state!==DECISION_STATUS.deferred).sort((left,right)=>(decisionStateScore[left.state]??2)-(decisionStateScore[right.state]??2)||byPriorityThenTime(left,right))
   const actions=normalized.assignments.map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.action,'assignment',index,normalized.date)).filter(item=>unresolved(item.state)).filter(item=>item.owner===currentMember||item.participants.includes(currentMember)).sort(byPriorityThenTime)
   const outcomeItems=normalized.topPriorities.length?normalized.topPriorities:fallbackOutcomeItems(normalized)
   const outcomes=outcomeItems.slice(0,3).map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.outcome,normalized.topPriorities.length?'top-priority':'derived-outcome',index,normalized.date))
   const memberOutcomes=outcomes.filter(item=>item.owner===currentMember||item.participants.includes(currentMember))
-  const signals=[...planSignals(normalized),integrationSignal(calendarHealth)].filter(Boolean).sort(byPriorityThenTime)
+  const signals=[...(planEstablished?planSignals(normalized):[]),integrationSignal(calendarHealth)].filter(Boolean).sort(byPriorityThenTime)
   const householdNowDate=getHouseholdDateKey(now)
   const householdNowMinutes=getHouseholdMinuteOfDay(now)
   const nextCommitment=normalized.date===householdNowDate?commitments.find(item=>item.startsAt&&timeMinutes(item.startsAt.slice(11,16))>=householdNowMinutes)||commitments.find(item=>!item.startsAt)||commitments[0]||null:commitments[0]||null
-  return{date:normalized.date,generatedAt:now.toISOString(),theme:normalized.theme,objective:normalized.dayObjective,governingPrinciple:normalized.governingPrinciple,signals,criticalSignals:signals.filter(item=>item.priority==='critical'),nextCommitment,commitments,outcomes,memberOutcomes,actions,decisions,pillarPulse:pillarPulse(normalized,commitments,signals),schedule:arrayOrEmpty(normalized.dayparts),counts:{signals:signals.length,actions:actions.length,decisions:decisions.length,commitments:commitments.length}}
+  const focus=todayFocus(normalized,{signals,outcomes,nextCommitment,actions})
+  return{date:normalized.date,generatedAt:now.toISOString(),theme:normalized.theme,objective:normalized.dayObjective,governingPrinciple:normalized.governingPrinciple,focus,signals,criticalSignals:signals.filter(item=>item.priority==='critical'),nextCommitment,commitments,outcomes,memberOutcomes,actions,decisions,pillarPulse:pillarPulse(normalized,commitments,signals),schedule:arrayOrEmpty(normalized.dayparts),counts:{signals:signals.length,actions:actions.length,decisions:decisions.length,commitments:commitments.length}}
 }
