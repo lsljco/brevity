@@ -14,15 +14,18 @@ function ruleDescription(rule, accounts) {
   const category = rule?.actions?.updateCategory?.value || 'Uncategorized'
   const accountId = rule?.conditions?.accounts?.on ? rule.conditions.accounts.value : ''
   const account = accounts.find(item => String(item.id) === String(accountId))
-  return { text, category, account:account?.name || '' }
+  return { text, category, account:account?.name || '', applyToExisting:Boolean(rule?.applyToExisting) }
 }
 
-export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], today, onReviewCreate, onReviewDelete, onClose }) {
+export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], today, initial = null, onReviewCreate, onReviewDelete, onClose }) {
   const titleId = useId()
   const categoryListId = useId()
-  const [matchText, setMatchText] = useState('')
-  const [category, setCategory] = useState('')
-  const [accountId, setAccountId] = useState('')
+  const [matchText, setMatchText] = useState(initial?.matchText || '')
+  const [matchField, setMatchField] = useState(initial?.matchField || 'originalStatement')
+  const [matchMode, setMatchMode] = useState(initial?.matchMode || 'contains')
+  const [category, setCategory] = useState(initial?.category || '')
+  const [accountId, setAccountId] = useState(initial?.accountId || '')
+  const [applyToExisting, setApplyToExisting] = useState(false)
   const [preparing, setPreparing] = useState('')
   const [error, setError] = useState('')
 
@@ -33,11 +36,12 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
   const previewRule = useMemo(() => ({
     applyToExisting:true,
     conditions:{
-      originalStatement:{ on:true, value:matchText },
+      originalStatement:{ on:matchField === 'originalStatement', match:matchMode, value:matchText },
+      merchantName:{ on:matchField === 'merchantName', match:matchMode, value:matchText },
       accounts:{ on:Boolean(accountId), value:accountId },
     },
     actions:{ updateCategory:{ on:true, value:category } },
-  }), [accountId, category, matchText])
+  }), [accountId, category, matchField, matchMode, matchText])
   const matches = useMemo(() => {
     if (!matchText.trim()) return []
     return transactions.filter(transaction => !transaction.pending && transactionMatchesRule(transaction, previewRule, accounts))
@@ -51,7 +55,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
     setPreparing('create')
     setError('')
     try {
-      const prepared = await onReviewCreate({ matchText:matchText.trim(), category:category.trim(), accountId, createdDate:today })
+      const prepared = await onReviewCreate({ matchText:matchText.trim(), matchField, matchMode, category:category.trim(), accountId, applyToExisting, createdDate:today })
       if (prepared !== false) onClose()
     } catch (cause) {
       setError(cause?.message || 'This rule could not be prepared for review.')
@@ -85,8 +89,23 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           <button type="button" aria-label="Close categorization rules" onClick={onClose} style={{border:0,background:'transparent',color:'var(--muted)',fontSize:22,cursor:'pointer'}}>×</button>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:12,marginTop:22}}>
-          <label style={{fontSize:11,color:'var(--muted)'}}>Original statement contains
+        {initial ? <div role="status" style={{marginTop:18,padding:'10px 12px',borderRadius:10,background:'rgba(197,164,109,.08)',border:'1px solid rgba(197,164,109,.2)',fontSize:11,lineHeight:1.5,color:'var(--muted)'}}>Started from <strong style={{color:'var(--soft-white)'}}>{initial.matchText}</strong>. Adjust the rule below, then return to the transaction editor to review the individual category change.</div> : null}
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginTop:22}}>
+          <label style={{fontSize:11,color:'var(--muted)'}}>Match using
+            <select value={matchField} onChange={event => setMatchField(event.target.value)} style={{...fieldStyle,marginTop:6}}>
+              <option value="originalStatement">Original bank statement</option>
+              <option value="merchantName">Merchant name</option>
+            </select>
+          </label>
+          <label style={{fontSize:11,color:'var(--muted)'}}>Match method
+            <select value={matchMode} onChange={event => setMatchMode(event.target.value)} style={{...fieldStyle,marginTop:6}}>
+              <option value="contains">Contains</option>
+              <option value="exactly">Exactly matches</option>
+              <option value="starts">Starts with</option>
+            </select>
+          </label>
+          <label style={{fontSize:11,color:'var(--muted)'}}>Match text
             <input autoFocus value={matchText} onChange={event => setMatchText(event.target.value)} placeholder="e.g. PUBLIX" style={{...fieldStyle,marginTop:6}} />
           </label>
           <label style={{fontSize:11,color:'var(--muted)'}}>Apply category
@@ -101,9 +120,14 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           </label>
         </div>
 
+        <label style={{display:'flex',alignItems:'flex-start',gap:10,marginTop:14,padding:'12px 14px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',color:'var(--soft-white)',fontSize:12,cursor:'pointer'}}>
+          <input type="checkbox" checked={applyToExisting} onChange={event => setApplyToExisting(event.target.checked)} style={{width:18,height:18,margin:0,accentColor:'var(--gold)'}} />
+          <span><strong>Apply this rule to all past matching transactions</strong><small style={{display:'block',marginTop:3,color:'var(--muted)',lineHeight:1.4}}>If selected, existing posted transactions that match these criteria will display the new category after approval. Pending bank activity remains unchanged.</small></span>
+        </label>
+
         <div style={{marginTop:14,padding:'12px 14px',borderRadius:11,background:'rgba(197,164,109,.07)',border:'1px solid rgba(197,164,109,.18)',fontSize:12,color:'var(--muted)',lineHeight:1.5}}>
           <strong style={{color:'var(--soft-white)'}}>{matches.length} posted sample{matches.length === 1 ? '' : 's'} found.</strong>{' '}
-          The preview checks current history so you can verify the wording. The rule starts {today} and will not rewrite earlier transactions.
+          {applyToExisting ? `These ${matches.length} existing posted matches will be updated after approval.` : `The preview checks current history only; these past matches will not be changed. The rule starts ${today}.`}
           {matches.slice(0, 3).map(transaction => <div key={transaction.id} style={{marginTop:5,color:'var(--soft-white)'}}>• {transaction.originalStatement || transaction.original_description || transaction.name}</div>)}
         </div>
 
@@ -115,7 +139,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           {rules.length === 0 ? <p style={{margin:0,fontSize:12,color:'var(--muted)'}}>No automatic categorization rules are active.</p> : rules.map(rule => {
             const description = ruleDescription(rule, accounts)
             return <div key={rule.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,padding:'10px 0',borderTop:'1px solid rgba(255,255,255,.06)'}}>
-              <div style={{minWidth:0}}><strong style={{display:'block',fontSize:13,color:'var(--soft-white)'}}>{description.text} → {description.category}</strong><span style={{fontSize:11,color:'var(--muted)'}}>{description.account || 'All linked accounts'} · posts on or after {rule.createdDate || 'rule creation'}</span></div>
+              <div style={{minWidth:0}}><strong style={{display:'block',fontSize:13,color:'var(--soft-white)'}}>{description.text} → {description.category}</strong><span style={{fontSize:11,color:'var(--muted)'}}>{description.account || 'All linked accounts'} · {description.applyToExisting ? 'includes past posted matches' : `posts on or after ${rule.createdDate || 'rule creation'}`}</span></div>
               <button type="button" onClick={() => reviewDelete(rule)} disabled={Boolean(preparing)} style={{flexShrink:0,padding:'7px 10px',borderRadius:8,border:'1px solid rgba(232,150,122,.3)',background:'transparent',color:'var(--expense-color)',font:'inherit',fontSize:11,cursor:preparing?'wait':'pointer'}}>{preparing === rule.id ? 'Preparing…' : 'Review removal'}</button>
             </div>
           })}

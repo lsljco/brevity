@@ -353,13 +353,13 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
 }
 
 // ── Main ActualTxModal ────────────────────────────────────────────────────────
-export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], onSave, onMakeRecurring, onClose }) {
+export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], onSave, onCreateRule, onMakeRecurring, onClose }) {
   const [form, setForm] = useState({
     name:              tx.name || '',
     amount:            String(Math.abs(tx.amount || 0)),
     date:              tx.date || '',
     category:          tx.category || '',
-    originalStatement: tx.originalStatement || tx.name || '',
+    originalStatement: tx.originalStatement || tx.original_description || tx.name || '',
     notes:             tx.notes || '',
     needsReview:       tx.needsReview || '',
     goal:              tx.goal || '',
@@ -367,6 +367,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
   })
   const [attachments, setAttachments]         = useState(tx.attachments || [])
   const [storedCategories, setStoredCategories] = useState(() => loadStoredCategoryOptions(localStorage))
+  const [ruleQuestion, setRuleQuestion] = useState('')
   const committedCategoryRef = useRef(form.category)
   const categoryOptions = mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, storedCategories, transactionCategories(tx))
 
@@ -381,6 +382,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
     const newCat = rawCategory.trim()
     set('category', newCat)
     committedCategoryRef.current = newCat
+    setRuleQuestion(newCat && newCat.toLocaleLowerCase() !== String(tx.category || '').trim().toLocaleLowerCase() ? 'ask' : '')
   }
 
   const handleSave = async () => {
@@ -388,6 +390,11 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
       ...tx,
       name: form.name.trim(),
       category: form.category.trim(),
+    }
+    const categoryChanged = updated.category.toLocaleLowerCase() !== String(tx.category || '').trim().toLocaleLowerCase()
+    if (categoryChanged && onCreateRule && ruleQuestion !== 'declined') {
+      setRuleQuestion('ask')
+      return
     }
     const prepared = await onSave(updated)
     if (prepared !== false) {
@@ -500,8 +507,16 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
                   style={{ ...inputStyle, paddingLeft: form.category ? 34 : 12 }} />
               </div>
               <span style={{ fontSize: 10, color: '#888884' }}>
-                Type a new category or choose a saved one. Name and Category changes require Action Mode review. To create a future categorization rule, ask Brevity.
+                Type a new category or choose a saved one. Name and Category changes require Action Mode review.
               </span>
+              {ruleQuestion === 'ask' && onCreateRule ? <div role="status" style={{marginTop:8,padding:12,borderRadius:10,border:'1px solid rgba(197,164,109,.28)',background:'rgba(197,164,109,.08)'}}>
+                <strong style={{display:'block',fontSize:12,color:'#F7F6F2'}}>Save this category change as a rule?</strong>
+                <span style={{display:'block',marginTop:4,fontSize:10,lineHeight:1.45,color:'#AAA9A4'}}>Brevity can categorize matching bank transactions automatically. You will choose the matching parameters before anything is reviewed.</span>
+                <div style={{display:'flex',gap:8,marginTop:10}}>
+                  <button type="button" onClick={() => { setRuleQuestion('declined'); onCreateRule({matchText:form.originalStatement || tx.original_description || tx.name || '',category:form.category.trim(),accountId:localAcct?.id || '',matchField:'originalStatement',matchMode:'contains'}) }} style={{padding:'7px 11px',border:0,borderRadius:8,background:'#C5A46D',color:'#17130d',font:'inherit',fontSize:11,fontWeight:700,cursor:'pointer'}}>Yes, set up rule</button>
+                  <button type="button" onClick={() => setRuleQuestion('declined')} style={{padding:'7px 11px',border:'1px solid rgba(255,255,255,.14)',borderRadius:8,background:'transparent',color:'#B8B7B1',font:'inherit',fontSize:11,cursor:'pointer'}}>No, just this transaction</button>
+                </div>
+              </div> : null}
             </div>
 
             {/* Bank amount is immutable; corrections belong in reconciliation. */}

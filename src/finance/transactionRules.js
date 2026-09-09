@@ -14,7 +14,11 @@ export function transactionMatchesRule(transaction, rule, accounts = []) {
   const conditions = rule.conditions
   if (active(conditions.originalStatement)) {
     const source = normalized(transaction.originalStatement || transaction.original_description || transaction.name)
-    if (!source.includes(normalized(conditions.originalStatement.value))) return false
+    const value = normalized(conditions.originalStatement.value)
+    const mode = conditions.originalStatement.match || 'contains'
+    if (mode === 'contains' && !source.includes(value)) return false
+    if (mode === 'starts' && !source.startsWith(value)) return false
+    if (mode === 'exactly' && source !== value) return false
   }
   if (active(conditions.merchantName)) {
     const source = normalized(transaction.name || transaction.merchant_name)

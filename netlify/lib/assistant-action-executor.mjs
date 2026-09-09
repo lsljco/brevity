@@ -223,7 +223,8 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), ...allowed, id:operation.targetId } } }
   }
   if (operation.type === 'transaction.rule.create') {
-    const item={id:createId(),name:payload.title||`Categorize ${payload.matchText}`,createdDate:payload.createdDate,applyToExisting:false,conditions:{originalStatement:{on:true,value:payload.matchText},accounts:{on:Boolean(payload.accountId),value:payload.accountId||''}},actions:{updateCategory:{on:true,value:payload.category}},splits:[]}
+    const matchField=payload.matchField||'originalStatement',matchMode=payload.matchMode||'contains'
+    const item={id:createId(),name:payload.title||`Categorize ${payload.matchText}`,createdDate:payload.createdDate,applyToExisting:Boolean(payload.applyToExisting),conditions:{originalStatement:{on:matchField==='originalStatement',match:matchMode,value:payload.matchText},merchantName:{on:matchField==='merchantName',match:matchMode,value:payload.matchText},accounts:{on:Boolean(payload.accountId),value:payload.accountId||''}},actions:{updateCategory:{on:true,value:payload.category}},splits:[]}
     return {before,after:[...(Array.isArray(value)?value:[]),item],createdId:item.id}
   }
   if (operation.type === 'transaction.rule.delete') {

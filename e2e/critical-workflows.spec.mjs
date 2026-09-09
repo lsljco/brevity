@@ -70,7 +70,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -87,12 +87,30 @@ test('posted transaction categorization rules are discoverable and preview exact
   await page.getByRole('button',{name:'Categorization rules'}).click()
   const dialog=page.getByRole('dialog',{name:'Categorization rules'})
   await expect(dialog).toBeVisible()
-  await dialog.getByLabel('Original statement contains').fill('Market')
+  await dialog.getByLabel('Match text').fill('Market')
   await dialog.getByLabel('Apply category').fill('Groceries')
   await expect(dialog).toContainText('1 posted sample found.')
   await expect(dialog).toContainText('Neighborhood Market')
   await expect(dialog.getByRole('option',{name:'Operating Account'})).toHaveCount(1)
   await expect(dialog.getByRole('button',{name:'Review new rule'})).toBeEnabled()
+})
+
+test('changing a posted transaction category offers a prefilled rule with past-match control',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await page.getByRole('button',{name:'Show bank activity'}).click()
+  await page.getByText('Neighborhood Market',{exact:true}).click()
+  const category=page.getByRole('combobox',{name:'Transaction category'})
+  await category.fill('Groceries')
+  await category.blur()
+  await expect(page.getByText('Save this category change as a rule?')).toBeVisible()
+  await page.getByRole('button',{name:'Yes, set up rule'}).click()
+  const dialog=page.getByRole('dialog',{name:'Categorization rules'})
+  await expect(dialog.getByLabel('Match text')).toHaveValue('Neighborhood Market')
+  await expect(dialog.getByLabel('Apply category')).toHaveValue('Groceries')
+  await expect(dialog.getByRole('checkbox',{name:/Apply this rule to all past matching transactions/})).not.toBeChecked()
 })
 
 test('Finance workspaces fit phone and tablet viewports without overlapping filters',async({page},testInfo)=>{
