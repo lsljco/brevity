@@ -16,13 +16,13 @@ test('Accounts mirrors the application-wide Plaid refresh state',()=>{
 const financeRefresh=readFileSync(new URL('./financeRefresh.js',import.meta.url),'utf8')
 
 test('automatic account refresh is cached while Sync now explicitly requests live balances',()=>{
-  assert.match(accountsFunction,/LIVE_BALANCE_TIMEOUT_MS\s*=\s*20000/)
+  assert.match(accountsFunction,/LIVE_BALANCE_TIMEOUT_MS\s*=\s*30000/)
   assert.match(accountsFunction,/accountsBalanceGet\(\{ access_token \}, \{ timeout:LIVE_BALANCE_TIMEOUT_MS \}\)/)
   assert.match(accountsFunction,/accountsGet\(\{ access_token \}, \{ timeout:CACHED_ACCOUNT_TIMEOUT_MS \}\)/)
   assert.match(accountsFunction,/liveBalance && !liveBalanceTimedOut \? \{ accountSourceReceipt:createAccountSourceReceipt\(allAccounts\) \} : \{\}/)
   assert.match(accountsFunction,/balanceProvenance = liveBalance && !liveBalanceTimedOut \? LIVE_BALANCE_PROVENANCE : 'plaid\.accountsGet'/)
   assert.match(financeRefresh,/requestLiveBalances \? '\/plaid-accounts\?live=1' : '\/plaid-accounts'/)
-  assert.match(financeRefresh,/LIVE_BALANCE_REQUEST_TIMEOUT_MS\s*=\s*35000/)
+  assert.match(financeRefresh,/LIVE_BALANCE_REQUEST_TIMEOUT_MS\s*=\s*45000/)
   assert.match(financeRefresh,/timeoutMs:requestLiveBalances \? LIVE_BALANCE_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS/)
   assert.match(financeRefresh,/fetchAccounts\(\{ requestBankUpdate \}\)/)
   assert.match(plaidConnect,/apiFetch\('\/plaid-accounts\?live=1'\)/)
