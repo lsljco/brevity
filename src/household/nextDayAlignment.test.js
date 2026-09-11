@@ -21,6 +21,13 @@ test('the dashboard and alignment screen identify tomorrow as the target', () =>
   assert.match(alignmentSource, /formatDailyPlanDate\(draft\.date\)/)
 })
 
+test('alignment flushes the latest local draft when the screen unmounts or the page is hidden', () => {
+  assert.match(alignmentSource, /latestDraftRef/)
+  assert.match(alignmentSource, /addEventListener\?\.\('pagehide', persistLatest\)/)
+  assert.match(alignmentSource, /removeEventListener\?\.\('pagehide', persistLatest\)/)
+  assert.match(alignmentSource, /saveLocalAlignmentDraft\(globalThis\.localStorage, latestDraftRef\.current, openedVersionRef\.current\)/)
+})
+
 test('today alignment is a separate reviewed action scoped only to today', () => {
   assert.match(dashboardSource, /Start Today’s Alignment/)
   assert.match(dashboardSource, /Adjust Today’s Alignment/)
