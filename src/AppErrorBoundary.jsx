@@ -1,4 +1,5 @@
 import React from 'react'
+import { CHUNK_RECOVERY_KEY, deploymentRecoveryUrl, recoverCurrentDeployment } from './deploymentRecovery.js'
 
 export default class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -12,6 +13,12 @@ export default class AppErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     console.error('[Brevity] Unhandled render error', error, info)
+    recoverCurrentDeployment({ error })
+  }
+
+  reloadCurrentDeployment = () => {
+    try { window.sessionStorage.removeItem(CHUNK_RECOVERY_KEY) } catch {}
+    window.location.replace(deploymentRecoveryUrl(window.location))
   }
 
   render() {
@@ -24,7 +31,7 @@ export default class AppErrorBoundary extends React.Component {
           <h1 style={{ margin: '8px 0 12px', fontSize: 30, fontWeight: 500 }}>The app hit a display error.</h1>
           <p style={{ color: 'rgba(247,243,234,.66)', lineHeight: 1.6 }}>Your data has not been deleted. Refresh the page. If this message returns, the technical detail below identifies the component failure instead of leaving a blank screen.</p>
           <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 20, padding: 16, borderRadius: 12, background: '#000', color: 'rgba(247,243,234,.72)', fontSize: 12 }}>{String(this.state.error?.message || this.state.error)}</pre>
-          <button onClick={() => window.location.reload()} style={{ marginTop: 18, padding: '10px 16px', borderRadius: 10, border: '1px solid rgba(197,164,109,.35)', background: 'rgba(197,164,109,.12)', color: '#c5a46d', cursor: 'pointer' }}>Reload Brevity</button>
+          <button onClick={this.reloadCurrentDeployment} style={{ marginTop: 18, padding: '10px 16px', borderRadius: 10, border: '1px solid rgba(197,164,109,.35)', background: 'rgba(197,164,109,.12)', color: '#c5a46d', cursor: 'pointer' }}>Load Current Brevity Version</button>
         </div>
       </main>
     )
