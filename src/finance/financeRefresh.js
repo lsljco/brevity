@@ -13,6 +13,11 @@ export const LIVE_BALANCE_PROVENANCE = 'plaid.accountsBalanceGet'
 
 const API = '/.netlify/functions'
 const REQUEST_TIMEOUT_MS = 20000
+// The server allows 20 seconds for an institution-facing balance request and
+// can then spend up to 8 seconds obtaining the safe cached roster fallback.
+// The browser must remain connected long enough to receive that truthful
+// partial result instead of aborting at the exact moment fallback begins.
+const LIVE_BALANCE_REQUEST_TIMEOUT_MS = 35000
 const TRANSACTION_REFRESH_REQUEST_TIMEOUT_MS = 45000
 // The transaction endpoint now performs bounded Plaid cursor pagination
 // rather than an unbounded full-history date query. Give that bounded initial
@@ -545,7 +550,10 @@ function hasImportableLiveBalanceProof(payload) {
 export async function refreshFinanceData(storage = window.localStorage, {
   requestBankUpdate = false,
   persist = true,
-  fetchAccounts = ({ requestBankUpdate:requestLiveBalances = false } = {}) => apiFetch(requestLiveBalances ? '/plaid-accounts?live=1' : '/plaid-accounts'),
+  fetchAccounts = ({ requestBankUpdate:requestLiveBalances = false } = {}) => apiFetch(
+    requestLiveBalances ? '/plaid-accounts?live=1' : '/plaid-accounts',
+    { timeoutMs:requestLiveBalances ? LIVE_BALANCE_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS },
+  ),
   fetchTransactions = options => fetchLatestPlaidTransactions(options),
   persistSourceImport = persistSharedSourceImport,
 } = {}) {
