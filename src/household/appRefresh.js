@@ -8,6 +8,7 @@ import { retryRefresh } from './retry.js'
 import { fetchSystemHealth, systemHealthIssues } from './systemHealth.js'
 
 export const APP_REFRESH_EVENT = 'brevity-app-refreshed'
+export const APP_REFRESH_STARTED_EVENT = 'brevity-app-refresh-started'
 export const ICLOUD_CACHE_KEY = 'brevity_icloud_calendar_cache_v1'
 
 export const applicationRefreshDate = (now = new Date()) => getHouseholdDateKey(now)
@@ -92,6 +93,9 @@ async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdat
     automaticAlreadyRequested:automaticBankRefreshRequested,
   })
   if (bankUpdateRequested && !requestBankUpdate) automaticBankRefreshRequested = true
+  window.dispatchEvent(new CustomEvent(APP_REFRESH_STARTED_EVENT, {
+    detail:{ bankUpdateRequested, financeReadOnly, startedAt:new Date().toISOString() },
+  }))
 
   const financePromise = retryRefresh(()=>refreshFinanceData(window.localStorage,{ requestBankUpdate:bankUpdateRequested, persist:!financeReadOnly }))
   const planPromise = retryRefresh(()=>fetchDailyPlan(date))
