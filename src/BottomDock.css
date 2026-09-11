@@ -3,10 +3,38 @@
   --brevity-command-dock-assistant-width:220px;
   --brevity-command-dock-sidebar-width:72px;
   --brevity-command-dock-sidebar-expanded-width:260px;
+  --brevity-mobile-nav-reserve:82px;
 }
 
+/*
+   The command dock is a reserved viewport lane, not an overlay. Shortening the
+   scrolling application viewport is what guarantees that the last workflow
+   control (for example Next Pillar) can never sit behind Ask Brevity.
+*/
 .app-main{
-  padding-bottom:calc(var(--brevity-command-dock-height) + 20px)!important;
+  height:calc(100vh - var(--brevity-command-dock-height))!important;
+  height:calc(100dvh - var(--brevity-command-dock-height))!important;
+  max-height:calc(100vh - var(--brevity-command-dock-height))!important;
+  max-height:calc(100dvh - var(--brevity-command-dock-height))!important;
+  min-height:0!important;
+  align-self:flex-start!important;
+  padding-bottom:24px!important;
+  scroll-padding-bottom:24px!important;
+}
+
+/* Draw the unused lower lane so it reads as a persistent command panel. */
+.app-shell::after{
+  content:'';
+  position:fixed;
+  z-index:90;
+  left:0;
+  right:0;
+  bottom:0;
+  height:var(--brevity-command-dock-height);
+  border-top:1px solid rgba(197,164,109,.18);
+  background:linear-gradient(180deg,rgba(13,12,10,.98),rgba(6,6,6,.99));
+  box-shadow:0 -10px 28px rgba(0,0,0,.28);
+  pointer-events:none;
 }
 
 .brevity-assistant-launcher{
@@ -115,17 +143,20 @@
   left:var(--brevity-command-dock-sidebar-expanded-width)!important;
 }
 
-@media(max-width:900px){
+/* Tablet: there is no bottom mobile nav, so the command lane sits on the edge. */
+@media(min-width:641px) and (max-width:900px){
   :root{
     --brevity-command-dock-height:64px;
     --brevity-command-dock-assistant-width:168px;
   }
   .app-main{
-    padding-bottom:calc(144px + env(safe-area-inset-bottom))!important;
+    height:calc(100vh - var(--brevity-command-dock-height))!important;
+    height:calc(100dvh - var(--brevity-command-dock-height))!important;
+    max-height:calc(100vh - var(--brevity-command-dock-height))!important;
+    max-height:calc(100dvh - var(--brevity-command-dock-height))!important;
   }
   .brevity-assistant-launcher{
-    right:0!important;
-    bottom:calc(64px + env(safe-area-inset-bottom))!important;
+    bottom:0!important;
     width:var(--brevity-command-dock-assistant-width)!important;
     min-width:var(--brevity-command-dock-assistant-width)!important;
     min-height:var(--brevity-command-dock-height)!important;
@@ -144,27 +175,56 @@
   .app-sidebar.is-expanded~.app-main .meal-planner-state--error,
   .app-sidebar.is-expanded~.app-main .app-refresh-status--error,
   .app-sidebar.is-expanded~.app-main .app-refresh-status--warning{
-    left:0!important;
-    right:var(--brevity-command-dock-assistant-width)!important;
-    bottom:calc(64px + env(safe-area-inset-bottom))!important;
+    bottom:0!important;
     min-height:var(--brevity-command-dock-height)!important;
   }
 }
 
-@media(max-width:560px){
-  :root{--brevity-command-dock-assistant-width:148px}
+/* Phone: reserve both the command lane and the separate three-button mobile nav. */
+@media(max-width:640px){
+  :root{
+    --brevity-command-dock-height:64px;
+    --brevity-command-dock-assistant-width:148px;
+  }
+  .app-main{
+    height:calc(100vh - var(--brevity-command-dock-height) - var(--brevity-mobile-nav-reserve) - env(safe-area-inset-bottom))!important;
+    height:calc(100dvh - var(--brevity-command-dock-height) - var(--brevity-mobile-nav-reserve) - env(safe-area-inset-bottom))!important;
+    max-height:calc(100vh - var(--brevity-command-dock-height) - var(--brevity-mobile-nav-reserve) - env(safe-area-inset-bottom))!important;
+    max-height:calc(100dvh - var(--brevity-command-dock-height) - var(--brevity-mobile-nav-reserve) - env(safe-area-inset-bottom))!important;
+    padding-bottom:20px!important;
+    scroll-padding-bottom:20px!important;
+  }
+  .app-shell::after{
+    bottom:calc(var(--brevity-mobile-nav-reserve) + env(safe-area-inset-bottom));
+  }
   .brevity-assistant-launcher{
+    right:0!important;
+    bottom:calc(var(--brevity-mobile-nav-reserve) + env(safe-area-inset-bottom))!important;
+    width:var(--brevity-command-dock-assistant-width)!important;
+    min-width:var(--brevity-command-dock-assistant-width)!important;
+    min-height:var(--brevity-command-dock-height)!important;
+    height:var(--brevity-command-dock-height)!important;
     grid-template-columns:24px minmax(0,1fr)!important;
     column-gap:8px!important;
-    padding-inline:10px!important;
+    border-radius:14px 0 0 0!important;
+    padding:8px 10px!important;
   }
   .brevity-assistant-launcher>span{font-size:12px!important}
-  .brevity-assistant-launcher::after{font-size:7px}
+  .brevity-assistant-launcher::after{content:'Assistant';font-size:7px}
   .app-main .alignment-error,
   .app-main .today-sync-banner--error,
   .app-main .meal-planner-state--error,
   .app-main .app-refresh-status--error,
-  .app-main .app-refresh-status--warning{
+  .app-main .app-refresh-status--warning,
+  .app-sidebar.is-expanded~.app-main .alignment-error,
+  .app-sidebar.is-expanded~.app-main .today-sync-banner--error,
+  .app-sidebar.is-expanded~.app-main .meal-planner-state--error,
+  .app-sidebar.is-expanded~.app-main .app-refresh-status--error,
+  .app-sidebar.is-expanded~.app-main .app-refresh-status--warning{
+    left:0!important;
+    right:var(--brevity-command-dock-assistant-width)!important;
+    bottom:calc(var(--brevity-mobile-nav-reserve) + env(safe-area-inset-bottom))!important;
+    min-height:var(--brevity-command-dock-height)!important;
     padding:10px 12px!important;
     font-size:12px!important;
   }
