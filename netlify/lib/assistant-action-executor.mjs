@@ -15,6 +15,7 @@ const SHARED_KEYS = {
   projects:'homehq_items_v1', calendar:'family_calendar_events_v1', overrides:'lslj_tx_overrides_v1',
   rules:'lslj_tx_rules_v1', budget:'lslj_budget_v1', forecasts:'brevity_finance_scenarios_v1', finance:'lslj_finance_v9',
   meetings:'brevity_finance_meetings_v1',
+  debts:'brevity_finance_debts_v1',
 }
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value))
 const nowIso = now => now().toISOString()
@@ -42,6 +43,7 @@ export function resourceForOperation(operation) {
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
   if (operation.type === 'finance.account.link') return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
+  if (operation.type.startsWith('debt.')) return `shared:${SHARED_KEYS.debts}`
   throw new Error(`No action resource exists for ${operation.type}.`)
 }
 
@@ -58,6 +60,7 @@ export function recordForOperation(value, operation) {
   if (operation.type === 'forecast.update') return ['model','planningExpense','expenseMode'].includes(operation.targetId) ? value : (value?.scenarios || []).find(item => item.id === operation.targetId)
   if (operation.type === 'finance.account.link') return (value?.accounts || []).find(item => item.id === operation.targetId)
   if (operation.type.startsWith('recurring.') && operation.type !== 'recurring.create') return (value?.transactions || []).find(item => item.id === operation.targetId)
+  if (operation.type.startsWith('debt.') && operation.type !== 'debt.create') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.action.update') return (value?.openActions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.correction.update') return (value?.corrections || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.history.update') return (value?.meetings || []).find(item => item.id === operation.targetId)
@@ -307,6 +310,22 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       skips:[],
     }
     return { before, after:{ ...(value || {}), transactions:[...transactions, item] }, createdId:item.id }
+  }
+  if (operation.type === 'debt.create') {
+    const changedAt=nowIso(context.now||(()=>new Date()))
+    const item={id:createId(),...clone(payload),createdAt:changedAt,updatedAt:changedAt,updatedBy:context.actor||'Household member'}
+    return{before,after:[...(Array.isArray(value)?value:[]),item],createdId:item.id}
+  }
+  if (operation.type === 'debt.update') {
+    let found=false;const changedAt=nowIso(context.now||(()=>new Date()))
+    const after=(Array.isArray(value)?value:[]).map(item=>{if(item.id!==operation.targetId)return item;found=true;return{...item,...clone(payload),updatedAt:changedAt,updatedBy:context.actor||'Household member'}})
+    if(!found)throw new Error('That debt no longer exists. Refresh Finance and review the current debt list.')
+    return{before,after}
+  }
+  if (operation.type === 'debt.delete') {
+    const items=Array.isArray(value)?value:[]
+    if(!items.some(item=>item.id===operation.targetId))throw new Error('That debt no longer exists. Refresh Finance and review the current debt list.')
+    return{before,after:items.filter(item=>item.id!==operation.targetId)}
   }
   if (operation.type === 'recurring.update' || operation.type === 'recurring.delete') {
     const transactions = [...(value?.transactions || [])]

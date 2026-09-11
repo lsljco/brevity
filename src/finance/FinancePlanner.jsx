@@ -41,6 +41,8 @@ import { buildScheduledActionPayload, scheduledActionScope } from './scheduledAc
 import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
 import CashForecastAgenda, { CashForecastIntro } from './CashForecastAgenda.jsx'
 import { USER_SIDEPANEL_IMAGE } from './financeAssets.js'
+import DebtWorkspace from './DebtWorkspace.jsx'
+import { DEBT_STORAGE_KEY, normalizeDebts } from './debtModel.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -1251,6 +1253,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
   const [txRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
   const [goals, setGoals] = useState(() => loadSavedValue('fp_goals', []))
+  const [debts, setDebts] = useState(() => normalizeDebts(loadSavedValue(DEBT_STORAGE_KEY, [])))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
   const [showTransactionRules, setShowTransactionRules] = useState(false)
   const [transactionRuleInitial, setTransactionRuleInitial] = useState(null)
@@ -1322,6 +1325,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       if (keys.has('lslj_tx_overrides_v1')) setTxOverrides(loadSavedValue('lslj_tx_overrides_v1', {}))
       if (keys.has('lslj_tx_rules_v1')) setTxRules(loadSavedValue('lslj_tx_rules_v1', []))
       if (keys.has('fp_goals')) setGoals(loadSavedValue('fp_goals', []))
+      if (keys.has(DEBT_STORAGE_KEY)) setDebts(normalizeDebts(loadSavedValue(DEBT_STORAGE_KEY, [])))
       if (keys.has('homehq_items_v1')) setHqItems(loadSavedValue('homehq_items_v1', []))
     }
     window.addEventListener(SHARED_STATE_EVENT, receiveSharedUpdate)
@@ -1970,6 +1974,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     summary:`Remove categorization rule ${rule.name || rule.id}`,
     operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category for this bank-statement rule`, payload:{} },
     storageKey:'lslj_tx_rules_v1',
+    surfaceError:true,
+  })
+  const reviewDebtChange = ({kind,debt}) => stageDirectFinanceReview({
+    summary:`${kind==='create'?'Add':kind==='delete'?'Remove':'Update'} debt ${debt.creditor || debt.accountName || ''}`,
+    operation:{type:`debt.${kind}`,...(kind!=='create'?{targetId:debt.id}:{}),payload:kind==='delete'?{}:Object.fromEntries(Object.entries(debt).filter(([key])=>key!=='id')),description:`${kind==='create'?'Add':kind==='delete'?'Remove':'Update'} the reviewed debt record for ${debt.creditor || 'this creditor'}. This records planning data only and never initiates a payment.`},
+    storageKey:DEBT_STORAGE_KEY,
     surfaceError:true,
   })
   // ── Derived values (all use fd = filtered accounts + transactions) ─────────
@@ -3165,6 +3175,13 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ══════════ DEBTS ══════════ */}
+      {view === 'debts' && (
+        <div className="finance-inner">
+          <DebtWorkspace debts={debts} transactions={filteredActuals} scheduledMonthlyNet={calculateScheduledTotalsForMonth(data.transactions,getHouseholdCalendarDate()).net} readOnly={readOnly} onReview={reviewDebtChange}/>
         </div>
       )}
 

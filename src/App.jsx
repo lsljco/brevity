@@ -40,6 +40,7 @@ const PILLARS = [
     { id:'transactions', label:'Transactions', icon:'ti-list' },
     { id:'calendar', label:'Cash Forecast', icon:'ti-calendar-dollar' },
     { id:'accounts', label:'Accounts', icon:'ti-building-bank' },
+    { id:'debts', label:'Debts', icon:'ti-receipt-2' },
     { id:'budget', label:'Budget', icon:'ti-chart-bar' },
     { id:'recurring', label:'Recurring', icon:'ti-repeat' },
     { id:'reporting', label:'Reporting', icon:'ti-report-analytics' },
@@ -49,7 +50,7 @@ const PILLARS = [
   ]},
 ]
 
-const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','budget','recurring','reporting'])
+const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','debts','budget','recurring','reporting'])
 // Keep tablet navigation collapsed by default as well. Feature breakpoints are
 // based on the viewport, so an expanded 240px rail at 768px can otherwise leave
 // less usable content width than their phone layouts expect.

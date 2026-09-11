@@ -53,6 +53,9 @@ export const ACTION_TYPES = {
   'recurring.create': 'finance',
   'recurring.update': 'finance',
   'recurring.delete': 'finance',
+  'debt.create': 'finance',
+  'debt.update': 'finance',
+  'debt.delete': 'finance',
   'meal.substitute': 'planning',
 }
 export const FORBIDDEN_ACTION_PATTERN = /payment|purchase|transfer|withdraw|deposit|connect|disconnect|password|credential|bank\.account/i
@@ -104,10 +107,13 @@ const ACTION_PAYLOAD_FIELDS = {
   'recurring.create': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.update': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.delete': [],
+  'debt.create': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
+  'debt.update': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
+  'debt.delete': [],
   'meal.substitute': ['mealType', 'mealId'],
 }
-const STRING_FIELDS = new Set(['title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
-const NUMBER_FIELDS = new Set(['amount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta'])
+const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
+const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'minimumPayment', 'dueDay', 'amount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta'])
 const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'createdDate', 'meetingDate', 'expiresOn'])
 const ACTION_ENUMS = {
@@ -123,6 +129,8 @@ const ACTION_ENUMS = {
   'transaction.rule.create': { matchField:['originalStatement', 'merchantName'], matchMode:['contains', 'exactly', 'starts'] },
   'recurring.create': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
   'recurring.update': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
+  'debt.create': { debtType:['Personal loan','Credit card','Student loan','Mortgage','Auto loan','Medical','Other'], status:['Active','Deferred','Paid off'] },
+  'debt.update': { debtType:['Personal loan','Credit card','Student loan','Mortgage','Auto loan','Medical','Other'], status:['Active','Deferred','Paid off'] },
   'meeting.action.create': { status:['open'], cadence:['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] },
   'meeting.action.update': { status:['open', 'done'] },
   'meeting.correction.create': {
@@ -141,7 +149,7 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
@@ -421,6 +429,12 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'household.inventory.waste.create') {
     if (!operation.targetId) throw new Error('Inventory waste requires the exact affected item.')
     if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) throw new Error('Inventory waste requires a positive reviewed quantity.')
+  }
+  if (type === 'debt.create' || type === 'debt.update') {
+    if (type === 'debt.create' && !payload.creditor) throw new Error('A debt requires a creditor.')
+    for (const field of ['originalBalance','currentBalance','interestRate','minimumPayment']) if (payload[field] !== undefined && (!Number.isFinite(payload[field]) || payload[field] < 0)) throw new Error('Debt balances, rates, and minimum payments must be non-negative numbers.')
+    if (payload.interestRate !== undefined && payload.interestRate > 100) throw new Error('Debt APR must be between 0 and 100 percent.')
+    if (payload.dueDay !== undefined && payload.dueDay !== 0 && (!Number.isInteger(payload.dueDay) || payload.dueDay < 1 || payload.dueDay > 31)) throw new Error('Debt due day must be from 1 through 31.')
   }
   if (type === 'calendar.create' && !isDate(payload.date || operation.targetDate)) throw new Error('A new calendar event requires an exact date.')
   if (type.startsWith('calendar.') && payload.allDay === false && !payload.time) throw new Error('A timed calendar event requires an exact time.')
