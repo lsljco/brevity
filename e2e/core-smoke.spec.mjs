@@ -136,3 +136,26 @@ test('mobile shell keeps fixed navigation inside the viewport without horizontal
   expect(box.y).toBeGreaterThanOrEqual(0)
   expect(box.y + box.height).toBeLessThanOrEqual(dimensions.height + 1)
 })
+
+test('expanded mobile refresh details stay above Ask Brevity and mobile navigation', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone', 'mobile-only assertion')
+  const refresh = page.locator('.app-refresh-status')
+  await expect(refresh).toBeVisible()
+  await page.getByRole('button', { name:'View details' }).click()
+  await expect(refresh).toHaveClass(/is-expanded/)
+
+  const [refreshBox, assistantBox, navBox] = await Promise.all([
+    refresh.boundingBox(),
+    page.locator('.brevity-assistant-launcher').boundingBox(),
+    page.locator('.mobile-app-nav').boundingBox(),
+  ])
+  expect(refreshBox).not.toBeNull()
+  expect(assistantBox).not.toBeNull()
+  expect(navBox).not.toBeNull()
+  expect(refreshBox.y + refreshBox.height).toBeLessThanOrEqual(assistantBox.y)
+  expect(refreshBox.y + refreshBox.height).toBeLessThanOrEqual(navBox.y)
+  expect(refreshBox.height).toBeLessThanOrEqual(page.viewportSize().height * 0.55 + 1)
+
+  const reservedPadding = await page.locator('.app-main').evaluate(element => parseFloat(getComputedStyle(element).paddingBottom))
+  expect(reservedPadding).toBeGreaterThanOrEqual(refreshBox.height)
+})

@@ -28,3 +28,12 @@ test('every global refresh state stays in the command lane instead of covering p
   assert.match(css, /\.app-main \.app-refresh-status\{[\s\S]*?position:fixed!important;[\s\S]*?bottom:0!important;/)
   assert.match(css, /right:var\(--brevity-command-dock-assistant-width\)!important/)
 })
+
+test('expanded phone refresh details become a bounded drawer above both bottom lanes', () => {
+  const phone = css.slice(css.indexOf('@media(max-width:640px)'))
+  assert.match(phone, /\.app-main\.has-expanded-refresh\{[\s\S]*?padding-bottom:calc\(min\(55dvh, 460px\) \+ 36px\)!important/)
+  assert.match(phone, /\.app-main \.app-refresh-status\.is-expanded,[\s\S]*?bottom:calc\(var\(--brevity-mobile-nav-reserve\) \+ var\(--brevity-command-dock-height\)/)
+  assert.match(phone, /max-height:min\(55dvh, 460px\)!important/)
+  assert.match(phone, /overflow-y:auto!important/)
+  assert.match(phone, /\.app-refresh-status\.is-expanded \.app-refresh-status-row\{[\s\S]*?position:sticky/)
+})
