@@ -7,6 +7,7 @@ import './MobileShell.css'
 import './ThemeCoverage.css'
 import './household/SpiritualLayoutFixes.css'
 import './ResponsiveHardening.css'
+import './BottomDock.css'
 import './household/spiritualMetadataEnhancer.js'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
