@@ -64,7 +64,10 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
     mealType,
     name:'',
     description:'',
+    ingredients:'',
     prepMinutes:'',
+    cookMinutes:'',
+    totalMinutes:'',
     image:'',
     serving:'1 serving',
     calories:'',
@@ -79,7 +82,10 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
       mealType:form.mealType,
       name:form.name.trim(),
       description:form.description.trim(),
+      ingredients:form.ingredients.split(/\r?\n/).map(value=>value.trim()).filter(Boolean),
       prepMinutes:Number(form.prepMinutes),
+      cookMinutes:Number(form.cookMinutes),
+      totalMinutes:form.totalMinutes===''?undefined:Number(form.totalMinutes),
       image:form.image.trim(),
       serving:form.serving.trim() || '1 serving',
       macros:{
@@ -104,7 +110,10 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
         <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)}>{MEAL_TYPES.map(type=><option key={type} value={type}>{LABELS[type]}</option>)}</select></label>
         <label className="meal-add-form--wide"><span>Meal name</span><input autoFocus required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
         <label className="meal-add-form--wide"><span>Description</span><textarea value={form.description} onChange={event=>set('description',event.target.value)} placeholder="Brief description of the plated meal" /></label>
+        <label className="meal-add-form--wide"><span>Ingredients <small>one per line</small></span><textarea value={form.ingredients} onChange={event=>set('ingredients',event.target.value)} placeholder={'Steak\nPotatoes\nButter'} /></label>
         <label><span>Prep time (minutes)</span><input required min="0" step="1" type="number" value={form.prepMinutes} onChange={event=>set('prepMinutes',event.target.value)} /></label>
+        <label><span>Cook time (minutes)</span><input required min="0" step="1" type="number" value={form.cookMinutes} onChange={event=>set('cookMinutes',event.target.value)} /></label>
+        <label><span>Total time (minutes) <small>optional override</small></span><input min="0" step="1" type="number" value={form.totalMinutes} onChange={event=>set('totalMinutes',event.target.value)} /></label>
         <label><span>Serving</span><input value={form.serving} onChange={event=>set('serving',event.target.value)} /></label>
         <label><span>Calories</span><input required min="0" step="1" type="number" value={form.calories} onChange={event=>set('calories',event.target.value)} /></label>
         <label><span>Protein (g)</span><input required min="0" step="1" type="number" value={form.proteinGrams} onChange={event=>set('proteinGrams',event.target.value)} /></label>
@@ -194,7 +203,7 @@ export default function MealPlanner() {
     <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>Rolling 7-Day Meal Plan</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>{data?.librarySummary?.total ?? 90}</strong><span>household meals</span></div></header>
     <div className="meal-planner-controls"><nav aria-label="Meal planner views"><button type="button" className={view === 'plan' ? 'is-active' : ''} onClick={() => setView('plan')}><i className="ti ti-calendar-week" /> 7-Day Plan</button><button type="button" className={view === 'library' ? 'is-active' : ''} onClick={() => setView('library')}><i className="ti ti-tools-kitchen-2" /> Meal Library</button></nav><p><i className="ti ti-refresh" /> The window rolls forward daily; replacements remain attached to their date.</p></div>
     {message && <div className="meal-planner-message" role="status">{message}</div>}
-    {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Plan insight</span><strong>{planInsight.tomorrowDinner ? `Tomorrow’s dinner is ${planInsight.tomorrowDinner.name}.` : `${planInsight.mealCount} meals are planned.`}</strong><p>{planInsight.tomorrowDinner ? `It is scheduled for ${planInsight.tomorrowDinner.prepMinutes} minutes. Across all ${planInsight.mealCount} meals in this 7-day window, the totals below show the complete planned prep and macro load.` : `Totals cover every resolved meal in the current 7-day plan.`}</p></div><dl><div><dt>Total planned prep</dt><dd>{formatPrepMinutes(planInsight.totalPrepMinutes)}</dd></div><div><dt>Total calories</dt><dd>{planInsight.totalCalories.toLocaleString()} cal</dd></div><div><dt>Total protein</dt><dd>{planInsight.totalProteinGrams}g</dd></div><div><dt>Total carbs</dt><dd>{planInsight.totalCarbohydrateGrams}g</dd></div><div><dt>Total fat</dt><dd>{planInsight.totalFatGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are plan estimates for the meals shown in this 7-day window, not evidence that a meal was prepared or eaten.</small></section>}
+    {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Today’s plan insight</span><strong>{planInsight.mealCount} meals are planned for {formatDay(planInsight.selectedDate)}.</strong><p>The totals below aggregate breakfast, lunch, and dinner for this day. Preparation uses each meal’s total time, or prep time when no separate cook time exists.</p></div><dl><div><dt>Total planned time</dt><dd>{formatPrepMinutes(planInsight.totalPrepMinutes)}</dd></div><div><dt>Total calories</dt><dd>{planInsight.totalCalories.toLocaleString()} cal</dd></div><div><dt>Total protein</dt><dd>{planInsight.totalProteinGrams}g</dd></div><div><dt>Total carbs</dt><dd>{planInsight.totalCarbohydrateGrams}g</dd></div><div><dt>Total fat</dt><dd>{planInsight.totalFatGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are estimates for the three meals shown for this day, not evidence that a meal was prepared or eaten.</small></section>}
     {state === 'loading' && !data && <div className="meal-planner-state"><i className="ti ti-loader-2" /> Preparing the household meal plan…</div>}
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {error && data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan refresh needed</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}

@@ -22,6 +22,8 @@ function normalizeMealInput(meal, actor, now, createId) {
   const mealType = String(meal?.mealType || '').toLowerCase()
   const name = String(meal?.name || '').trim()
   const prepMinutes = numeric(meal?.prepMinutes)
+  const cookMinutes = numeric(meal?.cookMinutes ?? 0)
+  const suppliedTotalMinutes = meal?.totalMinutes === undefined || meal?.totalMinutes === '' ? null : numeric(meal.totalMinutes)
   const calories = numeric(meal?.macros?.calories)
   const proteinGrams = numeric(meal?.macros?.proteinGrams)
   const carbohydrateGrams = numeric(meal?.macros?.carbohydrateGrams)
@@ -30,7 +32,7 @@ function normalizeMealInput(meal, actor, now, createId) {
 
   if (!MEAL_TYPES.includes(mealType)) errors.push('Choose breakfast, lunch or dinner.')
   if (!name) errors.push('Meal name is required.')
-  if (prepMinutes == null) errors.push('Prep time must be zero or greater.')
+  if (prepMinutes == null || cookMinutes == null || (meal?.totalMinutes !== undefined && meal?.totalMinutes !== '' && suppliedTotalMinutes == null)) errors.push('Prep, cook and total time must each be zero or greater.')
   if ([calories, proteinGrams, carbohydrateGrams, fatGrams].some(value => value == null)) errors.push('Calories, protein, carbs and fat must each be zero or greater.')
   if (errors.length) {
     const error = new Error(errors.join(' '))
@@ -46,6 +48,9 @@ function normalizeMealInput(meal, actor, now, createId) {
     name,
     description: String(meal?.description || '').trim() || name,
     prepMinutes: Math.round(prepMinutes),
+    cookMinutes: Math.round(cookMinutes),
+    totalMinutes: Math.round(suppliedTotalMinutes == null ? prepMinutes + cookMinutes : suppliedTotalMinutes),
+    ingredients: (Array.isArray(meal?.ingredients) ? meal.ingredients : String(meal?.ingredients || '').split(/\r?\n/)).map(value => String(value || '').trim()).filter(Boolean),
     image: String(meal?.image || '').trim(),
     serving: String(meal?.serving || '').trim() || '1 serving',
     nutritionBasis: 'Household-entered nutrition estimate',
