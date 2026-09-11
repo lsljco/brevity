@@ -44,9 +44,9 @@ export function createSermonSlidesBackgroundHandler({
     if (body.id !== id) return json(409, { error:'The slide request does not match the exact reviewed active-sermon artifact. Save the current documents and try again.' })
     const dataStore = slideStore || getStore({ name:STORE_NAME, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
     const prior = await dataStore.get(statusKey(id), { type:'json' }).catch(() => null)
-    if (['generating','ready'].includes(prior?.state)) return json(202, { accepted:true, recovered:true, id, state:prior.state })
+    if (prior?.state === 'generating' || (prior?.state === 'ready' && prior?.devotions?.state === 'ready' && prior?.devotionsDownload)) return json(202, { accepted:true, recovered:true, id, state:prior.state })
     const fileName = sermonSlidesFileName(notes, source)
-    await dataStore.setJSON(statusKey(id), { state:'generating',completed:0,total:0,fileName,sourceHash,activeVersion,startedAt:now().toISOString() })
+    await dataStore.setJSON(statusKey(id), { state:'generating',completed:0,total:0,fileName,sourceHash,activeVersion,startedAt:now().toISOString(),upgradingLegacyPackage:prior?.state==='ready' })
     try {
       const result = await buildSlides(notes, source, progress => dataStore.setJSON(statusKey(id), { state:'generating',...progress,fileName,sourceHash,activeVersion,updatedAt:now().toISOString() }))
       const devotionsPdf = await buildDevotions(notes, source, { assets:result.devotionAssets })
