@@ -30,7 +30,7 @@ function AttentionPanel({ items, onOpenCalendar }) {
   if (!items.length) return <section className="today-attention today-attention--clear"><i className="ti ti-circle-check" aria-hidden="true" /><div><strong>No household items need attention</strong><span>Brevity has not identified an unresolved household priority or operational exception for today.</span></div></section>
 
   return <section className="today-attention" aria-labelledby="today-attention-title">
-    <header><div><span>Act First</span><h2 id="today-attention-title">Needs Attention</h2></div><strong>{signals.length}</strong></header>
+    <header><div><span>Act First</span><h2 id="today-attention-title">Needs Attention</h2></div><strong>{items.length}</strong></header>
     <div className="today-attention-list">{items.map(item => <article key={item.id} className={`today-attention-item today-attention-item--${item.priority}`}>
       <i className={`ti ${item.source.system === 'integration' ? 'ti-plug-connected-x' : item.source.recordType === 'household-priority' ? 'ti-home-exclamation' : 'ti-alert-triangle'}`} aria-hidden="true" />
       <div><strong>{item.title}</strong>{item.detail && <span>{item.detail}</span>}<small>{item.source.recordType === 'household-priority' ? 'Household Management · Unresolved priority' : `${PILLAR_META[item.pillar]?.[0] || 'Household'} · Operational exception`}</small></div>
