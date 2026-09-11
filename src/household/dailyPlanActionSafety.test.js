@@ -142,6 +142,24 @@ test('review accepts safe generated item aliases and still rejects unknown contr
   )
 })
 
+test('generated dayparts normalize known Seven Pillar labels before Action Mode validation', () => {
+  const date='2026-09-11',current={...createEmptyDailyPlan(date),version:4},draft=structuredClone(current)
+  draft.dayparts=[{id:'anchor',label:'Anchor',window:'4:00–8:00 AM',objective:'Begin well',items:[
+    {time:'4:15 AM',title:'Devotion',owner:'Larry',pillar:'Spiritual Maturity'},
+    {time:'6:30 AM',title:'Household review',owner:'Larry',pillar:'Household Management'},
+  ]}]
+
+  const operations=buildPlanDraftOperations(current,draft)
+  const proposal=normalizeActionProposal({operations},{member:'Larry',role:'admin'})
+  assert.deepEqual(proposal.operations[0].payload.patch.dayparts[0].items.map(item=>item.pillar),['spiritual','household'])
+
+  draft.dayparts[0].items[0].pillar='not-a-pillar'
+  assert.throws(
+    ()=>normalizeActionProposal({operations:buildPlanDraftOperations(current,draft)},{member:'Larry',role:'admin'}),
+    /daypart 1 items item 1 has an invalid pillar/,
+  )
+})
+
 test('the generator stores an immutable versioned draft and never targets the live plan key', async () => {
   const calls=[],records=new Map()
   const dataStore={
