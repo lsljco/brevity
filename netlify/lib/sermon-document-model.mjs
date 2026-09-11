@@ -14,41 +14,49 @@ const guideDate = value => {
 export const sermonGuideBaseName = (title, date) => {
   const cleanTitle = clean(title).replace(/\s+(?:Sermon\s+)?Teaching\s+Guide$/i, '').trim() || 'Sermon'
   const prefix = guideDate(date)
-  return `${prefix ? `${prefix} - ` : ''}${cleanTitle} Sermon Teaching Guide`
+  return `${prefix ? `${prefix} - ` : ''}${cleanTitle} Teaching Document`
 }
 
+const atAGlance = notes => {
+  const glance = notes.messageAtAGlance || {}
+  return [
+    glance.focus && { label:'Focus', detail:glance.focus },
+    glance.centralDiagnosis && { label:'Central diagnosis', detail:glance.centralDiagnosis },
+    glance.centralCommand && { label:'Central command', detail:glance.centralCommand },
+    glance.centralHope && { label:'Central hope', detail:glance.centralHope },
+    glance.desiredResponse && { label:'Desired response', detail:glance.desiredResponse },
+  ].filter(Boolean)
+}
+
+const foundationalScriptures = notes => [
+  ...values(notes.primaryScriptures || notes.scriptures),
+  ...values(notes.supportingBiblicalWitnesses),
+].map(item => typeof item === 'string'
+  ? { label:item, detail:'' }
+  : { label:clean(item.reference), detail:clean(item.explanation) })
+
 export function normalizeSermonSections(notes = {}) {
-  const primary = values(notes.primaryScriptures || notes.scriptures)
-    .map(item => typeof item === 'string' ? { reference:item, explanation:'' } : item)
+  const glance = atAGlance(notes)
+  const scriptures = foundationalScriptures(notes)
+  const responseItems = [...values(notes.contributorInsights), ...values(notes.congregationalResponse)]
+  const closing = [notes.weeklyCharge, notes.closingCommission].filter(Boolean)
 
   return [
-    ['TEACHING OBJECTIVES', values(notes.teachingObjectives)],
-    ['ANCHOR DECLARATION', values(notes.anchorDeclaration)],
-    ['AIM', values(notes.aim)],
-    ['THESIS', values(notes.thesis || notes.bigIdea)],
-    ['OPENING EXHORTATION', values(notes.openingExhortation || notes.coreRevelation)],
-    ['PRIMARY SCRIPTURES', primary.map(item => `${clean(item.reference)}${item.explanation ? ` — ${clean(item.explanation)}` : ''}`)],
-    ['SUPPORTING BIBLICAL WITNESSES', values(notes.supportingBiblicalWitnesses).map(item => typeof item === 'string' ? item : `${clean(item.reference)}${item.explanation ? ` — ${clean(item.explanation)}` : ''}`)],
-    ['GOVERNING QUESTION', values(notes.governingQuestion)],
-    ['WORKING DEFINITIONS', values(notes.workingDefinitions)],
+    ['MESSAGE AT A GLANCE', glance.length ? [{ title:'', items:glance }] : values(notes.thesis || notes.aim)],
+    ['FOUNDATIONAL SCRIPTURES', scriptures.length ? [{ title:'', items:scriptures }] : []],
+    ['PASTORAL ORIENTATION', values(notes.openingExhortation || notes.coreRevelation)],
     ['HISTORICAL AND BIBLICAL CONTEXT', values(notes.historicalBiblicalContext)],
+    ['WORKING DEFINITIONS', values(notes.workingDefinitions)],
     ['DETAILED EXPOSITION', values(notes.detailedExposition)],
-    ['KINGDOM PRINCIPLES', values(notes.kingdomPrinciples || notes.foundationalTruths)],
     ['ARCHITECTURAL FRAMEWORKS', values(notes.architecturalFrameworks)],
-    ['MEMORABLE LINES', values(notes.memorableLines)],
-    ['PRACTICAL APPLICATION', values(notes.practicalApplication || notes.whatThisProduces)],
-    ['DIAGNOSTIC WORKSHEETS', values(notes.diagnosticWorksheets)],
+    ['KINGDOM PRINCIPLES', values(notes.kingdomPrinciples || notes.foundationalTruths)],
+    ['A PRACTICAL SOUL-CULTIVATION RHYTHM', values(notes.practicalApplication || notes.whatThisProduces)],
     ['PASTORAL GUARDRAILS', values(notes.pastoralGuardrails)],
-    ['REFLECTION QUESTIONS', values(notes.reflectionQuestions || notes.applicationQuestions)],
-    ['SEVEN-DAY MEDITATION AND FORMATION PLAN', values(notes.sevenDayFormationPlan)],
-    ['SMALL-GROUP TEACHING PLAN', values(notes.smallGroupTeachingPlan)],
-    ['CONTRIBUTOR INSIGHTS', values(notes.contributorInsights)],
-    ['WEEKLY CHARGE', values(notes.weeklyCharge || notes.call)],
-    ['CONGREGATIONAL RESPONSE', values(notes.congregationalResponse)],
+    ['REFLECTION AND DISCUSSION', values(notes.reflectionQuestions || notes.applicationQuestions)],
+    ['CONGREGATIONAL RESPONSE', responseItems],
     ['PRAYER', values(notes.prayer)],
-    ['CLOSING COMMISSION', values(notes.closingCommission)],
-    ['PERSONAL CLOSING RESPONSE', values(notes.personalResponseQuestions)],
     ['SCRIPTURE INDEX', values(notes.scriptureIndex)],
+    ['CLOSING CHARGE', closing],
   ].filter(([, items]) => items.length)
 }
 
