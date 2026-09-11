@@ -62,7 +62,7 @@ function MemberChecks({ selected = [], onChange }) {
 function HealthStep({ draft, update, onOpenMealPlan }) {
   const value = draft.health
   return <><HealthAlertBanner/><div className="alignment-form-grid alignment-form-grid--two">
-    {value.mealPlanSource === 'rolling' && <div className="alignment-meal-plan-notice"><div><i className="ti ti-calendar-check" /><span><strong>Brevity supplied today’s meals.</strong><small>Use the rolling plan to choose from 30 replacements for any meal.</small></span></div><button type="button" onClick={onOpenMealPlan}>Open Meal Plan</button></div>}
+    {value.mealPlanSource === 'rolling' && <div className="alignment-meal-plan-notice"><div><i className="ti ti-calendar-check" /><span><strong>Brevity supplied today’s meals.</strong><small>Use the rolling plan to choose from the household Meal Library.</small></span></div><button type="button" onClick={onOpenMealPlan}>Open Meal Plan</button></div>}
     <Field label="Breakfast"><input readOnly={value.mealPlanSource === 'rolling'} value={value.breakfast} onChange={e => update('health', { breakfast: e.target.value })} /></Field>
     <Field label="Lunch"><input readOnly={value.mealPlanSource === 'rolling'} value={value.lunch} onChange={e => update('health', { lunch: e.target.value })} /></Field>
     <Field label="Dinner"><input readOnly={value.mealPlanSource === 'rolling'} value={value.dinner} onChange={e => update('health', { dinner: e.target.value })} /></Field>
@@ -138,6 +138,7 @@ const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthSte
 export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly = false, readOnlyMessage = '', financeReadOnly = false, onCancel, onComplete, onOpenMealPlan, onReviewCalendarItem }) {
   const openedVersionRef = useRef(Number(plan?.version || 0))
   const [draft, setDraft] = useState(() => loadLocalAlignmentDraft(globalThis.localStorage, plan, openedVersionRef.current))
+  const latestDraftRef = useRef(draft)
   const [stepIndex, setStepIndex] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -152,11 +153,16 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
 
   const update = (section, patch) => {
     if (readOnly || (section === 'finance' && financeReadOnly)) return
-    setDraft(current => ({ ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }))
+    setDraft(current => {
+      const next = { ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }
+      latestDraftRef.current = next
+      return next
+    })
   }
   const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner'].filter(Boolean), [draft])
 
   useEffect(() => {
+    latestDraftRef.current = draft
     if (readOnly) return
     if (exiting.current) return
     setDraftSaveState('pending')
@@ -174,12 +180,29 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
     return () => clearTimeout(timer)
   }, [draft, readOnly])
 
+  useEffect(() => {
+    if (readOnly) return undefined
+    const persistLatest = () => {
+      if (exiting.current) return
+      try {
+        saveLocalAlignmentDraft(globalThis.localStorage, latestDraftRef.current, openedVersionRef.current)
+      } catch {
+        // The visible autosave state handles storage failures while mounted.
+      }
+    }
+    globalThis.addEventListener?.('pagehide', persistLatest)
+    return () => {
+      globalThis.removeEventListener?.('pagehide', persistLatest)
+      persistLatest()
+    }
+  }, [readOnly])
+
   const saveAndExit = async () => {
     if (readOnly) { onCancel(); return }
     exiting.current = true
     setSaving(true); setError('')
     try {
-      saveLocalAlignmentDraft(globalThis.localStorage, draft, openedVersionRef.current)
+      saveLocalAlignmentDraft(globalThis.localStorage, latestDraftRef.current, openedVersionRef.current)
       onCancel()
     } catch (err) {
       exiting.current = false
@@ -193,8 +216,9 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
     exiting.current = true
     setSaving(true); setError('')
     try {
-      const cleanedDraft = cleanLineLists(draft)
+      const cleanedDraft = cleanLineLists(latestDraftRef.current)
       if (financeReadOnly) cleanedDraft.finance = protectedFinanceRef.current
+      latestDraftRef.current = cleanedDraft
       const completedAt = new Date().toISOString()
       saveLocalAlignmentDraft(globalThis.localStorage, cleanedDraft, openedVersionRef.current)
       await onComplete(cleanedDraft, { expectedVersion:openedVersionRef.current, completedAt })
