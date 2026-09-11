@@ -80,7 +80,7 @@ const timelineItem = {
     time: { type: 'string' },
     title: { type: 'string' },
     owner: { type: 'string' },
-    pillar: { type: 'string' },
+    pillar: { type: 'string', enum: ['spiritual','health','fitness','household','education','finance','ministry'] },
   },
   required: ['time', 'title', 'owner', 'pillar'],
 };

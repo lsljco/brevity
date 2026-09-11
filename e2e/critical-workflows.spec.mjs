@@ -86,6 +86,17 @@ test('Today renders and counts unresolved Household Operations priorities',async
   await expect(page.locator('body')).not.toContainText("Can't find variable: signals")
 })
 
+test('Today last three pillar cards expose recorded detail instead of generic headings',async({page})=>{
+  const education=page.locator('[data-pillar="education"]')
+  const finance=page.locator('[data-pillar="finance"]')
+  const ministry=page.locator('[data-pillar="ministry"]')
+  await expect(education).toContainText('Education plan not defined')
+  await expect(education).toContainText('20 min reading · 10 min math')
+  await expect(finance).toContainText('No financial output, decision rule, bill, or purchase is recorded for today.')
+  await expect(ministry).toContainText('No ministry focus, meeting, fellowship follow-up, or prayer need is recorded for today.')
+  await expect(finance).not.toContainText('Financial Stewardship')
+})
+
 test('Next-Day Alignment retains the active weekly sermon instead of asking for another upload',async({page})=>{
   await page.getByRole('button',{name:/Tomorrow’s Alignment/}).click()
   await expect(page.getByRole('heading',{name:'Active teaching'})).toBeVisible()
