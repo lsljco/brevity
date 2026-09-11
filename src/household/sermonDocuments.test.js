@@ -5,7 +5,7 @@ import { buildSermonSlideSpecs, sermonSlidesFileName } from '../../netlify/lib/s
 
 const section = (sections, heading) => sections.find(([name]) => name === heading)?.[1] || []
 
-test('detailed sermon document sections retain nested descriptions, steps, and actions', () => {
+test('canonical sermon teaching-document sections retain nested descriptions, steps, and actions', () => {
   const sections = normalizeSermonSections({
     architecturalFrameworks:[{title:'Formation Path',description:'A complete pathway.',items:[{label:'Hearing',detail:'Begins the pathway.'}]}],
     practicalApplication:[{title:'Formation Audit',paragraphs:['Trace the gap.'],steps:['Name the fruit.','Complete the action.']}],
@@ -15,20 +15,20 @@ test('detailed sermon document sections retain nested descriptions, steps, and a
   assert.deepEqual(section(sections,'ARCHITECTURAL FRAMEWORKS')[0],{
     title:'Formation Path',description:'A complete pathway.',items:[{label:'Hearing',detail:'Begins the pathway.'}],
   })
-  assert.deepEqual(section(sections,'PRACTICAL APPLICATION')[0].steps,['Name the fruit.','Complete the action.'])
-  assert.deepEqual(section(sections,'WEEKLY CHARGE')[0].actions,['Choose one area.','Review the fruit.'])
+  assert.deepEqual(section(sections,'A PRACTICAL SOUL-CULTIVATION RHYTHM')[0].steps,['Name the fruit.','Complete the action.'])
+  assert.deepEqual(section(sections,'CLOSING CHARGE')[0].actions,['Choose one area.','Review the fruit.'])
   assert.deepEqual(sermonItemParagraphs(section(sections,'ARCHITECTURAL FRAMEWORKS')[0]),[
     'A complete pathway.','Hearing — Begins the pathway.',
   ])
-  assert.deepEqual(sermonItemParagraphs(section(sections,'PRACTICAL APPLICATION')[0]),[
+  assert.deepEqual(sermonItemParagraphs(section(sections,'A PRACTICAL SOUL-CULTIVATION RHYTHM')[0]),[
     'Trace the gap.','Name the fruit.','Complete the action.',
   ])
-  assert.deepEqual(sermonItemParagraphs(section(sections,'WEEKLY CHARGE')[0]),[
+  assert.deepEqual(sermonItemParagraphs(section(sections,'CLOSING CHARGE')[0]),[
     'Finish the work.','Choose one area.','Review the fruit.',
   ])
 })
 
-test('legacy sermon fields remain available for document export', () => {
+test('legacy sermon fields remain available inside the canonical teaching-document architecture', () => {
   const sections = normalizeSermonSections({
     bigIdea:'Faith becomes visible in obedience.',
     scriptures:['James 1:22'],
@@ -36,15 +36,14 @@ test('legacy sermon fields remain available for document export', () => {
     applicationQuestions:['What will I obey?'],
   })
 
-  assert.deepEqual(section(sections,'THESIS'),['Faith becomes visible in obedience.'])
-  assert.equal(section(sections,'PRIMARY SCRIPTURES')[0],'James 1:22')
+  assert.equal(section(sections,'FOUNDATIONAL SCRIPTURES')[0].items[0].label,'James 1:22')
   assert.deepEqual(section(sections,'KINGDOM PRINCIPLES'),['Hearing is not completion.'])
-  assert.deepEqual(section(sections,'REFLECTION QUESTIONS'),['What will I obey?'])
+  assert.deepEqual(section(sections,'REFLECTION AND DISCUSSION'),['What will I obey?'])
 })
 
-test('sermon guide filenames follow the Church Triumphant ministry standard', () => {
-  assert.equal(sermonGuideBaseName('From the Page to the Pattern','2026-08-23'),'08.23.2026 - From the Page to the Pattern Sermon Teaching Guide')
-  assert.equal(sermonGuideBaseName('From the Page to the Pattern Sermon Teaching Guide','2026-08-23'),'08.23.2026 - From the Page to the Pattern Sermon Teaching Guide')
+test('sermon document filenames follow the Church Triumphant teaching-document standard', () => {
+  assert.equal(sermonGuideBaseName('From the Page to the Pattern','2026-08-23'),'08.23.2026 - From the Page to the Pattern Teaching Document')
+  assert.equal(sermonGuideBaseName('From the Page to the Pattern Sermon Teaching Guide','2026-08-23'),'08.23.2026 - From the Page to the Pattern Teaching Document')
 })
 
 test('sermon slides form a visual teaching arc from the generated guide', () => {

@@ -14,19 +14,18 @@ function docParagraph(text,{bold=false,italic=false,size=22,align=AlignmentType.
 }
 
 function buildDocChildren(notes,source){
-  const title=clean(notes.documentTitle||notes.title||source.title||'Sermon Teaching Guide')
+  const title=clean(notes.documentTitle||notes.title||source.title||'Sermon Teaching Document')
   const children=[
-    new Paragraph({alignment:AlignmentType.CENTER,spacing:{before:1100,after:260},children:[new TextRun({text:'CHURCH TRIUMPHANT',font:'Times New Roman',bold:true,size:22,color:'9B783E'})]}),
+    new Paragraph({alignment:AlignmentType.CENTER,spacing:{before:950,after:260},children:[new TextRun({text:'CHURCH TRIUMPHANT TEACHING DOCUMENT',font:'Times New Roman',bold:true,size:22,color:'9B783E'})]}),
     new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:180},children:[new TextRun({text:title.toUpperCase(),font:'Times New Roman',bold:true,size:54,color:'1F1F1F'})]}),
   ]
   if(notes.subtitle)children.push(docParagraph(notes.subtitle,{italic:true,size:28,align:AlignmentType.CENTER}))
-  children.push(docParagraph('Sermon Teaching Guide',{bold:true,size:25,align:AlignmentType.CENTER}))
-  const metadata=[notes.series&&`Series: ${notes.series}`,notes.part&&`Part: ${notes.part}`,(notes.preacherTeacher||source.preacherTeacher)&&`Preacher/Teacher: ${notes.preacherTeacher||source.preacherTeacher}`,(notes.service||source.serviceType)&&`Service: ${notes.service||source.serviceType}`,(notes.sermonDate||source.sermonDate)&&`Date: ${notes.sermonDate||source.sermonDate}`].filter(Boolean)
+  const preacher=clean(notes.preacherTeacher||source.preacherTeacher)
+  const metadata=[preacher&&(preacher.match(/^Pastor\b/i)?preacher:`Pastor ${preacher}`),notes.sermonDate||source.sermonDate,notes.series].filter(Boolean)
   metadata.forEach(line=>children.push(docParagraph(line,{size:19,align:AlignmentType.CENTER})))
   if(notes.leadQuote)children.push(docParagraph(`“${clean(notes.leadQuote).replace(/^['“"]|['”"]$/g,'')}”`,{italic:true,size:22,align:AlignmentType.CENTER}))
-  children.push(new Paragraph({text:'Teaching Guide at a Glance',heading:HeadingLevel.TITLE,pageBreakBefore:true}))
-  normalizeSermonSections(notes).forEach(([heading,items])=>{
-    children.push(new Paragraph({text:heading.replace(/\b\w/g,char=>char.toUpperCase()),heading:HeadingLevel.HEADING_1,pageBreakBefore:['DETAILED EXPOSITION','PRACTICAL APPLICATION','PRAYER'].includes(heading)}))
+  normalizeSermonSections(notes).forEach(([heading,items],sectionIndex)=>{
+    children.push(new Paragraph({text:heading,heading:HeadingLevel.HEADING_1,pageBreakBefore:sectionIndex===0||['DETAILED EXPOSITION','A PRACTICAL SOUL-CULTIVATION RHYTHM','PRAYER'].includes(heading)}))
     items.forEach((item,index)=>{
       const titleText=objectTitle(item)
       if(titleText)children.push(new Paragraph({text:heading==='DETAILED EXPOSITION'?`${index+1}. ${titleText}`:titleText,heading:HeadingLevel.HEADING_2}))
@@ -60,22 +59,21 @@ function pdfLine(doc,text,{bold=false,italic=false,size=11.5,align='left',after=
 }
 
 export async function buildTimesSermonPdf(notes={},source={}){
-  const title=clean(notes.documentTitle||notes.title||source.title||'Sermon Teaching Guide')
-  const doc=new PDFDocument({size:'LETTER',margins:{top:56,bottom:56,left:62,right:62},bufferPages:true,info:{Title:title,Author:clean(notes.preacherTeacher||'Church Triumphant'),Subject:'Sermon Teaching Guide — Times New Roman standard'}})
+  const title=clean(notes.documentTitle||notes.title||source.title||'Sermon Teaching Document')
+  const doc=new PDFDocument({size:'LETTER',margins:{top:56,bottom:56,left:62,right:62},bufferPages:true,info:{Title:title,Author:clean(notes.preacherTeacher||'Church Triumphant'),Subject:'Church Triumphant Teaching Document'}})
   const chunks=[]
   doc.on('data',chunk=>chunks.push(chunk))
   doc.moveDown(4)
-  pdfLine(doc,'CHURCH TRIUMPHANT',{bold:true,size:11,align:'center',color:'#9B783E',after:1})
+  pdfLine(doc,'CHURCH TRIUMPHANT TEACHING DOCUMENT',{bold:true,size:11,align:'center',color:'#9B783E',after:1})
   pdfLine(doc,title.toUpperCase(),{bold:true,size:29,align:'center',after:.6})
   if(notes.subtitle)pdfLine(doc,notes.subtitle,{italic:true,size:15,align:'center',after:1})
-  pdfLine(doc,'Sermon Teaching Guide',{bold:true,size:13,align:'center',after:.25})
-  const metadata=[notes.series&&`Series: ${notes.series}`,notes.part&&`Part: ${notes.part}`,(notes.preacherTeacher||source.preacherTeacher)&&`Preacher/Teacher: ${notes.preacherTeacher||source.preacherTeacher}`,(notes.service||source.serviceType)&&`Service: ${notes.service||source.serviceType}`,(notes.sermonDate||source.sermonDate)&&`Date: ${notes.sermonDate||source.sermonDate}`].filter(Boolean)
+  const preacher=clean(notes.preacherTeacher||source.preacherTeacher)
+  const metadata=[preacher&&(preacher.match(/^Pastor\b/i)?preacher:`Pastor ${preacher}`),notes.sermonDate||source.sermonDate,notes.series].filter(Boolean)
   metadata.forEach(line=>pdfLine(doc,line,{size:9.5,align:'center',color:'#66615A',after:.08}))
   if(notes.leadQuote){doc.moveDown(.7);pdfLine(doc,`“${clean(notes.leadQuote).replace(/^['“"]|['”"]$/g,'')}”`,{italic:true,size:12,align:'center',after:.8})}
-  doc.addPage()
-  normalizeSermonSections(notes).forEach(([heading,items])=>{
-    if(doc.y>650)doc.addPage()
-    pdfLine(doc,heading.replace(/\b\w/g,char=>char.toUpperCase()),{bold:true,size:18,after:.4})
+  normalizeSermonSections(notes).forEach(([heading,items],sectionIndex)=>{
+    if(sectionIndex===0||doc.y>650)doc.addPage()
+    pdfLine(doc,heading,{bold:true,size:18,after:.4})
     items.forEach((item,index)=>{
       if(doc.y>680)doc.addPage()
       const titleText=objectTitle(item)
