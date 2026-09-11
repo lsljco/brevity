@@ -7,6 +7,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right)
 
 const ITEM_FIELDS = ['id', 'title', 'notes', 'owner', 'participants', 'status', 'priority', 'date', 'startTime', 'endTime', 'dueAt', 'requiresDecision', 'calendarSync', 'notificationLevel']
 const PLAN_ITEM_FIELDS = new Set(ITEM_FIELDS)
+const ISAIAH_EDITABLE_FIELDS = new Set(['readingMinutes', 'sightWordsMinutes', 'comprehensionMinutes', 'mathMinutes', 'notes'])
 export const PILLAR_EDITABLE_FIELDS = {
   spiritual:['scripture', 'devotionFocus', 'prayerFocus', 'discussionPrompts', 'obedienceAction', 'requiredOutput'],
   health:['breakfast', 'lunch', 'dinner', 'snacks', 'hydration', 'groceries', 'nextDayPrep', 'discussionPrompt'],
@@ -22,9 +23,15 @@ const cleanPlanItem = item => Object.fromEntries(Object.entries(item || {})
   .filter(([field]) => PLAN_ITEM_FIELDS.has(field))
   .map(([field, value]) => [field, clone(value)]))
 
-const safeValue = (field, value) => ITEM_ARRAY_FIELDS.has(field)
-  ? (Array.isArray(value) ? value.map(cleanPlanItem) : [])
-  : clone(value)
+const cleanIsaiahPatch = value => Object.fromEntries(Object.entries(value || {})
+  .filter(([field]) => ISAIAH_EDITABLE_FIELDS.has(field))
+  .map(([field, fieldValue]) => [field, clone(fieldValue)]))
+
+const safeValue = (field, value) => field === 'isaiah'
+  ? cleanIsaiahPatch(value)
+  : ITEM_ARRAY_FIELDS.has(field)
+    ? (Array.isArray(value) ? value.map(cleanPlanItem) : [])
+    : clone(value)
 
 function changedPatch(before, after, fields) {
   const patch = {}
