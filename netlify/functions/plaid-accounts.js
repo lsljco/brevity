@@ -15,7 +15,11 @@ const plaidClient = new PlaidApi(new Configuration({
     'PLAID-SECRET': process.env.PLAID_SECRET,
   }},
 }))
-const LIVE_BALANCE_TIMEOUT_MS = 20000
+// Some production institutions (including Pinnacle) legitimately take longer
+// than 20 seconds to complete the institution-facing balance request. Keep the
+// call bounded, but allow a full 30 seconds before falling back to cached
+// account identity without marking balances current.
+const LIVE_BALANCE_TIMEOUT_MS = 30000
 const CACHED_ACCOUNT_TIMEOUT_MS = 8000
 
 const timedOut = error => error?.code === 'ECONNABORTED'

@@ -203,7 +203,7 @@ test('a live-balance timeout returns cached account identity without minting cur
     assert.equal(Object.hasOwn(body,'accountSourceReceipt'),false)
     assert.deepEqual(body.errors.map(error=>error.code),['BALANCE_LIVE_TIMEOUT'])
     assert.equal(body.accounts[0].accountId,'checking-1')
-    assert.equal(calls[0][2].timeout,20000)
+    assert.equal(calls[0][2].timeout,30000)
     assert.equal(calls[1][2].timeout,8000)
   }finally{console.warn=originalWarn}
 })
