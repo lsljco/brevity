@@ -26,15 +26,15 @@ const formatStart = startsAt => startsAt
   ? new Date(startsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   : 'All day'
 
-function AttentionPanel({ signals, onOpenCalendar }) {
-  if (!signals.length) return <section className="today-attention today-attention--clear"><i className="ti ti-circle-check" aria-hidden="true" /><div><strong>No critical exceptions</strong><span>Brevity has not identified an unresolved operational risk for today.</span></div></section>
+function AttentionPanel({ items, onOpenCalendar }) {
+  if (!items.length) return <section className="today-attention today-attention--clear"><i className="ti ti-circle-check" aria-hidden="true" /><div><strong>No household items need attention</strong><span>Brevity has not identified an unresolved household priority or operational exception for today.</span></div></section>
 
   return <section className="today-attention" aria-labelledby="today-attention-title">
     <header><div><span>Act First</span><h2 id="today-attention-title">Needs Attention</h2></div><strong>{signals.length}</strong></header>
-    <div className="today-attention-list">{signals.map(signal => <article key={signal.id} className={`today-attention-item today-attention-item--${signal.priority}`}>
-      <i className={`ti ${signal.source.system === 'integration' ? 'ti-plug-connected-x' : 'ti-alert-triangle'}`} aria-hidden="true" />
-      <div><strong>{signal.title}</strong><span>{signal.detail}</span><small>{PILLAR_META[signal.pillar]?.[0] || 'Household'} · Operational exception</small></div>
-      {signal.source.recordType === 'calendar-health' && <button type="button" onClick={onOpenCalendar}>Review Calendar <i className="ti ti-arrow-right" /></button>}
+    <div className="today-attention-list">{items.map(item => <article key={item.id} className={`today-attention-item today-attention-item--${item.priority}`}>
+      <i className={`ti ${item.source.system === 'integration' ? 'ti-plug-connected-x' : item.source.recordType === 'household-priority' ? 'ti-home-exclamation' : 'ti-alert-triangle'}`} aria-hidden="true" />
+      <div><strong>{item.title}</strong>{item.detail && <span>{item.detail}</span>}<small>{item.source.recordType === 'household-priority' ? 'Household Management · Unresolved priority' : `${PILLAR_META[item.pillar]?.[0] || 'Household'} · Operational exception`}</small></div>
+      {item.source.recordType === 'calendar-health' && <button type="button" onClick={onOpenCalendar}>Review Calendar <i className="ti ti-arrow-right" /></button>}
     </article>)}</div>
   </section>
 }
@@ -198,7 +198,7 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
     <section className="today-pillar-stack" data-pillar="household">
       <div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Household Operations</h2></div>
-      <AttentionPanel signals={readModel.signals} onOpenCalendar={onOpenCalendar} />
+      <AttentionPanel items={readModel.attentionItems} onOpenCalendar={onOpenCalendar} />
       <section className="today-focus-card"><div><span>Today's Focus</span><h2>{readModel.focus.headline}</h2>{readModel.focus.detail && <p>{readModel.focus.detail}</p>}{readModel.governingPrinciple && <p>{readModel.governingPrinciple}</p>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!readModel.counts.decisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{readModel.counts.decisions}</strong><span>{readModel.counts.decisions ? readModel.counts.decisions === 1 ? 'decision needs attention' : 'decisions need attention' : 'no decisions need attention'}</span><i className={`ti ${readModel.counts.decisions ? 'ti-chevron-right' : 'ti-circle-check'}`} aria-hidden="true" /></button></section>
       <TodayCalendarAgenda commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} />
       <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Today’s Top 3</h2></div><small>Outcomes that make today successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>

@@ -48,8 +48,32 @@ test('Today read model separates outcomes, actions, decisions, commitments, and 
   assert.equal(model.commitments[0].source.system, 'apple-calendar')
   assert.equal(model.nextCommitment.title, 'Doctor appointment')
   assert.equal(model.signals.length, 0)
+  assert.deepEqual(model.attentionItems.map(item => item.title), [])
   assert.equal(model.focus.headline, 'Act on what matters')
   assert.equal(model.focus.source, 'recorded-theme')
+})
+
+test('Today surfaces every unresolved household priority in Household Operations attention', () => {
+  const model=buildTodayReadModel({plan:{
+    ...plan,
+    household:{priorities:[
+      {id:'one',title:'Replace the hallway bulb',status:'pending'},
+      {id:'two',title:'Schedule the HVAC service',status:'in-progress'},
+      {id:'three',title:'Approve the landscaping quote',status:'needs-decision'},
+      {id:'four',title:'Restock cleaning supplies',status:'ready'},
+      {id:'done',title:'Completed household work',status:'complete'},
+      {id:'deferred',title:'Deferred household work',status:'deferred'},
+    ]},
+  },calendarHealth:{state:'ready',usable:true}})
+
+  assert.equal(model.counts.attention,4)
+  assert.deepEqual(model.attentionItems.map(item=>item.title),[
+    'Approve the landscaping quote',
+    'Replace the hallway bulb',
+    'Restock cleaning supplies',
+    'Schedule the HVAC service',
+  ])
+  assert.ok(model.attentionItems.every(item=>item.source.recordType==='household-priority'))
 })
 
 test('Today derives a concrete focus when the plan theme is blank', () => {
