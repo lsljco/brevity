@@ -635,7 +635,12 @@ export async function refreshFinanceData(storage = window.localStorage, {
         // Even an unchanged live value must be acknowledged durably so its
         // signed provenance/anti-replay watermark reaches household state.
         financeNeedsPersistence = true
-        if (merged.unmatchedPlaidAccountIds.length) {
+        const gaps = classifyPlaidBalanceGaps(merged)
+        // Plaid returns every account available beneath an institution. When
+        // every Brevity account matched, additional returned accounts are
+        // intentionally untracked and must not downgrade a verified refresh.
+        // They remain available in Accounts for an explicit reviewed link.
+        if (gaps.linkReviewAvailable) {
           balanceDataStatus = 'partial'
           addBalanceError(`${merged.matchedCount} bank ${merged.matchedCount === 1 ? 'balance was' : 'balances were'} matched; ${merged.unmatchedPlaidAccountIds.length} bank ${merged.unmatchedPlaidAccountIds.length === 1 ? 'account is' : 'accounts are'} not linked to a Brevity account and remain excluded.`)
         }

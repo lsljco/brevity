@@ -120,7 +120,9 @@
 }
 .app-main .app-refresh-status{
   position:fixed!important;
-  z-index:1295!important;
+  /* The aggregate status owns this lane while present. Component-level
+     warnings must never intercept its buttons or conceal its details. */
+  z-index:1298!important;
   left:var(--brevity-command-dock-sidebar-width)!important;
   right:var(--brevity-command-dock-assistant-width)!important;
   bottom:0!important;
@@ -217,6 +219,10 @@
     padding-bottom:20px!important;
     scroll-padding-bottom:20px!important;
   }
+  .app-main.has-expanded-refresh{
+    padding-bottom:calc(min(55dvh, 460px) + 36px)!important;
+    scroll-padding-bottom:calc(min(55dvh, 460px) + 36px)!important;
+  }
   .app-shell::after{
     bottom:calc(var(--brevity-mobile-nav-reserve) + env(safe-area-inset-bottom));
   }
@@ -248,5 +254,29 @@
     min-height:var(--brevity-command-dock-height)!important;
     padding:10px 12px!important;
     font-size:12px!important;
+  }
+  .app-main .app-refresh-status.is-expanded,
+  .app-sidebar.is-expanded~.app-main .app-refresh-status.is-expanded{
+    left:12px!important;
+    right:12px!important;
+    bottom:calc(var(--brevity-mobile-nav-reserve) + var(--brevity-command-dock-height) + env(safe-area-inset-bottom) + 8px)!important;
+    width:auto!important;
+    min-height:0!important;
+    max-height:min(55dvh, 460px)!important;
+    padding:12px!important;
+    border:1px solid rgba(209,135,120,.48)!important;
+    border-radius:14px!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    box-shadow:0 -8px 34px rgba(0,0,0,.52)!important;
+  }
+  .app-main .app-refresh-status.is-expanded .app-refresh-status-row{
+    position:sticky;
+    z-index:1;
+    top:-12px;
+    margin:-12px -12px 0;
+    padding:12px;
+    background:rgba(24,13,12,.99);
+    border-bottom:1px solid rgba(197,164,109,.18);
   }
 }

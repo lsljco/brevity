@@ -66,6 +66,43 @@ test('additional Plaid accounts are untracked—not linkage failures—when ever
   assert.equal(gaps.untrackedReturnedCount,10)
 })
 
+test('application refresh stays balance-fresh when all Brevity accounts match and Plaid returns extras', async () => {
+  const finance={calendarDataVersion:6,accounts:[
+    {id:'operating',name:'Operating Account',type:'checking',balance:10,plaidAccountId:'bank-operating'},
+    {id:'projects',name:'Renovation / Projects',type:'checking',balance:20,plaidAccountId:'bank-projects'},
+    {id:'savings',name:'LSLJ Savings',type:'savings',balance:30,plaidAccountId:'bank-savings'},
+  ],transactions:[]}
+  const values=new Map([
+    ['lslj_finance_v9',JSON.stringify(finance)],
+    ['plaid_actuals_cache','[]'],
+  ])
+  const storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)}
+  const linked=finance.accounts.map((account,index)=>({
+    accountId:account.plaidAccountId,
+    name:account.name,
+    type:'depository',
+    subtype:account.type,
+    balance:100+index,
+  }))
+  const extras=Array.from({length:10},(_,index)=>({
+    accountId:`untracked-${index}`,
+    name:`Untracked account ${index}`,
+    type:'depository',
+    subtype:'checking',
+    balance:index,
+  }))
+
+  const result=await refreshFinanceData(storage,{
+    fetchAccounts:async()=>liveAccountPayload({connected:true,syncedAt:'2026-09-11T13:50:00Z',accounts:[...linked,...extras]}),
+    fetchTransactions:async()=>({connected:false,transactions:[]}),
+    persistSourceImport:async(_storage,key,value)=>{values.set(key,JSON.stringify(value));return{ok:true,durable:true,record:{key,value:JSON.stringify(value),version:2}}},
+  })
+
+  assert.equal(result.balanceDataStatus,'fresh')
+  assert.deepEqual(result.balanceErrors,[])
+  assert.equal(result.finance.accounts.length,3)
+})
+
 test('link review remains available when an unmatched Brevity account has a returned candidate', () => {
   const diagnostics=mergePlaidBalancesWithDiagnostics({accounts:[
     {id:'operating',name:'Operating Account',type:'checking',balance:10,plaidAccountId:'missing-old-id'},
