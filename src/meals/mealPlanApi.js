@@ -24,6 +24,14 @@ export function fetchRollingMealPlan(startDate) {
   return request(`${ENDPOINT}${query}`)
 }
 
+export function createMealLibraryItem(meal) {
+  return request(ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(meal),
+  })
+}
+
 export function prepareMealSubstitution({ date, mealType, mealId, expectedVersion }) {
   return request(`${ACTION_ENDPOINT}?action=prepare-meal`, {
     method: 'POST',
