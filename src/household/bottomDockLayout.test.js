@@ -23,3 +23,8 @@ test('the lower command lane is rendered as a dedicated panel', () => {
   assert.match(css, /height:var\(--brevity-command-dock-height\)/)
   assert.match(css, /pointer-events:none/)
 })
+
+test('every global refresh state stays in the command lane instead of covering page content', () => {
+  assert.match(css, /\.app-main \.app-refresh-status\{[\s\S]*?position:fixed!important;[\s\S]*?bottom:0!important;/)
+  assert.match(css, /right:var\(--brevity-command-dock-assistant-width\)!important/)
+})

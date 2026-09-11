@@ -93,12 +93,10 @@
   text-transform:uppercase;
 }
 
-/* Primary app-level errors occupy the remaining lower command lane. */
+/* All app refresh messages occupy the remaining lower command lane. */
 .app-main .alignment-error,
 .app-main .today-sync-banner--error,
-.app-main .meal-planner-state--error,
-.app-main .app-refresh-status--error,
-.app-main .app-refresh-status--warning{
+.app-main .meal-planner-state--error{
   position:fixed!important;
   z-index:1295!important;
   left:var(--brevity-command-dock-sidebar-width)!important;
@@ -120,6 +118,35 @@
   overflow:auto!important;
   backdrop-filter:blur(18px)!important;
 }
+.app-main .app-refresh-status{
+  position:fixed!important;
+  z-index:1295!important;
+  left:var(--brevity-command-dock-sidebar-width)!important;
+  right:var(--brevity-command-dock-assistant-width)!important;
+  bottom:0!important;
+  top:auto!important;
+  box-sizing:border-box!important;
+  width:auto!important;
+  max-width:none!important;
+  min-height:var(--brevity-command-dock-height)!important;
+  max-height:132px!important;
+  margin:0!important;
+  padding:12px 18px!important;
+  border:0!important;
+  border-top:1px solid rgba(197,164,109,.34)!important;
+  border-radius:0!important;
+  background:rgba(13,12,10,.98)!important;
+  box-shadow:0 -10px 30px rgba(0,0,0,.30)!important;
+  color:var(--soft-white)!important;
+  overflow:auto!important;
+  backdrop-filter:blur(18px)!important;
+}
+.app-main .app-refresh-status--warning,
+.app-main .app-refresh-status--error{
+  border-top-color:rgba(209,135,120,.48)!important;
+  background:rgba(24,13,12,.98)!important;
+  color:#e3aa9d!important;
+}
 .app-main .alignment-error{
   display:flex!important;
   align-items:center!important;
@@ -130,16 +157,14 @@
 }
 .app-main .today-sync-banner--error button,
 .app-main .meal-planner-state--error button,
-.app-main .app-refresh-status--error button,
-.app-main .app-refresh-status--warning button{
+.app-main .app-refresh-status button{
   min-height:40px!important;
 }
 
 .app-sidebar.is-expanded~.app-main .alignment-error,
 .app-sidebar.is-expanded~.app-main .today-sync-banner--error,
 .app-sidebar.is-expanded~.app-main .meal-planner-state--error,
-.app-sidebar.is-expanded~.app-main .app-refresh-status--error,
-.app-sidebar.is-expanded~.app-main .app-refresh-status--warning{
+.app-sidebar.is-expanded~.app-main .app-refresh-status{
   left:var(--brevity-command-dock-sidebar-expanded-width)!important;
 }
 
@@ -168,13 +193,11 @@
   .app-main .alignment-error,
   .app-main .today-sync-banner--error,
   .app-main .meal-planner-state--error,
-  .app-main .app-refresh-status--error,
-  .app-main .app-refresh-status--warning,
+  .app-main .app-refresh-status,
   .app-sidebar.is-expanded~.app-main .alignment-error,
   .app-sidebar.is-expanded~.app-main .today-sync-banner--error,
   .app-sidebar.is-expanded~.app-main .meal-planner-state--error,
-  .app-sidebar.is-expanded~.app-main .app-refresh-status--error,
-  .app-sidebar.is-expanded~.app-main .app-refresh-status--warning{
+  .app-sidebar.is-expanded~.app-main .app-refresh-status{
     bottom:0!important;
     min-height:var(--brevity-command-dock-height)!important;
   }
@@ -214,13 +237,11 @@
   .app-main .alignment-error,
   .app-main .today-sync-banner--error,
   .app-main .meal-planner-state--error,
-  .app-main .app-refresh-status--error,
-  .app-main .app-refresh-status--warning,
+  .app-main .app-refresh-status,
   .app-sidebar.is-expanded~.app-main .alignment-error,
   .app-sidebar.is-expanded~.app-main .today-sync-banner--error,
   .app-sidebar.is-expanded~.app-main .meal-planner-state--error,
-  .app-sidebar.is-expanded~.app-main .app-refresh-status--error,
-  .app-sidebar.is-expanded~.app-main .app-refresh-status--warning{
+  .app-sidebar.is-expanded~.app-main .app-refresh-status{
     left:0!important;
     right:var(--brevity-command-dock-assistant-width)!important;
     bottom:calc(var(--brevity-mobile-nav-reserve) + env(safe-area-inset-bottom))!important;

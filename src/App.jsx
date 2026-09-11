@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import HouseholdToday from './household/HouseholdToday.jsx'
 import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
 import { initialsForMember } from './household/memberProfile.js'
-import { refreshApplicationData } from './household/appRefresh.js'
+import { APP_REFRESH_STARTED_EVENT, refreshApplicationData } from './household/appRefresh.js'
 import { startSharedStateSync, syncSharedState } from './household/sharedState.js'
 import BrevityAssistant from './assistant/BrevityAssistant.jsx'
 import { getActionMode } from './assistant/assistantApi.js'
@@ -160,6 +160,16 @@ export default function App() {
   }
 
   useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('brevity_theme',theme)},[theme])
+  useEffect(()=>{
+    const handleRefreshStarted=event=>setRefreshState({
+      status:'loading',
+      message:event.detail?.bankUpdateRequested?'Refreshing bank balances and transactions…':'Refreshing Family Calendar and Today…',
+      issues:[],
+      expanded:false,
+    })
+    window.addEventListener(APP_REFRESH_STARTED_EVENT,handleRefreshStarted)
+    return()=>window.removeEventListener(APP_REFRESH_STARTED_EVENT,handleRefreshStarted)
+  },[])
   useEffect(()=>{
     const query=window.matchMedia(MOBILE_NAVIGATION_QUERY)
     const handleNavigationModeChange=event=>setSidebarExpanded(event.matches?false:savedDesktopSidebarState())

@@ -6,6 +6,13 @@ const accountsFunction=readFileSync(new URL('../../netlify/functions/plaid-accou
 const transactionsFunction=readFileSync(new URL('../../netlify/functions/plaid-transactions.js',import.meta.url),'utf8')
 const plaidConnect=readFileSync(new URL('./PlaidConnect.jsx',import.meta.url),'utf8')
 const financePlanner=readFileSync(new URL('./FinancePlanner.jsx',import.meta.url),'utf8')
+
+test('Accounts mirrors the application-wide Plaid refresh state',()=>{
+  assert.match(plaidConnect,/APP_REFRESH_STARTED_EVENT/)
+  assert.match(plaidConnect,/event\.detail\?\.bankUpdateRequested[\s\S]*setSyncing\(true\)/)
+  assert.match(plaidConnect,/APP_REFRESH_EVENT[\s\S]*setSyncing\(false\)/)
+  assert.match(plaidConnect,/syncing \? 'Syncing…' : 'Sync now'/)
+})
 const financeRefresh=readFileSync(new URL('./financeRefresh.js',import.meta.url),'utf8')
 
 test('automatic account refresh is cached while Sync now explicitly requests live balances',()=>{
@@ -15,6 +22,8 @@ test('automatic account refresh is cached while Sync now explicitly requests liv
   assert.match(accountsFunction,/liveBalance && !liveBalanceTimedOut \? \{ accountSourceReceipt:createAccountSourceReceipt\(allAccounts\) \} : \{\}/)
   assert.match(accountsFunction,/balanceProvenance = liveBalance && !liveBalanceTimedOut \? LIVE_BALANCE_PROVENANCE : 'plaid\.accountsGet'/)
   assert.match(financeRefresh,/requestLiveBalances \? '\/plaid-accounts\?live=1' : '\/plaid-accounts'/)
+  assert.match(financeRefresh,/LIVE_BALANCE_REQUEST_TIMEOUT_MS\s*=\s*35000/)
+  assert.match(financeRefresh,/timeoutMs:requestLiveBalances \? LIVE_BALANCE_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS/)
   assert.match(financeRefresh,/fetchAccounts\(\{ requestBankUpdate \}\)/)
   assert.match(plaidConnect,/apiFetch\('\/plaid-accounts\?live=1'\)/)
   assert.match(plaidConnect,/onTransactionsSync/)
