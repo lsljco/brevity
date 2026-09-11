@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { HOUSEHOLD_TIME_ZONE } from './financeTime.js'
+import { APP_REFRESH_EVENT, APP_REFRESH_STARTED_EVENT } from '../household/appRefresh.js'
 
 const API = '/.netlify/functions'
 const REQUEST_TIMEOUT_MS = 45000
@@ -76,6 +77,34 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
   const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
   const [expanded, setExpanded]         = useState(false)
   const [linkReviewCount, setLinkReviewCount] = useState(0)
+
+  // Keep the Accounts control synchronized with the application-wide refresh.
+  // Previously the top message could say Plaid was refreshing while this
+  // button remained idle because it only knew about clicks made in this panel.
+  useEffect(() => {
+    const handleStarted = event => {
+      if (!event.detail?.bankUpdateRequested) return
+      setSyncing(true)
+      setError(null)
+      setSyncNotice('')
+    }
+    const handleCompleted = event => {
+      if (!event.detail?.bankRefresh?.requested) return
+      setSyncing(false)
+      try {
+        const savedConnections = JSON.parse(localStorage.getItem('plaid_connections') || '[]')
+        const savedAt = localStorage.getItem('plaid_synced_at') || null
+        if (Array.isArray(savedConnections)) setConnections(savedConnections)
+        setSyncedAt(savedAt)
+      } catch {}
+    }
+    window.addEventListener(APP_REFRESH_STARTED_EVENT, handleStarted)
+    window.addEventListener(APP_REFRESH_EVENT, handleCompleted)
+    return () => {
+      window.removeEventListener(APP_REFRESH_STARTED_EVENT, handleStarted)
+      window.removeEventListener(APP_REFRESH_EVENT, handleCompleted)
+    }
+  }, [])
 
   // Existing connections remain readable and can be explicitly synchronized.
   // Institution credential mutations remain disabled; reviewed local account
