@@ -1,3 +1,5 @@
+import './SermonNotesCanonical.css'
+
 const list=value=>Array.isArray(value)?value.filter(Boolean):value?[value]:[]
 
 function TextList({items,ordered=false}){
