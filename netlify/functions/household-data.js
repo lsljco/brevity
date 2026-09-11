@@ -19,7 +19,11 @@ function store() { return getStore({ name: STORE_NAME, consistency: 'strong', si
 function planKey(date) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) throw new Error('A valid YYYY-MM-DD date is required.'); return `${HOUSEHOLD_ID}/daily-plans/${date}` }
 const clean = value => String(value || '').replace(/\s+/g, ' ').trim()
 const values = value => Array.isArray(value) ? value.filter(Boolean) : value ? [value] : []
-const addDays = (date, count) => { const value = new Date(`${date}T12:00:00-04:00`); value.setDate(value.getDate() + count); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}` }
+const addDays = (date, count) => {
+  const [year,month,day] = String(date || '').split('-').map(Number)
+  const value = new Date(Date.UTC(year, month - 1, day + count))
+  return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`
+}
 const itemText = item => typeof item === 'string' ? clean(item) : clean(item?.detail || item?.description || item?.text || item?.label || item?.stage)
 const missingBlob = error => error?.status === 404 || error?.statusCode === 404 || error?.name === 'NotFoundError'
 
@@ -108,7 +112,7 @@ function sermonDevotion(activeSermon, date) {
   const days = rawDays.map((day, index) => {
     const paragraphs = [...values(day?.description), ...values(day?.paragraphs), ...values(day?.details)].map(itemText).filter(Boolean)
     const practices = [...values(day?.steps), ...values(day?.actions), ...values(day?.items)].map(itemText).filter(Boolean)
-    return sharedSpiritualValue({ day: index + 1, date: addDays(sermonDate, index + 1), title: clean(day?.title) || `Day ${index + 1}`, scripture: dayScripture(day, activeSermon, index), devotionFocus: paragraphs.join('\n\n') || clean(day?.description || day?.detail), prayerFocus: practices.slice(0, 3), discussionPrompts: values(day?.discussionPrompts).map(itemText).filter(Boolean), obedienceAction: practices[0] || '', requiredOutput: practices[1] || practices[0] || '' })
+    return sharedSpiritualValue({ day: index + 1, date: addDays(sermonDate, index), title: clean(day?.title) || `Day ${index + 1}`, scripture: dayScripture(day, activeSermon, index), devotionFocus: paragraphs.join('\n\n') || clean(day?.description || day?.detail), prayerFocus: practices.slice(0, 3), discussionPrompts: values(day?.discussionPrompts).map(itemText).filter(Boolean), obedienceAction: practices[0] || '', requiredOutput: practices[1] || practices[0] || '' })
   })
   const exact = days.find(day => day.date === date)
   if (exact) return exact
@@ -116,16 +120,20 @@ function sermonDevotion(activeSermon, date) {
   return days[days.length - 1]
 }
 async function getPlan(date, dataStore = store()) {
-  const value = await readOptionalJSON(dataStore, planKey(date))
-  if (!value) return null
-  const activeSermonRecord = await readOptionalJSON(dataStore, ACTIVE_SERMON_KEY), activeSermon=activeSermonRecord?.deleted?null:activeSermonRecord, devotion = sermonDevotion(activeSermon, date)
+  const storedValue = await readOptionalJSON(dataStore, planKey(date))
+  const activeSermonRecord = await readOptionalJSON(dataStore, ACTIVE_SERMON_KEY), activeSermon=activeSermonRecord?.deleted?null:activeSermonRecord
+  if (!storedValue && !activeSermon?.sermonNotes) return null
+  // A future daily-plan record may not exist yet. Return an unpersisted version-zero
+  // shell so Next-Day Alignment still receives the reviewed weekly sermon authority.
+  const value = storedValue || { id:`daily-plan-${date}`, date, version:0, spiritual:{} }
+  const devotion = sermonDevotion(activeSermon, date)
   const existingSpiritual = sharedSpiritualValue(value.spiritual || {})
   if (!activeSermon?.sermonNotes) return value
   const retained={ ...existingSpiritual, owner: '', sermonNotes: sharedSpiritualValue(activeSermon.sermonNotes), sermonSource: { ...activeSermon.source, generatedAt: activeSermon.activatedAt, model: activeSermon.model, active: true, activeVersion:Number(activeSermon.version||0), sourceHash:activeSermon.source?.sourceHash||'', sharedHouseholdDevotion: true, devotionStartDate: daysStart(activeSermon) } }
   if (!devotion) return { ...value, spiritual:retained }
   return { ...value, spiritual: { ...retained, scripture: devotion.scripture, devotionFocus: devotion.devotionFocus, prayerFocus: devotion.prayerFocus, discussionPrompts: devotion.discussionPrompts, obedienceAction: devotion.obedienceAction, requiredOutput: devotion.requiredOutput, todayFocus: devotion.title, devotionDay: devotion.day, devotionDate: devotion.date, devotionTitle: devotion.title } }
 }
-function daysStart(activeSermon) { const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(sermonDate) ? addDays(sermonDate, 1) : '' }
+function daysStart(activeSermon) { const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(sermonDate) ? sermonDate : '' }
 async function readPlanEntry(dataStore, date) {
   const entry = await dataStore.getWithMetadata(planKey(date), { type:'json' })
   return entry ? { plan:entry.data, etag:entry.etag || '' } : { plan:null, etag:'' }

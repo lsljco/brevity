@@ -603,6 +603,28 @@ test('Today fails closed when active-sermon storage is unavailable', async () =>
   assert.equal(withoutSermon.spiritual.devotionFocus, 'Retained')
 })
 
+test('a missing future plan still receives the reviewed Sunday-through-Saturday sermon authority', async () => {
+  const active = {
+    version:4,
+    activatedAt:'2026-09-06T15:00:00.000Z',
+    source:{ sermonDate:'2026-09-06', sourceHash:'a'.repeat(64), title:'Weekly Word' },
+    sermonNotes:{ documentTitle:'Weekly Word', sevenDayFormationPlan:Array.from({length:7},(_,index)=>({ title:`Day ${index + 1}`, scripture:`Mark 4:${index + 1}`, paragraphs:[`Teaching ${index + 1}`], steps:[`Obey ${index + 1}`] })) },
+  }
+  const plan = await getPlan('2026-09-12', {
+    async getWithMetadata(key) {
+      if (key.includes('/daily-plans/')) return null
+      if (key.endsWith('/spiritual/active-sermon')) return { data:active, etag:'sermon-etag' }
+      return null
+    },
+  })
+  assert.equal(plan.version, 0)
+  assert.equal(plan.spiritual.sermonNotes.documentTitle, 'Weekly Word')
+  assert.equal(plan.spiritual.sermonSource.activeVersion, 4)
+  assert.equal(plan.spiritual.devotionDay, 7)
+  assert.equal(plan.spiritual.devotionDate, '2026-09-12')
+  assert.equal(plan.spiritual.todayFocus, 'Day 7')
+})
+
 test('daily generator context distinguishes missing prior data from a Blob outage', async () => {
   assert.equal(await readOptionalHouseholdRecord({ async getWithMetadata() { return null } }, 'missing'), null)
   assert.equal(await readOptionalHouseholdRecord({ async getWithMetadata() { throw Object.assign(new Error('missing'), { status:404 }) } }, 'missing'), null)

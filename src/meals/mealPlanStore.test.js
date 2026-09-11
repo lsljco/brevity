@@ -45,7 +45,9 @@ test('custom meals persist in the shared household library and count by meal typ
       mealType:'dinner',
       name:'Steak and Loaded Mashed Potatoes',
       description:'Steak with loaded mashed potatoes',
+      ingredients:['Ribeye steak','Russet potatoes','Butter'],
       prepMinutes:45,
+      cookMinutes:30,
       macros:{ calories:820, proteinGrams:58, carbohydrateGrams:52, fatGrams:42 },
     },
   })
@@ -55,7 +57,11 @@ test('custom meals persist in the shared household library and count by meal typ
   assert.equal(plan.library.length, 91)
   assert.equal(plan.librarySummary.total, 91)
   assert.equal(plan.librarySummary.counts.dinner, 31)
-  assert.equal(plan.library.find(meal => meal.id === created.id).name, 'Steak and Loaded Mashed Potatoes')
+  const storedMeal = plan.library.find(meal => meal.id === created.id)
+  assert.equal(storedMeal.name, 'Steak and Loaded Mashed Potatoes')
+  assert.deepEqual(storedMeal.ingredients, ['Ribeye steak','Russet potatoes','Butter'])
+  assert.equal(storedMeal.cookMinutes, 30)
+  assert.equal(storedMeal.totalMinutes, 75)
 })
 
 test('duplicate custom meal names in the same meal type are rejected', async () => {
