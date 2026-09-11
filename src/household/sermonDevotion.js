@@ -55,6 +55,8 @@ export function applySermonDevotionToSpiritual(spiritual = {}, devotion = null) 
 }
 
 export function sermonArtifactIdFromActive({ notes = {}, source = {} } = {}) {
+  const retainedId=clean(source.slideDeck?.id || source.document?.id)
+  if(retainedId)return retainedId
   const sourceHash = clean(source.sourceHash).toLowerCase()
   const activeVersion = Number(source.activeVersion || source.version || 0)
   if (!/^[a-f0-9]{64}$/.test(sourceHash) || !Number.isInteger(activeVersion) || activeVersion < 1) return ''
