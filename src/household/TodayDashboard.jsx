@@ -6,6 +6,7 @@ import { DECISION_STATUS, DECISION_STATUS_OPTIONS, HOUSEHOLD_MEMBERS, normalizeD
 import { buildTodayReadModel } from './operatingModel.js'
 import { sermonDevotionForDate, sermonDevotionImageUrl } from './sermonDevotion.js'
 import DailyCommandSchedule from './DailyCommandSchedule.jsx'
+import { educationBrief, financeBrief, ministryBrief } from './todayPillarBriefs.js'
 
 const PILLAR_META = {
   spiritual: ['Spiritual Maturity', 'ti-sun'],
@@ -175,9 +176,9 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
   const fitness=dailyPlan.fitness||{},education=dailyPlan.education||{},finance=dailyPlan.finance||{},ministry=dailyPlan.ministry||{}
   const fitnessMeta=[fitness.location,fitness.stepGoal?`${Number(fitness.stepGoal).toLocaleString()} step goal`:null,fitness.recovery]
-  const educationMeta=[education.thinkTankDeliverable,education.isaiah?.notes]
-  const financeMeta=[finance.bills?.length?`${finance.bills.length} bill${finance.bills.length===1?'':'s'} to review`:null,finance.purchases?.length?`${finance.purchases.length} purchase decision${finance.purchases.length===1?'':'s'}`:null,finance.discussionPrompt]
-  const ministryMeta=[ministry.meetings?.length?`${ministry.meetings.length} ministry commitment${ministry.meetings.length===1?'':'s'}`:null,ministry.fellowshipFollowUps?.length?`${ministry.fellowshipFollowUps.length} follow-up${ministry.fellowshipFollowUps.length===1?'':'s'}`:null,ministry.prayerNeeds?.[0]]
+  const educationCard=educationBrief(education)
+  const financeCard=financeBrief(finance)
+  const ministryCard=ministryBrief(ministry)
 
   return <div className="today-dashboard">
     <header className="today-hero">
@@ -207,11 +208,11 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
     {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Queue</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{readModel.counts.decisions} active {readModel.counts.decisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}. A determined decision remains visible until its resulting work is complete.</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{readModel.decisions.map((decision, index) => <DecisionEditor key={decision.id} decision={decision} number={index + 1} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => saveDecision(updated, decision.id, version)} />)}{!readModel.decisions.length && <div className="today-decision-all-clear"><i className="ti ti-circle-check" /><strong>All decisions are resolved.</strong><span>There are no remaining decisions needing attention.</span></div>}</div></section></div>}
 
-    <PillarBrief number={5} pillar="education" title={education.thinkTankTopic||'Education / Think Tank'} detail={education.thinkTankDeliverable} meta={educationMeta} onOpenPillar={onOpenPillar} />
+    <PillarBrief number={5} pillar="education" title={educationCard.title} detail={educationCard.detail} meta={educationCard.meta} onOpenPillar={onOpenPillar} />
 
-    <PillarBrief number={6} pillar="finance" title={finance.requiredOutput||finance.decisionRule||'Financial Stewardship'} detail={finance.decisionRule} meta={financeMeta} onOpenPillar={onOpenPillar} />
+    <PillarBrief number={6} pillar="finance" title={financeCard.title} detail={financeCard.detail} meta={financeCard.meta} onOpenPillar={onOpenPillar} />
 
-    <PillarBrief number={7} pillar="ministry" title={ministry.contentFocus||ministry.framework||'Ministry & Fellowship'} detail={ministry.framework} meta={ministryMeta} onOpenPillar={onOpenPillar} />
+    <PillarBrief number={7} pillar="ministry" title={ministryCard.title} detail={ministryCard.detail} meta={ministryCard.meta} onOpenPillar={onOpenPillar} />
 
     <DailyCommandSchedule plan={dailyPlan} showDecisions={false} />
   </div>
