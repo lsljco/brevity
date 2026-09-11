@@ -11,6 +11,7 @@ const ALLOWED_KEYS = new Set([
   'brevity_finance_categories_v1','brevity_finance_scenarios_v1','fp_goals','homehq_items_v1','family_calendar_events_v1',
   'brevity_daily_financial_alignment_v1','brevity_finance_timeframe_v1','brevity_finance_meetings_v1','brevity_household_maintenance_v1',
   'brevity_household_inventory_v1','brevity_household_finance_bridge_v1','brevity_household_schedule_v1',
+  'brevity_finance_debts_v1',
 ])
 const KEY_WRITE_DOMAINS = Object.freeze({
   lslj_finance_v9:'finance',
@@ -32,11 +33,13 @@ const KEY_WRITE_DOMAINS = Object.freeze({
   brevity_household_inventory_v1:'planning',
   brevity_household_finance_bridge_v1:'finance',
   brevity_household_schedule_v1:'planning',
+  brevity_finance_debts_v1:'finance',
 })
 const ADMIN_WRITE_KEYS = new Set([
   'lslj_finance_v9','plaid_actuals_cache','lslj_budget_v1','lslj_actuals_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1',
   'brevity_finance_categories_v1','brevity_finance_scenarios_v1','fp_goals','brevity_daily_financial_alignment_v1',
   'brevity_finance_meetings_v1','brevity_household_finance_bridge_v1',
+  'brevity_finance_debts_v1',
 ])
 const PLAID_SOURCE_KEYS = new Set(['lslj_finance_v9', 'plaid_actuals_cache'])
 const PLAID_ACCOUNT_FIELDS = new Set([

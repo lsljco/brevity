@@ -7,6 +7,7 @@ export const SHARED_STATE_KEYS = [
   'fp_goals', 'homehq_items_v1', 'family_calendar_events_v1', 'brevity_daily_financial_alignment_v1',
   'brevity_finance_meetings_v1', 'brevity_household_maintenance_v1', 'brevity_household_inventory_v1', 'brevity_household_finance_bridge_v1',
   'brevity_household_schedule_v1',
+  'brevity_finance_debts_v1',
 ]
 
 const ENDPOINT = '/.netlify/functions/household-state'

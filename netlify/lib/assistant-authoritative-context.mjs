@@ -6,7 +6,7 @@ import { budgetLineId } from '../../src/finance/budgetBreakdown.js'
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const HOUSEHOLD_STORE = 'brevity-household'
 const SHARED_STORE = 'brevity-household-state'
-const ACTION_SHARED_KEYS = ['lslj_finance_v9','lslj_budget_v1','brevity_finance_scenarios_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','homehq_items_v1','family_calendar_events_v1']
+const ACTION_SHARED_KEYS = ['lslj_finance_v9','lslj_budget_v1','brevity_finance_scenarios_v1','brevity_finance_debts_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','homehq_items_v1','family_calendar_events_v1']
 const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`
 const SENSITIVE_KEY = /token|secret|password|credential|api.?key|access.?key|client.?id|private.?key/i
 const LARGE_VALUE = /^(?:data:|[A-Za-z0-9+/]{300,}={0,2}$)/
