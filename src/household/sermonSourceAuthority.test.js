@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createSermonSourceRepository, sermonJobId, sermonJobStatus, sermonSourceHash } from '../../netlify/lib/sermon-source-repository.mjs'
+import { dailyPlanDraftMatchesActiveSermon, readDailyPlanDraft, saveGeneratedDailyPlanDraft } from '../../netlify/lib/household-plan-generator.mjs'
 import { createSermonFormationStartHandler } from '../../netlify/functions/sermon-formation-start.mjs'
 import { createSermonFormationBackgroundHandler } from '../../netlify/functions/sermon-formation-background.mjs'
 import { createSermonFormationStatusHandler } from '../../netlify/functions/sermon-formation-status.mjs'
@@ -26,6 +27,37 @@ function memoryStore(initial = {}) {
 }
 const session = member => ({ member, role:member==='Larry'?'admin':'member' })
 const request = (url, body = {}, cookie = 'session') => new Request(url,{method:'POST',headers:{'content-type':'application/json',cookie},body:JSON.stringify(body)})
+
+test('cached alignment drafts are valid only for the currently active sermon authority',()=>{
+  const active={version:5,source:{sourceHash:'b'.repeat(64)}}
+  const matching={draft:{spiritual:{sermonSource:{active:true,activeVersion:5,sourceHash:'b'.repeat(64)}}}}
+  const priorVersion={draft:{spiritual:{sermonSource:{active:true,activeVersion:4,sourceHash:'a'.repeat(64)}}}}
+  const missingSource={draft:{spiritual:{}}}
+  const staleActive={draft:{spiritual:{sermonSource:{active:true,activeVersion:5,sourceHash:'b'.repeat(64)}}}}
+
+  assert.equal(dailyPlanDraftMatchesActiveSermon(matching,active),true)
+  assert.equal(dailyPlanDraftMatchesActiveSermon(priorVersion,active),false)
+  assert.equal(dailyPlanDraftMatchesActiveSermon(missingSource,active),false)
+  assert.equal(dailyPlanDraftMatchesActiveSermon(missingSource,null),true)
+  assert.equal(dailyPlanDraftMatchesActiveSermon(staleActive,null),false)
+})
+
+test('a stale cached alignment draft can be replaced under the same request id after sermon activation',async()=>{
+  const store=memoryStore()
+  const requestId='tomorrow-alignment'
+  await saveGeneratedDailyPlanDraft({dataStore:store,date:'2026-09-11',requestId,basePlanVersion:2,draft:{spiritual:{}}})
+  const first=await readDailyPlanDraft(store,'2026-09-11',requestId)
+  assert.equal(first.draft.spiritual.sermonSource,undefined)
+
+  const sourceHash='c'.repeat(64)
+  const replacement={spiritual:{sermonNotes:{title:'Sunday Word'},sermonSource:{active:true,activeVersion:6,sourceHash}}}
+  const result=await saveGeneratedDailyPlanDraft({dataStore:store,date:'2026-09-11',requestId,basePlanVersion:2,draft:replacement,replaceExisting:true})
+  const current=await readDailyPlanDraft(store,'2026-09-11',requestId)
+
+  assert.equal(result.skipped,false)
+  assert.equal(current.draft.spiritual.sermonSource.activeVersion,6)
+  assert.equal(current.draft.spiritual.sermonSource.sourceHash,sourceHash)
+})
 
 test('sermon analysis creates an immutable source/version draft and never rewrites the active sermon',async()=>{
   const household='house',activeKey=`${household}/spiritual/active-sermon`

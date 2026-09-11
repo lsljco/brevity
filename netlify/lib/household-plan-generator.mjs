@@ -45,7 +45,7 @@ export async function readDailyPlanDraft(dataStore, date, requestId) {
   return readOptionalHouseholdRecord(dataStore, dailyPlanDraftKey(date, requestId));
 }
 
-export async function saveGeneratedDailyPlanDraft({ dataStore, date, requestId, draft, basePlanVersion, now = () => new Date() }) {
+export async function saveGeneratedDailyPlanDraft({ dataStore, date, requestId, draft, basePlanVersion, now = () => new Date(), replaceExisting = false }) {
   const record = {
     id:`daily-plan-draft-${requestId}`,
     requestId,
@@ -56,13 +56,21 @@ export async function saveGeneratedDailyPlanDraft({ dataStore, date, requestId, 
     createdAt:now().toISOString(),
     draft,
   };
-  const result = await dataStore.setJSON(dailyPlanDraftKey(date, requestId), record, { onlyIfNew:true });
+  const result = await dataStore.setJSON(dailyPlanDraftKey(date, requestId), record, replaceExisting ? {} : { onlyIfNew:true });
   if (result?.modified === false) {
     const existing = await readDailyPlanDraft(dataStore, date, requestId);
     if (!existing) throw new Error('The generated daily-plan draft could not be safely verified.');
     return { draftRecord:existing, skipped:true, reason:'request-already-generated' };
   }
   return { draftRecord:record, skipped:false };
+}
+
+export function dailyPlanDraftMatchesActiveSermon(draftRecord, activeSermon) {
+  const draftSource = draftRecord?.draft?.spiritual?.sermonSource || null;
+  if (!activeSermon) return !draftSource?.active;
+  return draftSource?.active === true
+    && Number(draftSource.activeVersion || 0) === Number(activeSermon.version || 0)
+    && String(draftSource.sourceHash || '') === String(activeSermon.source?.sourceHash || '');
 }
 
 const timelineItem = {
@@ -297,15 +305,16 @@ export async function generateDailyPlanDraft({ targetDate, targetWeekday, reques
   const existing = entry?.data || null;
   const reviewedBaseVersion = Number(existing?.version || 0);
   const reviewedRequestId = String(requestId || randomUUID());
+  const activeSermonRecord = await readOptionalHouseholdRecord(dataStore, ACTIVE_SERMON_KEY);
+  const activeSermon = activeSermonRecord?.deleted ? null : activeSermonRecord;
   const alreadyGenerated = await readDailyPlanDraft(dataStore, date, reviewedRequestId);
-  if (alreadyGenerated) return { draftRecord:alreadyGenerated, skipped:true, reason:'request-already-generated' };
+  const replaceGeneratedDraft = Boolean(alreadyGenerated && !dailyPlanDraftMatchesActiveSermon(alreadyGenerated, activeSermon));
+  if (alreadyGenerated && !replaceGeneratedDraft) return { draftRecord:alreadyGenerated, skipped:true, reason:'request-already-generated' };
 
   const yesterday = new Date(`${date}T12:00:00-04:00`);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
   const priorPlan = await readOptionalHouseholdRecord(dataStore, planKey(yesterdayKey));
-  const activeSermonRecord = await readOptionalHouseholdRecord(dataStore, ACTIVE_SERMON_KEY);
-  const activeSermon = activeSermonRecord?.deleted ? null : activeSermonRecord;
   const priorPlanContext = priorPlan ? { ...priorPlan, spiritual: { ...priorPlan.spiritual, sermonNotes: undefined } } : null;
   const mealRepository = providedMealRepository || await productionMealPlanRepository();
   const mealWindow = await mealRepository.getWindowReadOnly({ startDate: date, count: 1 });
@@ -329,7 +338,7 @@ export async function generateDailyPlanDraft({ targetDate, targetWeekday, reques
   // External publishing is intentionally disabled until Brevity can present
   // the exact artifact for review and restore the prior external version.
   // Daily generation must never overwrite an external devotion implicitly.
-  return saveGeneratedDailyPlanDraft({ dataStore, date, requestId:reviewedRequestId, draft:plan, basePlanVersion:reviewedBaseVersion });
+  return saveGeneratedDailyPlanDraft({ dataStore, date, requestId:reviewedRequestId, draft:plan, basePlanVersion:reviewedBaseVersion, replaceExisting:replaceGeneratedDraft });
 }
 
 // Retain the prior export name for queued deployments while changing its

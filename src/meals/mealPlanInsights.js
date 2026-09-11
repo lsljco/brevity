@@ -1,11 +1,35 @@
 const mealsIn = days => (Array.isArray(days) ? days : []).flatMap(day => Object.values(day?.resolvedMeals || {}).filter(Boolean))
+const numeric = value => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
 
 export function summarizeMealPlan(days) {
   const meals = mealsIn(days)
   if (!meals.length) return null
-  const totalPrepMinutes = meals.reduce((sum, meal) => sum + Number(meal.prepMinutes || 0), 0)
-  const averageProteinGrams = Math.round(meals.reduce((sum, meal) => sum + Number(meal.macros?.proteinGrams || 0), 0) / meals.length)
-  const longestPrep = [...meals].sort((left, right) => Number(right.prepMinutes || 0) - Number(left.prepMinutes || 0))[0]
+
+  const totals = meals.reduce((summary, meal) => ({
+    prepMinutes: summary.prepMinutes + numeric(meal.prepMinutes),
+    calories: summary.calories + numeric(meal.macros?.calories),
+    proteinGrams: summary.proteinGrams + numeric(meal.macros?.proteinGrams),
+    carbohydrateGrams: summary.carbohydrateGrams + numeric(meal.macros?.carbohydrateGrams),
+    fatGrams: summary.fatGrams + numeric(meal.macros?.fatGrams),
+  }), { prepMinutes:0, calories:0, proteinGrams:0, carbohydrateGrams:0, fatGrams:0 })
+
+  const averageProteinGrams = Math.round(totals.proteinGrams / meals.length)
+  const longestPrep = [...meals].sort((left, right) => numeric(right.prepMinutes) - numeric(left.prepMinutes))[0]
   const tomorrow = days?.[1]
-  return { mealCount:meals.length, totalPrepMinutes, averageProteinGrams, longestPrep, tomorrowDinner:tomorrow?.resolvedMeals?.dinner, tomorrowDate:tomorrow?.date || '' }
+
+  return {
+    mealCount: meals.length,
+    totalPrepMinutes: totals.prepMinutes,
+    totalCalories: Math.round(totals.calories),
+    totalProteinGrams: Math.round(totals.proteinGrams),
+    totalCarbohydrateGrams: Math.round(totals.carbohydrateGrams),
+    totalFatGrams: Math.round(totals.fatGrams),
+    averageProteinGrams,
+    longestPrep,
+    tomorrowDinner: tomorrow?.resolvedMeals?.dinner,
+    tomorrowDate: tomorrow?.date || '',
+  }
 }

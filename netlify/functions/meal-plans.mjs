@@ -7,7 +7,7 @@ const headers = {
   'cache-control': 'no-store',
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'content-type',
-  'access-control-allow-methods': 'GET,PUT,OPTIONS',
+  'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
 }
 
 const response = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) })
@@ -25,6 +25,12 @@ export const handler = async event => {
       return response(200, plan)
     }
 
+    if (event.httpMethod === 'POST') {
+      const body = JSON.parse(event.body || '{}')
+      const meal = await repository.createMeal({ meal:body, actor:session.member || 'Household member' })
+      return response(201, { meal })
+    }
+
     if (event.httpMethod === 'PUT') {
       return response(409, { error: 'Meal substitutions require review and confirmation. Refresh Brevity and use the meal replacement review.' })
     }
@@ -32,7 +38,7 @@ export const handler = async event => {
     return response(405, { error: 'Method not allowed.' })
   } catch (error) {
     console.error('[meal-plans]', error)
-    const status = error.code === 'VERSION_CONFLICT' || error.code === 'REVIEW_REQUIRED' ? 409 : error.code === 'VALIDATION_ERROR' || /valid YYYY-MM-DD/.test(error.message) ? 400 : 500
+    const status = error.code === 'VERSION_CONFLICT' || error.code === 'REVIEW_REQUIRED' ? 409 : error.code === 'VALIDATION_ERROR' || /valid YYYY-MM-DD/.test(error.message) || error instanceof SyntaxError ? 400 : 500
     return response(status, { error: error.message || 'Meal-plan request failed.' })
   }
 }

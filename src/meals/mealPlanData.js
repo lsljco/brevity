@@ -1,9 +1,14 @@
-import { MEAL_LIBRARY, MEALS_BY_ID, MEAL_TYPES, mealsForType } from './mealLibrary.js'
+import { MEAL_LIBRARY, MEAL_TYPES, mealsForType } from './mealLibrary.js'
 
 export const MEAL_PLAN_SCHEMA_VERSION = 1
 export const DEFAULT_MEAL_TIME_ZONE = 'America/New_York'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const customMealType = mealId => {
+  const match = /^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.exec(String(mealId || ''))
+  return match?.[1] || ''
+}
+const libraryIndex = library => new Map((Array.isArray(library) ? library : MEAL_LIBRARY).map(meal => [meal.id, meal]))
 
 export function validMealDate(value) {
   const text = String(value || '')
@@ -62,26 +67,37 @@ export function createRollingMealDay(date, context = {}) {
   }
 }
 
-export function resolveMealDay(day) {
+export function resolveMealDay(day, library = MEAL_LIBRARY) {
+  const byId = libraryIndex(library)
   return {
     ...day,
-    resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, MEALS_BY_ID.get(day?.meals?.[mealType]) || null])),
+    resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, byId.get(day?.meals?.[mealType]) || null])),
   }
 }
 
-export function validateMealSubstitution({ date, mealType, mealId }) {
+export function validateMealSubstitution({ date, mealType, mealId }, library) {
   const errors = []
   if (!validMealDate(date)) errors.push('A valid meal-plan date is required.')
   if (!MEAL_TYPES.includes(mealType)) errors.push('Choose breakfast, lunch or dinner.')
-  const meal = MEALS_BY_ID.get(mealId)
-  if (!meal) errors.push('Choose a meal from the household meal library.')
-  else if (meal.mealType !== mealType) errors.push(`The selected meal is not a ${mealType} option.`)
+
+  const suppliedLibrary = Array.isArray(library)
+  const meal = libraryIndex(library).get(mealId)
+  if (!meal) {
+    // Action Mode validates built-in meals without loading the meal store. Custom
+    // IDs carry their meal type so a reviewed custom selection can still pass
+    // that synchronous guard; plan reads resolve the ID against the household
+    // library before displaying it.
+    if (suppliedLibrary || customMealType(mealId) !== mealType) errors.push('Choose a meal from the household meal library.')
+  } else if (meal.mealType !== mealType) {
+    errors.push(`The selected meal is not a ${mealType} option.`)
+  }
   return errors
 }
 
-export function mealLibrarySummary() {
+export function mealLibrarySummary(library = MEAL_LIBRARY) {
+  const source = Array.isArray(library) ? library : MEAL_LIBRARY
   return {
-    total: MEAL_LIBRARY.length,
-    counts: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, mealsForType(mealType).length])),
+    total: source.length,
+    counts: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, source.filter(meal => meal.mealType === mealType).length])),
   }
 }

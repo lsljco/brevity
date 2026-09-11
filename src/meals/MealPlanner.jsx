@@ -9,6 +9,18 @@ const LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' }
 const ICONS = { breakfast: 'ti-sunrise', lunch: 'ti-sun-high', dinner: 'ti-moon-stars' }
 
 const formatDay = date => new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+const formatPrepMinutes = value => {
+  const total = Math.max(0, Math.round(Number(value) || 0))
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  if (!hours) return `${minutes} min`
+  return `${hours} hr${hours === 1 ? '' : 's'}${minutes ? ` ${minutes} min` : ''}`
+}
+
+function MealImage({ meal, className = '', loading = 'lazy', alt = '' }) {
+  if (meal?.image) return <img className={className} src={meal.image} alt={alt} loading={loading} />
+  return <div className={`meal-image-placeholder ${className}`} role="img" aria-label={alt || meal?.name || 'Meal photo not added'}><i className="ti ti-tools-kitchen-2" /><span>Photo not added</span></div>
+}
 
 function Macros({ meal }) {
   return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{meal.macros.calories}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
@@ -16,7 +28,7 @@ function Macros({ meal }) {
 
 function MealChoice({ meal, onChoose, selected, current }) {
   return <button type="button" className={`meal-choice${selected ? ' is-selected' : ''}`} onClick={onChoose}>
-    <img src={meal.image} alt="" loading="lazy" />
+    <MealImage meal={meal} alt="" />
     <span className="meal-choice-mark"><i className={`ti ${selected ? 'ti-circle-check-filled' : 'ti-circle'}`} /></span>
     <span><strong>{meal.name}</strong><small>{meal.description}</small><Macros meal={meal} /></span>
     <em>{current ? 'Current' : selected ? 'Selected' : `${meal.prepMinutes} min`}</em>
@@ -36,7 +48,7 @@ function ReplaceDialog({ selection, library, saving, onClose, onChoose, onReview
 
   return <div className="meal-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose() }}>
     <section className="meal-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-dialog-title">
-      <header><div><span>Meal library · 30 options</span><h2 id="meal-dialog-title">Replace {LABELS[selection.mealType]}</h2><p>{formatDay(selection.day.date)}</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
+      <header><div><span>Meal library · {candidates.length} options</span><h2 id="meal-dialog-title">Replace {LABELS[selection.mealType]}</h2><p>{formatDay(selection.day.date)}</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
       <label className="meal-search"><i className="ti ti-search" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${LABELS[selection.mealType].toLowerCase()} options`} /></label>
       <div className="meal-choice-list">{candidates.map(meal => <MealChoice key={meal.id} meal={meal} current={meal.id === selection.day.meals[selection.mealType]} selected={meal.id === selection.mealId} onChoose={() => onChoose(meal.id)} />)}</div>
       <footer className="meal-dialog-review">
@@ -47,26 +59,88 @@ function ReplaceDialog({ selection, library, saving, onClose, onChoose, onReview
   </div>
 }
 
+function AddMealDialog({ mealType, saving, onClose, onSave }) {
+  const [form, setForm] = useState({
+    mealType,
+    name:'',
+    description:'',
+    prepMinutes:'',
+    image:'',
+    serving:'1 serving',
+    calories:'',
+    proteinGrams:'',
+    carbohydrateGrams:'',
+    fatGrams:'',
+  })
+  const set = (field, value) => setForm(current => ({ ...current, [field]:value }))
+  const submit = event => {
+    event.preventDefault()
+    onSave({
+      mealType:form.mealType,
+      name:form.name.trim(),
+      description:form.description.trim(),
+      prepMinutes:Number(form.prepMinutes),
+      image:form.image.trim(),
+      serving:form.serving.trim() || '1 serving',
+      macros:{
+        calories:Number(form.calories),
+        proteinGrams:Number(form.proteinGrams),
+        carbohydrateGrams:Number(form.carbohydrateGrams),
+        fatGrams:Number(form.fatGrams),
+      },
+    })
+  }
+
+  useEffect(() => {
+    const close = event => { if (event.key === 'Escape' && !saving) onClose() }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [onClose, saving])
+
+  return <div className="meal-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose() }}>
+    <section className="meal-dialog meal-add-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-add-title">
+      <header><div><span>Household meal library</span><h2 id="meal-add-title">Add a meal</h2><p>Add it once and it will be available as a replacement on any device.</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
+      <form className="meal-add-form" onSubmit={submit}>
+        <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)}>{MEAL_TYPES.map(type=><option key={type} value={type}>{LABELS[type]}</option>)}</select></label>
+        <label className="meal-add-form--wide"><span>Meal name</span><input autoFocus required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
+        <label className="meal-add-form--wide"><span>Description</span><textarea value={form.description} onChange={event=>set('description',event.target.value)} placeholder="Brief description of the plated meal" /></label>
+        <label><span>Prep time (minutes)</span><input required min="0" step="1" type="number" value={form.prepMinutes} onChange={event=>set('prepMinutes',event.target.value)} /></label>
+        <label><span>Serving</span><input value={form.serving} onChange={event=>set('serving',event.target.value)} /></label>
+        <label><span>Calories</span><input required min="0" step="1" type="number" value={form.calories} onChange={event=>set('calories',event.target.value)} /></label>
+        <label><span>Protein (g)</span><input required min="0" step="1" type="number" value={form.proteinGrams} onChange={event=>set('proteinGrams',event.target.value)} /></label>
+        <label><span>Carbs (g)</span><input required min="0" step="1" type="number" value={form.carbohydrateGrams} onChange={event=>set('carbohydrateGrams',event.target.value)} /></label>
+        <label><span>Fat (g)</span><input required min="0" step="1" type="number" value={form.fatGrams} onChange={event=>set('fatGrams',event.target.value)} /></label>
+        <label className="meal-add-form--wide"><span>Photo URL <small>optional</small></span><input type="url" value={form.image} onChange={event=>set('image',event.target.value)} placeholder="https://…" /></label>
+        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving}>{saving?'Adding meal…':'Add to Meal Library'}</button></footer>
+      </form>
+    </section>
+  </div>
+}
+
 function PlanView({ days, onSelect }) {
   return <div className="meal-week">
     {days.map((day, index) => <article className={`meal-day${index === 0 ? ' meal-day--today' : ''}`} key={day.date}>
       <header><div><span>{index === 0 ? 'Today' : `Day ${index + 1}`}</span><h2>{formatDay(day.date)}</h2></div>{Object.keys(day.substitutions || {}).length > 0 && <small><i className="ti ti-replace" /> Customized</small>}</header>
       <div className="meal-day-slots">{MEAL_TYPES.map(mealType => {
         const meal = day.resolvedMeals[mealType]
-        return <section className="meal-slot" key={mealType}><img className="meal-slot-photo" src={meal?.image} alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes</small><button type="button" onClick={() => onSelect({ day, mealType })}><i className="ti ti-replace" /> Replace</button></div></section>
+        return <section className="meal-slot" key={mealType}><MealImage meal={meal} className="meal-slot-photo" alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes</small><button type="button" onClick={() => onSelect({ day, mealType })}><i className="ti ti-replace" /> Replace</button></div></section>
       })}</div>
     </article>)}
   </div>
 }
 
-function LibraryView({ library, onSelect }) {
-  return <div className="meal-library">{MEAL_TYPES.map(mealType => <section key={mealType}><header><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>30 choices</span><h2>{LABELS[mealType]}</h2></div></header><div className="meal-library-grid">{library.filter(meal => meal.mealType === mealType).map(meal => <article key={meal.id}><img src={meal.image} alt={meal.name} loading="lazy" /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{meal.prepMinutes} min</span></div><p>{meal.description}</p><Macros meal={meal} /></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>)}</div>
+function LibraryView({ library, onAdd }) {
+  return <div className="meal-library">{MEAL_TYPES.map(mealType => {
+    const meals = library.filter(meal => meal.mealType === mealType)
+    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{LABELS[mealType]}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {LABELS[mealType]}</button></header><div className="meal-library-grid">{meals.map(meal => <article key={meal.id}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{meal.prepMinutes} min</span></div><p>{meal.description}</p><Macros meal={meal} /></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
+  })}</div>
 }
 
 export default function MealPlanner() {
-  const { data, state, error, reload, prepareReplacement, applyReplacement } = useRollingMealPlan({reloadOnRefreshEvents:true})
+  const { data, state, error, reload, addMeal, prepareReplacement, applyReplacement } = useRollingMealPlan({reloadOnRefreshEvents:true})
   const [view, setView] = useState('plan')
   const [selection, setSelection] = useState(null)
+  const [addingMealType, setAddingMealType] = useState('')
   const [message, setMessage] = useState('')
   const planInsight = useMemo(() => summarizeMealPlan(data?.days), [data])
 
@@ -77,6 +151,18 @@ export default function MealPlanner() {
   }),[data])
 
   const chooseReplacement = mealId => setSelection(current=>({...current,mealId,proposal:null}))
+
+  const saveMeal = async meal => {
+    setMessage('')
+    try {
+      const created = await addMeal(meal)
+      setAddingMealType('')
+      setMessage(`${created.name} was added to the household Meal Library and is available for future meal replacements.`)
+    } catch (addError) {
+      if(addError.code==='STALE_MEAL_SCOPE')return
+      setMessage(addError.message || 'Could not add this meal to the household library.')
+    }
+  }
 
   const reviewReplacement = async () => {
     setMessage('')
@@ -105,14 +191,15 @@ export default function MealPlanner() {
   }
 
   return <main className="meal-planner">
-    <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>Rolling 7-Day Meal Plan</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>90</strong><span>household meals</span></div></header>
+    <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>Rolling 7-Day Meal Plan</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>{data?.librarySummary?.total ?? 90}</strong><span>household meals</span></div></header>
     <div className="meal-planner-controls"><nav aria-label="Meal planner views"><button type="button" className={view === 'plan' ? 'is-active' : ''} onClick={() => setView('plan')}><i className="ti ti-calendar-week" /> 7-Day Plan</button><button type="button" className={view === 'library' ? 'is-active' : ''} onClick={() => setView('library')}><i className="ti ti-tools-kitchen-2" /> Meal Library</button></nav><p><i className="ti ti-refresh" /> The window rolls forward daily; replacements remain attached to their date.</p></div>
     {message && <div className="meal-planner-message" role="status">{message}</div>}
-    {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Plan insight</span><strong>{planInsight.tomorrowDinner ? `Tomorrow’s dinner is ${planInsight.tomorrowDinner.name}.` : `${planInsight.mealCount} meals are planned.`}</strong><p>{planInsight.tomorrowDinner ? `It is scheduled for ${planInsight.tomorrowDinner.prepMinutes} minutes, so the useful preparation is making sure its main ingredients are available before tomorrow.` : `The plan represents about ${planInsight.totalPrepMinutes} minutes of preparation.`}</p></div><dl><div><dt>Planned prep</dt><dd>{planInsight.totalPrepMinutes} min</dd></div><div><dt>Avg. planned protein</dt><dd>{planInsight.averageProteinGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are plan estimates, not evidence that a meal was prepared or eaten.</small></section>}
+    {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Plan insight</span><strong>{planInsight.tomorrowDinner ? `Tomorrow’s dinner is ${planInsight.tomorrowDinner.name}.` : `${planInsight.mealCount} meals are planned.`}</strong><p>{planInsight.tomorrowDinner ? `It is scheduled for ${planInsight.tomorrowDinner.prepMinutes} minutes. Across all ${planInsight.mealCount} meals in this 7-day window, the totals below show the complete planned prep and macro load.` : `Totals cover every resolved meal in the current 7-day plan.`}</p></div><dl><div><dt>Total planned prep</dt><dd>{formatPrepMinutes(planInsight.totalPrepMinutes)}</dd></div><div><dt>Total calories</dt><dd>{planInsight.totalCalories.toLocaleString()} cal</dd></div><div><dt>Total protein</dt><dd>{planInsight.totalProteinGrams}g</dd></div><div><dt>Total carbs</dt><dd>{planInsight.totalCarbohydrateGrams}g</dd></div><div><dt>Total fat</dt><dd>{planInsight.totalFatGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are plan estimates for the meals shown in this 7-day window, not evidence that a meal was prepared or eaten.</small></section>}
     {state === 'loading' && !data && <div className="meal-planner-state"><i className="ti ti-loader-2" /> Preparing the household meal plan…</div>}
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {error && data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan refresh needed</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
-    {data && (view === 'plan' ? <PlanView days={data.days} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onSelect={setSelection} />)}
+    {data && (view === 'plan' ? <PlanView days={data.days} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onAdd={setAddingMealType} />)}
     {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} onClose={() => setSelection(null)} onChoose={chooseReplacement} onReview={reviewReplacement} onApply={applyReviewedReplacement} />}
+    {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} onClose={()=>setAddingMealType('')} onSave={saveMeal} />}
   </main>
 }

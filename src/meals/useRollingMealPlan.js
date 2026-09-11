@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
-import { executeMealSubstitution, fetchRollingMealPlan, prepareMealSubstitution } from './mealPlanApi.js'
+import { createMealLibraryItem, executeMealSubstitution, fetchRollingMealPlan, prepareMealSubstitution } from './mealPlanApi.js'
 
 export const ROLLING_MEAL_APP_REFRESH_EVENT = 'brevity-app-refreshed'
 
@@ -128,6 +128,27 @@ export function useRollingMealPlan({ enabled = true, startDate, requireFresh = f
     }
   },[enabled,reload,reloadOnRefreshEvents])
 
+  const addMeal = useCallback(async meal => {
+    if(!mountedRef.current||!rollingMealPlanScopeIsCurrent(scopeRef.current,requestKey))throw staleMealPlanScopeError()
+    const operation=++requestRef.current
+    activeRequestRef.current=null
+    setStateRequestKey(requestKey)
+    setState('saving')
+    setError('')
+    try {
+      const result=await createMealLibraryItem(meal)
+      if(!rollingMealPlanOperationIsCurrent({operation,currentOperation:requestRef.current,mounted:mountedRef.current,scope:scopeRef.current,requestKey}))throw staleMealPlanScopeError()
+      await reloadRef.current?.({supersede:true})
+      return result.meal
+    } catch (requestError) {
+      if(operation===requestRef.current&&mountedRef.current&&scopeRef.current?.enabled&&scopeRef.current.requestKey===requestKey){
+        setError(requestError.message || 'Could not add this meal to the household library.')
+        setState('error')
+      }
+      throw requestError
+    }
+  }, [requestKey])
+
   const prepareReplacement = useCallback(async ({ date, mealType, mealId, expectedVersion }) => {
     if(!mountedRef.current||!rollingMealPlanScopeIsCurrent(scopeRef.current,requestKey))throw staleMealPlanScopeError()
     const operation=++requestRef.current
@@ -172,5 +193,5 @@ export function useRollingMealPlan({ enabled = true, startDate, requireFresh = f
   }, [requestKey])
 
   const view=rollingMealPlanView({enabled,startDate:effectiveStartDate,requireFresh,state,stateRequestKey,data,dataRequestKey,error})
-  return { ...view, reload, prepareReplacement, applyReplacement }
+  return { ...view, reload, addMeal, prepareReplacement, applyReplacement }
 }

@@ -8,5 +8,32 @@
 .meal-plan-insight dt { color:var(--muted); font-size:9px; }
 .meal-plan-insight dd { margin:5px 0 0; color:var(--soft-white); font-size:11px; font-weight:700; }
 .meal-plan-insight > small { grid-column:1/-1; }
+
+.meal-library > section > header { justify-content:space-between; }
+.meal-library-heading { display:flex; gap:12px; align-items:center; }
+.meal-library-add { flex:0 0 auto; padding:9px 12px; border:1px solid rgba(197,164,109,.32); border-radius:9px; background:rgba(197,164,109,.08); color:var(--gold); font-size:11px; cursor:pointer; }
+.meal-library-add:hover { background:rgba(197,164,109,.14); }
+.meal-image-placeholder { display:flex!important; align-items:center; justify-content:center; flex-direction:column; gap:6px; min-height:68px; background:linear-gradient(145deg,rgba(197,164,109,.08),rgba(255,255,255,.025))!important; color:var(--gold); }
+.meal-image-placeholder span { color:var(--muted)!important; font-size:9px!important; font-weight:500!important; letter-spacing:0!important; text-transform:none!important; }
+.meal-library-grid article > .meal-image-placeholder { width:100%; height:155px; }
+.meal-choice > .meal-image-placeholder { width:92px; height:68px; border-radius:9px; }
+.meal-slot > .meal-image-placeholder { width:100%; height:170px; }
+
+.meal-add-dialog { width:min(720px,100%); }
+.meal-add-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:20px 24px 24px; overflow:auto; }
+.meal-add-form label { display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.meal-add-form label > span { color:var(--gold); }
+.meal-add-form label > span small { color:var(--muted); font-weight:500; letter-spacing:0; text-transform:none; }
+.meal-add-form input,.meal-add-form select,.meal-add-form textarea { width:100%; box-sizing:border-box; border:1px solid var(--glass-border); border-radius:9px; outline:0; padding:10px 11px; background:rgba(255,255,255,.035); color:var(--soft-white); font:inherit; font-size:12px; font-weight:500; letter-spacing:0; text-transform:none; }
+.meal-add-form select option { background:#111820; color:var(--soft-white); }
+.meal-add-form textarea { min-height:72px; resize:vertical; }
+.meal-add-form input:focus,.meal-add-form select:focus,.meal-add-form textarea:focus { border-color:rgba(197,164,109,.5); }
+.meal-add-form--wide { grid-column:1/-1; }
+.meal-add-form footer { grid-column:1/-1; display:flex; justify-content:flex-end; gap:8px; padding-top:4px; }
+.meal-add-form footer button { padding:9px 12px; border:1px solid var(--glass-border); border-radius:9px; background:transparent; color:var(--soft-white); cursor:pointer; }
+.meal-add-form footer button.is-primary { border-color:rgba(197,164,109,.45); background:rgba(197,164,109,.14); color:var(--gold); }
+.meal-add-form footer button:disabled { cursor:not-allowed; opacity:.45; }
+
 @media (max-width:800px) { .meal-plan-insight { grid-template-columns:1fr; }.meal-plan-insight > small { grid-column:auto; } }
-@media (max-width:520px) { .meal-plan-insight dl { grid-template-columns:1fr; } }
+@media (max-width:620px) { .meal-library > section > header { align-items:flex-start; flex-direction:column; }.meal-library-add { width:100%; } .meal-add-form { grid-template-columns:1fr; padding:18px; }.meal-add-form--wide,.meal-add-form footer { grid-column:auto; } }
+@media (max-width:520px) { .meal-plan-insight dl { grid-template-columns:repeat(2,1fr); } .meal-choice > .meal-image-placeholder { width:72px; height:60px; } }
