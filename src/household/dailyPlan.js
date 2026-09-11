@@ -13,6 +13,26 @@ export const PILLAR_IDS = [
   'ministry',
 ]
 
+const PILLAR_ALIASES = new Map([
+  ['spiritual maturity', 'spiritual'],
+  ['health & nutrition', 'health'],
+  ['health and nutrition', 'health'],
+  ['physical fitness', 'fitness'],
+  ['household management', 'household'],
+  ['household operations', 'household'],
+  ['education / think tank', 'education'],
+  ['education and think tank', 'education'],
+  ['financial stewardship', 'finance'],
+  ['finance & stewardship', 'finance'],
+  ['ministry & fellowship', 'ministry'],
+  ['ministry and fellowship', 'ministry'],
+])
+
+export function normalizePillarId(value) {
+  const pillar=String(value||'').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ')
+  return PILLAR_IDS.includes(pillar) ? pillar : PILLAR_ALIASES.get(pillar) || pillar
+}
+
 export const DAILY_PLAN_STORAGE_KEY = 'brevity_daily_plans_v1'
 export const DEFAULT_FITNESS_LOCATION = 'Lifetime Gym'
 export const DEFAULT_EDUCATION_OWNER = 'Family'
@@ -222,6 +242,13 @@ export function normalizeDailyPlan(input = {}) {
     topPriorities: normalizePlanItems(plan.topPriorities),
     assignments: normalizePlanItems(plan.assignments),
     decisions: arrayOrEmpty(plan.decisions).filter(decision => !isStandingRoutineDecision(decision)).map(normalizeDecision),
+    dayparts: arrayOrEmpty(plan.dayparts).map(part=>({
+      ...objectOrEmpty(part),
+      items:arrayOrEmpty(part?.items).map(item=>({
+        ...objectOrEmpty(item),
+        pillar:normalizePillarId(item?.pillar),
+      })),
+    })),
     morningAlignment: { ...base.morningAlignment, ...morningAlignment },
     spiritual: {
       ...base.spiritual,
