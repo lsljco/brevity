@@ -50,7 +50,17 @@ export default function SpiritualFormationStudio({draft,update}){
     setPendingAnalysis(getPendingSermonAnalysis());setActivationState('idle');setActivationError('');setState('ready');setError('')
   }
   useEffect(()=>{getOneDriveStatus().then(status=>setOneDrive({...status,loading:false,error:''})).catch(err=>setOneDrive(current=>({...current,loading:false,error:err.message||'Could not check OneDrive.'})))},[])
-  useEffect(()=>{if(slides.state!=='generating'||!slides.id)return;const timer=setInterval(()=>{getSermonSlideStatus(slides.id).then(status=>{setSlides(current=>({...current,...status,id:slides.id}));if(status.state==='ready')update('spiritual',{sermonNotes:spiritual.sermonNotes,sermonSource:{...existingSource,document:archivedDocument,slideDeck:{...status,id:slides.id}}})}).catch(err=>setSlides({state:'error',id:slides.id,error:err.message}))},4000);return()=>clearInterval(timer)},[slides.state,slides.id])
+  useEffect(()=>{
+    if(slides.state!=='generating'||!slides.id)return
+    const timer=setInterval(()=>{
+      getSermonSlideStatus(slides.id).then(status=>{
+        const next={...status,id:slides.id}
+        setSlides(current=>({...current,...next}))
+        if(status.state==='ready')update('spiritual',{sermonNotes:spiritual.sermonNotes,sermonSource:{...existingSource,document:archivedDocument,slideDeck:next}})
+      }).catch(err=>setSlides({state:'error',id:slides.id,error:err.message}))
+    },4000)
+    return()=>clearInterval(timer)
+  },[slides.state,slides.id])
   useEffect(()=>{const completed=event=>{if(!event.detail?.audit?.affectedRecords?.some(change=>change.resource==='sermon:active'))return;clearPendingSermonAnalysis();setPendingAnalysis(null);setCandidate(null);setActivationState('applied');setActivationError('')};window.addEventListener(ACTION_COMPLETED_EVENT,completed);return()=>window.removeEventListener(ACTION_COMPLETED_EVENT,completed)},[])
   useEffect(()=>{
     if(!pendingAnalysis?.jobId)return
@@ -102,13 +112,14 @@ export default function SpiritualFormationStudio({draft,update}){
   const stopWaiting=()=>{analysisControllerRef.current?.abort();clearPendingSermonAnalysis();setPendingAnalysis(null);setState('idle');setError('Waiting stopped. The reviewed active sermon was not changed. You can analyze the uploaded source again when ready.')}
 
   const archiveCurrent=async()=>{
-    if(!reviewedActive){setArchiveError('Review and activate this sermon before creating documents.');return}
+    if(!reviewedActive){setArchiveError('Review and activate this sermon before creating documents.');return null}
     setArchiveState('saving');setArchiveError('')
     try{
       const archived=await archiveSermonDocuments({activeVersion,sourceHash:activeSourceHash})
       setArchivedDocument(archived.document);setArchiveState('ready')
       update('spiritual',{sermonNotes:spiritual.sermonNotes,sermonSource:{...existingSource,document:archived.document}})
-    }catch(err){setArchiveState('error');setArchiveError(err.message||'Documents could not be archived.')}
+      return archived.document
+    }catch(err){setArchiveState('error');setArchiveError(err.message||'Documents could not be archived.');return null}
   }
 
   const reviewCandidate=async()=>{
@@ -141,7 +152,22 @@ export default function SpiritualFormationStudio({draft,update}){
     }catch(err){setState('error');setError(err.message||'Brevity could not read those sermon notes.')}
   }
 
-  const createSlides=async()=>{if(!reviewedActive||!archivedDocument?.id){setArchiveError('Create documents from the reviewed active sermon before creating slides.');return}const id=archivedDocument.id;setSlides({state:'generating',id,completed:0,total:0});try{await generateSermonSlides({id,activeVersion,sourceHash:activeSourceHash})}catch(err){setSlides({state:'error',id,error:err.message||'Could not start sermon slides.'})}}
+  const createSlides=async()=>{
+    if(!reviewedActive){setArchiveError('Review and activate this sermon before generating the sermon package.');return}
+    setArchiveError('')
+    let document=archivedDocument
+    if(!document?.id){
+      document=await archiveCurrent()
+      if(!document?.id)return
+    }
+    const id=document.id
+    setSlides({state:'generating',id,completed:0,total:0})
+    try{
+      const started=await generateSermonSlides({id,activeVersion,sourceHash:activeSourceHash})
+      setSlides(current=>({...current,id:started.id||id,state:'generating'}))
+    }catch(err){setSlides({state:'error',id,error:err.message||'Could not start sermon slides and devotions.'})}
+  }
+
   return <div className="spiritual-studio">
     <section className="sermon-source-card">
       <div className="sermon-source-heading">
@@ -192,8 +218,8 @@ export default function SpiritualFormationStudio({draft,update}){
         <article><span>Weekly Assignment</span><p>{spiritual.weeklyAssignment}</p></article>
       </div>
       <section className="sermon-document-actions">
-        <div><span>Document Repository</span><strong>Reviewed Sermon Documents &amp; Media</strong>{archivedDocument?<small className="sermon-cloud-ready"><i className="ti ti-device-floppy"/> Files generated locally from active version {archivedDocument.activeVersion}.</small>:null}{oneDrive.connected&&<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> OneDrive connected{oneDrive.connection?.account?` · ${oneDrive.connection.account}`:''}</small>}<small><i className="ti ti-lock"/> Automatic uploads are not enabled. Local documents and slides are created for review without changing OneDrive.</small>{slides.state==='generating'&&<small className="sermon-cloud-ready"><i className="ti ti-photo"/> Creating photorealistic sermon slides{slides.total?` · ${slides.completed||0} of ${slides.total} images`:''}…</small>}{slides.state==='error'&&<small>{slides.error}</small>}{archiveError&&<small>{archiveError}</small>}</div>
-        <div>{archivedDocument&&<>{archivedDocument.files?.docx&&<a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a>}{archivedDocument.files?.pdf&&<a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> PDF</a>}</>}{slides.state==='ready'&&<a href={slides.download}><i className="ti ti-file-type-ppt"/> PowerPoint</a>}{reviewedActive&&slides.state!=='ready'&&<button type="button" disabled={slides.state==='generating'||!archivedDocument?.id} onClick={createSlides}><i className={`ti ${slides.state==='generating'?'ti-loader-2':'ti-presentation'}`}/> {slides.state==='generating'?'Creating slides…':'Create sermon slides'}</button>}<span className="sermon-cloud-status"><i className="ti ti-lock"/> Automatic uploads not enabled</span><a href={ONEDRIVE_REPOSITORY_SHARE_URL} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> Open repository</a><button type="button" disabled={archiveState==='saving'||!reviewedActive} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Creating…':archivedDocument?'Recreate local documents':'Create local documents'}</button></div>
+        <div><span>Sermon Package</span><strong>Reviewed Sermon Notes, Slides &amp; Seven-Day Devotions</strong>{archivedDocument?<small className="sermon-cloud-ready"><i className="ti ti-device-floppy"/> Teaching documents generated from active version {archivedDocument.activeVersion}.</small>:null}{oneDrive.connected&&<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> OneDrive connected{oneDrive.connection?.account?` · ${oneDrive.connection.account}`:''}</small>}<small><i className="ti ti-shield-check"/> Generate Sermon Package creates the Word/PDF teaching documents, a PowerPoint deck, seven devotion images, and a seven-day devotion guide from the reviewed active sermon.</small>{slides.state==='generating'&&<small className="sermon-cloud-ready"><i className="ti ti-photo"/> Creating cinematic sermon slides + seven devotion images{slides.total?` · ${slides.completed||0} of ${slides.total} visuals`:''}…</small>}{slides.state==='error'&&<small>{slides.error}</small>}{archiveError&&<small>{archiveError}</small>}</div>
+        <div>{archivedDocument&&<>{archivedDocument.files?.docx&&<a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a>}{archivedDocument.files?.pdf&&<a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> Sermon PDF</a>}</>}{slides.state==='ready'&&<><a href={slides.download}><i className="ti ti-file-type-ppt"/> PowerPoint</a>{slides.devotionsDownload&&<a href={slides.devotionsDownload}><i className="ti ti-book-2"/> 7-Day Devotions</a>}</>}{reviewedActive&&slides.state!=='ready'&&<button type="button" disabled={slides.state==='generating'||archiveState==='saving'} onClick={createSlides}><i className={`ti ${slides.state==='generating'||archiveState==='saving'?'ti-loader-2':'ti-presentation'}`}/> {slides.state==='generating'?'Generating sermon package…':archiveState==='saving'?'Preparing source documents…':'Generate Sermon Slides + 7 Devotions'}</button>}<span className="sermon-cloud-status"><i className="ti ti-lock"/> Automatic uploads not enabled</span><a href={ONEDRIVE_REPOSITORY_SHARE_URL} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> Open repository</a><button type="button" disabled={archiveState==='saving'||!reviewedActive} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Creating…':archivedDocument?'Recreate teaching documents':'Create teaching documents only'}</button></div>
       </section>
       <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>Full Church Triumphant teaching-document framework</small></summary><SermonNotesView notes={spiritual.sermonNotes}/></details>
     </>}
