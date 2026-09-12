@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calculateDebtPayment, debtSummary, matchedDebtPayments, normalizeDebts, projectDebtPayoff } from './debtModel.js'
+import { calculateDebtPayment, debtRuleMatches, debtSummary, matchedDebtPayments, matchingDebtRule, normalizeDebts, projectDebtPayoff } from './debtModel.js'
 
 const debts=[
   {id:'prosper',creditor:'Prosper',debtType:'Personal loan',status:'Active',originalBalance:45000,currentBalance:39000,interestRate:12,minimumPayment:904.03,paymentMatchText:'PROSPER'},
@@ -15,6 +15,15 @@ test('payment matching excludes pending rows and never mutates the confirmed bal
   const rows=matchedDebtPayments(debts[0],[{id:'a',name:'PROSPER PAYMENT',amount:904.03,date:'2026-09-01',pending:false},{id:'b',name:'PROSPER PAYMENT',amount:904.03,date:'2026-10-01',pending:true},{id:'c',name:'GROCERY',amount:90,date:'2026-09-02'}])
   assert.deepEqual(rows.map(row=>row.id),['a'])
   assert.equal(debts[0].currentBalance,39000)
+})
+
+test('reviewed debt payment rules match the selected bank account and statement safely',()=>{
+  const ruled=[{...debts[0],paymentRule:{enabled:true,matchText:'TOWER HELOC',matchField:'originalStatement',matchMode:'contains',accountId:'operating',nonPrincipalAmount:0}}]
+  const posted={id:'tx-1',name:'Tower payment',originalStatement:'ONLINE PMT TOWER HELOC',amount:2735.02,pending:false}
+  assert.equal(debtRuleMatches(ruled[0],posted,'operating'),true)
+  assert.equal(debtRuleMatches(ruled[0],posted,'savings'),false)
+  assert.equal(matchingDebtRule(ruled,posted,'operating').id,'prosper')
+  assert.equal(matchingDebtRule(ruled,{...posted,pending:true},'operating'),null)
 })
 
 test('payoff scenario accrues interest and rolls freed minimums into remaining debt capacity',()=>{

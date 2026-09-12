@@ -261,6 +261,8 @@ test('Finance applies posted bank activity to debt with reviewed interest and pr
   await page.getByText('Mortgage payment',{exact:true}).click()
   await page.getByLabel('Debt account').selectOption('mortgage')
   await page.getByLabel('Escrow fees or other non-principal amount').fill('900')
+  await page.getByLabel('Save as a debt payment rule').check()
+  await page.getByLabel('Debt rule match text').fill('MONTHLY MORTGAGE')
   const preview=page.getByLabel('Debt payment allocation preview')
   await expect(preview).toContainText('Interest $1500.00')
   await expect(preview).toContainText('Principal $600.00')
@@ -270,6 +272,7 @@ test('Finance applies posted bank activity to debt with reviewed interest and pr
   const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Apply the posted')
   await expect(review).toContainText('reduce only principal')
+  await expect(review).toContainText('Save a future-payment rule matching “MONTHLY MORTGAGE”')
   await expect(review).toContainText('never moves money')
 })
 

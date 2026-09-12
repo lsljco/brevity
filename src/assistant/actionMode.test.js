@@ -61,6 +61,8 @@ test('each action accepts only its own fields and validates field types and enum
   assert.equal(historicalRule.risk,'strong-confirmation')
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'transaction.rule.delete',payload:{}}]},{member:'Larry',role:'admin'}))
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-mortgage',transactionDate:'2026-09-05',transactionName:'Mortgage payment',amount:3000,nonPrincipalAmount:900}}]},{member:'Larry',role:'admin'}))
+  const debtRule=normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-heloc',transactionDate:'2026-09-05',transactionName:'HELOC payment',amount:2735.02,nonPrincipalAmount:0,paymentRule:{enabled:true,matchText:'TOWER HELOC',matchField:'originalStatement',matchMode:'contains',accountId:'operating',nonPrincipalAmount:0}}}]},{member:'Larry',role:'admin'})
+  assert.equal(debtRule.operations[0].payload.paymentRule.matchText,'TOWER HELOC')
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-mortgage',transactionDate:'2026-09-05',transactionName:'Mortgage payment',amount:3000,nonPrincipalAmount:3100}}]},{member:'Larry',role:'admin'}),/between zero and the payment total/)
   for (const field of ['amount','date','originalStatement','notes','goal','splits','needsReview']) {
     assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.update',payload:{name:'AT&T',[field]:field==='amount'?450:'changed'}}]},{member:'Larry',role:'admin'}),new RegExp(`unsupported field: ${field}`))
@@ -199,6 +201,14 @@ test('reviewed bank activity applies calculated interest and principal to one ex
   assert.equal(result.after[1].currentBalance,2000)
   assert.equal(result.before[0].currentBalance,300000)
   assert.throws(()=>applyRecordOperation(result.after,operation),/already applied to a debt/)
+})
+
+test('reviewed bank activity can save a future matching rule on the same debt record',()=>{
+  const operation={type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-heloc',transactionDate:'2026-09-05',transactionName:'HELOC payment',amount:3000,nonPrincipalAmount:0,paymentRule:{enabled:true,matchText:'TOWER HELOC',matchField:'originalStatement',matchMode:'contains',accountId:'operating',nonPrincipalAmount:0}}}
+  const result=applyRecordOperation([{id:'mortgage',creditor:'Tower',status:'Active',currentBalance:100000,interestRate:6,interestMethod:'Amortized APR',paymentsPerYear:12,payments:[]}],operation,()=> 'unused',{actor:'Larry',now:()=>new Date('2026-09-05T12:00:00Z')})
+  assert.equal(result.after[0].paymentRule.matchText,'TOWER HELOC')
+  assert.equal(result.after[0].paymentMatchText,'TOWER HELOC')
+  assert.equal(result.after[0].currentBalance,97500)
 })
 
 test('Action Mode creates decisions and future-only categorization rules',()=>{

@@ -18,12 +18,39 @@ export function normalizeDebts(value) {
     fixedInterestAmount:amount(item.fixedInterestAmount),
     dueDay:Number.isInteger(Number(item.dueDay)) ? Number(item.dueDay) : 0,
     paymentMatchText:String(item.paymentMatchText || '').trim(), notes:String(item.notes || '').trim(),
+    paymentRule:item.paymentRule?.enabled ? {
+      enabled:true,
+      matchText:String(item.paymentRule.matchText || '').trim(),
+      matchField:item.paymentRule.matchField === 'merchantName' ? 'merchantName' : 'originalStatement',
+      matchMode:['contains','exactly','starts'].includes(item.paymentRule.matchMode) ? item.paymentRule.matchMode : 'contains',
+      accountId:String(item.paymentRule.accountId || '').trim(),
+      nonPrincipalAmount:cents(item.paymentRule.nonPrincipalAmount),
+    } : null,
     payments:(Array.isArray(item.payments) ? item.payments : []).filter(payment=>payment?.transactionId).map(payment=>({
       ...payment,amount:amount(payment.amount),interest:cents(payment.interest),principal:cents(payment.principal),
       nonPrincipalAmount:cents(payment.nonPrincipalAmount),unappliedAmount:cents(payment.unappliedAmount),
       balanceBefore:cents(payment.balanceBefore),balanceAfter:cents(payment.balanceAfter),
     })),
   }))
+}
+
+const ruleText = (transaction, field) => String(field === 'merchantName'
+  ? transaction?.merchant_name || transaction?.merchantName || transaction?.name || ''
+  : transaction?.originalStatement || transaction?.original_description || transaction?.name || '').trim().toLowerCase()
+
+export function debtRuleMatches(debt, transaction, localAccountId = '') {
+  const rule=debt?.paymentRule
+  if(!rule?.enabled || transaction?.pending || Number(transaction?.amount) <= 0)return false
+  if(rule.accountId && rule.accountId !== localAccountId)return false
+  const source=ruleText(transaction,rule.matchField),needle=String(rule.matchText||'').trim().toLowerCase()
+  if(!needle)return false
+  if(rule.matchMode==='exactly')return source===needle
+  if(rule.matchMode==='starts')return source.startsWith(needle)
+  return source.includes(needle)
+}
+
+export function matchingDebtRule(debts, transaction, localAccountId = '') {
+  return normalizeDebts(debts).find(debt=>debt.status==='Active'&&debt.currentBalance>0&&debtRuleMatches(debt,transaction,localAccountId)) || null
 }
 
 export function calculateDebtPayment(debt, transaction, nonPrincipalAmount = 0) {

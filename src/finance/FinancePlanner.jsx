@@ -1994,12 +1994,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     storageKey:DEBT_STORAGE_KEY,
     surfaceError:true,
   })
-  const reviewDebtPayment = ({debt,tx,nonPrincipalAmount}) => stageDirectFinanceReview({
+  const reviewDebtPayment = ({debt,tx,nonPrincipalAmount,paymentRule}) => stageDirectFinanceReview({
     summary:`Apply ${fmtMoney(Math.abs(Number(tx.amount)||0))} bank payment to ${debt.creditor}`,
     operation:{
       type:'debt.transaction.apply',targetId:debt.id,
-      payload:{transactionId:tx.id,transactionDate:tx.date,transactionName:String(tx.name||tx.originalStatement||'Debt payment'),amount:Math.abs(Number(tx.amount)||0),nonPrincipalAmount:Number(nonPrincipalAmount)||0},
-      description:`Apply the posted ${tx.date} bank transaction to ${debt.creditor}. Calculate interest using ${debt.interestMethod}, preserve ${fmtMoney(Number(nonPrincipalAmount)||0)} for escrow, fees, or other non-principal charges, and reduce only principal. This records the payment but never moves money.`,
+      payload:{transactionId:tx.id,transactionDate:tx.date,transactionName:String(tx.name||tx.originalStatement||'Debt payment'),amount:Math.abs(Number(tx.amount)||0),nonPrincipalAmount:Number(nonPrincipalAmount)||0,...(paymentRule?{paymentRule}: {})},
+      description:`Apply the posted ${tx.date} bank transaction to ${debt.creditor}. Calculate interest using ${debt.interestMethod}, preserve ${fmtMoney(Number(nonPrincipalAmount)||0)} for escrow, fees, or other non-principal charges, and reduce only principal.${paymentRule?` Save a future-payment rule matching “${paymentRule.matchText}” on this account.`:''} This records the payment but never moves money.`,
     },
     storageKey:DEBT_STORAGE_KEY,
     surfaceError:true,
