@@ -75,6 +75,11 @@ export async function resolvePublicAddress(url, lookup = dns.lookup) {
   return addresses[0]
 }
 
+export const pinnedLookup = resolved => (_hostname, options, callback) => {
+  if (options?.all) callback(null,[{address:resolved.address,family:resolved.family}])
+  else callback(null,resolved.address,resolved.family)
+}
+
 const nodeRequest = (url, options) => new Promise((resolve, reject) => {
   const request = (url.protocol === 'https:' ? https : http).request(url, options, resolve)
   request.setTimeout(options.timeout, () => request.destroy(Object.assign(new Error('Timed out'), { code:'ETIMEDOUT' })))
@@ -108,7 +113,7 @@ export async function fetchRecipeHtml(input, { lookup = dns.lookup, requester = 
         method:'GET',
         headers:{ accept:'text/html,application/xhtml+xml', 'accept-encoding':'identity', 'user-agent':'BrevityRecipeImporter/1.0' },
         timeout:timeoutMs,
-        lookup:(_hostname, _options, callback) => callback(null, resolved.address, resolved.family),
+        lookup:pinnedLookup(resolved),
       })
     } catch (error) {
       if (error?.code === 'ETIMEDOUT') throw fail('The recipe website took too long to respond.', 504)
