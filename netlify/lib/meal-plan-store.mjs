@@ -78,6 +78,8 @@ function normalizeMealInput(meal, actor, now, createId) {
     ingredientNutrition: normalizeIngredientNutrition(meal?.ingredientNutrition),
     nutritionWarnings: Array.isArray(meal?.nutritionWarnings) ? meal.nutritionWarnings.map(value=>String(value||'').trim()).filter(Boolean).slice(0,20) : [],
     nutritionBasis: String(meal?.nutritionBasis || '').trim() || 'Household-entered nutrition estimate',
+    sourceUrl: safeText(meal?.sourceUrl, 2048),
+    sourceName: safeText(meal?.sourceName, 160),
     macros: {
       calories: Math.round(calories),
       proteinGrams: Math.round(proteinGrams),

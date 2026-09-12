@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MEAL_TYPES } from './mealLibrary.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
-import { calculateMealNutrition } from './mealPlanApi.js'
+import { calculateMealNutrition, importRecipeFromUrl } from './mealPlanApi.js'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
 
@@ -72,7 +72,13 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
     image:'',
     yieldQuantity:'',
     yieldUnit:'servings',
+    sourceUrl:'',
+    sourceName:'',
   })
+  const [recipeUrl,setRecipeUrl]=useState('')
+  const [importState,setImportState]=useState('idle')
+  const [importError,setImportError]=useState('')
+  const [importNotice,setImportNotice]=useState('')
   const [nutrition,setNutrition]=useState(null)
   const [nutritionState,setNutritionState]=useState('idle')
   const [nutritionError,setNutritionError]=useState('')
@@ -80,13 +86,44 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
     setForm(current => ({ ...current, [field]:value }))
     if(['ingredients','yieldQuantity','yieldUnit'].includes(field)){setNutrition(null);setNutritionError('');setNutritionState('idle')}
   }
-  const ingredientLines=()=>form.ingredients.split(/\r?\n/).map(value=>value.trim()).filter(Boolean)
-  const calculate=async()=>{
+  const ingredientLines=value=>(value??form.ingredients).split(/\r?\n/).map(line=>line.trim()).filter(Boolean)
+  const calculateFor=async(ingredients,yieldQuantity,yieldUnit)=>{
     setNutritionState('loading');setNutritionError('')
     try{
-      const result=await calculateMealNutrition(ingredientLines(),Number(form.yieldQuantity),form.yieldUnit.trim())
+      const result=await calculateMealNutrition(ingredients,Number(yieldQuantity),yieldUnit.trim())
       setNutrition(result.nutrition);setNutritionState('ready')
-    }catch(error){setNutrition(null);setNutritionError(error.message||'Could not calculate nutrition.');setNutritionState('error')}
+      return true
+    }catch(error){setNutrition(null);setNutritionError(error.message||'Could not calculate nutrition.');setNutritionState('error');return false}
+  }
+  const calculate=()=>calculateFor(ingredientLines(),form.yieldQuantity,form.yieldUnit)
+  const importFromWebsite=async()=>{
+    setImportState('loading');setImportError('');setImportNotice('');setNutrition(null);setNutritionError('');setNutritionState('idle')
+    try{
+      const result=await importRecipeFromUrl(recipeUrl.trim())
+      const recipe=result.recipe
+      const ingredients=(recipe.ingredients||[]).join('\n')
+      const yieldQuantity=recipe.yieldQuantity??''
+      const yieldUnit=recipe.yieldUnit||'servings'
+      setForm(current=>({
+        ...current,
+        mealType:recipe.mealType||current.mealType,
+        name:recipe.name||'',
+        description:recipe.description||'',
+        ingredients,
+        prepMinutes:recipe.prepMinutes??'',
+        cookMinutes:recipe.cookMinutes??'',
+        totalMinutes:recipe.totalMinutes??'',
+        image:recipe.image||'',
+        yieldQuantity,
+        yieldUnit,
+        sourceUrl:recipe.sourceUrl||'',
+        sourceName:recipe.sourceName||'',
+      }))
+      const missing=(recipe.missingFields||[]).join(', ')
+      setImportNotice(`Imported from ${recipe.sourceName}.${missing?` Please enter the missing ${missing}.`:' Review the populated fields before saving.'}`)
+      setImportState('ready')
+      if(ingredients&&Number(yieldQuantity)>0&&yieldUnit)await calculateFor(ingredientLines(ingredients),yieldQuantity,yieldUnit)
+    }catch(error){setImportError(error.message||'Could not import that recipe.');setImportState('error')}
   }
   const submit = event => {
     event.preventDefault()
@@ -108,6 +145,8 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
       ingredientNutrition:nutrition.ingredients,
       nutritionWarnings:nutrition.warnings,
       nutritionBasis:nutrition.nutritionBasis,
+      sourceUrl:form.sourceUrl,
+      sourceName:form.sourceName,
     })
   }
 
@@ -121,8 +160,14 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
     <section className="meal-dialog meal-add-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-add-title">
       <header><div><span>Household meal library</span><h2 id="meal-add-title">Add a meal</h2><p>Add it once and it will be available as a replacement on any device.</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
       <form className="meal-add-form" onSubmit={submit}>
+        <section className="meal-recipe-import meal-add-form--wide" aria-labelledby="recipe-import-title">
+          <div><strong id="recipe-import-title">Import from a recipe website</strong><span>Paste the recipe page URL. Brevity will populate an editable draft and calculate nutrition from its measured ingredients.</span></div>
+          <div className="meal-recipe-import-controls"><label><span>Recipe website URL</span><input autoFocus type="url" required={false} value={recipeUrl} onChange={event=>setRecipeUrl(event.target.value)} placeholder="https://example.com/recipe" /></label><button type="button" onClick={importFromWebsite} disabled={saving||importState==='loading'||!recipeUrl.trim()}>{importState==='loading'?'Importing…':'Import recipe'}</button></div>
+          {importError&&<div className="meal-nutrition-error" role="alert">{importError}</div>}
+          {importNotice&&<div className="meal-recipe-import-notice" role="status">{importNotice}{form.sourceUrl&&<a href={form.sourceUrl} target="_blank" rel="noreferrer">View source</a>}</div>}
+        </section>
         <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)}>{MEAL_TYPES.map(type=><option key={type} value={type}>{LABELS[type]}</option>)}</select></label>
-        <label className="meal-add-form--wide"><span>Meal name</span><input autoFocus required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
+        <label className="meal-add-form--wide"><span>Meal name</span><input required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
         <label className="meal-add-form--wide"><span>Description</span><textarea value={form.description} onChange={event=>set('description',event.target.value)} placeholder="Brief description of the plated meal" /></label>
         <label className="meal-add-form--wide"><span>Measured ingredients <small>one per line; include brand, amount and unit</small></span><textarea required value={form.ingredients} onChange={event=>set('ingredients',event.target.value)} placeholder={'2 cups Pearl Milling Company pancake mix\n1 cup water\n1 stick salted butter'} /></label>
         <label><span>Prep time (minutes)</span><input required min="0" step="1" type="number" value={form.prepMinutes} onChange={event=>set('prepMinutes',event.target.value)} /></label>

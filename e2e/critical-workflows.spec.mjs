@@ -68,6 +68,12 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
       ],
       yieldQuantity:12,yieldUnit:'pancakes',serving:'1 pancake',batchMacros:{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98},perServingMacros:{calories:167.5,proteinGrams:2.1,carbohydrateGrams:21,fatGrams:8.2},warnings:['Confirm the exact package label.'],nutritionBasis:'Calculated by Brevity from the measured ingredient list.',
     }}
+    else if(path.endsWith('/recipe-import'))body={recipe:{
+      mealType:'breakfast',name:'Fluffy Golden Pancakes',description:'A family breakfast.',
+      ingredients:['2 cups Pearl Milling Company pancake mix','1 cup water','1 stick salted butter'],
+      prepMinutes:5,cookMinutes:15,totalMinutes:20,image:'https://recipes.example.com/pancakes.jpg',
+      yieldQuantity:12,yieldUnit:'pancakes',sourceUrl:'https://recipes.example.com/pancakes',sourceName:'recipes.example.com',missingFields:[],
+    }}
     else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()}
     else if(path.endsWith('/plaid-accounts'))body=alreadyLinkedExtrasFixture?{
       connected:true,balanceMode:'live',balanceProvenance:'plaid.accountsBalanceGet',syncedAt:new Date().toISOString(),errors:[],requiresUpdate:[],
@@ -150,6 +156,28 @@ test('Meal Library calculates batch and per-serving nutrition from measured ingr
   await dialog.locator('footer button.is-primary').click()
   await expect(page.getByText(/Saturday Pancakes was added/)).toBeVisible()
   await expect(page.getByText('Saturday Pancakes',{exact:true})).toBeVisible()
+})
+
+test('Meal Library imports a recipe website and calculates its per-serving nutrition',async({page})=>{
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Rolling 7-Day Meal Plan'})).toBeVisible()
+  await page.locator('.meal-planner-controls button').filter({hasText:'Meal Library'}).click()
+  await page.locator('.meal-library-add').filter({hasText:'Add Breakfast'}).click()
+  const dialog=page.getByRole('dialog',{name:'Add a meal'})
+  await dialog.getByLabel('Recipe website URL').fill('https://recipes.example.com/pancakes')
+  await dialog.locator('.meal-recipe-import-controls button').click()
+  await expect(dialog.getByLabel('Meal name')).toHaveValue('Fluffy Golden Pancakes')
+  await expect(dialog.getByLabel(/Measured ingredients/)).toHaveValue(/2 cups Pearl Milling Company/)
+  await expect(dialog.getByLabel('Prep time (minutes)')).toHaveValue('5')
+  await expect(dialog.getByLabel('Cook time (minutes)')).toHaveValue('15')
+  await expect(dialog.getByLabel('Batch yield')).toHaveValue('12')
+  await expect(dialog.getByLabel('Yield unit')).toHaveValue('pancakes')
+  await expect(dialog.getByLabel('Photo URL')).toHaveValue('https://recipes.example.com/pancakes.jpg')
+  await expect(dialog.getByRole('status')).toContainText('Review the populated fields before saving.')
+  const preview=dialog.getByLabel('Calculated nutrition preview')
+  await expect(preview).toContainText('Total batch')
+  await expect(preview).toContainText('Per 1 pancake')
+  await expect(dialog.locator('footer button.is-primary')).toBeEnabled()
 })
 
 test('Next-Day Alignment retains the active weekly sermon instead of asking for another upload',async({page})=>{

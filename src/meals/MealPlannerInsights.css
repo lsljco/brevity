@@ -33,6 +33,15 @@
 .meal-add-form footer button { padding:9px 12px; border:1px solid var(--glass-border); border-radius:9px; background:transparent; color:var(--soft-white); cursor:pointer; }
 .meal-add-form footer button.is-primary { border-color:rgba(197,164,109,.45); background:rgba(197,164,109,.14); color:var(--gold); }
 .meal-add-form footer button:disabled { cursor:not-allowed; opacity:.45; }
+.meal-recipe-import { display:grid; gap:12px; padding:15px; border:1px solid rgba(197,164,109,.3); border-radius:13px; background:rgba(197,164,109,.055); }
+.meal-recipe-import > div:first-child { display:grid; gap:4px; }
+.meal-recipe-import strong { color:var(--soft-white); font-size:13px; }
+.meal-recipe-import > div:first-child > span { color:var(--muted); font-size:10px; line-height:1.45; }
+.meal-recipe-import-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; }
+.meal-recipe-import-controls button { min-height:39px; padding:9px 13px; border:1px solid rgba(197,164,109,.42); border-radius:9px; background:rgba(197,164,109,.14); color:var(--gold); cursor:pointer; }
+.meal-recipe-import-controls button:disabled { cursor:not-allowed; opacity:.45; }
+.meal-recipe-import-notice { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; color:var(--soft-white); font-size:10px; line-height:1.45; }
+.meal-recipe-import-notice a { color:var(--gold); }
 .meal-nutrition-action { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px; border:1px solid rgba(197,164,109,.24); border-radius:12px; background:rgba(197,164,109,.055); }
 .meal-nutrition-action div { display:grid; gap:4px; }
 .meal-nutrition-action strong { color:var(--soft-white); font-size:12px; }
@@ -57,5 +66,5 @@
 .meal-nutrition-preview ul { margin:0; padding-left:18px; }
 
 @media (max-width:800px) { .meal-plan-insight { grid-template-columns:1fr; }.meal-plan-insight > small { grid-column:auto; } }
-@media (max-width:620px) { .meal-library > section > header { align-items:flex-start; flex-direction:column; }.meal-library-add { width:100%; } .meal-add-form { grid-template-columns:1fr; padding:18px; }.meal-add-form--wide,.meal-add-form footer { grid-column:auto; }.meal-nutrition-action,.meal-nutrition-row { align-items:stretch; flex-direction:column; }.meal-nutrition-action button { width:100%; }.meal-nutrition-totals { grid-template-columns:1fr; }.meal-nutrition-row > span { flex:auto; } }
+@media (max-width:620px) { .meal-library > section > header { align-items:flex-start; flex-direction:column; }.meal-library-add { width:100%; } .meal-add-form { grid-template-columns:1fr; padding:18px; }.meal-add-form--wide,.meal-add-form footer { grid-column:auto; }.meal-recipe-import-controls { grid-template-columns:1fr; }.meal-recipe-import-controls button,.meal-nutrition-action button { width:100%; }.meal-nutrition-action,.meal-nutrition-row { align-items:stretch; flex-direction:column; }.meal-nutrition-totals { grid-template-columns:1fr; }.meal-nutrition-row > span { flex:auto; } }
 @media (max-width:520px) { .meal-plan-insight dl { grid-template-columns:repeat(2,1fr); } .meal-choice > .meal-image-placeholder { width:72px; height:60px; } }

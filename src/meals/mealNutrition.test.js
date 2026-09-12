@@ -69,3 +69,11 @@ test('custom meal form derives macros from ingredients instead of asking the hou
   assert.doesNotMatch(source,/<span>Calories<\/span><input required/)
   assert.doesNotMatch(source,/<span>Protein \(g\)<\/span><input required/)
 })
+
+test('custom meal form imports a recipe website into an editable draft before save', () => {
+  const source=readFileSync(new URL('./MealPlanner.jsx',import.meta.url),'utf8')
+  assert.match(source,/Import from a recipe website/)
+  assert.match(source,/importRecipeFromUrl/)
+  assert.match(source,/Review the populated fields before saving/)
+  assert.match(source,/sourceUrl:form\.sourceUrl/)
+})
