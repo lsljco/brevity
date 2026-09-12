@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef } from 'react'
 import { fmtMoney } from './projection.js'
-import { bankActivityPreview, bankBalanceMovement } from './calendarSemantics.js'
+import { bankActivityPreview, bankBalanceMovement, cashForecastSourceSeverity } from './calendarSemantics.js'
 import { isTransferTransaction } from './reportingData.js'
 import { transactionDescription } from './transactionList.js'
 
 export function CashForecastIntro({ monthName, showBankActivity, error, freshnessMessage, freshnessStatus, balanceMessage, balanceStatus, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false }) {
-  const warning = Boolean(error) || unmappedTransactionCount > 0 || freshnessStatus !== 'fresh' || balanceStatus !== 'fresh'
+  const sourceSeverity = cashForecastSourceSeverity({ error, freshnessStatus, balanceStatus, unmappedTransactionCount })
   return (
     <>
       <section className="finance-calendar-intro" aria-labelledby="cash-forecast-title">
@@ -22,9 +22,12 @@ export function CashForecastIntro({ monthName, showBankActivity, error, freshnes
       </section>
       {(error || freshnessMessage || balanceMessage || unmappedTransactionCount > 0) && (
         <div
-          className={`finance-calendar-source-status${warning ? ' finance-calendar-source-status--warning' : ''}`}
-          role={warning ? 'alert' : 'status'}
+          className={`finance-calendar-source-status finance-calendar-source-status--${sourceSeverity}`}
+          role={sourceSeverity === 'error' ? 'alert' : 'status'}
         >
+          <span className="finance-calendar-source-status-label">
+            {sourceSeverity === 'error' ? 'Bank data error' : sourceSeverity === 'attention' ? 'Bank data notice' : 'Bank data status'}
+          </span>
           {balanceMessage && <span><strong>Balance anchor status:</strong> {balanceMessage}</span>}
           {(error || freshnessMessage) && <span><strong>Transaction snapshot status:</strong> {error || freshnessMessage} Bank activity below uses this exact-account snapshot; reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</span>}
           {unmappedTransactionCount > 0 && <span><strong>Excluded bank activity:</strong> Review unlinked rows in Finance › Transactions with all accounts selected.</span>}

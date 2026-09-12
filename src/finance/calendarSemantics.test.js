@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-import { bankActivityPreview, bankBalanceMovement, buildUniquePlaidAccountMap, cashForecastScope, hasCompatiblePlaidAccountLink, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
+import { bankActivityPreview, bankBalanceMovement, buildUniquePlaidAccountMap, cashForecastScope, cashForecastSourceSeverity, hasCompatiblePlaidAccountLink, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
 
 const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
 const agenda = readFileSync(new URL('./CashForecastAgenda.jsx', import.meta.url), 'utf8')
@@ -66,6 +66,14 @@ test('Cash Forecast bank preview reserves a row for pending evidence', () => {
   assert.deepEqual(bankActivityPreview(rows).map(transaction => transaction.id),['posted-transfer','pending-authorization'])
   assert.deepEqual(bankActivityPreview(rows.slice(0,2)).map(transaction => transaction.id),['posted-transfer','posted-purchase'])
   assert.deepEqual(bankActivityPreview([rows[2],...rows.slice(0,2)]).map(transaction => transaction.id),['pending-authorization','posted-transfer'])
+})
+
+test('Cash Forecast reserves error styling for real failures', () => {
+  assert.equal(cashForecastSourceSeverity({ freshnessStatus:'partial', balanceStatus:'fresh' }), 'attention')
+  assert.equal(cashForecastSourceSeverity({ freshnessStatus:'fresh', balanceStatus:'unverified' }), 'attention')
+  assert.equal(cashForecastSourceSeverity({ freshnessStatus:'fresh', balanceStatus:'fresh', unmappedTransactionCount:3 }), 'attention')
+  assert.equal(cashForecastSourceSeverity({ freshnessStatus:'fresh', balanceStatus:'fresh' }), 'information')
+  assert.equal(cashForecastSourceSeverity({ error:'Bank refresh failed', freshnessStatus:'partial', balanceStatus:'stale' }), 'error')
 })
 
 test('historical reconstruction follows Plaid signs and ignores pending rows', () => {
@@ -140,7 +148,7 @@ test('mobile agenda separates the plan, bank activity, and balance meaning', () 
   assert.match(agenda, /'Posted', isTransferTransaction\(transaction\) \? 'Transfer'/)
   assert.match(agenda, /Estimated historical cash balance/)
   assert.match(planner, /Estimated historical cash balance from/)
-  assert.match(agenda, /freshnessStatus !== 'fresh'/)
+  assert.match(agenda, /cashForecastSourceSeverity\(\{ error, freshnessStatus, balanceStatus, unmappedTransactionCount \}\)/)
   assert.match(agenda, /aria-expanded=\{selected\}/)
   assert.match(agenda, /aria-controls=\{detailId\}/)
   assert.match(agenda, /detail\.scrollIntoView/)
@@ -162,11 +170,12 @@ test('mobile agenda separates the plan, bank activity, and balance meaning', () 
   assert.match(planner, /viewAcctIds=\{forecastScope\.accountIds\}/)
 })
 
-test('phone Finance uses the app scroll and a non-overlapping account bar', () => {
+test('phone Finance uses the app scroll and keeps the account bar below back navigation', () => {
   const mobileBlock = responsive.slice(responsive.indexOf('@media (max-width: 720px)'))
   assert.match(mobileBlock, /\.app-main \.finance-root\s*\{[^}]*height:\s*auto\s*!important;[^}]*overflow:\s*visible\s*!important;/s)
   assert.match(mobileBlock, /\.finance-root \.dash-body\s*\{\s*overflow-y:\s*visible\s*!important;/)
-  assert.match(mobileBlock, /\.finance-account-filter\s*\{[^}]*position:\s*static\s*!important;[^}]*top:\s*auto\s*!important;/s)
+  assert.match(mobileBlock, /\.finance-account-filter\s*\{[^}]*position:\s*sticky\s*!important;[^}]*top:\s*0\s*!important;[^}]*z-index:\s*80\s*!important;/s)
+  assert.match(mobileBlock, /\.app-main:has\(\.app-context-navigation\) \.finance-account-filter\s*\{\s*top:\s*56px\s*!important;/)
   assert.match(mobileBlock, /\.finance-account-filter > button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/s)
   assert.match(mobileBlock, /\.finance-calendar-agenda-activity\s*\{\s*grid-column:\s*1 \/ -1;/)
 })

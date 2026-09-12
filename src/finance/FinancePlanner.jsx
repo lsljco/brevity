@@ -2290,7 +2290,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   // ── Account filter bar ──────────────────────────────────────────────────
   const allSelected = !selectedAccts || selectedAccts.size === data.accounts.length
   const AccountFilterBar = !isForm && (
-    <div className="finance-account-filter" style={{
+    <nav className="finance-account-filter" aria-label="Finance account filters" style={{
       position: 'sticky', top: 0, zIndex: 20,
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '8px 24px 8px',
@@ -2363,7 +2363,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
           {fmtMoney(totBal)}
         </span>
       )}
-    </div>
+    </nav>
   )
 
   const allAccountsLinkedToCurrentBankSources = data.accounts.length > 0

@@ -27,6 +27,12 @@ export function bankActivityPreview(transactions = [], limit = 2) {
   return preview
 }
 
+export function cashForecastSourceSeverity({ error, freshnessStatus, balanceStatus, unmappedTransactionCount = 0 } = {}) {
+  if (error) return 'error'
+  if (unmappedTransactionCount > 0 || freshnessStatus !== 'fresh' || balanceStatus !== 'fresh') return 'attention'
+  return 'information'
+}
+
 export function reconstructHistoricalCashBalances({ transactions = [], currentBalance = 0, todayKey = '' } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(todayKey || '')) || !Number.isFinite(Number(currentBalance))) return {}
   const posted = (Array.isArray(transactions) ? transactions : [])
