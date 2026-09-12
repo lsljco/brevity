@@ -54,6 +54,11 @@ test('legacy completion records migrate into the current occurrence state shape'
   assert.equal(state.occurrences['2026-09-03:thursday-nyla-basement'].complete, true)
 })
 
+test('a started responsibility is visibly in progress before completion',()=>{
+  const task=buildHouseholdMaintenanceWeek('2026-09-07')[0].tasks[0]
+  assert.equal(householdOperationCalendarEvent(task,{startedAt:'2026-09-07T19:30:00.000Z',startedBy:'Nyla'}).status,'In progress')
+})
+
 test('coverage applies to one recurring occurrence without changing another week', () => {
   const firstWeek = buildHouseholdMaintenanceWeek('2026-08-31')
   const secondWeek = buildHouseholdMaintenanceWeek('2026-09-07')
