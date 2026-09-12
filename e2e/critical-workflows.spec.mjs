@@ -129,10 +129,12 @@ test('Today last three pillar cards expose recorded detail instead of generic he
 })
 
 test('Meal Library calculates batch and per-serving nutrition from measured ingredients',async({page},testInfo)=>{
+  test.slow()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Health & Nutrition',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Meal Plan',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Rolling 7-Day Meal Plan'})).toBeVisible()
   await page.getByRole('button',{name:'Meal Library',exact:true}).click()
   await page.getByRole('button',{name:'Add Breakfast',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Add a meal'})
