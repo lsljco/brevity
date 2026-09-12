@@ -335,12 +335,26 @@
   letter-spacing: .1em;
   text-transform: uppercase;
 }
-.finance-calendar-source-status--warning {
+.finance-calendar-source-status-label {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.finance-calendar-source-status--attention {
+  border-color: rgba(197,164,109,.38);
+  background: rgba(197,164,109,.09);
+  color: var(--muted);
+}
+.finance-calendar-source-status--attention > span > strong { color: var(--gold); }
+.finance-calendar-source-status--error {
   border-color: rgba(232,150,122,.35);
   background: rgba(232,150,122,.08);
   color: var(--expense-color);
 }
-.finance-calendar-source-status--warning > span > strong { color: var(--expense-color); }
+.finance-calendar-source-status--error .finance-calendar-source-status-label,
+.finance-calendar-source-status--error > span > strong { color: var(--expense-color); }
 .finance-calendar-mobile-agenda { display: none; }
 .finance-calendar-mobile-agenda > button {
   box-sizing: border-box;
@@ -447,8 +461,9 @@
   }
   .finance-root .dash-body { overflow-y: visible !important; }
   .finance-account-filter {
-    position: static !important;
-    top: auto !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 80 !important;
     background: var(--theme-surface, rgba(10,9,8,.97)) !important;
     box-shadow: 0 8px 24px rgba(0,0,0,.24);
   }
@@ -456,7 +471,7 @@
     min-width: 44px;
     min-height: 44px;
   }
-  .app-main:has(.app-context-navigation) .finance-account-filter { top: auto !important; }
+  .app-main:has(.app-context-navigation) .finance-account-filter { top: 56px !important; }
   .finance-root .finance-inner {
     box-sizing: border-box !important;
     width: calc(100% - 24px) !important;
