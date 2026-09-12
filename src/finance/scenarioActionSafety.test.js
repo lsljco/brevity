@@ -56,7 +56,10 @@ test('Scenario Modeling never persists or claims a forecast change before Action
   assert.doesNotMatch(component,/localStorage\.setItem\(SCENARIO_STORAGE_KEY/)
   assert.doesNotMatch(component,/saveModel\(/)
   assert.doesNotMatch(component,/window\.confirm\(/)
-  assert.doesNotMatch(component,/addIncome|removeIncome|scenario-delete/,'unsupported row mutations must not bypass Action Mode')
+  assert.match(component,/incomeAction:'create'/)
+  assert.match(component,/incomeAction:'delete'/)
+  assert.match(component,/Review expense total/)
+  assert.match(component,/prepareDirectAction\(\{ summary, operation, expectedVersion \}\)/,'income and expense mutations must retain Action Mode review')
 })
 
 test('direct forecast review captures CAS, audits the exact record, and safely undoes',async()=>{
