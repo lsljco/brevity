@@ -75,12 +75,15 @@ test('custom meals retain calculated batch, yield and ingredient nutrition evide
     batchMacros:{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98},
     ingredientNutrition:[{input:'2 cups pancake mix',resolvedName:'Pancake mix',basis:'Package-label equivalent',confidence:'medium',macros:{calories:1200,proteinGrams:24,carbohydrateGrams:252,fatGrams:6}}],
     nutritionWarnings:['Confirm the exact package label.'],nutritionBasis:'Calculated by Brevity from the measured ingredient list.',
+    sourceUrl:'https://recipes.example.com/pancakes',sourceName:'recipes.example.com',
   }})
   assert.equal(meal.yieldQuantity,12)
   assert.equal(meal.yieldUnit,'pancakes')
   assert.deepEqual(meal.batchMacros,{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98})
   assert.equal(meal.ingredientNutrition[0].resolvedName,'Pancake mix')
   assert.deepEqual(meal.nutritionWarnings,['Confirm the exact package label.'])
+  assert.equal(meal.sourceUrl,'https://recipes.example.com/pancakes')
+  assert.equal(meal.sourceName,'recipes.example.com')
 })
 
 test('duplicate custom meal names in the same meal type are rejected', async () => {

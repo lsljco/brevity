@@ -41,6 +41,15 @@ export function calculateMealNutrition(ingredients, yieldQuantity, yieldUnit) {
   })
 }
 
+export function importRecipeFromUrl(url) {
+  return request('/.netlify/functions/recipe-import', {
+    timeoutMs:25000,
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({ url }),
+  })
+}
+
 export function prepareMealSubstitution({ date, mealType, mealId, expectedVersion }) {
   return request(`${ACTION_ENDPOINT}?action=prepare-meal`, {
     method: 'POST',
