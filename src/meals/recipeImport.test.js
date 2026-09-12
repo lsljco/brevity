@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
 import test from 'node:test'
-import { durationMinutes, fetchRecipeHtml, isPublicAddress, normalizeRecipeUrl, parseRecipeHtml, parseRecipeYield } from '../../netlify/lib/recipe-import.mjs'
+import { durationMinutes, fetchRecipeHtml, isPublicAddress, normalizeRecipeUrl, parseRecipeHtml, parseRecipeYield, pinnedLookup } from '../../netlify/lib/recipe-import.mjs'
 
 const response = (body, {statusCode=200,headers={'content-type':'text/html; charset=utf-8'}} = {}) => Object.assign(Readable.from([body]), {statusCode,headers})
 
@@ -58,8 +58,16 @@ test('recipe retrieval pins a validated public address and revalidates redirects
   await new Promise((resolve,reject)=>requests[0].options.lookup('ignored',{},(error,address,family)=>error?reject(error):(assert.deepEqual([address,family],['93.184.216.34',4]),resolve())))
 })
 
+test('pinned DNS lookup supports modern Node all-address requests', async () => {
+  const lookup=pinnedLookup({address:'93.184.216.34',family:4})
+  await new Promise((resolve,reject)=>lookup('ignored',{all:true},(error,addresses)=>error?reject(error):(assert.deepEqual(addresses,[{address:'93.184.216.34',family:4}]),resolve())))
+})
+
 test('recipe retrieval accepts bounded HTML from a public website', async () => {
-  const result=await fetchRecipeHtml('https://recipes.example.com/pancakes',{lookup:async()=>[{address:'93.184.216.34',family:4}],requester:async()=>response(recipeHtml)})
+  const result=await fetchRecipeHtml('https://recipes.example.com/pancakes',{lookup:async()=>[{address:'93.184.216.34',family:4}],requester:async(_url,options)=>{
+    await new Promise((resolve,reject)=>options.lookup('ignored',{all:true},(error,addresses)=>error?reject(error):(assert.deepEqual(addresses,[{address:'93.184.216.34',family:4}]),resolve())))
+    return response(recipeHtml)
+  }})
   assert.match(result.html,/Fluffy/)
   assert.equal(result.sourceUrl,'https://recipes.example.com/pancakes')
 })
