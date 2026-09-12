@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MEAL_TYPES } from './mealLibrary.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
+import { calculateMealNutrition } from './mealPlanApi.js'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
 
@@ -23,7 +24,7 @@ function MealImage({ meal, className = '', loading = 'lazy', alt = '' }) {
 }
 
 function Macros({ meal }) {
-  return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{meal.macros.calories}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
+  return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{Number(meal.macros.calories).toLocaleString()}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
 }
 
 function MealChoice({ meal, onChoose, selected, current }) {
@@ -69,31 +70,44 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
     cookMinutes:'',
     totalMinutes:'',
     image:'',
-    serving:'1 serving',
-    calories:'',
-    proteinGrams:'',
-    carbohydrateGrams:'',
-    fatGrams:'',
+    yieldQuantity:'',
+    yieldUnit:'servings',
   })
-  const set = (field, value) => setForm(current => ({ ...current, [field]:value }))
+  const [nutrition,setNutrition]=useState(null)
+  const [nutritionState,setNutritionState]=useState('idle')
+  const [nutritionError,setNutritionError]=useState('')
+  const set = (field, value) => {
+    setForm(current => ({ ...current, [field]:value }))
+    if(['ingredients','yieldQuantity','yieldUnit'].includes(field)){setNutrition(null);setNutritionError('');setNutritionState('idle')}
+  }
+  const ingredientLines=()=>form.ingredients.split(/\r?\n/).map(value=>value.trim()).filter(Boolean)
+  const calculate=async()=>{
+    setNutritionState('loading');setNutritionError('')
+    try{
+      const result=await calculateMealNutrition(ingredientLines(),Number(form.yieldQuantity),form.yieldUnit.trim())
+      setNutrition(result.nutrition);setNutritionState('ready')
+    }catch(error){setNutrition(null);setNutritionError(error.message||'Could not calculate nutrition.');setNutritionState('error')}
+  }
   const submit = event => {
     event.preventDefault()
+    if(!nutrition)return
     onSave({
       mealType:form.mealType,
       name:form.name.trim(),
       description:form.description.trim(),
-      ingredients:form.ingredients.split(/\r?\n/).map(value=>value.trim()).filter(Boolean),
+      ingredients:ingredientLines(),
       prepMinutes:Number(form.prepMinutes),
       cookMinutes:Number(form.cookMinutes),
       totalMinutes:form.totalMinutes===''?undefined:Number(form.totalMinutes),
       image:form.image.trim(),
-      serving:form.serving.trim() || '1 serving',
-      macros:{
-        calories:Number(form.calories),
-        proteinGrams:Number(form.proteinGrams),
-        carbohydrateGrams:Number(form.carbohydrateGrams),
-        fatGrams:Number(form.fatGrams),
-      },
+      serving:nutrition.serving,
+      yieldQuantity:nutrition.yieldQuantity,
+      yieldUnit:nutrition.yieldUnit,
+      macros:nutrition.perServingMacros,
+      batchMacros:nutrition.batchMacros,
+      ingredientNutrition:nutrition.ingredients,
+      nutritionWarnings:nutrition.warnings,
+      nutritionBasis:nutrition.nutritionBasis,
     })
   }
 
@@ -110,17 +124,23 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
         <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)}>{MEAL_TYPES.map(type=><option key={type} value={type}>{LABELS[type]}</option>)}</select></label>
         <label className="meal-add-form--wide"><span>Meal name</span><input autoFocus required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
         <label className="meal-add-form--wide"><span>Description</span><textarea value={form.description} onChange={event=>set('description',event.target.value)} placeholder="Brief description of the plated meal" /></label>
-        <label className="meal-add-form--wide"><span>Ingredients <small>one per line</small></span><textarea value={form.ingredients} onChange={event=>set('ingredients',event.target.value)} placeholder={'Steak\nPotatoes\nButter'} /></label>
+        <label className="meal-add-form--wide"><span>Measured ingredients <small>one per line; include brand, amount and unit</small></span><textarea required value={form.ingredients} onChange={event=>set('ingredients',event.target.value)} placeholder={'2 cups Pearl Milling Company pancake mix\n1 cup water\n1 stick salted butter'} /></label>
         <label><span>Prep time (minutes)</span><input required min="0" step="1" type="number" value={form.prepMinutes} onChange={event=>set('prepMinutes',event.target.value)} /></label>
         <label><span>Cook time (minutes)</span><input required min="0" step="1" type="number" value={form.cookMinutes} onChange={event=>set('cookMinutes',event.target.value)} /></label>
         <label><span>Total time (minutes) <small>optional override</small></span><input min="0" step="1" type="number" value={form.totalMinutes} onChange={event=>set('totalMinutes',event.target.value)} /></label>
-        <label><span>Serving</span><input value={form.serving} onChange={event=>set('serving',event.target.value)} /></label>
-        <label><span>Calories</span><input required min="0" step="1" type="number" value={form.calories} onChange={event=>set('calories',event.target.value)} /></label>
-        <label><span>Protein (g)</span><input required min="0" step="1" type="number" value={form.proteinGrams} onChange={event=>set('proteinGrams',event.target.value)} /></label>
-        <label><span>Carbs (g)</span><input required min="0" step="1" type="number" value={form.carbohydrateGrams} onChange={event=>set('carbohydrateGrams',event.target.value)} /></label>
-        <label><span>Fat (g)</span><input required min="0" step="1" type="number" value={form.fatGrams} onChange={event=>set('fatGrams',event.target.value)} /></label>
+        <label><span>Batch yield</span><input required min="0.1" max="500" step="0.1" type="number" value={form.yieldQuantity} onChange={event=>set('yieldQuantity',event.target.value)} placeholder="12" /></label>
+        <label><span>Yield unit</span><input required value={form.yieldUnit} onChange={event=>set('yieldUnit',event.target.value)} placeholder="pancakes" /></label>
+        <div className="meal-nutrition-action meal-add-form--wide"><div><strong>Nutrition from ingredients</strong><span>Brevity totals the full batch, then divides it by the batch yield.</span></div><button type="button" onClick={calculate} disabled={saving||nutritionState==='loading'||!ingredientLines().length||!Number(form.yieldQuantity)||!form.yieldUnit.trim()}>{nutritionState==='loading'?'Calculating…':nutrition?'Recalculate nutrition':'Calculate nutrition'}</button></div>
+        {nutritionError&&<div className="meal-nutrition-error meal-add-form--wide" role="alert">{nutritionError}</div>}
+        {nutrition&&<section className="meal-nutrition-preview meal-add-form--wide" aria-label="Calculated nutrition preview">
+          <header><div><span>Calculated estimate</span><strong>Total batch and per {nutrition.serving}</strong></div></header>
+          <div className="meal-nutrition-totals"><article><span>Total batch</span><Macros meal={{serving:'batch',macros:nutrition.batchMacros,nutritionBasis:nutrition.nutritionBasis}} /></article><article><span>Per {nutrition.serving}</span><Macros meal={{serving:nutrition.serving,macros:nutrition.perServingMacros,nutritionBasis:nutrition.nutritionBasis}} /></article></div>
+          <details><summary>Ingredient calculation details</summary>{nutrition.ingredients.map((ingredient,index)=><div className="meal-nutrition-row" key={`${ingredient.input}-${index}`}><div><strong>{ingredient.input}</strong><small>{ingredient.resolvedName} · {ingredient.basis} · {ingredient.confidence} confidence</small></div><span>{ingredient.macros.calories} cal · {ingredient.macros.proteinGrams}g P · {ingredient.macros.carbohydrateGrams}g C · {ingredient.macros.fatGrams}g F</span></div>)}</details>
+          {nutrition.warnings.length>0&&<ul>{nutrition.warnings.map((warning,index)=><li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
+          <small>{nutrition.nutritionBasis}</small>
+        </section>}
         <label className="meal-add-form--wide"><span>Photo URL <small>optional</small></span><input type="url" value={form.image} onChange={event=>set('image',event.target.value)} placeholder="https://…" /></label>
-        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving}>{saving?'Adding meal…':'Add to Meal Library'}</button></footer>
+        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving||!nutrition}>{saving?'Adding meal…':'Add to Meal Library'}</button></footer>
       </form>
     </section>
   </div>

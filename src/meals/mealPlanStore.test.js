@@ -64,6 +64,25 @@ test('custom meals persist in the shared household library and count by meal typ
   assert.equal(storedMeal.totalMinutes, 75)
 })
 
+test('custom meals retain calculated batch, yield and ingredient nutrition evidence', async () => {
+  const store=memoryStore()
+  const repository=createMealPlanRepository({store,now:()=>new Date('2026-09-12T10:00:00Z'),createId:()=> 'nutrition-id'})
+  const meal=await repository.createMeal({actor:'Larry',meal:{
+    mealType:'breakfast',name:'Twelve Pancakes',prepMinutes:10,cookMinutes:20,
+    ingredients:['2 cups pancake mix','1 cup water','1 stick butter'],
+    serving:'1 pancake',yieldQuantity:12,yieldUnit:'pancakes',
+    macros:{calories:168,proteinGrams:2,carbohydrateGrams:21,fatGrams:8},
+    batchMacros:{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98},
+    ingredientNutrition:[{input:'2 cups pancake mix',resolvedName:'Pancake mix',basis:'Package-label equivalent',confidence:'medium',macros:{calories:1200,proteinGrams:24,carbohydrateGrams:252,fatGrams:6}}],
+    nutritionWarnings:['Confirm the exact package label.'],nutritionBasis:'Calculated by Brevity from the measured ingredient list.',
+  }})
+  assert.equal(meal.yieldQuantity,12)
+  assert.equal(meal.yieldUnit,'pancakes')
+  assert.deepEqual(meal.batchMacros,{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98})
+  assert.equal(meal.ingredientNutrition[0].resolvedName,'Pancake mix')
+  assert.deepEqual(meal.nutritionWarnings,['Confirm the exact package label.'])
+})
+
 test('duplicate custom meal names in the same meal type are rejected', async () => {
   const store = memoryStore()
   let sequence = 0

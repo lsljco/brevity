@@ -25,7 +25,23 @@ const alreadyLinkedAccountRecords=()=>{
   ],transactions:[]}
   return {lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(finance),version:1,updatedAt}}
 }
+const mealPlanResponse=(addedMeal=null)=>{
+  const now=new Date().toISOString(),start=dateKey()
+  const meals=[
+    {id:'breakfast-eggs',mealType:'breakfast',name:'Eggs and Toast',description:'Eggs and whole-grain toast.',prepMinutes:10,totalMinutes:10,serving:'1 plate',macros:{calories:350,proteinGrams:22,carbohydrateGrams:30,fatGrams:14}},
+    {id:'lunch-chicken',mealType:'lunch',name:'Chicken and Vegetables',description:'Grilled chicken with vegetables.',prepMinutes:15,totalMinutes:15,serving:'1 plate',macros:{calories:480,proteinGrams:48,carbohydrateGrams:32,fatGrams:18}},
+    {id:'dinner-fish',mealType:'dinner',name:'Fish and Vegetables',description:'Roasted fish with vegetables.',prepMinutes:20,totalMinutes:20,serving:'1 plate',macros:{calories:520,proteinGrams:46,carbohydrateGrams:38,fatGrams:20}},
+    ...(addedMeal?[addedMeal]:[]),
+  ]
+  const days=Array.from({length:7},(_,index)=>{
+    const date=new Date(`${start}T12:00:00.000Z`);date.setUTCDate(date.getUTCDate()+index)
+    const dateValue=date.toISOString().slice(0,10)
+    return{id:`meal-plan-${dateValue}`,date:dateValue,version:1,meals:{breakfast:'breakfast-eggs',lunch:'lunch-chicken',dinner:'dinner-fish'},substitutions:{},resolvedMeals:{breakfast:meals[0],lunch:meals[1],dinner:meals[2]},createdAt:now,updatedAt:now}
+  })
+  return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
+}
 async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false}={}){
+  let addedMeal=null
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
     let body={}
@@ -37,6 +53,21 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
       }else body={records:alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
+    else if(path.endsWith('/meal-plans')){
+      if(route.request().method()==='POST'){
+        const payload=route.request().postDataJSON()
+        addedMeal={...payload,id:'custom-breakfast-browser-test',custom:true}
+        body={meal:addedMeal}
+      }else body=mealPlanResponse(addedMeal)
+    }
+    else if(path.endsWith('/meal-nutrition'))body={nutrition:{
+      ingredients:[
+        {input:'2 cups Pearl Milling Company pancake mix',resolvedName:'Pearl Milling Company pancake mix',amountDescription:'2 cups',basis:'Package-label estimate',confidence:'medium',macros:{calories:1200,proteinGrams:24,carbohydrateGrams:252,fatGrams:6}},
+        {input:'1 cup water',resolvedName:'Water',amountDescription:'1 cup',basis:'Water',confidence:'high',macros:{calories:0,proteinGrams:0,carbohydrateGrams:0,fatGrams:0}},
+        {input:'1 stick salted butter',resolvedName:'Salted butter',amountDescription:'1 stick',basis:'Standard portion estimate',confidence:'high',macros:{calories:810,proteinGrams:1,carbohydrateGrams:0,fatGrams:92}},
+      ],
+      yieldQuantity:12,yieldUnit:'pancakes',serving:'1 pancake',batchMacros:{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98},perServingMacros:{calories:167.5,proteinGrams:2.1,carbohydrateGrams:21,fatGrams:8.2},warnings:['Confirm the exact package label.'],nutritionBasis:'Calculated by Brevity from the measured ingredient list.',
+    }}
     else if(path.endsWith('/icloud-calendar'))body={events:[],connected:true,syncedAt:new Date().toISOString()}
     else if(path.endsWith('/plaid-accounts'))body=alreadyLinkedExtrasFixture?{
       connected:true,balanceMode:'live',balanceProvenance:'plaid.accountsBalanceGet',syncedAt:new Date().toISOString(),errors:[],requiresUpdate:[],
@@ -95,6 +126,30 @@ test('Today last three pillar cards expose recorded detail instead of generic he
   await expect(finance).toContainText('No financial output, decision rule, bill, or purchase is recorded for today.')
   await expect(ministry).toContainText('No ministry focus, meeting, fellowship follow-up, or prayer need is recorded for today.')
   await expect(finance).not.toContainText('Financial Stewardship')
+})
+
+test('Meal Library calculates batch and per-serving nutrition from measured ingredients',async({page})=>{
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Rolling 7-Day Meal Plan'})).toBeVisible()
+  await page.locator('.meal-planner-controls button').filter({hasText:'Meal Library'}).click()
+  await page.locator('.meal-library-add').filter({hasText:'Add Breakfast'}).click()
+  const dialog=page.getByRole('dialog',{name:'Add a meal'})
+  await dialog.getByLabel('Meal name').fill('Saturday Pancakes')
+  await dialog.getByLabel(/Measured ingredients/).fill('2 cups Pearl Milling Company pancake mix\n1 cup water\n1 stick salted butter')
+  await dialog.getByLabel('Prep time (minutes)').fill('5')
+  await dialog.getByLabel('Cook time (minutes)').fill('15')
+  await dialog.getByLabel('Batch yield').fill('12')
+  await dialog.getByLabel('Yield unit').fill('pancakes')
+  await dialog.locator('.meal-nutrition-action button').click()
+  const preview=dialog.getByLabel('Calculated nutrition preview')
+  await expect(preview).toContainText('Total batch')
+  await expect(preview).toContainText('2,010')
+  await expect(preview).toContainText('Per 1 pancake')
+  await expect(preview).toContainText('167.5')
+  await expect(dialog.locator('footer button.is-primary')).toBeEnabled()
+  await dialog.locator('footer button.is-primary').click()
+  await expect(page.getByText(/Saturday Pancakes was added/)).toBeVisible()
+  await expect(page.getByText('Saturday Pancakes',{exact:true})).toBeVisible()
 })
 
 test('Next-Day Alignment retains the active weekly sermon instead of asking for another upload',async({page})=>{
