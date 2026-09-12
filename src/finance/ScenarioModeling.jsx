@@ -119,7 +119,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       }),
     }))
     setReviewError('')
-    setReviewNotice('New income source drafted — complete its details, then review it before Brevity adds it.')
+    setReviewNotice('New income source drafted. Complete its details, then review it.')
   }
   const discardIncomeDraft = incomeId => {
     setDraftModel(current => ({
@@ -130,7 +130,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       }),
     }))
     setReviewError('')
-    setReviewNotice('The unreviewed income draft was discarded. The shared forecast was unchanged.')
+    setReviewNotice('Income draft discarded. The shared forecast was unchanged.')
   }
 
   const openReview = async ({ summary, operation }) => {
