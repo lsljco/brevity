@@ -25,6 +25,10 @@ const alreadyLinkedAccountRecords=()=>{
   ],transactions:[]}
   return {lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(finance),version:1,updatedAt}}
 }
+const scenarioRecords=()=>{
+  const value={expenseMode:'scenario',planningExpense:23812.11,scenarios:[{id:'current',title:'Current',description:'What household cash flow looks like today.',incomes:[{id:'salary',description:'LS Genesco Inc.',monthlyNet:8164,annualGross:134000,contribution:11,remote:true,employment:'Perm',notes:''}]}]}
+  return{brevity_finance_scenarios_v1:{key:'brevity_finance_scenarios_v1',value:JSON.stringify(value),version:2,updatedAt:new Date().toISOString()}}
+}
 const mealPlanResponse=(addedMeal=null)=>{
   const now=new Date().toISOString(),start=dateKey()
   const meals=[
@@ -40,7 +44,7 @@ const mealPlanResponse=(addedMeal=null)=>{
   })
   return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
 }
-async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false}={}){
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false}={}){
   let addedMeal=null
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
@@ -51,7 +55,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
       if(route.request().method()==='PUT'){
         const payload=route.request().postDataJSON()
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
-      }else body={records:alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
+      }else body={records:scenarioFixture?scenarioRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
     else if(path.endsWith('/meal-plans')){
       if(route.request().method()==='POST'){
@@ -111,7 +115,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -229,6 +233,44 @@ test('changing a posted transaction category offers a prefilled rule with past-m
   await dialog.getByRole('button',{name:'Review new rule'}).click()
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
   await expect(page.getByRole('heading',{name:/Automatically categorize matching past and future Neighborhood Market transactions as Groceries/})).toBeVisible()
+})
+
+test('Scenario Modeling edits descriptions, income rows, and recurring-expense totals through Action Mode',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Scenario Modeling',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Scenario Modeling',exact:true})).toBeVisible()
+
+  await page.getByLabel('Income 1 description draft').fill('LS Primary Salary')
+  await page.getByRole('button',{name:'Review changes to LS Primary Salary'}).click()
+  let review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Update reviewed forecast assumptions for “LS Genesco Inc.”')
+  await review.getByRole('button',{name:'Cancel'}).click()
+  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+
+  await page.getByRole('button',{name:'Add income source'}).click()
+  const newRow=page.locator('.scenario-table tbody tr').last()
+  await newRow.getByPlaceholder('Income source name').fill('Consulting Income')
+  await newRow.getByLabel('Consulting Income monthly net draft').fill('5000')
+  await newRow.getByLabel('Consulting Income annual gross draft').fill('80000')
+  await newRow.getByLabel('Consulting Income contribution draft').fill('8')
+  await newRow.getByRole('button',{name:'Review addition of Consulting Income'}).click()
+  review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Add “Consulting Income” to “Current” after review.')
+  await review.getByRole('button',{name:'Cancel'}).click()
+  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+
+  await page.getByRole('button',{name:'Review removal of LS Primary Salary'}).click()
+  review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Remove “LS Genesco Inc.” from “Current” after review.')
+  await review.getByRole('button',{name:'Cancel'}).click()
+  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+
+  await page.getByLabel('Monthly recurring expense total draft').fill('22000')
+  await page.getByRole('button',{name:'Review expense total'}).click()
+  review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Use $22,000.00 as the reviewed monthly recurring-expense total.')
 })
 
 test('Finance workspaces fit phone and tablet viewports without overlapping filters',async({page},testInfo)=>{

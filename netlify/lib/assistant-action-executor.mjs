@@ -255,13 +255,21 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       found = true
       const next = { ...scenario }
       for (const field of ['title', 'description']) if (payload[field] !== undefined) next[field] = payload[field]
-      if (payload.incomeId) {
+      if (payload.incomeAction === 'create') {
+        if ((scenario.incomes || []).some(income => income.id === payload.incomeId)) throw new Error('That forecast income id already exists. Refresh Brevity and try again.')
+        const income = { id:payload.incomeId }
+        for (const field of ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']) if (payload[field] !== undefined) income[field] = payload[field]
+        next.incomes = [...(scenario.incomes || []), income]
+      } else if (payload.incomeAction === 'delete') {
+        if (!(scenario.incomes || []).some(income => income.id === payload.incomeId)) throw new Error('That forecast income record no longer exists. Refresh Brevity and try again.')
+        next.incomes = (scenario.incomes || []).filter(income => income.id !== payload.incomeId)
+      } else if (payload.incomeId) {
         let incomeFound = false
         next.incomes = (scenario.incomes || []).map(income => {
           if (income.id !== payload.incomeId) return income
           incomeFound = true
           const updated = { ...income }
-          for (const field of ['monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']) if (payload[field] !== undefined) updated[field] = payload[field]
+          for (const field of ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']) if (payload[field] !== undefined) updated[field] = payload[field]
           return updated
         })
         if (!incomeFound) throw new Error('That forecast income record no longer exists. Refresh Brevity and ask again.')

@@ -102,7 +102,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
-  'forecast.update': ['title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
+  'forecast.update': ['title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'recurring.create': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.update': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
@@ -112,7 +112,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.delete': [],
   'meal.substitute': ['mealType', 'mealId'],
 }
-const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
+const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'minimumPayment', 'dueDay', 'amount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta'])
 const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'createdDate', 'meetingDate', 'expiresOn'])
@@ -125,7 +125,7 @@ const ACTION_ENUMS = {
   'project.update': { type:['Renovation', 'Maintenance', 'Repair'], status:['To Do', 'In Progress', 'Done'], priority:['High', 'Medium', 'Low'] },
   'calendar.create': { priority:['high', 'normal'] },
   'calendar.update': { priority:['high', 'normal'] },
-  'forecast.update': { expenseMode:['scenario', 'operating'] },
+  'forecast.update': { expenseMode:['scenario', 'operating'], incomeAction:['create', 'delete'] },
   'transaction.rule.create': { matchField:['originalStatement', 'merchantName'], matchMode:['contains', 'exactly', 'starts'] },
   'recurring.create': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
   'recurring.update': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
@@ -495,14 +495,18 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'forecast.update') {
     const modelFields = ['planningExpense', 'expenseMode']
     const scenarioFields = ['title', 'description']
-    const incomeFields = ['monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']
+    const incomeFields = ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']
     const fields = Object.keys(payload)
     if (['model', 'planningExpense', 'expenseMode'].includes(operation.targetId)) {
       if (fields.some(field => !modelFields.includes(field))) throw new Error('A forecast model update can change only planningExpense or expenseMode.')
+    } else if (payload.incomeAction === 'create') {
+      if (!payload.incomeId || !payload.description || fields.some(field => !['incomeAction', 'incomeId', ...incomeFields].includes(field))) throw new Error('Adding forecast income requires a unique id, description, and supported income fields.')
+    } else if (payload.incomeAction === 'delete') {
+      if (!payload.incomeId || fields.some(field => !['incomeAction', 'incomeId'].includes(field))) throw new Error('Removing forecast income requires only its exact income id.')
     } else if (payload.incomeId) {
-      if (!fields.some(field => scenarioFields.includes(field) || incomeFields.includes(field))) throw new Error('A forecast income update requires at least one reviewed income or scenario change.')
+      if (!fields.some(field => incomeFields.includes(field)) || fields.some(field => !['incomeId', ...incomeFields].includes(field))) throw new Error('A forecast income update requires at least one supported reviewed income change.')
     } else {
-      if (fields.some(field => incomeFields.includes(field))) throw new Error('A forecast income update requires an exact incomeId.')
+      if (fields.some(field => !scenarioFields.includes(field))) throw new Error('A forecast income update requires an exact incomeId.')
       if (!fields.some(field => scenarioFields.includes(field))) throw new Error('A forecast scenario update requires a title or description change.')
     }
   }
