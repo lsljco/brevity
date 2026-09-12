@@ -128,12 +128,11 @@ test('Today last three pillar cards expose recorded detail instead of generic he
   await expect(finance).not.toContainText('Financial Stewardship')
 })
 
-test('Meal Library calculates batch and per-serving nutrition from measured ingredients',async({page},testInfo)=>{
-  void testInfo
+test('Meal Library calculates batch and per-serving nutrition from measured ingredients',async({page})=>{
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Rolling 7-Day Meal Plan'})).toBeVisible()
-  await page.getByRole('button',{name:'Meal Library',exact:true}).click()
-  await page.getByRole('button',{name:'Add Breakfast',exact:true}).click()
+  await page.locator('.meal-planner-controls button').filter({hasText:'Meal Library'}).click()
+  await page.locator('.meal-library-add').filter({hasText:'Add Breakfast'}).click()
   const dialog=page.getByRole('dialog',{name:'Add a meal'})
   await dialog.getByLabel('Meal name').fill('Saturday Pancakes')
   await dialog.getByLabel(/Measured ingredients/).fill('2 cups Pearl Milling Company pancake mix\n1 cup water\n1 stick salted butter')
@@ -141,14 +140,14 @@ test('Meal Library calculates batch and per-serving nutrition from measured ingr
   await dialog.getByLabel('Cook time (minutes)').fill('15')
   await dialog.getByLabel('Batch yield').fill('12')
   await dialog.getByLabel('Yield unit').fill('pancakes')
-  await dialog.getByRole('button',{name:'Calculate nutrition'}).click()
+  await dialog.locator('.meal-nutrition-action button').click()
   const preview=dialog.getByLabel('Calculated nutrition preview')
   await expect(preview).toContainText('Total batch')
   await expect(preview).toContainText('2,010')
   await expect(preview).toContainText('Per 1 pancake')
   await expect(preview).toContainText('167.5')
-  await expect(dialog.getByRole('button',{name:'Add to Meal Library'})).toBeEnabled()
-  await dialog.getByRole('button',{name:'Add to Meal Library'}).click()
+  await expect(dialog.locator('footer button.is-primary')).toBeEnabled()
+  await dialog.locator('footer button.is-primary').click()
   await expect(page.getByText(/Saturday Pancakes was added/)).toBeVisible()
   await expect(page.getByText('Saturday Pancakes',{exact:true})).toBeVisible()
 })
