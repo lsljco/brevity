@@ -1,6 +1,6 @@
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
-import { getAcknowledgedSharedStateVersion } from './sharedState.js'
+import { getAcknowledgedSharedStateVersion, syncSharedState } from './sharedState.js'
 import { HOUSEHOLD_SCHEDULE_STORAGE_KEY, householdScheduleDate } from './householdScheduleData.js'
 import { HOUSEHOLD_MAINTENANCE_STORAGE_KEY } from './householdMaintenanceData.js'
 import { HOUSEHOLD_INVENTORY_STORAGE_KEY } from './householdInventoryData.js'
@@ -91,7 +91,14 @@ const storageKeyForOperation = operation => {
 }
 
 export async function requestHouseholdActionReview({ summary, operation, storage = localStorage }) {
-  const expectedVersion=getAcknowledgedSharedStateVersion(storage,storageKeyForOperation(operation))
+  const key=storageKeyForOperation(operation)
+  let expectedVersion
+  try { expectedVersion=getAcknowledgedSharedStateVersion(storage,key) }
+  catch(error){
+    if(error?.code!=='SHARED_STATE_VERSION_UNAVAILABLE')throw error
+    await syncSharedState(storage)
+    expectedVersion=getAcknowledgedSharedStateVersion(storage,key)
+  }
   const result=await prepareDirectAction({summary,operation,expectedVersion})
   if (!result?.proposal?.id) throw new Error('Action Mode did not return a reviewable household proposal.')
   requestActionReview(result.proposal)

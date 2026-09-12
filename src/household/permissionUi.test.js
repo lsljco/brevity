@@ -35,6 +35,8 @@ test('Household Operations keeps navigation visible while every occurrence chang
   assert.match(source, /Every operations change requires review/)
   assert.match(source, /requestHouseholdActionReview\(\{summary,operation\}\)/)
   assert.match(source, /maintenanceCompletionOperation\(task,'submit'\)/)
+  assert.match(source, /maintenanceCompletionOperation\(task,'start'\)/)
+  assert.match(source, /Review start/)
   assert.match(source, /maintenanceCoverageOperation\(task,coveredBy\)/)
   assert.match(source, /maintenanceExceptionOperation\(task,message\)/)
   assert.match(source, /<HouseholdSchedule currentMember=\{currentMember\} mode="schedule" canEdit=\{canEdit\} isAdmin=\{isAdmin\}/)

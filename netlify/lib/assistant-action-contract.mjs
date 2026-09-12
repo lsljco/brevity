@@ -149,7 +149,7 @@ const ACTION_ENUMS = {
   'meeting.session.create': { cadence:['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] },
   'meeting.workspace.update': { cadence:['monthly', 'quarterly', 'yearly'], monthStatus:['green', 'yellow', 'red'] },
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
-  'household.maintenance.completion.update': { action:['submit', 'approve', 'return', 'reopen'] },
+  'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
 const STRONG_TYPES = new Set(['debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8

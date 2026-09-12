@@ -97,6 +97,9 @@ test('schedule mutation uses server actor/time/id and projects Calendar without 
 test('maintenance transitions enforce responsible-member and verifier ownership',()=>{
   const task=buildHouseholdMaintenanceWeek(new Date('2026-09-07T12:00:00')).flatMap(day=>day.tasks).find(item=>item.owners.includes('Nyla'))
   assert.ok(task)
+  const started=applyHouseholdRecordOperation({},maintenanceCompletionOperation(task,'start'),{actor:'Nyla',now:()=>new Date('2026-09-07T19:30:00.000Z')}).after
+  assert.equal(started.occurrences[task.occurrenceId].startedBy,'Nyla')
+  assert.equal(householdRecordForOperation(started,maintenanceCompletionOperation(task,'submit')).startedAt,'2026-09-07T19:30:00.000Z')
   const operation=maintenanceCompletionOperation(task,'submit')
   const current=householdRecordForOperation({},operation)
   assert.equal(householdPermissionForOperation({operation,member:'Nyla',role:'member',currentRecord:current}).allowed,true)
@@ -109,6 +112,13 @@ test('maintenance transitions enforce responsible-member and verifier ownership'
   assert.equal(householdPermissionForOperation({operation,member:'Terica',role:'member',currentRecord:current}).allowed,false,'a verifier cannot submit another member’s responsibility')
   const approved=applyHouseholdRecordOperation(submitted,approval,{actor:'Terica',now:()=>new Date('2026-09-07T20:05:00.000Z')}).after
   assert.equal(approved.occurrences[task.occurrenceId].approvedBy,'Terica')
+})
+
+test('household review retries exact-version lookup after refreshing authoritative shared state',()=>{
+  const source=readFileSync(new URL('./householdActionReview.js',import.meta.url),'utf8')
+  assert.match(source,/error\?\.code!=='SHARED_STATE_VERSION_UNAVAILABLE'/)
+  assert.match(source,/await syncSharedState\(storage\)/)
+  assert.equal((source.match(/getAcknowledgedSharedStateVersion\(storage,key\)/g)||[]).length,2)
 })
 
 test('member schedule ownership cannot be transferred or deleted without administrator access',()=>{
