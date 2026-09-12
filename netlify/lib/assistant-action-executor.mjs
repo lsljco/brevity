@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { getStore } from '@netlify/blobs'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from '../../src/finance/recurrenceEditing.js'
 import { applyBudgetTarget } from '../../src/finance/budgetBreakdown.js'
+import { calculateDebtPayment } from '../../src/finance/debtModel.js'
 import { createEmptyDailyPlan } from '../../src/household/dailyPlan.js'
 import { applyHouseholdRecordOperation, householdRecordForOperation, householdResourceKeyForAction } from '../../src/household/householdActionModel.js'
 import { createRollingMealDay, validateMealSubstitution } from '../../src/meals/mealPlanData.js'
@@ -334,6 +335,21 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const items=Array.isArray(value)?value:[]
     if(!items.some(item=>item.id===operation.targetId))throw new Error('That debt no longer exists. Refresh Finance and review the current debt list.')
     return{before,after:items.filter(item=>item.id!==operation.targetId)}
+  }
+  if (operation.type === 'debt.transaction.apply') {
+    const items=Array.isArray(value)?value:[]
+    if(items.some(item=>(item.payments||[]).some(payment=>payment.transactionId===payload.transactionId)))throw new Error('That bank transaction is already applied to a debt. Refresh Finance and review the current payment history.')
+    let found=false;const changedAt=nowIso(context.now||(()=>new Date()))
+    const after=items.map(item=>{
+      if(item.id!==operation.targetId)return item
+      found=true
+      if(item.status==='Paid off'||Number(item.currentBalance)<=0)throw new Error('That debt is already paid off. Refresh Finance and choose an active debt.')
+      const allocation=calculateDebtPayment(item,{amount:payload.amount},payload.nonPrincipalAmount)
+      const payment={transactionId:payload.transactionId,date:payload.transactionDate,name:payload.transactionName,...allocation,interestMethod:item.interestMethod||'Amortized APR',appliedAt:changedAt,appliedBy:context.actor||'Household member'}
+      return{...item,currentBalance:allocation.balanceAfter,status:allocation.balanceAfter<=0?'Paid off':item.status,payments:[payment,...(item.payments||[])],updatedAt:changedAt,updatedBy:context.actor||'Household member'}
+    })
+    if(!found)throw new Error('That debt no longer exists. Refresh Finance and review the current debt list.')
+    return{before,after}
   }
   if (operation.type === 'recurring.update' || operation.type === 'recurring.delete') {
     const transactions = [...(value?.transactions || [])]

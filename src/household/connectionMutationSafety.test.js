@@ -9,7 +9,6 @@ const require=createRequire(import.meta.url)
 const {handler:createPlaidLink}=require('../../netlify/functions/plaid-create-link-token.js')
 const {handler:exchangePlaidToken}=require('../../netlify/functions/plaid-exchange-token.js')
 const {handler:disconnectPlaid}=require('../../netlify/functions/plaid-disconnect.js')
-const householdAuth=require('../../netlify/functions/household-auth.js')
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 
 test('Plaid connection mutation endpoints reject before touching bank credentials or token storage',async()=>{
@@ -47,31 +46,27 @@ test('Plaid UI keeps existing-source sync but exposes no connection mutation pat
   assert.doesNotMatch(source,/usePlaidLink|plaid-create-link-token|plaid-exchange-token|plaid-disconnect|handleRelink|handleDisconnect|plaid_oauth_link_token|window\.confirm/)
 })
 
-test('member-password mutation rejects before opening storage and never changes the session cookie',async()=>{
+test('member-password mutation requires authenticated current-password verification and rotates account sessions',()=>{
   const source=read('../../netlify/functions/household-auth.js')
   const handlerSource=source.slice(source.indexOf('exports.handler ='))
-  assert.ok(handlerSource.indexOf("action === 'set-member-password'")<handlerSource.indexOf('const dataStore = store()'))
   assert.equal((handlerSource.match(/action === 'set-member-password'/g)||[]).length,1)
-  const result=await householdAuth.handler({
-    httpMethod:'POST',
-    queryStringParameters:{action:'set-member-password'},
-    body:JSON.stringify({member:'Nyla',password:'must-not-be-saved'}),
-    headers:{cookie:'brevity_household_session=must-not-change'},
-  })
-  const body=JSON.parse(result.body)
-  assert.equal(result.statusCode,423)
-  assert.equal(body.code,'CREDENTIAL_MUTATIONS_DISABLED')
-  assert.equal(result.headers['set-cookie'],undefined)
+  assert.match(handlerSource,/const session = await readSession\(event\)/)
+  assert.match(handlerSource,/validPassword\(body\.currentPassword/)
+  assert.match(handlerSource,/member !== session\.member && session\.role !== 'admin'/)
+  assert.match(handlerSource,/authVersion = Number\(previous\?\.authVersion \|\| 0\) \+ 1/)
+  assert.match(handlerSource,/sessionCookie\(await createSession\(member, session\.role, authVersion\)\)/)
+  assert.doesNotMatch(handlerSource,/CREDENTIAL_MUTATIONS_DISABLED/)
   assert.match(handlerSource,/action === 'login'/)
 })
 
-test('Settings account UI is status-only while sign-in remains available',()=>{
+test('Settings exposes verified password changes while sign-in remains available',()=>{
   const ui=read('./HouseholdAuth.jsx')
   const api=read('./authApi.js')
-  assert.match(ui,/Household account status remains visible/)
-  assert.match(ui,/Password changes unavailable/)
-  assert.doesNotMatch(ui,/setHouseholdMemberPassword|onSubmit=\{save\}|Set \/ reset/)
-  assert.doesNotMatch(api,/set-member-password|setHouseholdMemberPassword/)
+  assert.match(ui,/setHouseholdMemberPassword/)
+  assert.match(ui,/onSubmit=\{savePassword\}/)
+  assert.match(ui,/Your current password/)
+  assert.match(ui,/Confirm new password/)
+  assert.match(api,/set-member-password/)
   assert.match(api,/loginHouseholdMember/)
   assert.match(ui,/onLogin\(member, password\)/)
 })

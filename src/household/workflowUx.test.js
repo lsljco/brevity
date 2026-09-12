@@ -22,12 +22,12 @@ test('Operations offers a direct all-overdue view and uses honest empty copy', (
   assert.match(operations, /No responsibilities are assigned to or covered by/)
 })
 
-test('Settings keeps account status visible but disables credential mutations', () => {
+test('Settings keeps account status visible and provides verified password changes', () => {
   const accounts = read('./HouseholdAuth.jsx')
-  assert.match(accounts, /Household account status remains visible/)
-  assert.match(accounts, /Password changes unavailable/)
-  assert.match(accounts, /type="button" disabled title="Household password changes are disabled in this release\."/)
-  assert.doesNotMatch(accounts, /setHouseholdMemberPassword|onSubmit=\{save\}|Set \/ reset/)
+  assert.match(accounts, /setHouseholdMemberPassword/)
+  assert.match(accounts, /onSubmit=\{savePassword\}/)
+  assert.match(accounts, /Other sessions for this account have been signed out|other active sessions/)
+  assert.doesNotMatch(accounts, /Password changes unavailable/)
 })
 
 test('Projects distinguish an empty portfolio from an empty filter result', () => {

@@ -53,9 +53,9 @@ function sign(value, secret) {
   return crypto.createHmac('sha256', secret).update(value).digest('base64url')
 }
 
-async function createSession(member, role = 'member') {
+async function createSession(member, role = 'member', authVersion = 0) {
   const token = crypto.randomBytes(48).toString('base64url')
-  const value = { member, role, exp:Date.now() + SESSION_DAYS * 86400000, createdAt:new Date().toISOString() }
+  const value = { member, role, authVersion:Number(authVersion || 0), exp:Date.now() + SESSION_DAYS * 86400000, createdAt:new Date().toISOString() }
   await store().setJSON(`sessions/${crypto.createHash('sha256').update(token).digest('hex')}`,value)
   return `v2.${token}`
 }
@@ -68,6 +68,8 @@ async function readSession(event) {
     if(!/^[A-Za-z0-9_-]{64}$/.test(opaque))return null
     const value=await store().get(`sessions/${crypto.createHash('sha256').update(opaque).digest('hex')}`,{type:'json'}).catch(()=>null)
     if(!value?.member||!MEMBERS.includes(value.member)||Number(value.exp)<Date.now())return null
+    const user=await store().get(userKey(value.member),{type:'json'}).catch(()=>null)
+    if(!user||Number(user.authVersion||0)!==Number(value.authVersion||0))return null
     return value
   }
   const [payload, signature] = token.split('.')
@@ -78,6 +80,8 @@ async function readSession(event) {
   try {
     const value = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (!value.member || !MEMBERS.includes(value.member) || Number(value.exp) < Date.now()) return null
+    const user=await store().get(userKey(value.member),{type:'json'}).catch(()=>null)
+    if(!user||Number(user.authVersion||0)!==Number(value.authVersion||0))return null
     return value
   } catch {
     return null
@@ -127,10 +131,6 @@ function clearCookie() {
 exports.handler = async event => {
   try {
     const action = event.queryStringParameters?.action || 'session'
-    if (action === 'set-member-password') return json(423, {
-      code:'CREDENTIAL_MUTATIONS_DISABLED',
-      error:'Creating household accounts and setting or resetting member passwords are disabled in this release. No credentials or sessions were changed.',
-    })
     const dataStore = store()
 
     if (event.httpMethod === 'GET' && action === 'session') {
@@ -158,8 +158,8 @@ exports.handler = async event => {
       if (body.member !== 'Larry') return json(400, { error: 'The first household administrator account must be Larry.' })
       if (String(body.password || '').length < 8) return json(400, { error: 'Use a password with at least 8 characters.' })
       const password = passwordHash(body.password)
-      await dataStore.setJSON(userKey('Larry'), { member: 'Larry', role: 'admin', ...password, createdAt: new Date().toISOString() })
-      const token = await createSession('Larry', 'admin')
+      await dataStore.setJSON(userKey('Larry'), { member: 'Larry', role: 'admin', authVersion:0, ...password, createdAt: new Date().toISOString() })
+      const token = await createSession('Larry', 'admin', 0)
       return json(201, { authenticated: true, member: 'Larry', role: 'admin' }, { 'set-cookie': sessionCookie(token) })
     }
 
@@ -168,8 +168,35 @@ exports.handler = async event => {
       if (!MEMBERS.includes(member)) return json(400, { error: 'Choose a household member.' })
       const record = await dataStore.get(userKey(member), { type: 'json' }).catch(() => null)
       if (!record || !validPassword(body.password || '', record)) return json(401, { error: 'Incorrect member or password.' })
-      const token = await createSession(member, record.role || 'member')
+      const token = await createSession(member, record.role || 'member', record.authVersion)
       return json(200, { authenticated: true, member, role: record.role || 'member' }, { 'set-cookie': sessionCookie(token) })
+    }
+
+    if (action === 'set-member-password') {
+      const session = await readSession(event)
+      if (!session) return json(401, { error:'Sign in required.' })
+      const member = String(body.member || session.member)
+      if (!MEMBERS.includes(member)) return json(400, { error:'Choose a household member.' })
+      if (member !== session.member && session.role !== 'admin') return json(403, { error:'Only an administrator can update another household member’s password.' })
+      const actor = await dataStore.get(userKey(session.member), { type:'json' }).catch(() => null)
+      if (!actor || !validPassword(body.currentPassword || '', actor)) return json(401, { error:'Your current password is incorrect.' })
+      const newPassword = String(body.newPassword || '')
+      if (newPassword.length < 8) return json(400, { error:'Use a new password with at least 8 characters.' })
+      if (validPassword(newPassword, await dataStore.get(userKey(member), { type:'json' }).catch(() => null))) return json(400, { error:'Choose a new password that is different from the current password.' })
+      const previous = await dataStore.get(userKey(member), { type:'json' }).catch(() => null)
+      const authVersion = Number(previous?.authVersion || 0) + 1
+      await dataStore.setJSON(userKey(member), {
+        member,
+        role:previous?.role || (member === 'Larry' ? 'admin' : 'member'),
+        createdAt:previous?.createdAt || new Date().toISOString(),
+        updatedAt:new Date().toISOString(),
+        updatedBy:session.member,
+        authVersion,
+        ...passwordHash(newPassword),
+      })
+      const headers = {}
+      if (member === session.member) headers['set-cookie'] = sessionCookie(await createSession(member, session.role, authVersion))
+      return json(previous ? 200 : 201, { ok:true, member, message:`Password updated for ${member}. Other sessions for this account have been signed out.` }, headers)
     }
 
     if (action === 'logout') return json(200, { ok: true }, { 'set-cookie': clearCookie() })

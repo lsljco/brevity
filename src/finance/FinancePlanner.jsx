@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { Fragment, lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Line, Doughnut } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -6,7 +6,6 @@ import {
   Filler, Tooltip, ArcElement, DoughnutController,
 } from 'chart.js'
 import PlaidConnect from './PlaidConnect.jsx'
-import ActualTxModal from './ActualTxModal.jsx'
 import TransactionRuleModal from './TransactionRuleModal.jsx'
 import { buildProjection, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, restorePersistedFinanceData } from './financeData.js'
@@ -14,7 +13,7 @@ import { actualTransactionKind, budgetCategoryForTransaction, buildBalanceSheet,
 import FinanceTimeframe from './FinanceTimeframe.jsx'
 import MonarchReports, { RecurringFinance } from './MonarchReports.jsx'
 import { allocateBudgetActuals, budgetTargetForLine, budgetTargetRow, buildBudgetBreakdown, buildBudgetCategoryLines, buildBudgetLines, buildLegacyBudgetOwners, budgetBreakdownTotal } from './budgetBreakdown.js'
-import { filterTransactionsByTimeframe, resolveTimeframe, restoreTimeframe } from './financeTimeframe.js'
+import { filterTransactionsByTimeframe, resolveTimeframe, restoreTimeframe, TIMEFRAME_PRESETS, timeframeLabel } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import DashboardFooter from './DashboardFooter.jsx'
 import ScenarioModeling from './ScenarioModeling.jsx'
@@ -41,8 +40,10 @@ import { buildScheduledActionPayload, scheduledActionScope } from './scheduledAc
 import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
 import CashForecastAgenda, { CashForecastIntro } from './CashForecastAgenda.jsx'
 import { USER_SIDEPANEL_IMAGE } from './financeAssets.js'
-import DebtWorkspace from './DebtWorkspace.jsx'
 import { DEBT_STORAGE_KEY, normalizeDebts } from './debtModel.js'
+
+const ActualTxModal=lazy(()=>import('./ActualTxModal.jsx'))
+const DebtWorkspace=lazy(()=>import('./DebtWorkspace.jsx'))
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
 
@@ -836,6 +837,17 @@ const LUXURY_CSS = `
 .finance-account-filter > span,
 .finance-account-filter > div,
 .finance-account-filter > i { flex: 0 0 auto; }
+.finance-current-scope {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid rgba(197,164,109,.28);
+  border-radius: 999px;
+  background: rgba(197,164,109,.08);
+  color: var(--brevity-gold-light);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
 .app-main:has(.app-context-navigation) .finance-account-filter { top: 56px !important; }
 
 .finance-form-grid,
@@ -1982,6 +1994,16 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     storageKey:DEBT_STORAGE_KEY,
     surfaceError:true,
   })
+  const reviewDebtPayment = ({debt,tx,nonPrincipalAmount}) => stageDirectFinanceReview({
+    summary:`Apply ${fmtMoney(Math.abs(Number(tx.amount)||0))} bank payment to ${debt.creditor}`,
+    operation:{
+      type:'debt.transaction.apply',targetId:debt.id,
+      payload:{transactionId:tx.id,transactionDate:tx.date,transactionName:String(tx.name||tx.originalStatement||'Debt payment'),amount:Math.abs(Number(tx.amount)||0),nonPrincipalAmount:Number(nonPrincipalAmount)||0},
+      description:`Apply the posted ${tx.date} bank transaction to ${debt.creditor}. Calculate interest using ${debt.interestMethod}, preserve ${fmtMoney(Number(nonPrincipalAmount)||0)} for escrow, fees, or other non-principal charges, and reduce only principal. This records the payment but never moves money.`,
+    },
+    storageKey:DEBT_STORAGE_KEY,
+    surfaceError:true,
+  })
   // ── Derived values (all use fd = filtered accounts + transactions) ─────────
   const t = getHouseholdCalendarDate()
   const todayKey = getHouseholdDateKey()
@@ -2289,6 +2311,11 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
 
   // ── Account filter bar ──────────────────────────────────────────────────
   const allSelected = !selectedAccts || selectedAccts.size === data.accounts.length
+  const financePresetLabel = TIMEFRAME_PRESETS.find(([id]) => id === financeRange.preset)?.[1] || 'Custom'
+  const financeAccountScopeLabel = allSelected
+    ? 'All accounts'
+    : fd.accounts.length === 1 ? fd.accounts[0].name : `${fd.accounts.length} accounts`
+  const financeScopeSummary = `${financePresetLabel} · ${financeAccountScopeLabel}`
   const AccountFilterBar = !isForm && (
     <nav className="finance-account-filter" aria-label="Finance account filters" style={{
       position: 'sticky', top: 0, zIndex: 20,
@@ -2300,6 +2327,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts</span>
+      <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>
 
       {/* All pill */}
       <button
@@ -2993,7 +3021,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                   : transactionFilter?.postedOnly
                     ? `${transactionViewActuals.length} posted transaction${transactionViewActuals.length !== 1 ? 's' : ''}`
                   : `${transactionViewActuals.length} posted/pending transaction${transactionViewActuals.length !== 1 ? 's' : ''}`
-                : `${scheduledViewTransactions.length} scheduled transaction${scheduledViewTransactions.length !== 1 ? 's' : ''}`}
+                : `${scheduledViewTransactions.length} scheduled transaction${scheduledViewTransactions.length !== 1 ? 's' : ''} · ${financeScopeSummary}`}
             </p>
             <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
               {showActuals&&!readOnly&&<button type="button" onClick={() => { setTransactionRuleInitial(null); setShowTransactionRules(true) }} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className="ti ti-wand" aria-hidden="true"/>Categorization rules{txRules.length ? ` · ${txRules.length}` : ''}</button>}
@@ -3181,7 +3209,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       {/* ══════════ DEBTS ══════════ */}
       {view === 'debts' && (
         <div className="finance-inner">
-          <DebtWorkspace debts={debts} transactions={filteredActuals} scheduledMonthlyNet={calculateScheduledTotalsForMonth(data.transactions,getHouseholdCalendarDate()).net} readOnly={readOnly} onReview={reviewDebtChange}/>
+          <Suspense fallback={<div className="loading-screen">Loading debts…</div>}><DebtWorkspace debts={debts} transactions={filteredActuals} scheduledMonthlyNet={calculateScheduledTotalsForMonth(data.transactions,getHouseholdCalendarDate()).net} readOnly={readOnly} onReview={reviewDebtChange}/></Suspense>
         </div>
       )}
 
@@ -3244,11 +3272,12 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
 
       {/* ══════════ ACTUAL TRANSACTION EDIT MODAL ══════════ */}
       {!readOnly && selActualTx && (
-        <ActualTxModal
+        <Suspense fallback={null}><ActualTxModal
           tx={selActualTx}
           accounts={data.accounts}
           allTxNames={allTxNames}
           goals={goals}
+          debts={debts}
           onSave={handleSaveActualTx}
           onCreateRule={initial => { setTransactionRuleInitial(initial); setShowTransactionRules(true) }}
           onMakeRecurring={(!isTransferTransaction(selActualTx) && (Number(selActualTx.amount) >= 0 || isRecognizedIncomeTransaction(selActualTx))) ? (form) => {
@@ -3262,8 +3291,9 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
             setSelActualTx(null)
             setTimeout(() => setView('tx-form'), 50)
           } : undefined}
+          onApplyDebtPayment={reviewDebtPayment}
           onClose={() => setSelActualTx(null)}
-        />
+        /></Suspense>
       )}
       {!readOnly && showTransactionRules && (
         <TransactionRuleModal

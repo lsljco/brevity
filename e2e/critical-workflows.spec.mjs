@@ -29,6 +29,13 @@ const scenarioRecords=()=>{
   const value={expenseMode:'scenario',planningExpense:23812.11,scenarios:[{id:'current',title:'Current',description:'What household cash flow looks like today.',incomes:[{id:'salary',description:'LS Genesco Inc.',monthlyNet:8164,annualGross:134000,contribution:11,remote:true,employment:'Perm',notes:''}]}]}
   return{brevity_finance_scenarios_v1:{key:'brevity_finance_scenarios_v1',value:JSON.stringify(value),version:2,updatedAt:new Date().toISOString()}}
 }
+const debtPaymentRecords=()=>{
+  const records=cashForecastRecords(),actuals=JSON.parse(records.plaid_actuals_cache.value)
+  actuals.push({id:'bank-mortgage',accountId:'plaid-operating',name:'Mortgage payment',originalStatement:'MONTHLY MORTGAGE PAYMENT',category:'MORTGAGE',amount:3000,date:dateKey(),pending:false})
+  records.plaid_actuals_cache.value=JSON.stringify(actuals)
+  records.brevity_finance_debts_v1={key:'brevity_finance_debts_v1',value:JSON.stringify([{id:'mortgage',creditor:'Mortgage lender',accountName:'Home mortgage',debtType:'Mortgage',status:'Active',originalBalance:400000,currentBalance:300000,interestRate:6,interestMethod:'Amortized APR',paymentsPerYear:12,fixedInterestAmount:0,minimumPayment:2800,dueDay:1,paymentMatchText:'MORTGAGE',notes:'',payments:[]}]),version:3,updatedAt:new Date().toISOString()}
+  return records
+}
 const mealPlanResponse=(addedMeal=null)=>{
   const now=new Date().toISOString(),start=dateKey()
   const meals=[
@@ -44,7 +51,7 @@ const mealPlanResponse=(addedMeal=null)=>{
   })
   return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
 }
-async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false}={}){
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false}={}){
   let addedMeal=null
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
@@ -55,7 +62,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
       if(route.request().method()==='PUT'){
         const payload=route.request().postDataJSON()
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
-      }else body={records:scenarioFixture?scenarioRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
+      }else body={records:scenarioFixture?scenarioRecords():debtPaymentFixture?debtPaymentRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
     else if(path.endsWith('/meal-plans')){
       if(route.request().method()==='POST'){
@@ -115,7 +122,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -195,6 +202,16 @@ test('Household Operations exposes Schedule, Routines, Operations and Inventory 
 
 test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
 
+test('Transactions keep account and timeframe scope visible with filtered totals',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await page.getByLabel('Select financial timeframe').selectOption('this-month')
+  await expect(page.getByLabel('Current Finance scope: This Month · Operating Account')).toBeVisible()
+  await expect(page.getByText(/scheduled transactions · This Month · Operating Account$/)).toBeVisible()
+})
+
 test('posted transaction categorization rules are discoverable and preview exact bank matches',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Finance',exact:true}).click()
@@ -233,6 +250,27 @@ test('changing a posted transaction category offers a prefilled rule with past-m
   await dialog.getByRole('button',{name:'Review new rule'}).click()
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
   await expect(page.getByRole('heading',{name:/Automatically categorize matching past and future Neighborhood Market transactions as Groceries/})).toBeVisible()
+})
+
+test('Finance applies posted bank activity to debt with reviewed interest and principal',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await page.getByRole('button',{name:'Show bank activity'}).click()
+  await page.getByText('Mortgage payment',{exact:true}).click()
+  await page.getByLabel('Debt account').selectOption('mortgage')
+  await page.getByLabel('Escrow fees or other non-principal amount').fill('900')
+  const preview=page.getByLabel('Debt payment allocation preview')
+  await expect(preview).toContainText('Interest $1500.00')
+  await expect(preview).toContainText('Principal $600.00')
+  await expect(preview).toContainText('New balance $299,400.00')
+  await expect(preview).toContainText('Amortized APR')
+  await page.getByRole('button',{name:'Review debt payment'}).click()
+  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Apply the posted')
+  await expect(review).toContainText('reduce only principal')
+  await expect(review).toContainText('never moves money')
 })
 
 test('Scenario Modeling edits descriptions, income rows, and recurring-expense totals through Action Mode',async({page},testInfo)=>{

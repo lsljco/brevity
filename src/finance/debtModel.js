@@ -1,8 +1,10 @@
 export const DEBT_STORAGE_KEY = 'brevity_finance_debts_v1'
 export const DEBT_TYPES = ['Personal loan','Credit card','Student loan','Mortgage','Auto loan','Medical','Other']
 export const DEBT_STATUSES = ['Active','Deferred','Paid off']
+export const DEBT_INTEREST_METHODS = ['Amortized APR','Fixed interest per payment','Principal only']
 
 const amount = value => Math.max(0, Number(value) || 0)
+const cents = value => Math.round((Number(value) || 0) * 100) / 100
 export function normalizeDebts(value) {
   return (Array.isArray(value) ? value : []).filter(item => item?.id).map(item => ({
     ...item,
@@ -11,9 +13,35 @@ export function normalizeDebts(value) {
     status:DEBT_STATUSES.includes(item.status) ? item.status : 'Active',
     originalBalance:amount(item.originalBalance), currentBalance:amount(item.currentBalance),
     interestRate:amount(item.interestRate), minimumPayment:amount(item.minimumPayment),
+    interestMethod:DEBT_INTEREST_METHODS.includes(item.interestMethod) ? item.interestMethod : 'Amortized APR',
+    paymentsPerYear:Number.isInteger(Number(item.paymentsPerYear)) && Number(item.paymentsPerYear) > 0 ? Number(item.paymentsPerYear) : 12,
+    fixedInterestAmount:amount(item.fixedInterestAmount),
     dueDay:Number.isInteger(Number(item.dueDay)) ? Number(item.dueDay) : 0,
     paymentMatchText:String(item.paymentMatchText || '').trim(), notes:String(item.notes || '').trim(),
+    payments:(Array.isArray(item.payments) ? item.payments : []).filter(payment=>payment?.transactionId).map(payment=>({
+      ...payment,amount:amount(payment.amount),interest:cents(payment.interest),principal:cents(payment.principal),
+      nonPrincipalAmount:cents(payment.nonPrincipalAmount),unappliedAmount:cents(payment.unappliedAmount),
+      balanceBefore:cents(payment.balanceBefore),balanceAfter:cents(payment.balanceAfter),
+    })),
   }))
+}
+
+export function calculateDebtPayment(debt, transaction, nonPrincipalAmount = 0) {
+  const normalized=normalizeDebts([{...debt,id:debt?.id||'preview'}])[0]
+  if(!normalized)throw new Error('Choose a current debt before calculating this payment.')
+  const payment=cents(Math.abs(Number(transaction?.amount)||0)),other=cents(nonPrincipalAmount)
+  if(payment<=0)throw new Error('A debt payment must be greater than zero.')
+  if(other<0||other>payment)throw new Error('Escrow, fees, and other non-principal amounts must be between zero and the payment total.')
+  const available=cents(payment-other)
+  const calculatedInterest=normalized.interestMethod==='Fixed interest per payment'
+    ? normalized.fixedInterestAmount
+    : normalized.interestMethod==='Amortized APR'
+      ? normalized.currentBalance*(normalized.interestRate/100/normalized.paymentsPerYear)
+      : 0
+  const interest=cents(Math.min(available,Math.max(0,calculatedInterest)))
+  const principal=cents(Math.min(normalized.currentBalance,Math.max(0,available-interest)))
+  const balanceAfter=cents(Math.max(0,normalized.currentBalance-principal))
+  return{amount:payment,interest,principal,nonPrincipalAmount:other,unappliedAmount:cents(Math.max(0,payment-interest-principal-other)),balanceBefore:cents(normalized.currentBalance),balanceAfter}
 }
 
 export function debtSummary(debts) {

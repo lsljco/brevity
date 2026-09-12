@@ -32,6 +32,12 @@ test('finance navigation and dialog icon controls expose explicit accessible nam
   assert.ok(planner.includes('aria-label={`Bank source for ${acct.name}`}'))
 })
 
+test('scheduled totals disclose their account and timeframe scope', () => {
+  assert.match(planner, /financeScopeSummary = `\$\{financePresetLabel\} · \$\{financeAccountScopeLabel\}`/)
+  assert.match(planner, /Current Finance scope: \$\{financeScopeSummary\}/)
+  assert.match(planner, /scheduled transaction\$\{scheduledViewTransactions\.length !== 1 \? 's' : ''\} · \$\{financeScopeSummary\}/)
+})
+
 test('actual transaction and legacy rule controls describe close, remove, and toggle actions', () => {
   assert.match(actualTransaction, /aria-label="Close rule editor"/)
   assert.match(actualTransaction, /aria-label="Close transaction details"/)
