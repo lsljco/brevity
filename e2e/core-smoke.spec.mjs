@@ -114,6 +114,19 @@ test('Settings exposes sync health and identifies browser data as a recovery cac
   await expect(page.getByText('Browser Data Export')).toHaveCount(0)
 })
 
+test('Settings submits a verified household password change', async ({ page }, testInfo) => {
+  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
+  await page.getByRole('button', { name:'Settings' }).click()
+  await expect(page.getByText('Your current password')).toBeVisible()
+  await page.getByLabel('Your current password').fill('current-secret')
+  await page.getByLabel('New password', { exact:true }).fill('new-household-secret')
+  await page.getByLabel('Confirm new password').fill('new-household-secret')
+  const request = page.waitForRequest(value => value.url().includes('action=set-member-password'))
+  await page.getByRole('button', { name:'Change Password' }).click()
+  const submitted = await request
+  expect(submitted.postDataJSON()).toEqual({ member:'Larry', currentPassword:'current-secret', newPassword:'new-household-secret' })
+})
+
 test('shared-state UI no longer asks users to reload after synchronization', async ({ page }) => {
   await expect(page.locator('body')).not.toContainText('Refresh this view to display them')
   await expect(page.getByRole('button', { name:'Reload view' })).toHaveCount(0)

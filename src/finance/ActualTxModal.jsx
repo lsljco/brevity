@@ -2,6 +2,7 @@ import { useEffect, useId, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_TRANSACTION_CATEGORIES, loadStoredCategoryOptions, mergeCategoryOptions, saveStoredCategoryOptions, transactionCategories } from './categoryData.js'
 import { filterTypeaheadOptions } from './typeahead.js'
+import { calculateDebtPayment } from './debtModel.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -353,7 +354,7 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
 }
 
 // ── Main ActualTxModal ────────────────────────────────────────────────────────
-export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], onSave, onCreateRule, onMakeRecurring, onClose }) {
+export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onClose }) {
   const [form, setForm] = useState({
     name:              tx.name || '',
     amount:            String(Math.abs(tx.amount || 0)),
@@ -368,6 +369,10 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
   const [attachments, setAttachments]         = useState(tx.attachments || [])
   const [storedCategories, setStoredCategories] = useState(() => loadStoredCategoryOptions(localStorage))
   const [ruleQuestion, setRuleQuestion] = useState('')
+  const [debtId, setDebtId] = useState('')
+  const [nonPrincipalAmount, setNonPrincipalAmount] = useState('0')
+  const [debtBusy, setDebtBusy] = useState(false)
+  const [debtError, setDebtError] = useState('')
   const committedCategoryRef = useRef(form.category)
   const categoryOptions = mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, storedCategories, transactionCategories(tx))
 
@@ -407,6 +412,20 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
   const localAcct = accounts?.find(a => a.plaidAccountId === tx.accountId)
 
   const isIncome = tx.amount < 0
+  const activeDebts=debts.filter(debt=>debt.status!=='Paid off'&&Number(debt.currentBalance)>0)
+  const selectedDebt=activeDebts.find(debt=>debt.id===debtId)
+  let debtAllocation=null,allocationError=''
+  try { if(selectedDebt)debtAllocation=calculateDebtPayment(selectedDebt,tx,Number(nonPrincipalAmount)) } catch(error) { allocationError=error.message }
+
+  const reviewDebtPayment = async () => {
+    if(!selectedDebt||!debtAllocation)return
+    setDebtBusy(true);setDebtError('')
+    try{
+      const prepared=await onApplyDebtPayment?.({debt:selectedDebt,tx,nonPrincipalAmount:Number(nonPrincipalAmount)})
+      if(prepared!==false)onClose()
+    }catch(error){setDebtError(error.message||'This debt payment could not be prepared safely.')}
+    finally{setDebtBusy(false)}
+  }
 
   return createPortal(
     <>
@@ -529,6 +548,21 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], on
               </div>
               <span style={{ fontSize: 10, color: '#888884' }}>Amount and date remain tied to the bank record. Use reconciliation to explain a variance.</span>
             </div>
+
+            {/* Goal */}
+            {!tx.pending&&Number(tx.amount)>0&&onApplyDebtPayment&&<div style={{...sectionStyle,padding:14,borderRadius:12,border:'1px solid rgba(197,164,109,.28)',background:'rgba(197,164,109,.07)'}}>
+              <label style={labelStyle}>Apply to debt</label>
+              <select aria-label="Debt account" value={debtId} onChange={event=>{setDebtId(event.target.value);setDebtError('')}} style={inputStyle}>
+                <option value="">Choose a debt…</option>
+                {activeDebts.map(debt=><option key={debt.id} value={debt.id}>{debt.creditor} · ${Number(debt.currentBalance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>)}
+              </select>
+              {selectedDebt&&<><label style={{...labelStyle,marginTop:8}}>Escrow, fees, or other non-principal amount</label><input aria-label="Escrow fees or other non-principal amount" type="number" min="0" max={Math.abs(Number(tx.amount)||0)} step="0.01" value={nonPrincipalAmount} onChange={event=>setNonPrincipalAmount(event.target.value)} style={inputStyle}/></>}
+              {debtAllocation&&<div aria-label="Debt payment allocation preview" style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginTop:8,fontSize:11,color:'#B8B7B1'}}><span>Interest <b style={{display:'block',color:'#F7F6F2'}}>${debtAllocation.interest.toFixed(2)}</b></span><span>Principal <b style={{display:'block',color:'#F7F6F2'}}>${debtAllocation.principal.toFixed(2)}</b></span><span>New balance <b style={{display:'block',color:'#C5A46D'}}>${debtAllocation.balanceAfter.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</b></span><span>Method <b style={{display:'block',color:'#F7F6F2'}}>{selectedDebt.interestMethod}</b></span></div>}
+              {debtAllocation?.unappliedAmount>0&&<span role="status" style={{fontSize:10,color:'#E5A08F'}}>${debtAllocation.unappliedAmount.toFixed(2)} exceeds the remaining principal and will remain unapplied.</span>}
+              {(debtError||allocationError)&&<span role="alert" style={{fontSize:10,color:'#E5A08F'}}>{debtError||allocationError}</span>}
+              <button type="button" disabled={!debtAllocation||debtBusy} onClick={reviewDebtPayment} style={{marginTop:8,padding:'9px 11px',borderRadius:9,border:0,background:'#C5A46D',color:'#17130d',font:'600 12px inherit',cursor:debtAllocation&&!debtBusy?'pointer':'not-allowed',opacity:debtAllocation&&!debtBusy?1:.5}}>{debtBusy?'Preparing review…':'Review debt payment'}</button>
+              <span style={{fontSize:10,lineHeight:1.45,color:'#888884'}}>Brevity calculates interest from the debt’s reviewed method, applies only the principal reduction, and records the bank transaction once after Action Mode approval.</span>
+            </div>}
 
             {/* Goal */}
             <div style={sectionStyle}>

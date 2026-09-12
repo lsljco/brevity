@@ -1,0 +1,15 @@
+.debt-interest-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.debt-payments p span small {
+  margin-top: 3px;
+}
+
+.debt-payments p > b {
+  flex-shrink: 0;
+  margin-left: 10px;
+}

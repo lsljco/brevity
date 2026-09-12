@@ -60,6 +60,8 @@ test('each action accepts only its own fields and validates field types and enum
   const historicalRule=normalizeActionProposal({operations:[{...base,type:'transaction.rule.create',payload:{title:'Coffee',matchText:'STARBUCKS',matchField:'merchantName',matchMode:'starts',category:'Coffee',accountId:'operating',applyToExisting:true,createdDate:'2026-09-05'}}]},{member:'Larry',role:'admin'})
   assert.equal(historicalRule.risk,'strong-confirmation')
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'transaction.rule.delete',payload:{}}]},{member:'Larry',role:'admin'}))
+  assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-mortgage',transactionDate:'2026-09-05',transactionName:'Mortgage payment',amount:3000,nonPrincipalAmount:900}}]},{member:'Larry',role:'admin'}))
+  assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-mortgage',transactionDate:'2026-09-05',transactionName:'Mortgage payment',amount:3000,nonPrincipalAmount:3100}}]},{member:'Larry',role:'admin'}),/between zero and the payment total/)
   for (const field of ['amount','date','originalStatement','notes','goal','splits','needsReview']) {
     assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.update',payload:{name:'AT&T',[field]:field==='amount'?450:'changed'}}]},{member:'Larry',role:'admin'}),new RegExp(`unsupported field: ${field}`))
   }
@@ -183,6 +185,20 @@ test('record executor updates decisions and preserves a complete before image',(
   assert.equal(result.after.decisions[0].status,'complete')
   assert.equal(result.before.decisions[0].status,'needs-decision')
   assert.equal(original.decisions[0].status,'needs-decision')
+})
+
+test('reviewed bank activity applies calculated interest and principal to one exact debt',()=>{
+  const debts=[
+    {id:'mortgage',creditor:'Mortgage lender',debtType:'Mortgage',status:'Active',originalBalance:400000,currentBalance:300000,interestRate:6,interestMethod:'Amortized APR',paymentsPerYear:12,fixedInterestAmount:0,minimumPayment:2800,payments:[]},
+    {id:'card',creditor:'Card',debtType:'Credit card',status:'Active',originalBalance:5000,currentBalance:2000,interestRate:20,interestMethod:'Amortized APR',paymentsPerYear:12,fixedInterestAmount:0,minimumPayment:100,payments:[]},
+  ]
+  const operation={type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-mortgage',transactionDate:'2026-09-05',transactionName:'Mortgage payment',amount:3000,nonPrincipalAmount:900}}
+  const result=applyRecordOperation(debts,operation,()=> 'unused',{actor:'Larry',now:()=>new Date('2026-09-06T12:00:00Z')})
+  assert.equal(result.after[0].currentBalance,299400)
+  assert.deepEqual(result.after[0].payments[0],{transactionId:'bank-mortgage',date:'2026-09-05',name:'Mortgage payment',amount:3000,interest:1500,principal:600,nonPrincipalAmount:900,unappliedAmount:0,balanceBefore:300000,balanceAfter:299400,interestMethod:'Amortized APR',appliedAt:'2026-09-06T12:00:00.000Z',appliedBy:'Larry'})
+  assert.equal(result.after[1].currentBalance,2000)
+  assert.equal(result.before[0].currentBalance,300000)
+  assert.throws(()=>applyRecordOperation(result.after,operation),/already applied to a debt/)
 })
 
 test('Action Mode creates decisions and future-only categorization rules',()=>{
