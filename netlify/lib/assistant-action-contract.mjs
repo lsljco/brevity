@@ -111,7 +111,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.create': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.update': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.delete': [],
-  'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount'],
+  'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
   'meal.substitute': ['mealType', 'mealId'],
 }
 const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
@@ -315,6 +315,11 @@ function normalizeActionPayload(type, input) {
       normalized[field] = normalizeParticipants(type, value)
     } else if (field === 'raci') {
       normalized[field] = normalizeRaci(type, value)
+    } else if (type === 'debt.transaction.apply' && field === 'paymentRule') {
+      if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('A debt payment rule must be an object.')
+      const unsupportedRuleField=Object.keys(value).find(key=>!['enabled','matchText','matchField','matchMode','accountId','nonPrincipalAmount'].includes(key))
+      if(unsupportedRuleField)throw new Error(`The debt payment rule contains an unsupported field: ${unsupportedRuleField}.`)
+      normalized.paymentRule={enabled:value.enabled===true,matchText:clean(value.matchText,300),matchField:clean(value.matchField,40),matchMode:clean(value.matchMode,40),accountId:cleanId(String(value.accountId||'')),nonPrincipalAmount:Number(value.nonPrincipalAmount||0)}
     } else if (field === 'splits') {
       if (!Array.isArray(value) || value.length > 20) throw new Error(`The ${type} action requires no more than 20 transaction splits.`)
       normalized[field] = value.map((split, index) => {
@@ -443,6 +448,12 @@ export function normalizeActionOperation(input = {}) {
     if (!operation.targetId || !payload.transactionId || !payload.transactionName || !isDate(payload.transactionDate)) throw new Error('Applying bank activity to debt requires the exact debt and posted transaction details.')
     if (!Number.isFinite(payload.amount) || payload.amount <= 0) throw new Error('A debt payment must be a positive posted amount.')
     if (!Number.isFinite(payload.nonPrincipalAmount) || payload.nonPrincipalAmount < 0 || payload.nonPrincipalAmount > payload.amount) throw new Error('Escrow, fees, and other non-principal amounts must be between zero and the payment total.')
+    if(payload.paymentRule){
+      const rule=payload.paymentRule
+      if(rule.enabled!==true||!String(rule.matchText||'').trim())throw new Error('A debt payment rule requires exact match text.')
+      if(!['originalStatement','merchantName'].includes(rule.matchField)||!['contains','starts','exactly'].includes(rule.matchMode))throw new Error('Choose a supported debt payment rule field and match method.')
+      if(!Number.isFinite(Number(rule.nonPrincipalAmount))||Number(rule.nonPrincipalAmount)<0)throw new Error('A debt payment rule requires a non-negative non-principal amount.')
+    }
   }
   if (type === 'calendar.create' && !isDate(payload.date || operation.targetDate)) throw new Error('A new calendar event requires an exact date.')
   if (type.startsWith('calendar.') && payload.allDay === false && !payload.time) throw new Error('A timed calendar event requires an exact time.')

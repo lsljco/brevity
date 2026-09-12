@@ -2,7 +2,7 @@ import { useEffect, useId, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_TRANSACTION_CATEGORIES, loadStoredCategoryOptions, mergeCategoryOptions, saveStoredCategoryOptions, transactionCategories } from './categoryData.js'
 import { filterTypeaheadOptions } from './typeahead.js'
-import { calculateDebtPayment } from './debtModel.js'
+import { calculateDebtPayment, matchingDebtRule } from './debtModel.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -371,6 +371,10 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
   const [ruleQuestion, setRuleQuestion] = useState('')
   const [debtId, setDebtId] = useState('')
   const [nonPrincipalAmount, setNonPrincipalAmount] = useState('0')
+  const [saveDebtRule, setSaveDebtRule] = useState(false)
+  const [debtRuleMatchText, setDebtRuleMatchText] = useState(tx.originalStatement || tx.original_description || tx.name || '')
+  const [debtRuleMatchField, setDebtRuleMatchField] = useState('originalStatement')
+  const [debtRuleMatchMode, setDebtRuleMatchMode] = useState('contains')
   const [debtBusy, setDebtBusy] = useState(false)
   const [debtError, setDebtError] = useState('')
   const committedCategoryRef = useRef(form.category)
@@ -414,6 +418,12 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
   const isIncome = tx.amount < 0
   const activeDebts=debts.filter(debt=>debt.status!=='Paid off'&&Number(debt.currentBalance)>0)
   const selectedDebt=activeDebts.find(debt=>debt.id===debtId)
+  useEffect(()=>{
+    const match=matchingDebtRule(debts,tx,localAcct?.id||'')
+    if(!match)return
+    setDebtId(match.id)
+    setNonPrincipalAmount(String(match.paymentRule?.nonPrincipalAmount||0))
+  },[debts,tx,localAcct?.id])
   let debtAllocation=null,allocationError=''
   try { if(selectedDebt)debtAllocation=calculateDebtPayment(selectedDebt,tx,Number(nonPrincipalAmount)) } catch(error) { allocationError=error.message }
 
@@ -421,7 +431,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
     if(!selectedDebt||!debtAllocation)return
     setDebtBusy(true);setDebtError('')
     try{
-      const prepared=await onApplyDebtPayment?.({debt:selectedDebt,tx,nonPrincipalAmount:Number(nonPrincipalAmount)})
+      const prepared=await onApplyDebtPayment?.({debt:selectedDebt,tx,nonPrincipalAmount:Number(nonPrincipalAmount),paymentRule:saveDebtRule?{enabled:true,matchText:debtRuleMatchText.trim(),matchField:debtRuleMatchField,matchMode:debtRuleMatchMode,accountId:localAcct?.id||'',nonPrincipalAmount:Number(nonPrincipalAmount)||0}:null})
       if(prepared!==false)onClose()
     }catch(error){setDebtError(error.message||'This debt payment could not be prepared safely.')}
     finally{setDebtBusy(false)}
@@ -557,6 +567,8 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
                 {activeDebts.map(debt=><option key={debt.id} value={debt.id}>{debt.creditor} · ${Number(debt.currentBalance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>)}
               </select>
               {selectedDebt&&<><label style={{...labelStyle,marginTop:8}}>Escrow, fees, or other non-principal amount</label><input aria-label="Escrow fees or other non-principal amount" type="number" min="0" max={Math.abs(Number(tx.amount)||0)} step="0.01" value={nonPrincipalAmount} onChange={event=>setNonPrincipalAmount(event.target.value)} style={inputStyle}/></>}
+              {selectedDebt&&<label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:11,lineHeight:1.45,color:'#B8B7B1'}}><input aria-label="Save as a debt payment rule" type="checkbox" checked={saveDebtRule} onChange={event=>setSaveDebtRule(event.target.checked)} style={{marginTop:2}}/><span><b style={{display:'block',color:'#F7F6F2'}}>Save as a debt payment rule</b>Future matching posted payments will preselect {selectedDebt.creditor} and use this non-principal amount.</span></label>}
+              {selectedDebt&&saveDebtRule&&<div style={{display:'grid',gap:8,padding:10,borderRadius:10,background:'rgba(255,255,255,.035)'}}><label style={labelStyle}>Match text</label><input aria-label="Debt rule match text" value={debtRuleMatchText} onChange={event=>setDebtRuleMatchText(event.target.value)} style={inputStyle}/><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><select aria-label="Debt rule match field" value={debtRuleMatchField} onChange={event=>setDebtRuleMatchField(event.target.value)} style={inputStyle}><option value="originalStatement">Original statement</option><option value="merchantName">Merchant name</option></select><select aria-label="Debt rule match mode" value={debtRuleMatchMode} onChange={event=>setDebtRuleMatchMode(event.target.value)} style={inputStyle}><option value="contains">Contains</option><option value="starts">Starts with</option><option value="exactly">Exactly matches</option></select></div><span style={{fontSize:10,color:'#888884'}}>Limited to {localAcct?.name||'this linked account'}. A matched payment still requires Action Mode review before its balance is changed.</span></div>}
               {debtAllocation&&<div aria-label="Debt payment allocation preview" style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginTop:8,fontSize:11,color:'#B8B7B1'}}><span>Interest <b style={{display:'block',color:'#F7F6F2'}}>${debtAllocation.interest.toFixed(2)}</b></span><span>Principal <b style={{display:'block',color:'#F7F6F2'}}>${debtAllocation.principal.toFixed(2)}</b></span><span>New balance <b style={{display:'block',color:'#C5A46D'}}>${debtAllocation.balanceAfter.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</b></span><span>Method <b style={{display:'block',color:'#F7F6F2'}}>{selectedDebt.interestMethod}</b></span></div>}
               {debtAllocation?.unappliedAmount>0&&<span role="status" style={{fontSize:10,color:'#E5A08F'}}>${debtAllocation.unappliedAmount.toFixed(2)} exceeds the remaining principal and will remain unapplied.</span>}
               {(debtError||allocationError)&&<span role="alert" style={{fontSize:10,color:'#E5A08F'}}>{debtError||allocationError}</span>}

@@ -346,7 +346,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       if(item.status==='Paid off'||Number(item.currentBalance)<=0)throw new Error('That debt is already paid off. Refresh Finance and choose an active debt.')
       const allocation=calculateDebtPayment(item,{amount:payload.amount},payload.nonPrincipalAmount)
       const payment={transactionId:payload.transactionId,date:payload.transactionDate,name:payload.transactionName,...allocation,interestMethod:item.interestMethod||'Amortized APR',appliedAt:changedAt,appliedBy:context.actor||'Household member'}
-      return{...item,currentBalance:allocation.balanceAfter,status:allocation.balanceAfter<=0?'Paid off':item.status,payments:[payment,...(item.payments||[])],updatedAt:changedAt,updatedBy:context.actor||'Household member'}
+      return{...item,currentBalance:allocation.balanceAfter,status:allocation.balanceAfter<=0?'Paid off':item.status,payments:[payment,...(item.payments||[])],...(payload.paymentRule?{paymentRule:clone(payload.paymentRule),paymentMatchText:payload.paymentRule.matchText}:{}),updatedAt:changedAt,updatedBy:context.actor||'Household member'}
     })
     if(!found)throw new Error('That debt no longer exists. Refresh Finance and review the current debt list.')
     return{before,after}
