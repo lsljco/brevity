@@ -6,11 +6,11 @@ const source = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'u
 
 test('dashboard income and expense cards use matching timeframe drill-downs', () => {
   assert.match(source, /dashboardIncome = showActuals \? actualRangeTotals\.income : expectedRangeTotals\.income/)
-  assert.match(source, /dashboardExpense = showActuals \? actualRangeTotals\.expenses : recurringRangeTotals\.expenses/)
+  assert.match(source, /dashboardExpense = showActuals \? actualRangeTotals\.expenses : expectedRangeTotals\.expenses/)
   assert.match(source, /openFilteredTransactions\(\{ direction:'income', realizedIncomeOnly:true, label:'Realized income' \}\)/)
   assert.match(source, /openScheduledTransactions\(\{ direction:'income', label:'Expected income' \}\)/)
   assert.match(source, /openFilteredTransactions\(\{ direction:'expense', postedOnly:true, label:'Posted expenses' \}\)/)
-  assert.match(source, /openScheduledTransactions\(\{ direction:'expense', recurringOnly:true, label:'Recurring expenses' \}\)/)
+  assert.match(source, /openScheduledTransactions\(\{ direction:'expense', label:'Projected expenses' \}\)/)
 })
 
 test('dashboard cash flow and 90-day floor drill into their own supporting records', () => {
@@ -26,9 +26,11 @@ test('scheduled timeframe drill-downs display occurrence totals instead of one b
   assert.match(source, /occurrence.*in timeframe/)
 })
 
-test('dashboard labels distinguish expected income and the recurring-only baseline', () => {
+test('dashboard labels distinguish expected income and all projected expenses', () => {
   assert.doesNotMatch(source, /Monthly Net Income/)
   assert.match(source, /showActuals \? 'Realized Income' : 'Expected Income'/)
+  assert.match(source, /showActuals \? 'Posted Expenses' : 'Projected Expenses'/)
+  assert.match(source, /projectedExpenseSources\.length/)
   assert.match(source, /Recurring baseline cash flow/)
   assert.match(source, /One-time items are excluded/)
 })
