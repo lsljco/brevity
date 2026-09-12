@@ -2073,21 +2073,17 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     () => calculateScheduledTotalsForRange(fd.transactions, financeRange),
     [fd.transactions, financeRange],
   )
-  const recurringRangeTotals = useMemo(
-    () => calculateScheduledTotalsForRange(fd.transactions, financeRange, { recurringOnly:true }),
-    [fd.transactions, financeRange],
-  )
   const postedTimeframeActuals = useMemo(() => timeframeActuals.filter(transaction => !transaction.pending), [timeframeActuals])
   const actualRangeTotals = useMemo(() => summarizeActualCashActivity(postedTimeframeActuals), [postedTimeframeActuals])
   const dashboardIncome = showActuals ? actualRangeTotals.income : expectedRangeTotals.income
-  const dashboardExpense = showActuals ? actualRangeTotals.expenses : recurringRangeTotals.expenses
+  const dashboardExpense = showActuals ? actualRangeTotals.expenses : expectedRangeTotals.expenses
   const dashboardCashFlow = showActuals ? actualRangeTotals.net : expectedRangeTotals.net
   const expectedIncomeSources = useMemo(
     () => fd.transactions.filter(transaction => transaction.type === 'income' && calculateTransactionAmountForRange(transaction, financeRange) > 0),
     [fd.transactions, financeRange],
   )
-  const recurringExpenseSources = useMemo(
-    () => fd.transactions.filter(transaction => transaction.type === 'expense' && transaction.freq !== 'once' && calculateTransactionAmountForRange(transaction, financeRange, { recurringOnly:true }) > 0),
+  const projectedExpenseSources = useMemo(
+    () => fd.transactions.filter(transaction => transaction.type === 'expense' && calculateTransactionAmountForRange(transaction, financeRange) > 0),
     [fd.transactions, financeRange],
   )
   const dailyBudget = useMemo(() => loadBudget(), [view])
@@ -2438,7 +2434,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
             {[
               { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'current balance', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
               { label: showActuals ? 'Realized Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(isRealizedIncomeTransaction).length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted income' : 'selected timeframe', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', realizedIncomeOnly:true, label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
-              { label: showActuals ? 'Posted Expenses' : 'Recurring Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${postedTimeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} posted transactions` : `${recurringExpenseSources.length} recurring items`, trend:showActuals ? 'pending excluded' : 'selected timeframe', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', postedOnly:true, label:'Posted expenses' }) : openScheduledTransactions({ direction:'expense', recurringOnly:true, label:'Recurring expenses' }) },
+              { label: showActuals ? 'Posted Expenses' : 'Projected Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${postedTimeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} posted transactions` : `${projectedExpenseSources.length} projected item${projectedExpenseSources.length === 1 ? '' : 's'}`, trend:showActuals ? 'pending excluded' : 'selected timeframe', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', postedOnly:true, label:'Posted expenses' }) : openScheduledTransactions({ direction:'expense', label:'Projected expenses' }) },
               { label: showActuals ? 'Posted Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Posted cash inflows minus posted outflows; transfers excluded' : 'Expected income minus expected outflow', trend:'selected timeframe', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ excludeTransfers:true, postedOnly:true, label:'Posted cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
               { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'selected-account forecast', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) { setSelDay(toISO(minDay)); setCalMonth(minDay.getMonth()); setCalYear(minDay.getFullYear()) } setView('calendar') } },
             ].map((kpi, i) => {

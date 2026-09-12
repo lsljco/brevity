@@ -123,7 +123,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -216,6 +216,21 @@ test('authorized user starts an assigned household task through Action Mode',asy
 })
 
 test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
+
+test('Projected Expenses includes one-time calendar obligations in the selected timeframe',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  const card=page.locator('.kpi-card').filter({hasText:'Projected Expenses'})
+  await expect(card).toContainText('$40.00')
+  await expect(card).toContainText('1 projected item')
+  await card.click()
+  await expect(page.getByText('Projected expenses',{exact:true})).toBeVisible()
+  await expect(page.getByText('Planned groceries',{exact:true})).toBeVisible()
+  await expect(page.getByText('Expected Expenses',{exact:true})).toBeVisible()
+  await expect(page.getByText('$40.00',{exact:true}).first()).toBeVisible()
+})
 
 test('Transactions keep account and timeframe scope visible with filtered totals',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
