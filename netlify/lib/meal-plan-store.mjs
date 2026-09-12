@@ -17,6 +17,20 @@ const numeric = value => {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
+const safeText = (value, maximum = 500) => String(value || '').trim().slice(0, maximum)
+const normalizeIngredientNutrition = rows => (Array.isArray(rows) ? rows : []).slice(0, 30).map(row => ({
+  input: safeText(row?.input, 240),
+  resolvedName: safeText(row?.resolvedName, 240),
+  amountDescription: safeText(row?.amountDescription, 240),
+  basis: safeText(row?.basis, 500),
+  confidence: ['high', 'medium', 'low'].includes(row?.confidence) ? row.confidence : 'low',
+  macros: {
+    calories: Math.round(numeric(row?.macros?.calories) || 0),
+    proteinGrams: Math.round(numeric(row?.macros?.proteinGrams) || 0),
+    carbohydrateGrams: Math.round(numeric(row?.macros?.carbohydrateGrams) || 0),
+    fatGrams: Math.round(numeric(row?.macros?.fatGrams) || 0),
+  },
+}))
 
 function normalizeMealInput(meal, actor, now, createId) {
   const mealType = String(meal?.mealType || '').toLowerCase()
@@ -53,7 +67,17 @@ function normalizeMealInput(meal, actor, now, createId) {
     ingredients: (Array.isArray(meal?.ingredients) ? meal.ingredients : String(meal?.ingredients || '').split(/\r?\n/)).map(value => String(value || '').trim()).filter(Boolean),
     image: String(meal?.image || '').trim(),
     serving: String(meal?.serving || '').trim() || '1 serving',
-    nutritionBasis: 'Household-entered nutrition estimate',
+    yieldQuantity: numeric(meal?.yieldQuantity),
+    yieldUnit: String(meal?.yieldUnit || '').trim(),
+    batchMacros: meal?.batchMacros ? {
+      calories:Math.round(numeric(meal.batchMacros.calories) || 0),
+      proteinGrams:Math.round(numeric(meal.batchMacros.proteinGrams) || 0),
+      carbohydrateGrams:Math.round(numeric(meal.batchMacros.carbohydrateGrams) || 0),
+      fatGrams:Math.round(numeric(meal.batchMacros.fatGrams) || 0),
+    } : undefined,
+    ingredientNutrition: normalizeIngredientNutrition(meal?.ingredientNutrition),
+    nutritionWarnings: Array.isArray(meal?.nutritionWarnings) ? meal.nutritionWarnings.map(value=>String(value||'').trim()).filter(Boolean).slice(0,20) : [],
+    nutritionBasis: String(meal?.nutritionBasis || '').trim() || 'Household-entered nutrition estimate',
     macros: {
       calories: Math.round(calories),
       proteinGrams: Math.round(proteinGrams),
