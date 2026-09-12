@@ -257,7 +257,7 @@ test('Finance workspaces fit phone and tablet viewports without overlapping filt
   }
 })
 
-test('iPhone Cash Forecast clearly separates its monthly plan without a sticky account overlap',async({page},testInfo)=>{
+test('iPhone Cash Forecast keeps Finance context visible without covering its monthly plan',async({page},testInfo)=>{
   test.skip(testInfo.project.name!=='iphone','iPhone Cash Forecast contract')
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Finance',exact:true}).click()
@@ -282,19 +282,42 @@ test('iPhone Cash Forecast clearly separates its monthly plan without a sticky a
   await expect(agenda.locator(':scope > button.is-selected')).toHaveCount(0)
   await expect(page.locator('.finance-calendar-day-header')).toHaveCount(0)
 
+  const main=page.locator('.app-main')
+  await main.evaluate(element=>{element.scrollTop=0})
+  const beforeScroll=await page.evaluate(()=>{
+    const account=document.querySelector('.finance-account-filter')
+    const history=document.querySelector('.app-context-navigation')
+    const accountBox=account?.getBoundingClientRect()
+    const historyBox=history?.getBoundingClientRect()
+    return{
+      accountTop:accountBox?.top??-1,
+      historyBottom:historyBox?.bottom??-1,
+    }
+  })
+  await main.evaluate(element=>{element.scrollTop=Math.min(800,element.scrollHeight-element.clientHeight)})
+  await expect.poll(()=>main.evaluate(element=>element.scrollTop)).toBeGreaterThan(100)
+
   const layout=await page.evaluate(()=>{
     const account=document.querySelector('.finance-account-filter')
     const intro=document.querySelector('.finance-calendar-intro')
     const root=document.querySelector('.finance-root')
+    const history=document.querySelector('.app-context-navigation')
     const accountBox=account?.getBoundingClientRect()
     const introBox=intro?.getBoundingClientRect()
+    const historyBox=history?.getBoundingClientRect()
     return{
       accountPosition:account?getComputedStyle(account).position:'missing',
+      accountTop:accountBox?.top??-1,
+      historyBottom:historyBox?.bottom??-1,
       rootOverflow:root?getComputedStyle(root).overflowY:'missing',
       overlaps:Boolean(accountBox&&introBox&&Math.min(accountBox.bottom,introBox.bottom)-Math.max(accountBox.top,introBox.top)>1),
     }
   })
-  expect(layout).toEqual({accountPosition:'static',rootOverflow:'visible',overlaps:false})
+  expect(layout.accountPosition).toBe('sticky')
+  expect(Math.abs(layout.accountTop-beforeScroll.accountTop)).toBeLessThanOrEqual(1)
+  expect(layout.accountTop).toBeGreaterThanOrEqual(layout.historyBottom-1)
+  expect(layout.rootOverflow).toBe('visible')
+  expect(layout.overlaps).toBe(false)
 })
 
 test('iPhone account-link repair turns an unmatched balance warning into a compatible reviewed choice',async({page},testInfo)=>{
