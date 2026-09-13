@@ -215,6 +215,11 @@ test('direct Action version lookup permits only absent or exactly acknowledged r
     brevity_shared_state_meta_v1:JSON.stringify({ homehq_items_v1:{ hash:hashValue(value), version:7 } }),
   })
   assert.equal(getAcknowledgedSharedStateVersion(acknowledged, 'homehq_items_v1'), 7)
+  const acknowledgedLegacy = memoryStorage({
+    homehq_items_v1:value,
+    brevity_shared_state_meta_v1:JSON.stringify({ homehq_items_v1:{ hash:hashValue(value), version:0 } }),
+  })
+  assert.equal(getAcknowledgedSharedStateVersion(acknowledgedLegacy, 'homehq_items_v1'), 0)
   assert.throws(
     () => getAcknowledgedSharedStateVersion(memoryStorage({ homehq_items_v1:value }), 'homehq_items_v1'),
     error => error.code === 'SHARED_STATE_VERSION_UNAVAILABLE' && error.status === 409,

@@ -85,7 +85,11 @@ export function getAcknowledgedSharedStateVersion(storage, key) {
   }
 
   const version = Number(acknowledged?.version)
-  if (!Number.isInteger(version) || version <= 0 || acknowledged?.hash !== hashValue(localValue)) {
+  // Version zero is valid when the server explicitly acknowledged the exact
+  // local value. Legacy records created before version increments were added
+  // can otherwise never enter Action Mode. A browser-only value still has no
+  // acknowledgement object and remains blocked by the hash check below.
+  if (!acknowledged || !Number.isInteger(version) || version < 0 || acknowledged.hash !== hashValue(localValue)) {
     throw unavailableSharedVersion('This household record has local changes that are not durably synchronized. Wait for household sync, then try again.')
   }
   return version
