@@ -27,6 +27,9 @@ export const ACTION_TYPES = {
   'household.maintenance.coverage.update': 'planning',
   'household.maintenance.exception.update': 'planning',
   'household.maintenance.completion.update': 'planning',
+  'household.maintenance.chore.create': 'planning',
+  'household.maintenance.chore.update': 'planning',
+  'household.maintenance.chore.delete': 'planning',
   'household.inventory.item.create': 'planning',
   'household.inventory.quantity.update': 'planning',
   'household.inventory.waste.create': 'planning',
@@ -82,6 +85,9 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.maintenance.coverage.update': ['coveredBy'],
   'household.maintenance.exception.update': ['exception'],
   'household.maintenance.completion.update': ['action', 'reason'],
+  'household.maintenance.chore.create': ['title','date','startTime','endTime','timing','category','zone','owners','details','signoffRequired'],
+  'household.maintenance.chore.update': ['title','date','startTime','endTime','timing','category','zone','owners','details','signoffRequired'],
+  'household.maintenance.chore.delete': [],
   'household.inventory.item.create': ['name', 'category', 'location', 'quantity', 'unit', 'parLevel', 'unitCost', 'expiresOn', 'notes'],
   'household.inventory.quantity.update': ['delta'],
   'household.inventory.waste.create': ['quantity', 'reason'],
@@ -116,7 +122,7 @@ const ACTION_PAYLOAD_FIELDS = {
 }
 const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta'])
-const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting'])
+const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
 const ACTION_ENUMS = {
   'decision.create': { status:['needs-decision', 'determined', 'complete', 'deferred'] },
@@ -151,7 +157,7 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
@@ -313,6 +319,11 @@ function normalizeActionPayload(type, input) {
       normalized[field] = owner
     } else if (field === 'participants') {
       normalized[field] = normalizeParticipants(type, value)
+    } else if (field === 'owners') {
+      normalized[field] = normalizeParticipants(type, value)
+    } else if (field === 'details') {
+      if(!Array.isArray(value)||value.length>20)throw new Error('A household chore supports no more than 20 checklist items.')
+      normalized[field]=value.map(item=>clean(item,500)).filter(Boolean)
     } else if (field === 'raci') {
       normalized[field] = normalizeRaci(type, value)
     } else if (type === 'debt.transaction.apply' && field === 'paymentRule') {
@@ -427,6 +438,7 @@ export function normalizeActionOperation(input = {}) {
     if (!payload.cancelled && (!payload.startTime || !payload.endTime)) throw new Error('A changed routine occurrence requires exact start and end times.')
   }
   if (type === 'household.maintenance.coverage.update' && payload.coveredBy && !HOUSEHOLD_MEMBERS.includes(payload.coveredBy)) throw new Error('Household coverage requires a recognized member.')
+  if ((type === 'household.maintenance.chore.create' || type === 'household.maintenance.chore.update') && (!payload.title || !payload.date || !payload.owners?.length)) throw new Error('A household chore requires a title, date, and at least one owner.')
   if (type === 'household.maintenance.completion.update' && payload.action === 'return' && !payload.reason) throw new Error('Returning a household responsibility requires a reviewed reason.')
   if (type === 'household.inventory.item.create') {
     if (!payload.name) throw new Error('An inventory item requires a name.')

@@ -45,9 +45,13 @@ const assertDate = value => {
 const assertTimeRange = (startTime, endTime) => {
   if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || endTime <= startTime) throw new Error('The household schedule requires an end time after its start time.')
 }
-const maintenanceTask = occurrenceId => {
+const maintenanceTask = (occurrenceId,state={}) => {
   const date=assertDate(String(occurrenceId || '').slice(0,10))
-  const task=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`)).flatMap(day=>day.tasks).find(item=>item.occurrenceId===occurrenceId)
+  const normalized=normalizeHouseholdMaintenanceState(state)
+  let task=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),normalized).flatMap(day=>day.tasks).find(item=>item.occurrenceId===occurrenceId)
+  if(!task)task=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`)).flatMap(day=>day.tasks).find(item=>item.occurrenceId===occurrenceId)
+  if(!task&&occurrenceId.includes(':custom-')){const id=occurrenceId.split(':custom-')[1],custom=normalized.customChores.find(item=>item.id===id);if(custom)task={...custom,occurrenceId}}
+  if(task&&normalized.taskEdits[occurrenceId])task={...task,...normalized.taskEdits[occurrenceId],occurrenceId}
   if (!task) throw new Error('That household responsibility no longer exists in the operating plan.')
   return task
 }
@@ -61,7 +65,8 @@ export function householdRecordForOperation(value, operation) {
   }
   if (type.startsWith('household.maintenance.')) {
     const state=normalizeHouseholdMaintenanceState(value)
-    const task=maintenanceTask(operation.targetId)
+    if(type==='household.maintenance.chore.create')return null
+    const task=maintenanceTask(operation.targetId,state)
     const occurrence=householdOccurrence(state,task)
     return { ...clone(occurrence),id:task.occurrenceId,owner:task.owners.length===1?task.owners[0]:'',owners:[...task.owners],participants:[...task.owners],verifiers:[...(task.verifiers || HOUSEHOLD_CHORE_VERIFIERS)],coveredBy:occurrence.coveredBy || '' }
   }
@@ -163,9 +168,22 @@ function scheduleOperation(value, operation, context) {
 
 function maintenanceOperation(value, operation, context) {
   const state=normalizeHouseholdMaintenanceState(value)
-  const task=maintenanceTask(operation.targetId)
+  const actor=assertMember(context.actor,'actor'),now=isoNow(context),payload=operation.payload || {}
+  if(operation.type==='household.maintenance.chore.create'){
+    const title=String(payload.title||'').trim(),date=assertDate(payload.date||operation.targetDate),owners=uniqueMembers(payload.owners)
+    if(!title||!owners.length)throw new Error('A chore requires a title and at least one owner.')
+    if(payload.startTime||payload.endTime)assertTimeRange(payload.startTime,payload.endTime)
+    const item={id:createId(context),title,date,startTime:payload.startTime||'',endTime:payload.endTime||'',timing:payload.timing||'Flexible',category:payload.category||'Household chore',zone:payload.zone||'Whole House',owners,details:(payload.details||[]).map(String).map(value=>value.trim()).filter(Boolean),calendarEnabled:true,signoffRequired:payload.signoffRequired!==false,verifiers:HOUSEHOLD_CHORE_VERIFIERS,createdBy:actor,createdAt:now,updatedBy:actor,updatedAt:now}
+    return normalizeHouseholdMaintenanceState({...state,customChores:[...state.customChores,item]})
+  }
+  const task=maintenanceTask(operation.targetId,state)
   if (task.occurrenceId.slice(0,10)!==operation.targetDate) throw new Error('The household responsibility date changed after review.')
-  const actor=assertMember(context.actor,'actor'),now=isoNow(context),prior=clone(householdOccurrence(state,task)),payload=operation.payload || {}
+  if(operation.type==='household.maintenance.chore.update'){
+    const patch=clone(payload);if(patch.date)assertDate(patch.date);if(patch.startTime||patch.endTime)assertTimeRange(patch.startTime,patch.endTime);if(patch.owners&&!uniqueMembers(patch.owners).length)throw new Error('A chore requires at least one owner.');if(patch.owners)patch.owners=uniqueMembers(patch.owners)
+    return normalizeHouseholdMaintenanceState({...state,taskEdits:{...state.taskEdits,[task.occurrenceId]:{...(state.taskEdits[task.occurrenceId]||{}),...patch,updatedBy:actor,updatedAt:now}}})
+  }
+  if(operation.type==='household.maintenance.chore.delete')return normalizeHouseholdMaintenanceState({...state,deletedOccurrences:{...state.deletedOccurrences,[task.occurrenceId]:{deletedAt:now,deletedBy:actor}}})
+  const prior=clone(householdOccurrence(state,task))
   let patch={},action='updated',note=''
   if (operation.type==='household.maintenance.coverage.update') {
     if (payload.coveredBy) assertMember(payload.coveredBy,'coverage member')
@@ -248,6 +266,7 @@ export function householdPermissionForOperation({ operation, member, role, curre
   }
   if (operation.type.startsWith('household.inventory.')) return {allowed:true}
   if (operation.type.startsWith('household.maintenance.')) {
+    if(operation.type==='household.maintenance.chore.create')return operation.payload?.owners?.includes(member)?{allowed:true}:{allowed:false,reason:'Household members may add chores only when they are an owner.'}
     const owners=currentRecord?.owners || []
     const responsible=owners.includes('Everyone') || owners.includes(member) || currentRecord?.coveredBy===member
     const verifier=(currentRecord?.verifiers || HOUSEHOLD_CHORE_VERIFIERS).includes(member)

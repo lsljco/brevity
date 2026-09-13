@@ -7,6 +7,7 @@ import { buildTodayReadModel } from './operatingModel.js'
 import { sermonDevotionForDate, sermonDevotionImageUrl } from './sermonDevotion.js'
 import DailyCommandSchedule from './DailyCommandSchedule.jsx'
 import { educationBrief, financeBrief, ministryBrief } from './todayPillarBriefs.js'
+import WeatherHeader from './WeatherHeader.jsx'
 
 const PILLAR_META = {
   spiritual: ['Spiritual Maturity', 'ti-sun'],
@@ -190,6 +191,8 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
         <button className="today-alignment-button today-alignment-button--secondary" onClick={onStartRecap}><i className="ti ti-clipboard-check" /> {readOnly ? 'View Recap' : closed ? 'Review Recap' : 'Close Today'}</button>
       </div>
     </header>
+
+    <WeatherHeader date={dailyPlan.date} />
 
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} />
 

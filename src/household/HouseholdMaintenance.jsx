@@ -18,7 +18,8 @@ import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { SHARED_STATE_EVENT } from './sharedState.js'
 import {
   maintenanceCompletionOperation, maintenanceCoverageOperation,
-  maintenanceExceptionOperation, requestHouseholdActionReview,
+  maintenanceExceptionOperation, maintenanceChoreCreateOperation, maintenanceChoreUpdateOperation,
+  maintenanceChoreDeleteOperation, requestHouseholdActionReview,
 } from './householdActionReview.js'
 import HouseholdInventory from './HouseholdInventory.jsx'
 import HouseholdIntelligencePanel from './HouseholdIntelligencePanel.jsx'
@@ -48,6 +49,21 @@ function MutationNotice({ canEdit, error, notice }){
   if(notice)return <div className="household-operations-read-only" role="status"><strong>Review required.</strong> {notice}</div>
   return <div className="household-operations-read-only" role="note"><strong>{canEdit ? 'Every operations change requires review.' : 'Household operations are read-only for this account.'}</strong>{' '}{canEdit ? 'Action Mode preserves the exact version, actor, Audit History, and safe Undo before any responsibility changes.' : 'You can review operations, but your account does not have household planning permission.'}</div>
 }
+const blankChore=(date,member)=>({title:'',date,startTime:'',endTime:'',timing:'Flexible',category:'Household chore',zone:'Whole House',owners:[member],details:[],signoffRequired:true})
+function ChoreEditor({task,currentMember,isAdmin,busy,onClose,onReview,onDelete}){
+  const [draft,setDraft]=useState(()=>task?{...task,date:task.scheduledDate||task.occurrenceId.slice(0,10),details:[...(task.details||[])]}:blankChore(maintenanceDateKey(maintenanceToday()),currentMember))
+  const set=(key,value)=>setDraft(value0=>({...value0,[key]:value}))
+  const valid=draft.title.trim()&&draft.date&&draft.owners.length
+  return <div className="chore-editor-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><form className="chore-editor" role="dialog" aria-modal="true" aria-label={task?'Edit chore':'Add chore'} onSubmit={event=>{event.preventDefault();if(valid)onReview(draft)}}>
+    <header><div><p>Household Operations</p><h2>{task?'Edit chore':'Add a chore'}</h2></div><button type="button" onClick={onClose} aria-label="Close chore editor"><i className="ti ti-x"/></button></header>
+    <label><span>Chore</span><input value={draft.title} onChange={event=>set('title',event.target.value)} required/></label>
+    <div className="chore-editor-grid"><label><span>Date</span><input type="date" value={draft.date} onChange={event=>set('date',event.target.value)} required/></label><label><span>Zone</span><input value={draft.zone} onChange={event=>set('zone',event.target.value)}/></label><label><span>Start time</span><input type="time" value={draft.startTime} onChange={event=>set('startTime',event.target.value)}/></label><label><span>End time</span><input type="time" value={draft.endTime} onChange={event=>set('endTime',event.target.value)}/></label></div>
+    <fieldset><legend>Owners</legend><div className="chore-owner-options">{HOUSEHOLD_MEMBERS.map(member=><label key={member}><input type="checkbox" checked={draft.owners.includes(member)} onChange={event=>set('owners',event.target.checked?[...draft.owners,member]:draft.owners.filter(item=>item!==member))}/><span>{member}</span></label>)}</div></fieldset>
+    <label><span>Description / completion checklist (one item per line)</span><textarea rows="5" value={draft.details.join('\n')} onChange={event=>set('details',event.target.value.split('\n'))}/></label>
+    <label className="chore-signoff"><input type="checkbox" checked={draft.signoffRequired} onChange={event=>set('signoffRequired',event.target.checked)}/><span>Require Larry or Terica sign-off</span></label>
+    <footer>{task&&isAdmin&&<button className="danger" type="button" disabled={busy} onClick={onDelete}>Review deletion</button>}<span/><button type="button" onClick={onClose}>Cancel</button><button className="primary" type="submit" disabled={!valid||busy}>{busy?'Preparing…':'Review change'}</button></footer>
+  </form></div>
+}
 
 export default function HouseholdMaintenance({ currentMember, canEdit=true, isAdmin=false }) {
   const [workspace, setWorkspace] = useState('operations')
@@ -59,8 +75,9 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
   const [reviewBusy,setReviewBusy]=useState('')
   const [reviewError,setReviewError]=useState('')
   const [reviewNotice,setReviewNotice]=useState('')
+  const [editingTask,setEditingTask]=useState(null)
   const todayKey = maintenanceDateKey(maintenanceToday())
-  const days = useMemo(() => buildHouseholdMaintenanceWeek(weekStart), [weekStart])
+  const days = useMemo(() => buildHouseholdMaintenanceWeek(weekStart,state), [weekStart,state])
   const summary = useMemo(() => summarizeHouseholdMaintenance(days, state), [days, state])
   const zones = useMemo(() => householdOperationZones(days), [days])
   const owners = ['Mine', 'All', ...HOUSEHOLD_MEMBERS, 'Everyone']
@@ -95,6 +112,8 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
   const reopenTask=task=>stage(`Review reopening of ${task.title}`,maintenanceCompletionOperation(task,'reopen'),task.occurrenceId)
   const updateCoverage=(task,coveredBy)=>stage(`Review coverage for ${task.title}`,maintenanceCoverageOperation(task,coveredBy),task.occurrenceId)
   const reportException=task=>{const prior=householdOccurrence(state,task);const message=window.prompt(`What is preventing “${task.title}” from being completed?`,prior.exception||'');if(message===null)return;return stage(`Review exception for ${task.title}`,maintenanceExceptionOperation(task,message),task.occurrenceId)}
+  const reviewChore=async draft=>{const operation=editingTask?maintenanceChoreUpdateOperation(editingTask,draft):maintenanceChoreCreateOperation(draft);if(await stage(editingTask?`Review changes to ${editingTask.title}`:`Review new chore ${draft.title}`,operation,editingTask?.occurrenceId||'new-chore'))setEditingTask(null)}
+  const deleteChore=async()=>{if(!editingTask||!window.confirm(`Delete “${editingTask.title}” from this operating plan?`))return;if(await stage(`Review deletion of ${editingTask.title}`,maintenanceChoreDeleteOperation(editingTask),editingTask.occurrenceId))setEditingTask(null)}
 
   const ownerMatches = task => {
     const occurrence = householdOccurrence(state, task)
@@ -119,6 +138,7 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
         <p>{HOUSEHOLD_OPERATING_PRINCIPLE}</p>
       </div>
       <div className="maintenance-week-controls">
+        {canEdit&&<button className="maintenance-add-chore" type="button" onClick={()=>setEditingTask(false)}><i className="ti ti-plus"/> Add chore</button>}
         <button type="button" onClick={() => setWeekStart(addWeeks(weekStart, -1))} aria-label="Previous week"><i className="ti ti-chevron-left" /></button>
         <div><span>Operating week</span><strong>{weekLabel(weekStart)}</strong></div>
         <button type="button" onClick={() => setWeekStart(addWeeks(weekStart, 1))} aria-label="Next week"><i className="ti ti-chevron-right" /></button>
@@ -188,6 +208,7 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
                   <div className="maintenance-owners"><span><i className="ti ti-user" /> {effectiveOwner}</span><span><i className="ti ti-shield-check" /> Sign-off: {(task.verifiers || HOUSEHOLD_CHORE_VERIFIERS).join(' or ')}</span></div>
                   <div className={`operations-status operations-status--${status.toLowerCase().replace(/\s+/g,'-')}`}><strong>{status}</strong>{isAwaiting&&<span>Submitted by {occurrence.submittedBy || occurrence.completedBy}. Waiting for verification.</span>}{isApproved&&<span>Approved by {occurrence.approvedBy || 'Verifier'}.</span>}{isReturned&&<span>Returned by {occurrence.returnedBy}: {occurrence.returnReason}</span>}</div>
                   {canEdit&&(canSubmit||isVerifier)&&<div className="operations-actions">
+                    <button type="button" disabled={Boolean(reviewBusy)} onClick={()=>setEditingTask(task)}><i className="ti ti-edit"/> Edit details</button>
                     <label><span>Coverage</span><select value={occurrence.coveredBy||'Original owner'} disabled={Boolean(reviewBusy)} onChange={event=>updateCoverage(task,event.target.value)}><option>Original owner</option>{coverageOptions.map(member=><option key={member}>{member}</option>)}</select></label>
                     {canSubmit&&!isInProgress&&!isAwaiting&&!isApproved&&!isReturned&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>startTask(task)}><i className="ti ti-player-play"/> Review start</button>}
                     {canSubmit&&!isAwaiting&&!isApproved&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>submitTask(task)}><i className="ti ti-send"/> {isReturned?'Review resubmission':'Review completion'}</button>}
@@ -206,5 +227,6 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
         </section>
       })}
     </div>
+    {editingTask!==null&&<ChoreEditor task={editingTask||null} currentMember={currentMember} isAdmin={isAdmin} busy={Boolean(reviewBusy)} onClose={()=>setEditingTask(null)} onReview={reviewChore} onDelete={deleteChore}/>}
   </div>
 }
