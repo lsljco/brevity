@@ -84,7 +84,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.schedule.occurrence.update': ['date', 'startTime', 'endTime', 'cancelled'],
   'household.maintenance.coverage.update': ['coveredBy'],
   'household.maintenance.exception.update': ['exception'],
-  'household.maintenance.completion.update': ['action', 'reason'],
+  'household.maintenance.completion.update': ['action', 'reason', 'completedItems'],
   'household.maintenance.chore.create': ['title','date','startTime','endTime','timing','category','zone','owners','details','signoffRequired'],
   'household.maintenance.chore.update': ['title','date','startTime','endTime','timing','category','zone','owners','details','signoffRequired'],
   'household.maintenance.chore.delete': [],
@@ -324,6 +324,9 @@ function normalizeActionPayload(type, input) {
     } else if (field === 'details') {
       if(!Array.isArray(value)||value.length>20)throw new Error('A household chore supports no more than 20 checklist items.')
       normalized[field]=value.map(item=>clean(item,500)).filter(Boolean)
+    } else if (field === 'completedItems') {
+      if(!Array.isArray(value)||value.length>20||value.some(item=>!Number.isInteger(item)||item<0||item>19))throw new Error('A household completion requires valid checklist item numbers.')
+      normalized[field]=[...new Set(value)].sort((a,b)=>a-b)
     } else if (field === 'raci') {
       normalized[field] = normalizeRaci(type, value)
     } else if (type === 'debt.transaction.apply' && field === 'paymentRule') {
@@ -567,7 +570,11 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
   if (operation.type?.startsWith('household.')) {
-    if (role !== 'admin' && !permissions?.[operation.domain]) return { allowed:false, reason:`${operation.domain} actions are not enabled for ${member}.` }
+    // Assigned chore owners and named verifiers may perform the narrow task
+    // lifecycle even when they cannot administer the broader household plan.
+    // householdPermissionForOperation still enforces the exact owner/verifier.
+    const responsibilityLifecycle=operation.type==='household.maintenance.completion.update' || operation.type==='household.maintenance.exception.update'
+    if (role !== 'admin' && !responsibilityLifecycle && !permissions?.[operation.domain]) return { allowed:false, reason:`${operation.domain} actions are not enabled for ${member}.` }
     return householdPermissionForOperation({ operation, member, role, currentRecord })
   }
   if (role === 'admin') return { allowed:true }

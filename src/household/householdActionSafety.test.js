@@ -99,12 +99,15 @@ test('maintenance transitions enforce responsible-member and verifier ownership'
   assert.ok(task)
   const started=applyHouseholdRecordOperation({},maintenanceCompletionOperation(task,'start'),{actor:'Nyla',now:()=>new Date('2026-09-07T19:30:00.000Z')}).after
   assert.equal(started.occurrences[task.occurrenceId].startedBy,'Nyla')
-  assert.equal(householdRecordForOperation(started,maintenanceCompletionOperation(task,'submit')).startedAt,'2026-09-07T19:30:00.000Z')
-  const operation=maintenanceCompletionOperation(task,'submit')
+  const completedItems=task.details.map((_,index)=>index)
+  assert.equal(householdRecordForOperation(started,maintenanceCompletionOperation(task,'submit','',completedItems)).startedAt,'2026-09-07T19:30:00.000Z')
+  const operation=maintenanceCompletionOperation(task,'submit','',completedItems)
   const current=householdRecordForOperation({},operation)
   assert.equal(householdPermissionForOperation({operation,member:'Nyla',role:'member',currentRecord:current}).allowed,true)
   assert.equal(householdPermissionForOperation({operation,member:'Lorenzo',role:'member',currentRecord:current}).allowed,false)
+  assert.throws(()=>applyHouseholdRecordOperation({},maintenanceCompletionOperation(task,'submit','',completedItems.slice(1)),{actor:'Nyla'}),/Complete every checklist item/)
   const submitted=applyHouseholdRecordOperation({},operation,{actor:'Nyla',now:()=>new Date('2026-09-07T20:00:00.000Z')}).after
+  assert.deepEqual(submitted.occurrences[task.occurrenceId].checklistCompleted,completedItems)
   const approval=maintenanceCompletionOperation(task,'approve')
   const submittedRecord=householdRecordForOperation(submitted,approval)
   assert.equal(householdPermissionForOperation({operation:approval,member:'Terica',role:'member',currentRecord:submittedRecord}).allowed,true)
