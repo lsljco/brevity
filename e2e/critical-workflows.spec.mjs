@@ -52,12 +52,12 @@ const mealPlanResponse=(addedMeal=null)=>{
   })
   return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
 }
-async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false}={}){
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false,sessionMember='Larry',sessionRole='admin'}={}){
   let addedMeal=null
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
     let body={}
-    if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:'Larry',role:'admin',bootstrapRequired:false}
+    if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:sessionMember,role:sessionRole,bootstrapRequired:false}
     else if(path.endsWith('/household-auth')&&action==='members')body={members:[]}
     else if(path.endsWith('/household-state')){
       if(route.request().method()==='PUT'){
@@ -131,7 +131,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -248,11 +248,32 @@ test('authorized user starts an assigned household task through Action Mode',asy
   await page.getByRole('button',{name:'Household Operations'}).click()
   await page.getByRole('button',{name:'Operations',exact:true}).click()
   await page.locator('.operations-filter-group').first().getByRole('button',{name:'All',exact:true}).click()
-  const start=page.getByRole('button',{name:'Review start'}).first()
+  const start=page.getByRole('button',{name:'Start task'}).first()
   await expect(start).toBeVisible()
   await start.click()
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toContainText('Start')
   await expect(page.getByText('local changes that are not durably synchronized')).toHaveCount(0)
+})
+
+test('assigned chore owner completes every checklist item before confirmation',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management'}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Operations'}).click()
+  await page.getByRole('button',{name:'Operations',exact:true}).click()
+  await expect(page.getByText('You can complete responsibilities assigned to you.')).toBeVisible()
+  const task=page.locator('.maintenance-task').first()
+  const checklist=task.locator('.maintenance-checklist input[type="checkbox"]')
+  await expect(checklist.first()).toBeEnabled()
+  const confirm=task.getByRole('button',{name:'Confirm complete'})
+  await expect(confirm).toBeDisabled()
+  for(let index=0;index<await checklist.count();index+=1)await checklist.nth(index).check()
+  await expect(task.getByText(/All checklist items are checked/)).toBeVisible()
+  await expect(confirm).toBeEnabled()
+  await confirm.click()
+  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Confirm completion')
+  await expect(review).toContainText('Submit')
 })
 
 test('Household Operations can add and edit chore dates, times, owners, and details through Action Mode',async({page},testInfo)=>{

@@ -198,7 +198,10 @@ function maintenanceOperation(value, operation, context) {
       patch={startedAt:now,startedBy:actor,returnedAt:'',returnedBy:'',returnReason:''};action='started'
     } else if (payload.action==='submit') {
       if (prior.approvedAt || (prior.submittedAt && !prior.returnedAt)) throw new Error('That responsibility is already complete or awaiting sign-off.')
-      patch={complete:!task.signoffRequired,startedAt:prior.startedAt||'',startedBy:prior.startedBy||'',completedAt:now,completedBy:actor,submittedAt:task.signoffRequired?now:'',submittedBy:task.signoffRequired?actor:'',approvedAt:'',approvedBy:'',returnedAt:'',returnedBy:'',returnReason:'',exception:''};action=task.signoffRequired?'submitted-for-signoff':'completed'
+      const requiredItems=(task.details||[]).map((detail,index)=>String(detail||'').trim()?index:null).filter(index=>index!==null)
+      const completedItems=[...new Set(Array.isArray(payload.completedItems)?payload.completedItems:[])].filter(index=>requiredItems.includes(index)).sort((a,b)=>a-b)
+      if(requiredItems.some(index=>!completedItems.includes(index)))throw new Error('Complete every checklist item before submitting this responsibility for review.')
+      patch={complete:!task.signoffRequired,checklistCompleted:completedItems,startedAt:prior.startedAt||'',startedBy:prior.startedBy||'',completedAt:now,completedBy:actor,submittedAt:task.signoffRequired?now:'',submittedBy:task.signoffRequired?actor:'',approvedAt:'',approvedBy:'',returnedAt:'',returnedBy:'',returnReason:'',exception:''};action=task.signoffRequired?'submitted-for-signoff':'completed'
     } else if (payload.action==='approve') {
       if (!prior.submittedAt || prior.approvedAt) throw new Error('Only a currently submitted responsibility can be approved.')
       patch={complete:true,approvedAt:now,approvedBy:actor,returnedAt:'',returnedBy:'',returnReason:''};action='approved'
@@ -207,7 +210,7 @@ function maintenanceOperation(value, operation, context) {
       note=payload.reason;patch={complete:false,submittedAt:'',submittedBy:'',approvedAt:'',approvedBy:'',returnedAt:now,returnedBy:actor,returnReason:note};action='returned'
     } else if (payload.action==='reopen') {
       if (!prior.approvedAt && !prior.complete) throw new Error('Only a completed responsibility can be reopened.')
-      patch={complete:false,startedAt:'',startedBy:'',completedAt:'',completedBy:'',submittedAt:'',submittedBy:'',approvedAt:'',approvedBy:'',returnedAt:'',returnedBy:'',returnReason:''};action='reopened'
+      patch={complete:false,checklistCompleted:[],startedAt:'',startedBy:'',completedAt:'',completedBy:'',submittedAt:'',submittedBy:'',approvedAt:'',approvedBy:'',returnedAt:'',returnedBy:'',returnReason:''};action='reopened'
     } else throw new Error('That household completion transition is not supported.')
   } else throw new Error(`Unsupported household maintenance change: ${operation.type}.`)
   const history=[...(Array.isArray(prior.history)?prior.history:[]),{action,by:actor,at:now,note}]
