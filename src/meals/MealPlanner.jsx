@@ -3,6 +3,7 @@ import { MEAL_TYPES } from './mealLibrary.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
 import { calculateMealNutrition, importRecipeFromUrl } from './mealPlanApi.js'
+import { requestActionReview } from '../assistant/actionEvents.js'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
 
@@ -36,7 +37,7 @@ function MealChoice({ meal, onChoose, selected, current }) {
   </button>
 }
 
-function ReplaceDialog({ selection, library, saving, onClose, onChoose, onReview, onApply }) {
+function ReplaceDialog({ selection, library, saving, error, onClose, onChoose, onReview }) {
   const [query, setQuery] = useState('')
   const candidates = useMemo(() => library.filter(meal => meal.mealType === selection.mealType && `${meal.name} ${meal.description}`.toLowerCase().includes(query.toLowerCase())), [library, query, selection.mealType])
   const currentMeal=library.find(meal=>meal.id===selection.day.meals[selection.mealType])
@@ -53,14 +54,14 @@ function ReplaceDialog({ selection, library, saving, onClose, onChoose, onReview
       <label className="meal-search"><i className="ti ti-search" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${LABELS[selection.mealType].toLowerCase()} options`} /></label>
       <div className="meal-choice-list">{candidates.map(meal => <MealChoice key={meal.id} meal={meal} current={meal.id === selection.day.meals[selection.mealType]} selected={meal.id === selection.mealId} onChoose={() => onChoose(meal.id)} />)}</div>
       <footer className="meal-dialog-review">
-        <div><span>{selection.proposal?'Reviewed change':'Selection'}</span><strong>{currentMeal?.name||'Current meal'} <i className="ti ti-arrow-right" /> {selectedMeal?.name||'Choose a replacement'}</strong>{selection.proposal&&<small>This exact replacement and meal-plan version are ready to apply. It will be recorded in Audit History and can be safely undone.</small>}</div>
-        <div><button type="button" onClick={onClose} disabled={saving}>Cancel</button>{selection.proposal?<button type="button" className="is-primary" onClick={()=>onApply(selection.proposal.id)} disabled={saving}>{saving?'Applying…':'Apply reviewed change'}</button>:<button type="button" className="is-primary" onClick={onReview} disabled={saving||!selectedMeal||selectedMeal.id===currentMeal?.id}>{saving?'Preparing review…':'Review change'}</button>}</div>
+        <div><span>Selection</span><strong>{currentMeal?.name||'Current meal'} <i className="ti ti-arrow-right" /> {selectedMeal?.name||'Choose a replacement'}</strong><small>Review opens Action Mode. Nothing changes until you confirm there, and the completed change can be undone from Audit History.</small>{error&&<small className="meal-dialog-error" role="alert">{error}</small>}</div>
+        <div><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="button" className="is-primary" onClick={onReview} disabled={saving||!selectedMeal||selectedMeal.id===currentMeal?.id}>{saving?'Opening review…':'Review change'}</button></div>
       </footer>
     </section>
   </div>
 }
 
-function AddMealDialog({ mealType, saving, onClose, onSave }) {
+function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
   const [form, setForm] = useState({
     mealType,
     name:'',
@@ -69,7 +70,6 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
     prepMinutes:'',
     cookMinutes:'',
     totalMinutes:'',
-    image:'',
     yieldQuantity:'',
     yieldUnit:'servings',
     sourceUrl:'',
@@ -113,7 +113,6 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
         prepMinutes:recipe.prepMinutes??'',
         cookMinutes:recipe.cookMinutes??'',
         totalMinutes:recipe.totalMinutes??'',
-        image:recipe.image||'',
         yieldQuantity,
         yieldUnit,
         sourceUrl:recipe.sourceUrl||'',
@@ -136,7 +135,6 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
       prepMinutes:Number(form.prepMinutes),
       cookMinutes:Number(form.cookMinutes),
       totalMinutes:form.totalMinutes===''?undefined:Number(form.totalMinutes),
-      image:form.image.trim(),
       serving:nutrition.serving,
       yieldQuantity:nutrition.yieldQuantity,
       yieldUnit:nutrition.yieldUnit,
@@ -184,8 +182,9 @@ function AddMealDialog({ mealType, saving, onClose, onSave }) {
           {nutrition.warnings.length>0&&<ul>{nutrition.warnings.map((warning,index)=><li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
           <small>{nutrition.nutritionBasis}</small>
         </section>}
-        <label className="meal-add-form--wide"><span>Photo URL <small>optional</small></span><input type="url" value={form.image} onChange={event=>set('image',event.target.value)} placeholder="https://…" /></label>
-        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving||!nutrition}>{saving?'Adding meal…':'Add to Meal Library'}</button></footer>
+        <div className="meal-image-generation-note meal-add-form--wide"><i className="ti ti-photo-spark" /><div><strong>Meal image generated by Brevity</strong><span>When you save, Brevity creates an ultra-photorealistic editorial food image styled to match the Meal Library.</span></div></div>
+        {error&&<div className="meal-nutrition-error meal-add-form--wide" role="alert">{error}</div>}
+        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving||!nutrition}>{saving?'Generating image and adding meal…':'Add to Meal Library'}</button></footer>
       </form>
     </section>
   </div>
@@ -211,11 +210,13 @@ function LibraryView({ library, onAdd }) {
 }
 
 export default function MealPlanner() {
-  const { data, state, error, reload, addMeal, prepareReplacement, applyReplacement } = useRollingMealPlan({reloadOnRefreshEvents:true})
+  const { data, state, error, reload, addMeal, prepareReplacement } = useRollingMealPlan({reloadOnRefreshEvents:true})
   const [view, setView] = useState('plan')
   const [selection, setSelection] = useState(null)
   const [addingMealType, setAddingMealType] = useState('')
   const [message, setMessage] = useState('')
+  const [replacementError, setReplacementError] = useState('')
+  const [addMealError, setAddMealError] = useState('')
   const planInsight = useMemo(() => summarizeMealPlan(data?.days), [data])
 
   useEffect(()=>setSelection(current=>{
@@ -224,42 +225,31 @@ export default function MealPlanner() {
     return currentDay?.version===current.day.version?current:null
   }),[data])
 
-  const chooseReplacement = mealId => setSelection(current=>({...current,mealId,proposal:null}))
+  const chooseReplacement = mealId => { setReplacementError(''); setSelection(current=>({...current,mealId,proposal:null})) }
 
   const saveMeal = async meal => {
     setMessage('')
+    setAddMealError('')
     try {
       const created = await addMeal(meal)
       setAddingMealType('')
       setMessage(`${created.name} was added to the household Meal Library and is available for future meal replacements.`)
     } catch (addError) {
       if(addError.code==='STALE_MEAL_SCOPE')return
-      setMessage(addError.message || 'Could not add this meal to the household library.')
+      setAddMealError(addError.message || 'Could not generate the meal image or add this meal to the household library.')
     }
   }
 
   const reviewReplacement = async () => {
     setMessage('')
+    setReplacementError('')
     try {
       const proposal=await prepareReplacement({date:selection.day.date,mealType:selection.mealType,mealId:selection.mealId,expectedVersion:selection.day.version})
-      setSelection(current=>current&&current.mealId===selection.mealId?{...current,proposal}:current)
-    } catch (replaceError) {
-      if(replaceError.code==='STALE_MEAL_SCOPE')return
-      setMessage(replaceError.status === 409 ? 'The plan changed on another device. Refreshing the latest version…' : replaceError.message)
-      if (replaceError.status === 409) await reload().catch(() => undefined)
-    }
-  }
-
-  const applyReviewedReplacement = async proposalId => {
-    setMessage('')
-    try {
-      const applied=await applyReplacement(proposalId)
-      if(applied.scopeChanged)return
+      if(!requestActionReview(proposal))throw new Error('Action Mode could not open the meal replacement review.')
       setSelection(null)
-      setMessage(applied.refreshError?'Meal replaced and recorded in Action Mode Audit History, but the updated meal plan could not be reloaded. Retry the meal-plan refresh before making another replacement.':'Meal replaced after review. The change is recorded in Action Mode Audit History and can be safely undone.')
     } catch (replaceError) {
       if(replaceError.code==='STALE_MEAL_SCOPE')return
-      setMessage(replaceError.status === 409 ? 'The plan changed after review. Refreshing the latest version…' : replaceError.message)
+      setReplacementError(replaceError.status === 409 ? 'The plan changed on another device. Refreshing the latest version…' : replaceError.message||'Brevity could not prepare this meal replacement.')
       if (replaceError.status === 409) await reload().catch(() => undefined)
     }
   }
@@ -273,7 +263,7 @@ export default function MealPlanner() {
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {error && data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan refresh needed</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {data && (view === 'plan' ? <PlanView days={data.days} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onAdd={setAddingMealType} />)}
-    {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} onClose={() => setSelection(null)} onChoose={chooseReplacement} onReview={reviewReplacement} onApply={applyReviewedReplacement} />}
-    {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} onClose={()=>setAddingMealType('')} onSave={saveMeal} />}
+    {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} error={replacementError} onClose={() => { setReplacementError(''); setSelection(null) }} onChoose={chooseReplacement} onReview={reviewReplacement} />}
+    {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} error={addMealError} onClose={()=>{setAddMealError('');setAddingMealType('')}} onSave={saveMeal} />}
   </main>
 }

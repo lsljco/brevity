@@ -159,8 +159,9 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
 
   const getWindowReadOnly = async ({ startDate = mealDateInTimeZone(now(), timeZone), count = 7 } = {}) => buildWindow({ startDate, count, readOnly:true })
 
-  const createMeal = async ({ meal, actor = 'Household member' }) => {
-    const createdMeal = normalizeMealInput(meal, actor, now, createId)
+  const createMeal = async ({ meal, actor = 'Household member', generateImage }) => {
+    let createdMeal = normalizeMealInput(meal, actor, now, createId)
+    let imageGenerated = Boolean(createdMeal.image)
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const { entry, customMeals } = await getLibrary()
       const duplicate = [...MEAL_LIBRARY, ...customMeals].some(existing => existing.mealType === createdMeal.mealType && existing.name.trim().toLowerCase() === createdMeal.name.toLowerCase())
@@ -168,6 +169,10 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
         const error = new Error(`${createdMeal.name} is already in the ${createdMeal.mealType} library.`)
         error.code = 'VALIDATION_ERROR'
         throw error
+      }
+      if (!imageGenerated && generateImage) {
+        createdMeal = { ...createdMeal, image:await generateImage(createdMeal, createdMeal.id) }
+        imageGenerated = true
       }
       const payload = {
         version: Number(entry.data?.version || 0) + 1,

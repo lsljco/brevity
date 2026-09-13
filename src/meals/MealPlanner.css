@@ -77,10 +77,16 @@
 .meal-dialog-review strong { display: block; color: var(--soft-white); font-size: 12px; }
 .meal-dialog-review strong i { margin: 0 5px; color: var(--gold); }
 .meal-dialog-review small { max-width: 440px; margin-top: 5px; line-height: 1.35; }
+.meal-dialog-review .meal-dialog-error { margin-top: 9px; padding: 8px 10px; border: 1px solid rgba(224,99,86,.38); border-radius: 8px; background: rgba(120,35,29,.2); color: #f0b4aa; font-size: 11px; }
 .meal-dialog-review > div:last-child { display: flex; flex: 0 0 auto; gap: 8px; }
 .meal-dialog-review button { padding: 9px 12px; border: 1px solid var(--glass-border); border-radius: 9px; background: transparent; color: var(--soft-white); cursor: pointer; }
 .meal-dialog-review button.is-primary { border-color: rgba(197,164,109,.45); background: rgba(197,164,109,.14); color: var(--gold); }
 .meal-dialog-review button:disabled { cursor: not-allowed; opacity: .45; }
+.meal-image-generation-note { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px solid rgba(197,164,109,.24); border-radius: 12px; background: rgba(197,164,109,.07); }
+.meal-image-generation-note i { color: var(--gold); font-size: 24px; }
+.meal-image-generation-note strong, .meal-image-generation-note span { display: block; }
+.meal-image-generation-note strong { color: var(--soft-white); font-size: 13px; }
+.meal-image-generation-note span { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 @media (max-width: 850px) {
   .meal-day-slots, .meal-library-grid { grid-template-columns: 1fr; }
   .meal-slot + .meal-slot { border-left: 0; border-top: 1px solid var(--glass-border); }
