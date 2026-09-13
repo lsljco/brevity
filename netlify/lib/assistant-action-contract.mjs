@@ -508,8 +508,9 @@ export function normalizeActionOperation(input = {}) {
   if(type==='meal.substitute'){
     if(!MEAL_TYPES.includes(payload.mealType))throw new Error('Choose breakfast, lunch or dinner for the meal substitution.')
     const meal=MEALS_BY_ID.get(payload.mealId)
-    if(!meal)throw new Error('Choose a meal from the household meal library.')
-    if(meal.mealType!==payload.mealType)throw new Error(`The selected meal is not a ${payload.mealType} option.`)
+    const customType=/^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.exec(String(payload.mealId||''))?.[1]
+    if(!meal&&customType!==payload.mealType)throw new Error('Choose a meal from the household meal library.')
+    if(meal&&meal.mealType!==payload.mealType)throw new Error(`The selected meal is not a ${payload.mealType} option.`)
   }
   if (type === 'forecast.update') {
     const modelFields = ['planningExpense', 'expenseMode']

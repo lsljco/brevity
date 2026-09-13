@@ -287,6 +287,19 @@ test('reviewed meal replacement recovers a lost response, audits once, and safel
   assert.equal((await repository.getAudit(completed.audit.id)).undoAvailable,false)
 })
 
+test('Action Mode prepares a custom meal replacement from the authoritative household library',async()=>{
+  const date='2026-09-07',instant=new Date('2026-09-07T12:00:00Z')
+  const actionStore=versionedBlobStore(),mealStore=versionedBlobStore()
+  const repository=createAssistantActionRepository({store:actionStore,householdId:'house',now:()=>instant})
+  const mealRepository=createMealPlanRepository({store:mealStore,householdId:'lslj-family',now:()=>instant,createId:()=> 'salmon'})
+  const day=await mealRepository.ensureDay(date)
+  const custom=await mealRepository.createMeal({actor:'Larry',meal:{mealType:'dinner',name:'Salmon, Rice, and Broccoli',ingredients:['salmon','rice','broccoli'],prepMinutes:10,cookMinutes:20,macros:{calories:600,proteinGrams:45,carbohydrateGrams:55,fatGrams:20}}})
+  const proposal=await prepareMealProposal({input:{date,mealType:'dinner',mealId:custom.id,expectedVersion:day.version},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),repository,mealRepository,now:instant,id:'custom-meal-proposal'})
+  assert.equal(proposal.operations[0].payload.mealId,custom.id)
+  assert.match(proposal.operations[0].description,/Salmon, Rice, and Broccoli/)
+  assert.doesNotThrow(()=>normalizeActionProposal({operations:[proposal.operations[0]]},{member:'Larry',role:'admin'}))
+})
+
 test('meal review previews a missing day without writing and creates it only when the reviewed action executes',async()=>{
   const date='2026-09-08',instant=new Date('2026-09-07T12:00:00Z')
   const actionStore=versionedBlobStore(),mealStore=versionedBlobStore()

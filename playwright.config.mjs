@@ -16,6 +16,7 @@ export default defineConfig({
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'iphone', use: { ...devices['iPhone 14'], browserName: 'chromium' } },
     { name: 'tablet', use: { ...devices['iPad Pro 11'], browserName: 'chromium' } },
+    { name: 'tablet-landscape', use: { ...devices['iPad Pro 11 landscape'], browserName: 'chromium' } },
   ],
   webServer: {
     command: 'npm run preview -- --host 127.0.0.1 --port 4173',

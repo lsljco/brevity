@@ -64,6 +64,21 @@ test('custom meals persist in the shared household library and count by meal typ
   assert.equal(storedMeal.totalMinutes, 75)
 })
 
+test('custom meal creation generates its image once before the shared record is committed', async () => {
+  const store=memoryStore()
+  const repository=createMealPlanRepository({store,createId:()=> 'generated-image-id'})
+  let calls=0
+  const meal=await repository.createMeal({actor:'Larry',generateImage:async(candidate,assetId)=>{
+    calls+=1
+    assert.equal(candidate.name,'Salmon, Rice, and Broccoli')
+    assert.equal(assetId,'custom-dinner-generated-image-id')
+    return '/.netlify/functions/meal-images?id=custom-dinner-generated-image-id'
+  },meal:{mealType:'dinner',name:'Salmon, Rice, and Broccoli',ingredients:['salmon','rice','broccoli'],prepMinutes:10,cookMinutes:20,macros:{calories:600,proteinGrams:45,carbohydrateGrams:55,fatGrams:20}}})
+  assert.equal(calls,1)
+  assert.equal(meal.image,'/.netlify/functions/meal-images?id=custom-dinner-generated-image-id')
+  assert.equal((await repository.getLibrary()).customMeals[0].image,meal.image)
+})
+
 test('custom meals retain calculated batch, yield and ingredient nutrition evidence', async () => {
   const store=memoryStore()
   const repository=createMealPlanRepository({store,now:()=>new Date('2026-09-12T10:00:00Z'),createId:()=> 'nutrition-id'})

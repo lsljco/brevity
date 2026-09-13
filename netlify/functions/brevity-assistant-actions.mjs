@@ -96,7 +96,9 @@ export async function prepareCalendarProposal({input,session,permissions,events,
 export async function prepareMealProposal({input,session,permissions,repository,mealRepository,now=new Date(),id}) {
   const date=String(input?.date||''),mealType=String(input?.mealType||''),mealId=String(input?.mealId||'')
   const expectedVersion=Number(input?.expectedVersion)
-  const replacement=MEALS_BY_ID.get(mealId)
+  const { library } = await mealRepository.getLibrary()
+  const replacement=library.find(meal=>meal.id===mealId)
+  if(!replacement||replacement.mealType!==mealType)throw Object.assign(new Error(`Choose a ${mealType} meal from the household meal library.`),{code:'INVALID_ACTION'})
   let proposal
   try{
     proposal=normalizeActionProposal({
@@ -119,7 +121,7 @@ export async function prepareMealProposal({input,session,permissions,repository,
   const currentMealId=day.meals?.[mealType]
   if(!currentMealId)throw Object.assign(new Error('That meal is not available on the selected meal-plan day.'),{code:'INVALID_ACTION'})
   if(currentMealId===mealId)throw Object.assign(new Error('Choose a different meal before reviewing this replacement.'),{code:'INVALID_ACTION'})
-  const currentMeal=MEALS_BY_ID.get(currentMealId)
+  const currentMeal=library.find(meal=>meal.id===currentMealId)||MEALS_BY_ID.get(currentMealId)
   operation={...operation,targetId:currentMealId,description:`Replace ${currentMeal?.name||currentMealId} with ${replacement?.name||mealId}`}
   // A missing day remains only a deterministic preview during review. Exact
   // version zero lets the reviewed executor create-and-substitute it with one

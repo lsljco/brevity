@@ -26,6 +26,7 @@ export function fetchRollingMealPlan(startDate) {
 
 export function createMealLibraryItem(meal) {
   return request(ENDPOINT, {
+    timeoutMs: 90000,
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(meal),
