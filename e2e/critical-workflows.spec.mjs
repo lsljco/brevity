@@ -30,6 +30,7 @@ const scenarioRecords=()=>{
   return{brevity_finance_scenarios_v1:{key:'brevity_finance_scenarios_v1',value:JSON.stringify(value),version:2,updatedAt:new Date().toISOString()}}
 }
 const householdMaintenanceRecords=()=>({brevity_household_maintenance_v1:{key:'brevity_household_maintenance_v1',value:JSON.stringify({version:4,trackingStartedOn:'2026-09-01',occurrences:{},completions:{}}),version:2,updatedAt:new Date().toISOString()}})
+const projectRecords=()=>({homehq_items_v1:{key:'homehq_items_v1',value:JSON.stringify([{id:'kitchen-1',title:'Kitchen refresh',type:'Renovation',room:'Kitchen',roomCustom:'',status:'In Progress',priority:'High',startDate:'2026-09-10',due:'2026-10-15',estcost:'12000.00',actcost:'1400.00',notes:'Preserve the stone.',raci:{responsible:['Larry'],accountable:[],consulted:[],informed:[]},cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,photos:[],files:[]}]),version:4,updatedAt:new Date().toISOString()}})
 const debtPaymentRecords=()=>{
   const records=cashForecastRecords(),actuals=JSON.parse(records.plaid_actuals_cache.value)
   actuals.push({id:'bank-mortgage',accountId:'plaid-operating',name:'Mortgage payment',originalStatement:'MONTHLY MORTGAGE PAYMENT',category:'MORTGAGE',amount:3000,date:dateKey(),pending:false})
@@ -52,7 +53,7 @@ const mealPlanResponse=(addedMeal=null)=>{
   })
   return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
 }
-async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false,sessionMember='Larry',sessionRole='admin'}={}){
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false,projectFixture=false,sessionMember='Larry',sessionRole='admin'}={}){
   let addedMeal=null
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
@@ -63,7 +64,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
       if(route.request().method()==='PUT'){
         const payload=route.request().postDataJSON()
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
-      }else body={records:householdTaskFixture?householdMaintenanceRecords():scenarioFixture?scenarioRecords():debtPaymentFixture?debtPaymentRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
+      }else body={records:projectFixture?projectRecords():householdTaskFixture?householdMaintenanceRecords():scenarioFixture?scenarioRecords():debtPaymentFixture?debtPaymentRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
     else if(path.endsWith('/meal-plans')){
       if(route.request().method()==='POST'){
@@ -131,7 +132,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -293,6 +294,22 @@ test('Household Operations can add and edit chore dates, times, owners, and deta
   await expect(edit.getByLabel('Date')).toHaveValue(/\d{4}-\d{2}-\d{2}/)
   await expect(edit.getByRole('checkbox',{name:'Larry',exact:true})).toBeVisible()
   await expect(edit.getByRole('button',{name:'Review deletion'})).toBeVisible()
+})
+
+test('Project review repairs stale local synchronization metadata before opening Action Mode',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management'}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Projects'}).click()
+  await expect(page.getByText('Kitchen refresh',{exact:true})).toBeVisible()
+  await page.getByTitle('Edit through Action Mode').click()
+  const editor=page.locator('.hq-modal-card')
+  await expect(editor).toContainText('Edit Item')
+  await editor.locator('input').first().fill('Kitchen completion')
+  await page.evaluate(()=>localStorage.setItem('brevity_shared_state_meta_v1',JSON.stringify({homehq_items_v1:{version:4,hash:'stale-browser-hash'}})))
+  await editor.getByRole('button',{name:'Review in Action Mode'}).click()
+  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toContainText('Kitchen completion')
+  await expect(page.getByText('local changes that are not durably synchronized')).toHaveCount(0)
 })
 
 test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})

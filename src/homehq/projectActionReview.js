@@ -1,6 +1,6 @@
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
-import { getAcknowledgedSharedStateVersion } from '../household/sharedState.js'
+import { getAcknowledgedSharedStateVersion, syncSharedState } from '../household/sharedState.js'
 import { normalizeProjectItem, PROJECT_STORAGE_KEY } from './projectData.js'
 
 const PROJECT_TEXT_FIELDS = [
@@ -76,7 +76,13 @@ export function projectDeleteOperation(project) {
 }
 
 export async function requestProjectActionReview({ summary, operation, storage = localStorage }) {
-  const expectedVersion=getAcknowledgedSharedStateVersion(storage, PROJECT_STORAGE_KEY)
+  let expectedVersion
+  try { expectedVersion=getAcknowledgedSharedStateVersion(storage, PROJECT_STORAGE_KEY) }
+  catch(error) {
+    if(error?.code!=='SHARED_STATE_VERSION_UNAVAILABLE')throw error
+    await syncSharedState(storage)
+    expectedVersion=getAcknowledgedSharedStateVersion(storage, PROJECT_STORAGE_KEY)
+  }
   const result=await prepareDirectAction({ summary, operation, expectedVersion })
   if (!result?.proposal?.id) throw new Error('Action Mode did not return a reviewable project proposal.')
   requestActionReview(result.proposal)
