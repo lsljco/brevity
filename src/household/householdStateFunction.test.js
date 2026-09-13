@@ -407,16 +407,20 @@ test('shared-state reads distinguish absent records from storage failures', asyn
   )
 })
 
-test('shared-state reads repair the known legacy Action Mode hash marker', async () => {
-  const value=JSON.stringify({accounts:[],transactions:[{id:'reviewed'}]})
-  const legacy={key:'lslj_finance_v9',value,hash:'assistant-action',version:7}
+test('shared-state reads derive exact hashes for every legacy record shape', async () => {
+  const financeValue=JSON.stringify({accounts:[],transactions:[{id:'reviewed'}]})
+  const projectValue=JSON.stringify([{id:'legacy-project',title:'Kitchen refresh'}])
   const records=await readHouseholdRecords({
     async getWithMetadata(key) {
-      return key.endsWith('/lslj_finance_v9') ? {data:legacy,etag:'etag-legacy'} : null
+      if(key.endsWith('/lslj_finance_v9'))return {data:{key:'lslj_finance_v9',value:financeValue,hash:'assistant-action',version:7},etag:'etag-finance'}
+      if(key.endsWith('/homehq_items_v1'))return {data:{key:'homehq_items_v1',value:projectValue,version:4},etag:'etag-project'}
+      return null
     },
   })
-  assert.equal(records.lslj_finance_v9.hash,hashValue(value))
+  assert.equal(records.lslj_finance_v9.hash,hashValue(financeValue))
   assert.equal(records.lslj_finance_v9.version,7)
+  assert.equal(records.homehq_items_v1.hash,hashValue(projectValue))
+  assert.equal(records.homehq_items_v1.version,4)
 })
 
 test('shared-state keys map to their server-enforced permission domains', () => {
