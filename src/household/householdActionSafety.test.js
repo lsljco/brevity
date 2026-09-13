@@ -11,7 +11,7 @@ import {
 } from './householdActionModel.js'
 import {
   inventoryItemCreateOperation, inventoryQuantityOperation, inventoryWasteOperation,
-  maintenanceCompletionOperation, scheduleBlockCreateOperation,
+  maintenanceCompletionOperation, maintenanceChoreCreateOperation, maintenanceChoreUpdateOperation, maintenanceChoreDeleteOperation, scheduleBlockCreateOperation,
 } from './householdActionReview.js'
 import { buildHouseholdMaintenanceWeek, publishHouseholdOperationEvents } from './householdMaintenanceData.js'
 import { householdScheduleCalendarEvents, publishHouseholdScheduleEvents } from './householdScheduleData.js'
@@ -112,6 +112,21 @@ test('maintenance transitions enforce responsible-member and verifier ownership'
   assert.equal(householdPermissionForOperation({operation,member:'Terica',role:'member',currentRecord:current}).allowed,false,'a verifier cannot submit another member’s responsibility')
   const approved=applyHouseholdRecordOperation(submitted,approval,{actor:'Terica',now:()=>new Date('2026-09-07T20:05:00.000Z')}).after
   assert.equal(approved.occurrences[task.occurrenceId].approvedBy,'Terica')
+})
+
+test('reviewed chores can be created, rescheduled, reassigned, and deleted without direct browser writes',()=>{
+  const draft={title:'Clean pantry',date:'2026-09-08',startTime:'16:00',endTime:'17:00',timing:'',category:'Deep clean',zone:'Kitchen',owners:['Nyla'],details:['Discard expired items'],signoffRequired:true}
+  const create=maintenanceChoreCreateOperation(draft)
+  assert.equal(householdPermissionForOperation({operation:create,member:'Nyla',role:'member',currentRecord:null}).allowed,true)
+  const created=applyHouseholdRecordOperation({},create,{actor:'Nyla',now:()=>new Date('2026-09-07T12:00:00Z'),createId:()=> 'pantry'}).after
+  const task=buildHouseholdMaintenanceWeek('2026-09-07',created).flatMap(day=>day.tasks).find(item=>item.title==='Clean pantry')
+  const update=maintenanceChoreUpdateOperation(task,{...draft,date:'2026-09-10',owners:['Larry'],startTime:'18:00',endTime:'19:00'})
+  const updated=applyHouseholdRecordOperation(created,update,{actor:'Larry',now:()=>new Date('2026-09-07T13:00:00Z')}).after
+  const moved=buildHouseholdMaintenanceWeek('2026-09-07',updated).flatMap(day=>day.tasks).find(item=>item.occurrenceId===task.occurrenceId)
+  assert.equal(moved.scheduledDate,'2026-09-10');assert.deepEqual(moved.owners,['Larry'])
+  const deleted=applyHouseholdRecordOperation(updated,maintenanceChoreDeleteOperation(moved),{actor:'Larry',now:()=>new Date('2026-09-07T14:00:00Z')}).after
+  assert.equal(buildHouseholdMaintenanceWeek('2026-09-07',deleted).flatMap(day=>day.tasks).some(item=>item.occurrenceId===task.occurrenceId),false)
+  assert.doesNotMatch(maintenanceSource,/localStorage\.setItem/)
 })
 
 test('household review retries exact-version lookup after refreshing authoritative shared state',()=>{

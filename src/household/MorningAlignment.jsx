@@ -6,6 +6,7 @@ import HealthAlertBanner from './HealthAlertBanner.jsx'
 import { compactEditableLines, compactTitledItems, joinEditableLines, splitEditableLines } from './lineEditing.js'
 import { formatDailyPlanDate } from './alignmentDate.js'
 import { loadLocalAlignmentDraft, saveLocalAlignmentDraft } from './dailyPlanLocalDraft.js'
+import WeatherHeader from './WeatherHeader.jsx'
 import './MorningAlignment.css'
 import './MorningAlignmentAutosave.css'
 
@@ -237,6 +238,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
       <div><span>Seven Pillars · {formatDailyPlanDate(draft.date)}</span><h1>{isToday ? 'Today’s Alignment' : 'Next-Day Alignment'}</h1><p>{isToday ? 'Adjust today’s direction as circumstances change. These updates apply only to today.' : 'Set tomorrow’s direction the day before—before food, fitness, errands, or outside activity begins.'}</p></div>
       <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${readOnly ? 'readonly' : draftSaveState}`}>{readOnly?'View only':draftSaveState==='pending'?'Saving on this device…':draftSaveState==='reviewing'?'Review opened · draft retained':draftSaveState==='error'?'Local draft needs attention':'Draft saved on this device'}</span><button type="button" disabled={saving} onClick={readOnly ? onCancel : saveAndExit}>{readOnly ? 'Return to Today' : 'Save Local Draft & Exit'}</button></div>
     </header>
+    <WeatherHeader date={draft.date} compact />
     {readOnly && <div className="alignment-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>This alignment is view-only</strong><span>{readOnlyMessage || 'Plans & decisions permission is required to change the shared household plan.'}</span></div></div>}
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
     <nav className="alignment-step-nav" aria-label="Alignment progress">

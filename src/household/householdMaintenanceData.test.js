@@ -50,8 +50,22 @@ test('work scheduled before operations tracking began is not falsely marked over
 
 test('legacy completion records migrate into the current occurrence state shape', () => {
   const state = normalizeHouseholdMaintenanceState({ trackingStartedOn:'2026-09-01', completions:{ '2026-09-03:thursday-nyla-basement':{ complete:true, completedBy:'Nyla' } } })
-  assert.equal(state.version, 4)
+  assert.equal(state.version, 5)
   assert.equal(state.occurrences['2026-09-03:thursday-nyla-basement'].complete, true)
+})
+
+test('custom chores and reviewed occurrence edits appear on their scheduled day',()=>{
+  const state=normalizeHouseholdMaintenanceState({customChores:[{id:'laundry',title:'Fold laundry',date:'2026-09-09',owners:['Larry'],details:['Put clothes away']}],taskEdits:{'2026-09-07:monday-nyla-upstairs':{date:'2026-09-10',startTime:'15:00',endTime:'16:00',owners:['Terica']}}})
+  const days=buildHouseholdMaintenanceWeek('2026-09-07',state)
+  const moved=days.find(day=>day.date==='2026-09-10').tasks.find(task=>task.occurrenceId==='2026-09-07:monday-nyla-upstairs')
+  assert.equal(moved.timing,'15:00–16:00')
+  assert.deepEqual(moved.owners,['Terica'])
+  assert.equal(days.find(day=>day.date==='2026-09-09').tasks.some(task=>task.title==='Fold laundry'),true)
+})
+
+test('deleted chore occurrences stay out of the operating week',()=>{
+  const id='2026-09-07:monday-nyla-upstairs',state=normalizeHouseholdMaintenanceState({deletedOccurrences:{[id]:{deletedAt:'2026-09-07T10:00:00Z'}}})
+  assert.equal(buildHouseholdMaintenanceWeek('2026-09-07',state).flatMap(day=>day.tasks).some(task=>task.occurrenceId===id),false)
 })
 
 test('a started responsibility is visibly in progress before completion',()=>{
