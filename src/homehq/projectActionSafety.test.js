@@ -161,6 +161,8 @@ test('Projects UI has no direct project, image, attachment, import, or recovery-
   assert.match(home,/Project import, file and image changes, and multi-project calendar publishing remain unavailable/)
   assert.doesNotMatch(home,/saveItems|publishProjectEvents|FileReader|window\.confirm|type="file"/)
   assert.match(review,/getAcknowledgedSharedStateVersion\(storage, PROJECT_STORAGE_KEY\)/)
+  assert.match(review,/error\?\.code!=='SHARED_STATE_VERSION_UNAVAILABLE'/)
+  assert.match(review,/await syncSharedState\(storage\)/)
   assert.match(review,/prepareDirectAction\(\{ summary, operation, expectedVersion \}\)/)
   assert.match(review,/requestActionReview\(result\.proposal\)/)
   assert.doesNotMatch(dashboard,/addDashboardProjectWithImage|updateDashboardProjectImage|brevity_project_images_v1/)
