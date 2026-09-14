@@ -72,12 +72,11 @@ test('sidebar account controls are consolidated under one Settings destination',
   assert.match(mobileShellSource, /\.settings-action-button\s*\{[^}]*min-height:\s*44px;/s)
 })
 
-test('desktop sidebar state is explicit, persistent, and unaffected by module navigation', () => {
+test('sidebar state is explicit, persistent, and unaffected by module navigation at every viewport', () => {
   assert.match(appSource, /useState\(initialSidebarExpanded\)/)
-  assert.match(appSource, /const closeSidebarAfterNavigation=\(\)=>\{if\(isCompactNavigation\(\)\)setSidebarExpanded\(false\)\}/)
-  assert.match(appSource, /const navigateTo=[\s\S]*?closeSidebarAfterNavigation\(\)/)
-  assert.match(appSource, /const returnToPreviousView=[\s\S]*?closeSidebarAfterNavigation\(\)/)
-  assert.doesNotMatch(appSource, /const returnToPreviousView=[\s\S]*?setSidebarExpanded\(false\)[\s\S]*?const openPillar/)
+  assert.doesNotMatch(appSource, /closeSidebarAfterNavigation/)
+  assert.doesNotMatch(appSource, /const navigateTo=[\s\S]*?setSidebarExpanded[\s\S]*?const returnToPreviousView/)
+  assert.doesNotMatch(appSource, /const returnToPreviousView=[\s\S]*?setSidebarExpanded[\s\S]*?const openPillar/)
   assert.doesNotMatch(appSource, /<aside[^>]+onBlur=/)
   assert.match(appSource, /localStorage\.setItem\(SIDEBAR_STATE_KEY,next\?'expanded':'collapsed'\)/)
 })
