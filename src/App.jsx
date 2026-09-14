@@ -235,7 +235,6 @@ export default function App() {
   if(!sharedReady) return <AuthLoading/>
 
   const currentMember=auth.member
-  const closeSidebarAfterNavigation=()=>{if(isCompactNavigation())setSidebarExpanded(false)}
   const toggleSidebar=()=>setSidebarExpanded(current=>{const next=!current;if(!isCompactNavigation())localStorage.setItem(SIDEBAR_STATE_KEY,next?'expanded':'collapsed');return next})
   const navigateTo=(pillarId,viewId)=>{
     const current={pillarId:activePillar,viewId:activeView,label:navigationLabel(activePillar,activeView),scrollTop:appMainRef.current?.scrollTop||0}
@@ -244,7 +243,6 @@ export default function App() {
     setActivePillar(pillarId)
     setActiveView(viewId)
     setExpandedPillar(pillarId||null)
-    closeSidebarAfterNavigation()
     requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=0})
   }
   const returnToPreviousView=()=>{
@@ -254,14 +252,13 @@ export default function App() {
     setActivePillar(result.previous.pillarId)
     setActiveView(result.previous.viewId)
     setExpandedPillar(result.previous.pillarId||null)
-    closeSidebarAfterNavigation()
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=result.previous.scrollTop||0}))
   }
   const openPillar=pillarId=>navigateTo(pillarId,'pillar-analysis')
   const handlePillarClick=pillar=>{
     setNavigationHistory([{pillarId:'',viewId:'today',label:'Today',scrollTop:0}])
     setActivePillar(pillar.id);setActiveView('pillar-analysis');setExpandedPillar(pillar.id)
-    closeSidebarAfterNavigation();requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=0})
+    requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=0})
   }
   const navigateFromFinance=viewId=>navigateTo(viewId==='property'?'household':'finance',viewId)
   const handleRefreshStatus=()=>{setActionPermissionRevision(value=>value+1);return refreshAll(currentMember,{requestBankUpdate:true})}
