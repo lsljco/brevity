@@ -131,8 +131,23 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
   })
 }
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
+async function closeMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click();await expect(drawer).not.toHaveClass(/is-expanded/)}}
 
 test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+
+test('expanded side panel remains expanded while navigating until its toggle is used',async({page},testInfo)=>{
+  const drawer=page.locator('#primary-navigation-drawer')
+  if(!(await drawer.getAttribute('class')||'').includes('is-expanded')){
+    await page.getByRole('button',{name:testInfo.project.name==='iphone'?'Menu':'Expand navigation'}).click()
+  }
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Collapse navigation'}).click()
+  await expect(drawer).not.toHaveClass(/is-expanded/)
+})
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
@@ -247,6 +262,7 @@ test('authorized user starts an assigned household task through Action Mode',asy
   await page.getByRole('button',{name:'Household Management'}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Household Operations'}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Operations',exact:true}).click()
   await page.locator('.operations-filter-group').first().getByRole('button',{name:'All',exact:true}).click()
   const start=page.getByRole('button',{name:'Start task'}).first()
@@ -261,6 +277,7 @@ test('assigned chore owner completes every checklist item before confirmation',a
   await page.getByRole('button',{name:'Household Management'}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Household Operations'}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Operations',exact:true}).click()
   await expect(page.getByText('You can complete responsibilities assigned to you.')).toBeVisible()
   const task=page.locator('.maintenance-task').first()
@@ -278,7 +295,7 @@ test('assigned chore owner completes every checklist item before confirmation',a
 })
 
 test('Household Operations can add and edit chore dates, times, owners, and details through Action Mode',async({page},testInfo)=>{
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Operations'}).click();await page.getByRole('button',{name:'Operations',exact:true}).click()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Operations'}).click();await closeMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Operations',exact:true}).click()
   await page.getByRole('button',{name:'Add chore'}).click()
   const editor=page.getByRole('dialog',{name:'Add chore'})
   await editor.getByRole('textbox',{name:'Chore',exact:true}).fill('Clean pantry')
@@ -301,6 +318,7 @@ test('Project review repairs stale local synchronization metadata before opening
   await page.getByRole('button',{name:'Household Management'}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Projects'}).click()
+  await closeMenuIfMobile(page,testInfo)
   await expect(page.getByText('Kitchen refresh',{exact:true})).toBeVisible()
   await page.getByTitle('Edit through Action Mode').click()
   const editor=page.locator('.hq-modal-card')
@@ -319,6 +337,7 @@ test('Projected Expenses includes one-time calendar obligations in the selected 
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   const card=page.locator('.kpi-card').filter({hasText:'Projected Expenses'})
   await expect(card).toContainText('$40.00')
   await expect(card).toContainText('1 projected item')
@@ -334,6 +353,7 @@ test('Transactions keep account and timeframe scope visible with filtered totals
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByLabel('Select financial timeframe').selectOption('this-month')
   await expect(page.getByLabel('Current Finance scope: This Month · Operating Account')).toBeVisible()
   await expect(page.getByText(/scheduled transactions · This Month · Operating Account$/)).toBeVisible()
@@ -344,6 +364,7 @@ test('posted transaction categorization rules are discoverable and preview exact
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Show bank activity'}).click()
   await page.getByRole('button',{name:'Categorization rules'}).click()
   const dialog=page.getByRole('dialog',{name:'Categorization rules'})
@@ -361,6 +382,7 @@ test('changing a posted transaction category offers a prefilled rule with past-m
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Show bank activity'}).click()
   await page.getByText('Neighborhood Market',{exact:true}).click()
   const category=page.getByRole('combobox',{name:'Transaction category'})
@@ -384,6 +406,7 @@ test('Finance applies posted bank activity to debt with reviewed interest and pr
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Transactions',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Show bank activity'}).click()
   await page.getByText('Mortgage payment',{exact:true}).click()
   await page.getByLabel('Debt account').selectOption('mortgage')
@@ -408,6 +431,7 @@ test('Scenario Modeling edits descriptions, income rows, and recurring-expense t
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Scenario Modeling',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await expect(page.getByRole('heading',{name:'Scenario Modeling',exact:true})).toBeVisible()
 
   await page.getByLabel('Income 1 description draft').fill('LS Primary Salary')
@@ -473,6 +497,7 @@ test('iPhone Cash Forecast keeps Finance context visible without covering its mo
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Cash Forecast',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
 
   await expect(page.getByRole('heading',{name:'Cash Forecast',exact:true})).toBeVisible()
   await expect(page.getByRole('button',{name:/Show \d+ bank transactions? for /})).toBeVisible()
@@ -536,6 +561,7 @@ test('iPhone account-link repair turns an unmatched balance warning into a compa
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:/Check existing connection|Sync now/i}).click()
   const warning=page.getByRole('alert')
   await expect(warning).toContainText('returned bank accounts are available for reviewed linkage')
