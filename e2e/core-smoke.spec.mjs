@@ -81,7 +81,6 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
 test('top-level pillar navigation returns to Today instead of the previously viewed pillar', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Household Management' }).click()
-  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Spiritual Maturity' }).click()
   await expect(page.getByRole('button', { name:'Back to Today' })).toBeVisible()
 })
@@ -103,6 +102,7 @@ test('Settings exposes sync health and identifies browser data as a recovery cac
   page.on('pageerror', error => pageErrors.push(error.message))
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Settings' }).click()
+  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Collapse navigation' }).click()
   await page.waitForTimeout(300)
   expect(pageErrors).toEqual([])
   await expect(page.getByRole('heading', { name:'Settings', exact:true })).toBeVisible()
@@ -117,6 +117,7 @@ test('Settings exposes sync health and identifies browser data as a recovery cac
 test('Settings submits a verified household password change', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Settings' }).click()
+  if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Collapse navigation' }).click()
   await expect(page.getByText('Your current password')).toBeVisible()
   await page.getByLabel('Your current password').fill('current-secret')
   await page.getByLabel('New password', { exact:true }).fill('new-household-secret')
