@@ -160,6 +160,7 @@ test('Household Intelligence dashboard separates metrics and opens an auditable 
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await page.getByRole('button',{name:'Household Intelligence',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
   await expect(page.getByRole('heading',{name:'Household Intelligence',exact:true})).toBeVisible()
   await expect(page.getByText('Pillar Attainment',{exact:true}).first()).toBeVisible()
   await expect(page.getByText('Plan Adherence',{exact:true}).first()).toBeVisible()
