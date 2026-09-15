@@ -125,6 +125,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
       const targetDate=url.searchParams.get('date')||dateKey()
       body={location:{name:'Johns Creek, GA',timezone:'America/New_York'},targetDate,isCurrentDay:targetDate===dateKey(),current:{observedAt:`${dateKey()}T09:15`,temperature:74,apparentTemperature:75,humidity:61,precipitation:0,windSpeed:5,condition:'Mostly clear',icon:'cloud-sun'},day:{high:82,low:66,precipitationProbability:35,sunrise:`${targetDate}T07:18`,sunset:`${targetDate}T19:43`},periods:[['Morning',70,'Mostly clear','cloud-sun',5],['Midday',79,'Partly cloudy','cloud-sun',10],['Afternoon',82,'Light rain','cloud-rain',35],['Evening',73,'Partly cloudy','cloud-sun',20]].map(([label,temperature,condition,icon,precipitationProbability])=>({label,temperature,apparentTemperature:temperature,condition,icon,precipitationProbability,windSpeed:5,time:`${targetDate}T12:00`})),updatedAt:new Date().toISOString(),source:'Open-Meteo',stale:false}
     }
+    else if(path.endsWith('/alignment-meeting-analyze'))body={summary:'The household aligned meals and fitness.',unresolved:[],changes:{health:{lunch:'Alignment meeting lunch'},fitness:{participants:['Javin'],stepGoal:9000}}}
     else if(path.endsWith('/onedrive-status'))body={configured:true,connected:true,changeRequired:false,connection:{account:'test'}}
     else if(path.endsWith('/sermon-device-rescue'))body={sermons:[],imports:[]}
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})
@@ -165,6 +166,24 @@ test('Today and daily alignments show current and daypart weather',async({page})
   await page.getByRole('button',{name:"Start Tomorrow’s Alignment"}).click()
   await expect(page.getByRole('heading',{name:'Next-Day Alignment'})).toBeVisible()
   await expect(page.getByLabel('Weather for Johns Creek, GA')).toContainText('Morning')
+})
+
+test('Today and Tomorrow alignment include Finance-style meeting capture and reviewed draft application',async({page})=>{
+  for(const [button,heading,transcriptLabel] of [["Start Today’s Alignment","Today’s Alignment","Today’s Alignment transcript"],["Start Tomorrow’s Alignment","Next-Day Alignment","Tomorrow’s Alignment transcript"]]){
+    await page.getByRole('button',{name:button}).click()
+    await expect(page.getByRole('heading',{name:heading})).toBeVisible()
+    const capture=page.getByLabel(/Alignment meeting capture$/)
+    await expect(capture.getByRole('button',{name:'Start Meeting'})).toBeVisible()
+    await capture.getByLabel(transcriptLabel).fill('Javin will join fitness. Lunch is Alignment meeting lunch. Set nine thousand steps.')
+    await capture.getByRole('button',{name:'Analyze with Brevity'}).click()
+    await expect(capture).toContainText('The household aligned meals and fitness.')
+    await capture.getByRole('button',{name:'Apply Suggestions to Draft'}).click()
+    await page.getByRole('button',{name:'Health & Nutrition'}).click()
+    await expect(page.getByLabel('Lunch')).toHaveValue('Alignment meeting lunch')
+    await page.getByRole('button',{name:'Ministry & Fellowship'}).click()
+    await expect(page.getByRole('button',{name:'Review & Complete Alignment'})).toBeVisible()
+    await page.getByRole('button',{name:'Save Local Draft & Exit'}).click()
+  }
 })
 
 test('Today renders and counts unresolved Household Operations priorities',async({page})=>{
