@@ -76,13 +76,29 @@ export function classifyActivity(event,config){
 }
 
 const statusOf=record=>clean(record.status).toLowerCase()
-const completed=record=>Boolean(record.complete||record.completed||record.completedAt||record.approvedAt||['complete','completed','done','approved'].includes(statusOf(record)))
+const explicitCompleted=record=>Boolean(record.complete===true||record.completed===true||record.completedAt||record.approvedAt||['complete','completed','done','approved'].includes(statusOf(record)))
 const planned=record=>record.planned!==false&&!['cancelled','canceled','deleted','deferred'].includes(statusOf(record))&&!record.cancelled&&!record.deleted
 const membersFor=(record,members)=>unique([record.owner,...(record.owners||[]),...(record.members||[]),...(record.participants||[]),...(record.raci?.responsible||[])]).filter(member=>members.includes(member))
+const temporalValue=value=>value&&typeof value==='object'?(value.dateTime||value.date||''):value
+const activityDate=record=>clean(temporalValue(record.date||record.start||record.startDate||record.targetDate||record.due)).slice(0,10)
+const calendarOccurred=(record,date,now)=>{
+  if(explicitCompleted(record))return true
+  if(record.complete===false||record.completed===false||['missed','skipped','incomplete','not completed'].includes(statusOf(record)))return false
+  const today=dateKey(now)
+  if(date<today)return true
+  if(date>today||record.allDay)return false
+  const endValue=temporalValue(record.end||record.endDate||record.endAt)
+  const startValue=temporalValue(record.start||record.startDate||record.startAt)
+  const end=endValue?new Date(endValue):null
+  if(end&&!Number.isNaN(end.getTime()))return end.getTime()<=now.getTime()
+  const start=startValue?new Date(startValue):null
+  if(start&&!Number.isNaN(start.getTime()))return start.getTime()+Math.max(0,number(record.minutes)||60)*60000<=now.getTime()
+  return false
+}
 
-export function normalizePerformanceActivities({calendarEvents=[],projects=[],schedule={},maintenance={},dailyPlans=[],members=[],config}){
+export function normalizePerformanceActivities({calendarEvents=[],projects=[],schedule={},maintenance={},dailyPlans=[],members=[],config,now=new Date()}){
   const activities=[]
-  const push=(record,kind,defaults={})=>{if(!record||!planned(record))return;const date=clean(record.date||record.start||record.targetDate||record.due||defaults.date).slice(0,10);if(!date)return;const owners=membersFor(record,members);const classification=classifyActivity(record,config);activities.push({id:clean(record.id||record.sourceId||`${kind}-${activities.length}`),kind,title:clean(record.title||record.name)||kind,date,owners:owners.length?owners:['Family'],minutes:Math.max(0,number(record.minutes)||minutesBetween(record.startTime||record.time,record.endTime,defaults.minutes||60)),planned:true,completed:completed(record),private:Boolean(record.private||record.visibility==='private'),classification,source:clean(record.source)||kind,status:statusOf(record)})}
+  const push=(record,kind,defaults={})=>{if(!record||!planned(record))return;const date=activityDate(record)||clean(defaults.date).slice(0,10);if(!date)return;const owners=membersFor(record,members);const classification=classifyActivity(record,config);const isExplicit=explicitCompleted(record),isCompleted=kind==='calendar'?calendarOccurred(record,date,now):isExplicit;activities.push({id:clean(record.id||record.sourceId||`${kind}-${activities.length}`),kind,title:clean(record.title||record.name)||kind,date,owners:owners.length?owners:['Family'],minutes:Math.max(0,number(record.minutes)||minutesBetween(record.startTime||record.time,record.endTime,defaults.minutes||60)),planned:true,completed:isCompleted,completionEvidence:isExplicit?'confirmed':isCompleted&&kind==='calendar'?'elapsed-calendar':'pending',private:Boolean(record.private||record.visibility==='private'),classification,source:clean(record.source)||kind,status:statusOf(record)})}
   calendarEvents.forEach(record=>push(record,'calendar',{minutes:record.allDay?0:60}))
   projects.forEach(record=>push(record,'project',{minutes:0}))
   ;(schedule.blocks||[]).forEach(record=>push(record,'schedule'))
