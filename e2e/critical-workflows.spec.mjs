@@ -30,6 +30,10 @@ const scenarioRecords=()=>{
   return{brevity_finance_scenarios_v1:{key:'brevity_finance_scenarios_v1',value:JSON.stringify(value),version:2,updatedAt:new Date().toISOString()}}
 }
 const householdMaintenanceRecords=()=>({brevity_household_maintenance_v1:{key:'brevity_household_maintenance_v1',value:JSON.stringify({version:4,trackingStartedOn:'2026-09-01',occurrences:{},completions:{}}),version:2,updatedAt:new Date().toISOString()}})
+const intelligenceRecords=()=>{const updatedAt=new Date().toISOString(),today=dateKey();return{
+  brevity_household_intelligence_v1:{key:'brevity_household_intelligence_v1',value:JSON.stringify({schemaVersion:1,targets:[{id:'larry-finance',member:'Larry',pillarId:'finance',label:'Finance review',targetCount:2,frequency:'period',weight:1,active:true}],rules:[],overrides:{},privacy:{Larry:{details:true}}}),version:1,updatedAt},
+  family_calendar_events_v1:{key:'family_calendar_events_v1',value:JSON.stringify([{id:'finance-done',title:'Daily finance review',date:today,owner:'Larry',pillar:'finance',completed:true,minutes:30},{id:'finance-open',title:'Weekly finance review',date:today,owner:'Larry',pillar:'finance',minutes:60}]),version:1,updatedAt},
+}}
 const projectRecords=()=>({homehq_items_v1:{key:'homehq_items_v1',value:JSON.stringify([{id:'kitchen-1',title:'Kitchen refresh',type:'Renovation',room:'Kitchen',roomCustom:'',status:'In Progress',priority:'High',startDate:'2026-09-10',due:'2026-10-15',estcost:'12000.00',actcost:'1400.00',notes:'Preserve the stone.',raci:{responsible:['Larry'],accountable:[],consulted:[],informed:[]},cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,photos:[],files:[]}]),version:0,updatedAt:new Date().toISOString()}})
 const debtPaymentRecords=()=>{
   const records=cashForecastRecords(),actuals=JSON.parse(records.plaid_actuals_cache.value)
@@ -53,7 +57,7 @@ const mealPlanResponse=(addedMeal=null)=>{
   })
   return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
 }
-async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false,projectFixture=false,sessionMember='Larry',sessionRole='admin'}={}){
+async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false,projectFixture=false,intelligenceFixture=false,sessionMember='Larry',sessionRole='admin'}={}){
   let addedMeal=null
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
@@ -64,7 +68,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
       if(route.request().method()==='PUT'){
         const payload=route.request().postDataJSON()
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
-      }else body={records:projectFixture?projectRecords():householdTaskFixture?householdMaintenanceRecords():scenarioFixture?scenarioRecords():debtPaymentFixture?debtPaymentRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
+      }else body={records:intelligenceFixture?intelligenceRecords():projectFixture?projectRecords():householdTaskFixture?householdMaintenanceRecords():scenarioFixture?scenarioRecords():debtPaymentFixture?debtPaymentRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan()}
     else if(path.endsWith('/meal-plans')){
       if(route.request().method()==='POST'){
@@ -134,7 +138,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 async function closeMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click();await expect(drawer).not.toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
 
 test('expanded side panel remains expanded while navigating until its toggle is used',async({page},testInfo)=>{
   const drawer=page.locator('#primary-navigation-drawer')
@@ -151,6 +155,23 @@ test('expanded side panel remains expanded while navigating until its toggle is 
 })
 
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
+
+test('Household Intelligence dashboard separates metrics and opens an auditable score drilldown',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
+  await page.getByRole('button',{name:'Household Intelligence',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Household Intelligence',exact:true})).toBeVisible()
+  await expect(page.getByText('Pillar Attainment %',{exact:true})).toBeVisible()
+  await expect(page.getByText('Plan Adherence %',{exact:true})).toBeVisible()
+  await expect(page.getByText('Time Allocation %',{exact:true})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Member Scorecard'})).toBeVisible()
+  await page.getByRole('button',{name:'Larry Finance & Stewardship'}).click()
+  const drilldown=page.getByRole('dialog',{name:'Larry Finance & Stewardship score detail'})
+  await expect(drilldown).toContainText('Finance review')
+  await expect(drilldown).toContainText('1 / 2 activities')
+  await expect(drilldown).toContainText('Daily finance review')
+  await expect(drilldown).toContainText('Weekly finance review')
+})
 
 test('Today and daily alignments show current and daypart weather',async({page})=>{
   const todayWeather=page.getByLabel('Weather for Johns Creek, GA')
