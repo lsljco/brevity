@@ -178,9 +178,10 @@ test('Today and Tomorrow alignment include Finance-style meeting capture and rev
     await capture.getByRole('button',{name:'Analyze with Brevity'}).click()
     await expect(capture).toContainText('The household aligned meals and fitness.')
     await capture.getByRole('button',{name:'Apply Suggestions to Draft'}).click()
-    await page.getByRole('button',{name:'Health & Nutrition'}).click()
+    const steps=page.getByRole('navigation',{name:'Alignment progress'})
+    await steps.getByRole('button',{name:'Health & Nutrition'}).click()
     await expect(page.getByLabel('Lunch')).toHaveValue('Alignment meeting lunch')
-    await page.getByRole('button',{name:'Ministry & Fellowship'}).click()
+    await steps.getByRole('button',{name:'Ministry & Fellowship'}).click()
     await expect(page.getByRole('button',{name:'Review & Complete Alignment'})).toBeVisible()
     await page.getByRole('button',{name:'Save Local Draft & Exit'}).click()
   }
