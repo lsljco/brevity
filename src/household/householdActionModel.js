@@ -16,17 +16,20 @@ import {
   normalizeInventoryItem,
   normalizeInventoryState,
 } from './householdInventoryData.js'
+import { INTELLIGENCE_STORAGE_KEY, normalizeIntelligenceConfig } from './performanceIntelligence.js'
 
 export const HOUSEHOLD_ACTION_RESOURCE_KEYS = {
   schedule:HOUSEHOLD_SCHEDULE_STORAGE_KEY,
   maintenance:HOUSEHOLD_MAINTENANCE_STORAGE_KEY,
   inventory:HOUSEHOLD_INVENTORY_STORAGE_KEY,
+  intelligence:INTELLIGENCE_STORAGE_KEY,
 }
 
 export function householdResourceKeyForAction(type = '') {
   if (type.startsWith('household.schedule.')) return HOUSEHOLD_ACTION_RESOURCE_KEYS.schedule
   if (type.startsWith('household.maintenance.')) return HOUSEHOLD_ACTION_RESOURCE_KEYS.maintenance
   if (type.startsWith('household.inventory.')) return HOUSEHOLD_ACTION_RESOURCE_KEYS.inventory
+  if (type.startsWith('household.intelligence.')) return HOUSEHOLD_ACTION_RESOURCE_KEYS.intelligence
   return ''
 }
 
@@ -71,6 +74,7 @@ export function householdRecordForOperation(value, operation) {
     return { ...clone(occurrence),id:task.occurrenceId,owner:task.owners.length===1?task.owners[0]:'',owners:[...task.owners],participants:[...task.owners],verifiers:[...(task.verifiers || HOUSEHOLD_CHORE_VERIFIERS)],coveredBy:occurrence.coveredBy || '' }
   }
   if (type.startsWith('household.inventory.')) return normalizeInventoryState(value).items.find(item=>item.id===operation.targetId) || null
+  if (type.startsWith('household.intelligence.')) return normalizeIntelligenceConfig(value, HOUSEHOLD_MEMBERS)
   return null
 }
 
@@ -251,6 +255,12 @@ export function applyHouseholdRecordOperation(value, operation, context = {}) {
   if (type.startsWith('household.schedule.')) return {before:clone(value),after:scheduleOperation(value,operation,context)}
   if (type.startsWith('household.maintenance.')) return {before:clone(value),after:maintenanceOperation(value,operation,context)}
   if (type.startsWith('household.inventory.')) return {before:clone(value),after:inventoryOperation(value,operation,context)}
+  if (type==='household.intelligence.config.update') {
+    let candidate
+    try{candidate=JSON.parse(operation.payload?.configJson||'')}catch{throw new Error('The reviewed Household Intelligence configuration is invalid.')}
+    const after=normalizeIntelligenceConfig(candidate,HOUSEHOLD_MEMBERS)
+    return{before:clone(value),after:{...after,updatedAt:isoNow(context),updatedBy:assertMember(context.actor,'actor')}}
+  }
   throw new Error(`Unsupported household operation: ${type}.`)
 }
 
@@ -268,6 +278,7 @@ export function householdPermissionForOperation({ operation, member, role, curre
     return {allowed:true}
   }
   if (operation.type.startsWith('household.inventory.')) return {allowed:true}
+  if (operation.type.startsWith('household.intelligence.')) return {allowed:false,reason:'Household Intelligence targets, privacy, and shared classification rules require household-administrator review.'}
   if (operation.type.startsWith('household.maintenance.')) {
     if(operation.type==='household.maintenance.chore.create')return operation.payload?.owners?.includes(member)?{allowed:true}:{allowed:false,reason:'Household members may add chores only when they are an owner.'}
     const owners=currentRecord?.owners || []
