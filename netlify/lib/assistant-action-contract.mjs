@@ -33,6 +33,7 @@ export const ACTION_TYPES = {
   'household.inventory.item.create': 'planning',
   'household.inventory.quantity.update': 'planning',
   'household.inventory.waste.create': 'planning',
+  'household.intelligence.config.update': 'planning',
   'project.create': 'projects',
   'project.update': 'projects',
   'project.delete': 'projects',
@@ -91,6 +92,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.inventory.item.create': ['name', 'category', 'location', 'quantity', 'unit', 'parLevel', 'unitCost', 'expiresOn', 'notes'],
   'household.inventory.quantity.update': ['delta'],
   'household.inventory.waste.create': ['quantity', 'reason'],
+  'household.intelligence.config.update': ['configJson'],
   'project.create': ['title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.update': ['title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.delete': [],
@@ -285,6 +287,10 @@ function normalizeActionPayload(type, input) {
     } else if (field === 'plaidAccountId') {
       assertString(type, field, value)
       normalized[field] = clean(value, 512)
+    } else if (field === 'configJson') {
+      assertString(type, field, value)
+      if(value.length>250_000)throw new Error('The Household Intelligence configuration is too large.')
+      try{normalized.configJson=JSON.stringify(JSON.parse(value))}catch{throw new Error('The Household Intelligence configuration is invalid JSON.')}
     } else if (STRING_FIELDS.has(field)) {
       assertString(type, field, value)
       const cleaned = ['summary', 'reason', 'transcript', 'note'].includes(field)
@@ -451,6 +457,11 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'household.inventory.waste.create') {
     if (!operation.targetId) throw new Error('Inventory waste requires the exact affected item.')
     if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) throw new Error('Inventory waste requires a positive reviewed quantity.')
+  }
+  if(type==='household.intelligence.config.update'){
+    if(operation.targetId!=='configuration')throw new Error('Household Intelligence changes require the exact configuration record.')
+    let candidate;try{candidate=JSON.parse(payload.configJson)}catch{throw new Error('The Household Intelligence configuration is invalid JSON.')}
+    if(!candidate||typeof candidate!=='object'||Array.isArray(candidate))throw new Error('The Household Intelligence configuration must be an object.')
   }
   if (type === 'debt.create' || type === 'debt.update') {
     if (type === 'debt.create' && !payload.creditor) throw new Error('A debt requires a creditor.')

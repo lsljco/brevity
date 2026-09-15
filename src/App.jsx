@@ -18,6 +18,7 @@ const HomeHQ = lazy(() => import('./homehq/HomeHQ.jsx'))
 const MealPlanner = lazy(() => import('./meals/MealPlanner.jsx'))
 const EstateWorkspace = lazy(() => import('./estate/EstateWorkspace.jsx'))
 const HouseholdMaintenance = lazy(() => import('./household/HouseholdMaintenance.jsx'))
+const HouseholdPerformanceIntelligence = lazy(() => import('./household/HouseholdPerformanceIntelligence.jsx'))
 
 const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
@@ -26,6 +27,7 @@ const PILLARS = [
   ] },
   { id:'fitness', label:'Physical Fitness', icon:'ti-run', layer:2, description:'Strength, discipline, and physical stewardship.', items:[] },
   { id:'household', label:'Household Management', icon:'ti-home', layer:3, description:'The heartbeat of the home — operations, property, and daily life.', items:[
+    { id:'household-intelligence', label:'Household Intelligence', icon:'ti-chart-dots-3' },
     { id:'property', label:'Projects', icon:'ti-building-estate' },
     { id:'household-maintenance', label:'Household Operations', icon:'ti-broom' },
     { id:'family-calendar', label:'Family Calendar', icon:'ti-calendar-event' },
@@ -271,10 +273,11 @@ export default function App() {
   const handleActionCompleted=async()=>{setActionPermissionRevision(value=>value+1);await syncSharedState();await refreshAll(currentMember).catch(()=>{})}
 
   const renderContent=()=>{
-    if(activeView==='today')return <HouseholdToday currentMember={currentMember} canEditPlanning={canEditPlanning} planningAccessStatus={planningAccessStatus} isAdministrator={auth.role==='admin'} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')}/>
+    if(activeView==='today')return <HouseholdToday currentMember={currentMember} canEditPlanning={canEditPlanning} planningAccessStatus={planningAccessStatus} isAdministrator={auth.role==='admin'} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')} onOpenIntelligence={()=>navigateTo('household','household-intelligence')}/>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role} theme={theme} onThemeChange={()=>setTheme(value=>value==='dark'?'light':'dark')} onSignOut={auth.logout}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ readOnly={!canEditProjects} canDelete={auth.role==='admin'} currentMember={currentMember}/></Suspense>
     if(activeView==='household-maintenance')return <Suspense fallback={<div className="app-view-loading">Loading Household Operations…</div>}><HouseholdMaintenance currentMember={currentMember} canEdit={canEditPlanning} isAdmin={auth.role==='admin'}/></Suspense>
+    if(activeView==='household-intelligence')return <Suspense fallback={<div className="app-view-loading">Loading Household Intelligence…</div>}><HouseholdPerformanceIntelligence currentMember={currentMember} isAdministrator={auth.role==='admin'}/></Suspense>
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-managed source records"/></Suspense>
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
