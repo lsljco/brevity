@@ -34,10 +34,24 @@ test('attainment uses member-specific targets and household averages eligible me
 
 test('plan adherence stays separate from attainment and excludes cancelled work',()=>{
   const cfg=config()
-  const activities=normalizePerformanceActivities({calendarEvents:[{id:'done',title:'Study',date:'2026-09-08',owner:'A',completed:true},{id:'open',title:'Study',date:'2026-09-09',owner:'A'},{id:'cancelled',title:'Study',date:'2026-09-10',owner:'A',status:'cancelled'}],members,config:cfg})
+  const activities=normalizePerformanceActivities({calendarEvents:[{id:'done',title:'Study',date:'2026-09-08',owner:'A',completed:true},{id:'open',title:'Study',date:'2026-09-09',owner:'A'},{id:'cancelled',title:'Study',date:'2026-09-10',owner:'A',status:'cancelled'}],members,config:cfg,now:new Date('2026-09-08T12:00:00')})
   const model=calculatePerformance({activities,config:cfg,members,period:week,viewer:'A'})
   assert.equal(model.planAdherence,50)
   assert.equal(model.activities.length,2)
+})
+
+test('elapsed calendar occurrences calculate as performed while future and explicitly missed events do not',()=>{
+  const cfg=config(),activities=normalizePerformanceActivities({calendarEvents:[
+    {id:'past',title:'Gym workout',start:{dateTime:'2026-09-08T09:00:00'},end:{dateTime:'2026-09-08T10:00:00'},owner:'A'},
+    {id:'future',title:'Gym workout',startDate:'2026-09-12T09:00:00',endDate:'2026-09-12T10:00:00',owner:'A'},
+    {id:'missed',title:'Gym workout',date:'2026-09-07',owner:'A',status:'missed'},
+  ],members,config:cfg,now:new Date('2026-09-10T12:00:00')})
+  const model=calculatePerformance({activities,config:cfg,members,period:week,viewer:'A'})
+  const fitness=model.memberScores[0].pillars.find(item=>item.id==='fitness')
+  assert.equal(activities.find(item=>item.id==='past').completionEvidence,'elapsed-calendar')
+  assert.equal(fitness.completed,1)
+  assert.equal(fitness.planned,3)
+  assert.equal(fitness.attainment,33)
 })
 
 test('missing targets and activities remain No Data rather than zero',()=>{
