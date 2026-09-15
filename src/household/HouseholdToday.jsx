@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
@@ -15,7 +15,7 @@ import { clearLocalAlignmentDraft, clearLocalRecapDraft } from './dailyPlanLocal
 import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 import { clearPillarAnalyses } from './pillarAnalysisCache.js'
 import './HouseholdOS.css'
-import TodayIntelligenceSummary from './TodayIntelligenceSummary.jsx'
+const TodayIntelligenceSummary = lazy(() => import('./TodayIntelligenceSummary.jsx'))
 
 const cachedCalendar = () => {
   try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
@@ -188,7 +188,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     {state === 'loading' && <div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading the shared household plan…</div>}
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    <TodayIntelligenceSummary currentMember={currentMember} onOpen={onOpenIntelligence}/>
+    <Suspense fallback={null}><TodayIntelligenceSummary currentMember={currentMember} onOpen={onOpenIntelligence}/></Suspense>
     <TodayDashboard plan={planWithMeals} meals={todayMeals} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} readOnly={!canEditPlanning} canGeneratePlan={isAdministrator} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onReviewDecision={reviewDecision} onReviewAssignment={reviewAssignment} generationState={generationState} />
   </div>
 }
