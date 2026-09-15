@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calculatePerformance,classifyActivity,DEFAULT_PILLARS,matchingClassificationRule,normalizeIntelligenceConfig,normalizePerformanceActivities,projectPerformance,resolveIntelligencePeriod } from './performanceIntelligence.js'
+import { calculatePerformance,classifyActivity,DEFAULT_PILLARS,intelligenceSummary,matchingClassificationRule,normalizeIntelligenceConfig,normalizePerformanceActivities,projectPerformance,resolveIntelligencePeriod } from './performanceIntelligence.js'
 import { applyHouseholdRecordOperation,householdResourceKeyForAction } from './householdActionModel.js'
 import { handler as classifyHandler } from '../../netlify/functions/calendar-pillar-classify.mjs'
 
@@ -45,6 +45,12 @@ test('missing targets and activities remain No Data rather than zero',()=>{
   assert.equal(model.overall,null)
   assert.equal(model.planAdherence,null)
   assert.ok(model.householdPillars.every(item=>item.attainment===null))
+})
+
+test('strengths never labels a currently failing pillar as strong because its projection may recover',()=>{
+  const summary=intelligenceSummary({overall:0,period:week,householdPillars:[{id:'education',attainment:0,projected:100},{id:'finance',attainment:90,projected:100}],reviewQueue:[],activities:[{}]})
+  assert.deepEqual(summary.strengths.map(item=>item.id),['finance'])
+  assert.deepEqual(summary.attention.map(item=>item.id),['education'])
 })
 
 test('confirmed rules beat heuristic classification and manual overrides beat rules',()=>{
