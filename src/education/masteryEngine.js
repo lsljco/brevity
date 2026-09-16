@@ -1,0 +1,30 @@
+export const MASTERY = Object.freeze({ RED:'RED', YELLOW:'YELLOW', GREEN:'GREEN', BLUE:'BLUE' })
+
+export function calculateFluency(wordsAttempted, errors) {
+  const attempted=Math.max(0,Number(wordsAttempted)||0)
+  const misses=Math.min(attempted,Math.max(0,Number(errors)||0))
+  const correct=attempted-misses
+  return { wcpm:correct, accuracy:attempted?Math.round((correct/attempted)*1000)/10:0 }
+}
+
+export function deriveMastery({ previous='RED', independentCorrect=0, total=0, encounters=1, stretch=false }={}) {
+  const accuracy=total>0?independentCorrect/total:0
+  if(total===0||accuracy<0.6)return MASTERY.RED
+  if(accuracy<0.85)return MASTERY.YELLOW
+  if(encounters<2)return MASTERY.YELLOW
+  if(stretch&&accuracy>=0.85)return MASTERY.BLUE
+  if(previous===MASTERY.BLUE&&accuracy>=0.85)return MASTERY.BLUE
+  return MASTERY.GREEN
+}
+
+export function nextRetrievalDate(status, encounterDate, retrievalCount=0) {
+  const base=new Date(`${encounterDate}T12:00:00Z`)
+  if(Number.isNaN(base.getTime()))return encounterDate
+  const gaps=status===MASTERY.GREEN||status===MASTERY.BLUE?[1,3,7,14,28]:[1]
+  base.setUTCDate(base.getUTCDate()+gaps[Math.min(Math.max(0,retrievalCount),gaps.length-1)])
+  return base.toISOString().slice(0,10)
+}
+
+export function resolveCurrentUnit(units, date) {
+  return units.find(unit=>date>=unit.startDate&&date<=unit.endDate)||null
+}
