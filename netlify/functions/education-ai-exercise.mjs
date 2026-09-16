@@ -13,7 +13,22 @@ const allowedMinutes=new Set([10,20,30,45])
 const cleanStrings=(value,max=8)=>Array.isArray(value)?value.map(item=>String(item||'').trim()).filter(Boolean).slice(0,max):[]
 const exerciseId=()=>`reading-${Date.now().toString(36)}-${crypto.randomUUID().slice(0,8)}`
 
-const schema={type:'object',additionalProperties:false,properties:{title:{type:'string',maxLength:140},intro:{type:'string',maxLength:500},directions:{type:'string',minLength:80,maxLength:900},requiredDirectionPoints:{type:'array',minItems:3,maxItems:6,items:{type:'string',maxLength:220}},passage:{type:'string',minLength:500,maxLength:5000},sectionMinutes:{type:'integer',minimum:5,maximum:15},difficultyNote:{type:'string',maxLength:500},vocabulary:{type:'array',minItems:3,maxItems:6,items:{type:'object',additionalProperties:false,properties:{word:{type:'string',maxLength:60},meaning:{type:'string',maxLength:220}},required:['word','meaning']}},questions:{type:'array',minItems:4,maxItems:7,items:{type:'object',additionalProperties:false,properties:{id:{type:'string',maxLength:40},type:{type:'string',enum:['multiple_choice','short_response']},prompt:{type:'string',maxLength:500},choices:{type:'array',maxItems:4,items:{type:'string',maxLength:220}},correctAnswer:{type:'string',maxLength:500},rubric:{type:'string',maxLength:700},skill:{type:'string',maxLength:120}},required:['id','type','prompt','choices','correctAnswer','rubric','skill']}},required:['title','intro','directions','requiredDirectionPoints','passage','sectionMinutes','difficultyNote','vocabulary','questions']}
+const schema={
+  type:'object',
+  additionalProperties:false,
+  properties:{
+    title:{type:'string',maxLength:140},
+    intro:{type:'string',maxLength:500},
+    directions:{type:'string',minLength:80,maxLength:900},
+    requiredDirectionPoints:{type:'array',minItems:3,maxItems:6,items:{type:'string',maxLength:220}},
+    passage:{type:'string',minLength:500,maxLength:5000},
+    sectionMinutes:{type:'integer',minimum:5,maximum:15},
+    difficultyNote:{type:'string',maxLength:500},
+    vocabulary:{type:'array',minItems:3,maxItems:6,items:{type:'object',additionalProperties:false,properties:{word:{type:'string',maxLength:60},meaning:{type:'string',maxLength:220}},required:['word','meaning']}},
+    questions:{type:'array',minItems:4,maxItems:7,items:{type:'object',additionalProperties:false,properties:{id:{type:'string',maxLength:40},type:{type:'string',enum:['multiple_choice','short_response']},prompt:{type:'string',maxLength:500},choices:{type:'array',maxItems:4,items:{type:'string',maxLength:220}},correctAnswer:{type:'string',maxLength:500},rubric:{type:'string',maxLength:700},skill:{type:'string',maxLength:120}},required:['id','type','prompt','choices','correctAnswer','rubric','skill']}},
+  },
+  required:['title','intro','directions','requiredDirectionPoints','passage','sectionMinutes','difficultyNote','vocabulary','questions'],
+}
 const outputText=response=>Array.isArray(response?.output)?response.output.flatMap(item=>Array.isArray(item?.content)?item.content:[]).map(part=>typeof part?.text==='string'?part.text:'').join('').trim():''
 const publicQuestion=q=>({id:q.id,type:q.type,prompt:q.prompt,choices:q.choices,skill:q.skill})
 export const educationAiExerciseInternals={schema,publicQuestion,PROMPT_VERSION,allowedMinutes,safeDate}
