@@ -1,0 +1,1 @@
+export function prerequisiteBridge({targetStandard,prerequisiteSkill,skillStatus}){const blocked=['RED'].includes(skillStatus);return{targetStandard,prerequisiteSkill,skillStatus,blocked,action:blocked?'teach-smallest-prerequisite-then-reconnect':'teach-grade-level-target'}}
