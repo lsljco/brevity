@@ -37,7 +37,8 @@ export const handler=async event=>{
   if(body.mode==='directions'){
     try{
       const result=await gradeDirections(record,String(body.studentSummary||'').slice(0,1600))
-      return json(200,{exerciseId,mode:'directions',...result,skill:'following written directions',contentMasteryAffected:false,reviewed:false,evidenceStatus:'draft-adult-review-required'})
+      const supportUsed=Boolean(body.supportUsed)
+      return json(200,{exerciseId,mode:'directions',...result,skill:'following written directions',supportUsed,supportLevel:supportUsed?'audio-supported':'independent-reading',contentMasteryAffected:false,reviewed:false,evidenceStatus:'draft-adult-review-required'})
     }catch{return json(502,{error:'Brevity could not check the directions explanation. An adult can review it instead.'})}
   }
 
