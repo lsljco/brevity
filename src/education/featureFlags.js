@@ -1,0 +1,1 @@
+export const EDUCATION_FEATURE_FLAGS={interactiveTutor:true,standardsSync:true,authoritativePersistence:false,fullYearCurriculum:false,householdIntelligenceRollup:false}

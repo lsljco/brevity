@@ -1,0 +1,1 @@
+export function comparableFluencyTrend(sessions=[]){const probes=sessions.filter(s=>s?.fluency?.comparisonGroup).reduce((m,s)=>{const k=s.fluency.comparisonGroup;(m[k]??=[]).push({date:s.date,wcpm:s.fluency.wcpm,accuracy:s.fluency.accuracy,probeId:s.fluency.probeId});return m},{});return probes}

@@ -1,0 +1,1 @@
+export function tutorSessionId(date,sequence=1){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date)))throw new Error('Tutor session date must use YYYY-MM-DD.');return`isaiah-${date}-session-${Math.max(1,Number(sequence)||1)}`}
