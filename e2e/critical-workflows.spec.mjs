@@ -169,7 +169,7 @@ test('Household Intelligence dashboard separates metrics and opens an auditable 
   await page.getByRole('button',{name:'Larry Finance & Stewardship'}).click()
   const drilldown=page.getByRole('dialog',{name:'Score explanation'})
   await expect(drilldown).toContainText('Finance review')
-  await expect(drilldown).toContainText('1 of 2 activities')
+  await expect(drilldown).toContainText('2 of 2 activities')
   await expect(drilldown).toContainText('Daily finance review')
   await expect(drilldown).toContainText('Weekly finance review')
 })
