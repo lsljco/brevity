@@ -8,7 +8,7 @@ import {
   rollingMealDates,
   validateMealSubstitution,
 } from '../../src/meals/mealPlanData.js'
-import { MEAL_LIBRARY, MEAL_TYPES } from '../../src/meals/mealLibrary.js'
+import { fallbackMealImage, MEAL_LIBRARY, MEAL_TYPES } from '../../src/meals/mealLibrary.js'
 
 const STORE_NAME = 'brevity-meals'
 
@@ -65,6 +65,7 @@ function normalizeMealInput(meal, actor, now, createId) {
     cookMinutes: Math.round(cookMinutes),
     totalMinutes: Math.round(suppliedTotalMinutes == null ? prepMinutes + cookMinutes : suppliedTotalMinutes),
     ingredients: (Array.isArray(meal?.ingredients) ? meal.ingredients : String(meal?.ingredients || '').split(/\r?\n/)).map(value => String(value || '').trim()).filter(Boolean),
+    instructions: (Array.isArray(meal?.instructions) ? meal.instructions : String(meal?.instructions || '').split(/\r?\n/)).map(value => String(value || '').trim()).filter(Boolean).slice(0, 30),
     image: String(meal?.image || '').trim(),
     serving: String(meal?.serving || '').trim() || '1 serving',
     yieldQuantity: numeric(meal?.yieldQuantity),
@@ -145,13 +146,18 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       getLibrary(),
       Promise.all(dates.map(async date => readOnly ? (await getDay(date)) || createDay(date) : ensureDay(date))),
     ])
+    const viewLibrary = libraryState.library.map(meal => {
+      if (meal.image) return meal
+      const image = fallbackMealImage(meal, libraryState.library)
+      return image ? { ...meal, image, imageFallback:true } : meal
+    })
     return {
       householdId,
       timeZone,
       startDate,
-      days: days.map(day => resolveMealDay(day, libraryState.library)),
-      library: libraryState.library,
-      librarySummary: mealLibrarySummary(libraryState.library),
+      days: days.map(day => resolveMealDay(day, viewLibrary)),
+      library: viewLibrary,
+      librarySummary: mealLibrarySummary(viewLibrary),
     }
   }
 

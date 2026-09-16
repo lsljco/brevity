@@ -28,6 +28,32 @@ function Macros({ meal }) {
   return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{Number(meal.macros.calories).toLocaleString()}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
 }
 
+function MealDetailDialog({ meal, onClose }) {
+  const ingredients = Array.isArray(meal?.ingredients) ? meal.ingredients : []
+  const instructions = Array.isArray(meal?.instructions) ? meal.instructions : []
+  useEffect(() => {
+    const close = event => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [onClose])
+  return <div className="meal-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="meal-dialog meal-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-detail-title">
+      <header><div><span>{LABELS[meal.mealType]} recipe</span><h2 id="meal-detail-title">{meal.name}</h2><p>{meal.description}</p></div><button type="button" onClick={onClose} aria-label="Close meal details"><i className="ti ti-x" /></button></header>
+      <div className="meal-detail-body">
+        <MealImage meal={meal} className="meal-detail-image" alt={meal.name} loading="eager" />
+        <div className="meal-detail-facts"><span><strong>{formatPrepMinutes(meal.totalMinutes ?? meal.prepMinutes)}</strong> total</span><span><strong>{formatPrepMinutes(meal.prepMinutes)}</strong> prep</span>{Number(meal.cookMinutes) > 0 && <span><strong>{formatPrepMinutes(meal.cookMinutes)}</strong> cook</span>}<span><strong>{meal.serving || '1 serving'}</strong> serving</span></div>
+        <Macros meal={meal} />
+        <div className="meal-detail-columns">
+          <section><h3>Ingredients</h3>{ingredients.length ? <ul>{ingredients.map((ingredient,index)=><li key={`${ingredient}-${index}`}>{ingredient}</li>)}</ul> : <p>Ingredient quantities have not been recorded for this library meal.</p>}</section>
+          <section><h3>Recipe</h3>{instructions.length ? <ol>{instructions.map((instruction,index)=><li key={`${instruction}-${index}`}>{instruction}</li>)}</ol> : <p>{meal.description} Detailed preparation steps have not been recorded for this meal.</p>}</section>
+        </div>
+        {meal.nutritionBasis && <small className="meal-detail-note">{meal.nutritionBasis}</small>}
+        {meal.sourceUrl && <a className="meal-detail-source" href={meal.sourceUrl} target="_blank" rel="noreferrer"><i className="ti ti-external-link" /> View original recipe{meal.sourceName ? ` at ${meal.sourceName}` : ''}</a>}
+      </div>
+    </section>
+  </div>
+}
+
 function MealChoice({ meal, onChoose, selected, current }) {
   return <button type="button" className={`meal-choice${selected ? ' is-selected' : ''}`} onClick={onChoose}>
     <MealImage meal={meal} alt="" />
@@ -67,6 +93,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
     name:'',
     description:'',
     ingredients:'',
+    instructions:'',
     prepMinutes:'',
     cookMinutes:'',
     totalMinutes:'',
@@ -102,6 +129,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
       const result=await importRecipeFromUrl(recipeUrl.trim())
       const recipe=result.recipe
       const ingredients=(recipe.ingredients||[]).join('\n')
+      const instructions=(recipe.instructions||[]).join('\n')
       const yieldQuantity=recipe.yieldQuantity??''
       const yieldUnit=recipe.yieldUnit||'servings'
       setForm(current=>({
@@ -110,6 +138,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
         name:recipe.name||'',
         description:recipe.description||'',
         ingredients,
+        instructions,
         prepMinutes:recipe.prepMinutes??'',
         cookMinutes:recipe.cookMinutes??'',
         totalMinutes:recipe.totalMinutes??'',
@@ -132,6 +161,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
       name:form.name.trim(),
       description:form.description.trim(),
       ingredients:ingredientLines(),
+      instructions:form.instructions.split(/\r?\n/).map(line=>line.trim()).filter(Boolean),
       prepMinutes:Number(form.prepMinutes),
       cookMinutes:Number(form.cookMinutes),
       totalMinutes:form.totalMinutes===''?undefined:Number(form.totalMinutes),
@@ -168,6 +198,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
         <label className="meal-add-form--wide"><span>Meal name</span><input required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
         <label className="meal-add-form--wide"><span>Description</span><textarea value={form.description} onChange={event=>set('description',event.target.value)} placeholder="Brief description of the plated meal" /></label>
         <label className="meal-add-form--wide"><span>Measured ingredients <small>one per line; include brand, amount and unit</small></span><textarea required value={form.ingredients} onChange={event=>set('ingredients',event.target.value)} placeholder={'2 cups Pearl Milling Company pancake mix\n1 cup water\n1 stick salted butter'} /></label>
+        <label className="meal-add-form--wide"><span>Recipe steps <small>one step per line</small></span><textarea value={form.instructions} onChange={event=>set('instructions',event.target.value)} placeholder={'Season the ingredients.\nCook until done.\nPlate and serve.'} /></label>
         <label><span>Prep time (minutes)</span><input required min="0" step="1" type="number" value={form.prepMinutes} onChange={event=>set('prepMinutes',event.target.value)} /></label>
         <label><span>Cook time (minutes)</span><input required min="0" step="1" type="number" value={form.cookMinutes} onChange={event=>set('cookMinutes',event.target.value)} /></label>
         <label><span>Total time (minutes) <small>optional override</small></span><input min="0" step="1" type="number" value={form.totalMinutes} onChange={event=>set('totalMinutes',event.target.value)} /></label>
@@ -190,22 +221,22 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
   </div>
 }
 
-function PlanView({ days, onSelect }) {
+function PlanView({ days, onSelect, onOpenMeal }) {
   return <div className="meal-week">
     {days.map((day, index) => <article className={`meal-day${index === 0 ? ' meal-day--today' : ''}`} key={day.date}>
       <header><div><span>{index === 0 ? 'Today' : `Day ${index + 1}`}</span><h2>{formatDay(day.date)}</h2></div>{Object.keys(day.substitutions || {}).length > 0 && <small><i className="ti ti-replace" /> Customized</small>}</header>
       <div className="meal-day-slots">{MEAL_TYPES.map(mealType => {
         const meal = day.resolvedMeals[mealType]
-        return <section className="meal-slot" key={mealType}><MealImage meal={meal} className="meal-slot-photo" alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes</small><button type="button" onClick={() => onSelect({ day, mealType })}><i className="ti ti-replace" /> Replace</button></div></section>
+        return <section className="meal-slot meal-card-action" key={mealType} role="button" tabIndex="0" aria-label={`View ${meal?.name} details`} onClick={()=>meal&&onOpenMeal(meal)} onKeyDown={event=>{if((event.key==='Enter'||event.key===' ')&&meal){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} className="meal-slot-photo" alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes · View recipe</small><button type="button" onClick={event => { event.stopPropagation(); onSelect({ day, mealType }) }}><i className="ti ti-replace" /> Replace</button></div></section>
       })}</div>
     </article>)}
   </div>
 }
 
-function LibraryView({ library, onAdd }) {
+function LibraryView({ library, onAdd, onOpenMeal }) {
   return <div className="meal-library">{MEAL_TYPES.map(mealType => {
     const meals = library.filter(meal => meal.mealType === mealType)
-    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{LABELS[mealType]}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {LABELS[mealType]}</button></header><div className="meal-library-grid">{meals.map(meal => <article key={meal.id}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{meal.prepMinutes} min</span></div><p>{meal.description}</p><Macros meal={meal} /></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
+    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{LABELS[mealType]}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {LABELS[mealType]}</button></header><div className="meal-library-grid">{meals.map(meal => <article className="meal-card-action" key={meal.id} role="button" tabIndex="0" aria-label={`View ${meal.name} details`} onClick={()=>onOpenMeal(meal)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{meal.prepMinutes} min</span></div><p>{meal.description}</p><Macros meal={meal} /><small className="meal-library-view">View ingredients &amp; recipe</small></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
   })}</div>
 }
 
@@ -214,6 +245,7 @@ export default function MealPlanner() {
   const [view, setView] = useState('plan')
   const [selection, setSelection] = useState(null)
   const [addingMealType, setAddingMealType] = useState('')
+  const [detailMeal, setDetailMeal] = useState(null)
   const [message, setMessage] = useState('')
   const [replacementError, setReplacementError] = useState('')
   const [addMealError, setAddMealError] = useState('')
@@ -262,7 +294,8 @@ export default function MealPlanner() {
     {state === 'loading' && !data && <div className="meal-planner-state"><i className="ti ti-loader-2" /> Preparing the household meal plan…</div>}
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {error && data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan refresh needed</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
-    {data && (view === 'plan' ? <PlanView days={data.days} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onAdd={setAddingMealType} />)}
+    {data && (view === 'plan' ? <PlanView days={data.days} onOpenMeal={setDetailMeal} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onAdd={setAddingMealType} onOpenMeal={setDetailMeal} />)}
+    {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} />}
     {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} error={replacementError} onClose={() => { setReplacementError(''); setSelection(null) }} onChoose={chooseReplacement} onReview={reviewReplacement} />}
     {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} error={addMealError} onClose={()=>{setAddMealError('');setAddingMealType('')}} onSave={saveMeal} />}
   </main>

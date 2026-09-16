@@ -198,6 +198,16 @@ const imageUrl = (value, sourceUrl) => {
   } catch { return '' }
 }
 
+const instructionText = value => {
+  if (typeof value === 'string') return cleanText(value, 1000)
+  if (!value || typeof value !== 'object') return ''
+  return cleanText(value.text || value.name, 1000)
+}
+
+const recipeInstructions = value => (Array.isArray(value) ? value : [value])
+  .flatMap(item => Array.isArray(item?.itemListElement) ? item.itemListElement : [item])
+  .map(instructionText).filter(Boolean).slice(0, 30)
+
 export function parseRecipeHtml(html, sourceUrl) {
   const candidates = []
   const pattern = /<script\b[^>]*type=["']application\/ld\+json[^"']*["'][^>]*>([\s\S]*?)<\/script>/gi
@@ -224,6 +234,7 @@ export function parseRecipeHtml(html, sourceUrl) {
     name:cleanText(recipe.name, 160),
     description:cleanText(recipe.description, 1000),
     ingredients,
+    instructions:recipeInstructions(recipe.recipeInstructions),
     prepMinutes,
     cookMinutes,
     totalMinutes,

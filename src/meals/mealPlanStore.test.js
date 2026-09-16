@@ -79,6 +79,17 @@ test('custom meal creation generates its image once before the shared record is 
   assert.equal((await repository.getLibrary()).customMeals[0].image,meal.image)
 })
 
+test('read windows recover a relevant image for legacy custom meals without rewriting the stored record', async () => {
+  const store=memoryStore()
+  store.records.set('lslj-family/library/custom',{version:1,meals:[{id:'custom-dinner-legacy',custom:true,mealType:'dinner',name:'Salmon, rice, and broccoli',description:'Salmon, Rice, and Broccoli Meal',ingredients:['salmon','rice','broccoli'],image:'',prepMinutes:15,serving:'1 serving',macros:{calories:580,proteinGrams:44,carbohydrateGrams:38,fatGrams:27}}]})
+  const repository=createMealPlanRepository({store,now:()=>new Date('2026-09-16T12:00:00Z')})
+  const plan=await repository.getWindowReadOnly({startDate:'2026-09-16'})
+  const meal=plan.library.find(candidate=>candidate.id==='custom-dinner-legacy')
+  assert.equal(meal.image,'/meal-images/dinner-02.webp')
+  assert.equal(meal.imageFallback,true)
+  assert.equal(store.records.get('lslj-family/library/custom').meals[0].image,'')
+})
+
 test('custom meals retain calculated batch, yield and ingredient nutrition evidence', async () => {
   const store=memoryStore()
   const repository=createMealPlanRepository({store,now:()=>new Date('2026-09-12T10:00:00Z'),createId:()=> 'nutrition-id'})
