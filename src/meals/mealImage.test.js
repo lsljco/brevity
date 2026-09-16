@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { assertMealImagePng, buildMealImagePrompt, generateMealImage, mealImageKey } from '../../netlify/lib/meal-image.mjs'
+import { assertMealImagePng, buildMealImagePrompt, generateMealImage, mealImageContentType, mealImageKey } from '../../netlify/lib/meal-image.mjs'
 
 const png = Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1,2,3])
 
@@ -8,6 +8,9 @@ test('meal image prompt preserves the selected dish and premium library aestheti
   const prompt=buildMealImagePrompt({name:'Salmon, rice, and broccoli',description:'Seared salmon with vegetables.',ingredients:['6 oz salmon','1 cup rice','1 cup broccoli']})
   assert.match(prompt,/Salmon, rice, and broccoli/)
   assert.match(prompt,/6 oz salmon/)
+  assert.match(prompt,/must visibly define the finished dish/)
+  assert.match(prompt,/Do not add, replace, or feature ingredients that are not listed/)
+  assert.match(prompt,/Luxury American steakhouse/)
   assert.match(prompt,/ultra-photorealistic/)
   assert.match(prompt,/deep black and navy/)
   assert.match(prompt,/antique-gold/)
@@ -35,4 +38,11 @@ test('generated meal images are PNG-validated, stored separately, and returned a
 
 test('meal image generation rejects non-PNG output before storage', () => {
   assert.throws(()=>assertMealImagePng(Buffer.from('not an image')),/generated PNG meal images only/)
+})
+
+test('uploaded meal images accept only validated web image signatures',()=>{
+  assert.equal(mealImageContentType(png),'image/png')
+  assert.equal(mealImageContentType(Buffer.from([0xff,0xd8,0xff,1])),'image/jpeg')
+  assert.equal(mealImageContentType(Buffer.from('RIFF1234WEBP')),'image/webp')
+  assert.throws(()=>mealImageContentType(Buffer.from('not an image')),/valid PNG, JPEG, or WebP/)
 })

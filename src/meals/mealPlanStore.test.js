@@ -90,6 +90,24 @@ test('read windows recover a relevant image for legacy custom meals without rewr
   assert.equal(store.records.get('lslj-family/library/custom').meals[0].image,'')
 })
 
+test('a generated image override is shared for any exact library meal without mutating its source record', async () => {
+  const store=memoryStore()
+  const repository=createMealPlanRepository({store,now:()=>new Date('2026-09-16T12:00:00Z')})
+  const image='/.netlify/functions/meal-images?id=breakfast-01-new'
+  await repository.setMealImage({mealId:'breakfast-01',image,actor:'Larry'})
+  const plan=await repository.getWindowReadOnly({startDate:'2026-09-16'})
+  const meal=plan.library.find(candidate=>candidate.id==='breakfast-01')
+  assert.equal(meal.image,image)
+  assert.equal(meal.imageGenerated,true)
+  assert.equal(store.records.get('lslj-family/library/image-overrides').images['breakfast-01'],image)
+  assert.equal((await repository.getLibrary()).library.find(candidate=>candidate.id==='breakfast-01').image,image)
+})
+
+test('image overrides reject meals outside the authoritative household library', async () => {
+  const repository=createMealPlanRepository({store:memoryStore()})
+  await assert.rejects(repository.setMealImage({mealId:'missing-meal',image:'/image.png'}),error=>error.code==='VALIDATION_ERROR')
+})
+
 test('custom meals retain calculated batch, yield and ingredient nutrition evidence', async () => {
   const store=memoryStore()
   const repository=createMealPlanRepository({store,now:()=>new Date('2026-09-12T10:00:00Z'),createId:()=> 'nutrition-id'})
