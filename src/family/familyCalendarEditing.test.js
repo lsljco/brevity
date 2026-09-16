@@ -20,10 +20,14 @@ test('direct Family Calendar changes use reviewed server-side Action Mode execut
   assert.doesNotMatch(source,/localStorage\.setItem\(FAMILY_CALENDAR_KEY/)
 })
 
-test('native Apple and source-managed Brevity events remain read-only in the direct editor', () => {
+test('native Apple events are editable while source-managed Brevity records stay in their authoritative workflow', () => {
   assert.match(source,/canEditBrevityCalendarEvent\(event,calendarAccess\)/)
-  assert.match(source,/Apple Family Calendar · Read-only/)
+  assert.match(source,/Apple Family Calendar · Editable/)
   assert.match(source,/Brevity · Managed in source workflow/)
+  assert.match(source,/Notification 1/)
+  assert.match(source,/Notification 2/)
+  assert.match(source,/Every weekday/)
+  assert.match(source,/End time/)
   assert.match(source,/getActionMode\(\)/)
 })
 

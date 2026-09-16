@@ -26,6 +26,17 @@ export function isBrevityManagedAppleEvent(event) {
     && !String(event?.id || event?.uid || '').includes('::')
 }
 
+export function isSourceManagedCalendarEvent(event) {
+  const sourceId = clean(event?.sourceId)
+  return /^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(sourceId)
+}
+
+export function isDirectlyEditableAppleEvent(event) {
+  return isAppleCalendarEvent(event)
+    && !isSourceManagedCalendarEvent(event)
+    && (!event?.recurring || event?.recurrenceEditable)
+}
+
 export function calendarEventVersion(event) {
   return clean(event?.etag || event?.updatedAt)
 }
@@ -50,7 +61,7 @@ export function calendarTimeInputValue(value) {
 }
 
 export function canEditBrevityCalendarEvent(event, access = {}) {
-  if (!access.allowed || !isBrevityManagedAppleEvent(event) || !calendarEventVersion(event)) return false
+  if (!access.allowed || !isDirectlyEditableAppleEvent(event) || !calendarEventVersion(event)) return false
   if (access.role === 'admin') return true
   const owners = [event?.owner, ...(Array.isArray(event?.participants) ? event.participants : [])].filter(Boolean)
   return owners.includes('Family') || owners.includes(access.member)

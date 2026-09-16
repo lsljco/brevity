@@ -9,6 +9,7 @@ import {
   calendarPermissionForActionMode,
   calendarTimeInputValue,
   canonicalizeBrevityCalendarEvent,
+  isDirectlyEditableAppleEvent,
   isBrevityManagedAppleEvent,
 } from './calendarRecords.js'
 import { writeCalendarSnapshotCache } from '../household/appRefresh.js'
@@ -55,15 +56,29 @@ const normalizeIcloud = event => {
 }
 const eventToken = calendarEventVersion
 
-const emptyForm = (date = getHouseholdDateKey(), owner = 'Family') => ({ title:'', date, time:'', owner, participants:[], notes:'' })
+const emptyForm = (date = getHouseholdDateKey(), owner = 'Family') => ({ title:'',date,time:'',endDate:date,endTime:'',allDay:true,owner,participants:[],notes:'',location:'',url:'',recurrenceFrequency:'none',recurrenceInterval:1,recurrenceDays:[],recurrenceEndDate:'',alert1Minutes:15,alert2Minutes:60 })
 const eventForm = event => ({
   title:event?.title || '',
-  date:event?.date || event?.start || getHouseholdDateKey(),
-  time:calendarTimeInputValue(event?.time),
+  date:event?.seriesDate || event?.date || event?.start || getHouseholdDateKey(),
+  time:calendarTimeInputValue(event?.seriesTime || event?.time),
+  endDate:event?.seriesEndDate || event?.endDate || event?.date || event?.start || getHouseholdDateKey(),
+  endTime:calendarTimeInputValue(event?.seriesEndTime || event?.endTime),
+  allDay:event?.allDay !== false && !event?.time,
   owner:event?.owner || 'Family',
   participants:Array.isArray(event?.participants) ? event.participants : [],
   notes:event?.notes || '',
+  location:event?.location || '',
+  url:event?.url || '',
+  recurrenceFrequency:event?.recurrenceFrequency || 'none',
+  recurrenceInterval:Number(event?.recurrenceInterval)||1,
+  recurrenceDays:Array.isArray(event?.recurrenceDays)?event.recurrenceDays:[],
+  recurrenceEndDate:event?.recurrenceEndDate || '',
+  alert1Minutes:Number.isFinite(event?.alert1Minutes)?event.alert1Minutes:-1,
+  alert2Minutes:Number.isFinite(event?.alert2Minutes)?event.alert2Minutes:-1,
 })
+
+const recurrenceNames={none:'Does not repeat',daily:'Every day',weekdays:'Every weekday',weekly:'Every week',monthly:'Every month',yearly:'Every year'}
+const weekdayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, onApply, busy, error }) {
   const review = editor.step === 'review'
@@ -71,14 +86,21 @@ function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, on
   const toggleParticipant = name => onChange({ ...form, participants:form.participants.includes(name) ? form.participants.filter(item => item !== name) : [...form.participants, name] })
   return <div className="family-calendar-editor-backdrop" role="presentation" onMouseDown={event=>event.target===event.currentTarget&&onCancel()}>
     <section className="family-calendar-editor" role="dialog" aria-modal="true" aria-labelledby="family-calendar-editor-title">
-      <header><div><span>{review?'Review required':editor.mode==='create'?'New Brevity event':'Edit Brevity event'}</span><h2 id="family-calendar-editor-title">{review?'Confirm the calendar change':editor.mode==='create'?'Add to Family Calendar':'Update Family Calendar'}</h2></div><button type="button" onClick={onCancel} aria-label="Close calendar editor"><i className="ti ti-x" aria-hidden="true"/></button></header>
+      <header><div><span>{review?'Review required':editor.mode==='create'?'New Brevity event':isBrevityManagedAppleEvent(editor.record)?'Edit Brevity event':'Edit Apple event'}</span><h2 id="family-calendar-editor-title">{review?'Confirm the calendar change':editor.mode==='create'?'Add to Family Calendar':editor.record?.recurring?'Update recurring series':'Update Family Calendar'}</h2></div><button type="button" onClick={onCancel} aria-label="Close calendar editor"><i className="ti ti-x" aria-hidden="true"/></button></header>
       {review ? <div className="family-calendar-review">
         <p>No record changes until you apply this reviewed proposal.</p>
-        <dl><div><dt>Event</dt><dd>{form.title}</dd></div><div><dt>Date</dt><dd>{new Date(`${form.date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</dd></div><div><dt>Time</dt><dd>{form.time || 'All day'}</dd></div><div><dt>Owner</dt><dd>{form.owner}</dd></div>{form.participants.length>0&&<div><dt>Participants</dt><dd>{form.participants.join(', ')}</dd></div>}{form.notes.trim()&&<div><dt>Notes</dt><dd>{form.notes}</dd></div>}</dl>
+        <dl><div><dt>Event</dt><dd>{form.title}</dd></div><div><dt>Starts</dt><dd>{form.date}{form.allDay?' · All day':` · ${form.time}`}</dd></div><div><dt>Ends</dt><dd>{form.endDate}{!form.allDay&&form.endTime?` · ${form.endTime}`:''}</dd></div><div><dt>Repeats</dt><dd>{recurrenceNames[form.recurrenceFrequency]}{form.recurrenceInterval>1?` · Every ${form.recurrenceInterval} intervals`:''}{form.recurrenceEndDate?` · Through ${form.recurrenceEndDate}`:''}</dd></div><div><dt>Notifications</dt><dd>{form.alert1Minutes<0?'None':`${form.alert1Minutes} minutes before`} · {form.alert2Minutes<0?'None':`${form.alert2Minutes} minutes before`}</dd></div><div><dt>Owner</dt><dd>{form.owner}</dd></div>{form.location.trim()&&<div><dt>Location</dt><dd>{form.location}</dd></div>}{form.url.trim()&&<div><dt>URL</dt><dd>{form.url}</dd></div>}{form.participants.length>0&&<div><dt>Participants</dt><dd>{form.participants.join(', ')}</dd></div>}{form.notes.trim()&&<div><dt>Notes</dt><dd>{form.notes}</dd></div>}</dl>
         <div className="family-calendar-safety"><i className="ti ti-shield-check" aria-hidden="true"/><span>Action Mode will record the actor, timestamp, affected record, and prior values for Undo. The save stops if the Apple record changed after review.</span></div>
       </div> : <form id="family-calendar-record-form" onSubmit={onReview}>
+        {editor.record?.recurring&&<div className="family-calendar-series-note" role="note"><i className="ti ti-repeat" aria-hidden="true"/><span>This updates the entire recurring series. Individual occurrence exceptions remain managed in Apple Calendar.</span></div>}
         <label>Title<input required value={form.title} onChange={event=>onChange({...form,title:event.target.value})} placeholder="What is happening?"/></label>
-        <div className="family-calendar-editor-grid"><label>Date<input required type="date" value={form.date} onChange={event=>onChange({...form,date:event.target.value})}/></label><label>Time, optional<input type="time" value={form.time} onChange={event=>onChange({...form,time:event.target.value})}/></label></div>
+        <label className="family-calendar-all-day"><input type="checkbox" checked={form.allDay} onChange={event=>onChange({...form,allDay:event.target.checked,time:event.target.checked?'':form.time||'09:00',endTime:event.target.checked?'':form.endTime||'10:00'})}/><span>All-day event</span></label>
+        <div className="family-calendar-editor-grid"><label>Start date<input required type="date" value={form.date} onChange={event=>onChange({...form,date:event.target.value,endDate:form.endDate<event.target.value?event.target.value:form.endDate})}/></label>{!form.allDay&&<label>Start time<input required type="time" value={form.time} onChange={event=>onChange({...form,time:event.target.value})}/></label>}<label>End date<input required type="date" min={form.date} value={form.endDate} onChange={event=>onChange({...form,endDate:event.target.value})}/></label>{!form.allDay&&<label>End time<input required type="time" value={form.endTime} onChange={event=>onChange({...form,endTime:event.target.value})}/></label>}</div>
+        <div className="family-calendar-editor-grid"><label>Repeat<select value={form.recurrenceFrequency} onChange={event=>onChange({...form,recurrenceFrequency:event.target.value})}>{Object.entries(recurrenceNames).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{form.recurrenceFrequency!=='none'&&<label>Repeat every<input type="number" min="1" max="365" value={form.recurrenceInterval} onChange={event=>onChange({...form,recurrenceInterval:Number(event.target.value)||1})}/></label>}{form.recurrenceFrequency!=='none'&&<label>Repeat until, optional<input type="date" min={form.date} value={form.recurrenceEndDate} onChange={event=>onChange({...form,recurrenceEndDate:event.target.value})}/></label>}</div>
+        {form.recurrenceFrequency==='weekly'&&<fieldset><legend>Repeat on</legend><div>{weekdayNames.map((name,index)=><label key={name}><input type="checkbox" checked={form.recurrenceDays.includes(index)} onChange={()=>onChange({...form,recurrenceDays:form.recurrenceDays.includes(index)?form.recurrenceDays.filter(day=>day!==index):[...form.recurrenceDays,index].sort()})}/><span>{name}</span></label>)}</div></fieldset>}
+        <div className="family-calendar-editor-grid"><label>Notification 1<select value={form.alert1Minutes} onChange={event=>onChange({...form,alert1Minutes:Number(event.target.value)})}><option value={-1}>None</option><option value={0}>At event time</option><option value={5}>5 minutes before</option><option value={15}>15 minutes before</option><option value={30}>30 minutes before</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={10080}>1 week before</option></select></label><label>Notification 2<select value={form.alert2Minutes} onChange={event=>onChange({...form,alert2Minutes:Number(event.target.value)})}><option value={-1}>None</option><option value={0}>At event time</option><option value={5}>5 minutes before</option><option value={15}>15 minutes before</option><option value={30}>30 minutes before</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={10080}>1 week before</option></select></label></div>
+        <label>Location<input value={form.location} onChange={event=>onChange({...form,location:event.target.value})} placeholder="Address or place"/></label>
+        <label>URL<input type="url" value={form.url} onChange={event=>onChange({...form,url:event.target.value})} placeholder="https://"/></label>
         <label>Owner<select value={form.owner} onChange={event=>onChange({...form,owner:event.target.value})}>{ownerOptions.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
         <fieldset><legend>Participants, optional</legend><div>{HOUSEHOLD_MEMBERS.map(name=><label key={name}><input type="checkbox" checked={form.participants.includes(name)} onChange={()=>toggleParticipant(name)}/><span>{name}</span></label>)}</div></fieldset>
         <label>Notes, optional<textarea rows="3" value={form.notes} onChange={event=>onChange({...form,notes:event.target.value})}/></label>
@@ -311,7 +333,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
           <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
           {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
             <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
-            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':event.source==='icloud'?'Apple Family Calendar · Read-only':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
+            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
       })}
@@ -321,7 +343,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
         <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span></header>
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>
-          <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':event.source==='icloud'?'Apple Family Calendar · Read-only':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
+          <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
           {canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" className="family-calendar-agenda-edit" onClick={()=>openEdit(event)}><i className="ti ti-edit" aria-hidden="true"/> Edit</button>}
         </article>)}
       </section>)}

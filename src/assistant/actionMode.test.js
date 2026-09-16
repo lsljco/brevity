@@ -731,7 +731,7 @@ test('direct calendar review stores a versioned Action Mode proposal and enforce
   await assert.rejects(()=>prepareCalendarProposal({input,session:{member:'Lorenzo',role:'member'},permissions:defaultActionPermissions('member'),events,repository}),error=>error.code==='FORBIDDEN')
 })
 
-test('direct calendar review allows safe creation but rejects edits to native Apple records',async()=>{
+test('direct calendar review allows safe creation and versioned edits to native Apple records',async()=>{
   const repository={saveProposal:async proposal=>proposal}
   const createInput={summary:'Create appointment',operation:{type:'calendar.create',description:'Create appointment',targetId:'',targetDate:'2026-09-09',payload:{title:'Appointment',date:'2026-09-09',owner:'Larry'},allowedScopes:['this-item'],defaultScope:'this-item'}}
   const created=await prepareCalendarProposal({input:createInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:[],repository,now:new Date('2026-09-07T12:00:00Z'),id:'create-calendar'})
@@ -743,9 +743,12 @@ test('direct calendar review allows safe creation but rejects edits to native Ap
   const alreadyCurrent={id:'calendar-1',sourceId:'assistant-daily-2026-09-09-finance-review',title:'Family Finance Meeting',date:'2026-09-09',time:'09:00',allDay:false,pillar:'household',owner:'Family',participants:[],notes:'',priority:false}
   assert.equal(await prepareCalendarProposal({input:planInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:[alreadyCurrent],repository,now:new Date('2026-09-07T12:00:00Z'),id:'plan-calendar-retry'}),null)
 
-  const native=[{id:'native-1',sourceId:'native-1',etag:'native-v1',title:'Native',owner:'Family'}]
+  const native=[{id:'native-1',sourceId:'',etag:'native-v1',title:'Native',owner:'Family'}]
   const updateInput={summary:'Update native',expectedEventToken:'native-v1',operation:{...createInput.operation,type:'calendar.update',targetId:'native-1'}}
-  await assert.rejects(()=>prepareCalendarProposal({input:updateInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:native,repository}),error=>error.code==='FORBIDDEN')
+  const nativeProposal=await prepareCalendarProposal({input:updateInput,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:native,repository})
+  assert.equal(nativeProposal.operations[0].targetId,'native-1')
+  const managed=[{...native[0],id:'managed-1',sourceId:'project-kitchen'}]
+  await assert.rejects(()=>prepareCalendarProposal({input:{...updateInput,operation:{...updateInput.operation,targetId:'managed-1'}},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),events:managed,repository}),error=>error.code==='FORBIDDEN')
 })
 
 test('calendar Undo stops before writing when the Apple event has a newer version',async()=>{

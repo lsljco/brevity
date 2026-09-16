@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { actionCalendarUid, authorizeUntrustedSourceMutation, calendarMutationDomain, calendarMutationPermission, createICloudCalendarHandler, deleteCalendarEventWithIntent, makeIcs, parseEvent, putCalendarEventIdempotently, putCalendarUpdateWithFreshEtag, resolveAuthoritativeCalendarSource } from '../../netlify/functions/icloud-calendar.mjs'
+import { actionCalendarUid, authorizeUntrustedSourceMutation, calendarMutationDomain, calendarMutationPermission, createICloudCalendarHandler, deleteCalendarEventWithIntent, makeIcs, parseEvent, patchNativeCalendarIcs, putCalendarEventIdempotently, putCalendarUpdateWithFreshEtag, resolveAuthoritativeCalendarSource } from '../../netlify/functions/icloud-calendar.mjs'
 import { createICloudCalendarEvent, deleteICloudCalendarEvent, updateICloudCalendarEvent } from '../family/icloudCalendarApi.js'
 
 const member = { member:'Nyla', role:'member' }
@@ -121,6 +121,7 @@ test('calendar mutations use the permission domain of their authoritative source
 test('direct calendar mutations enforce member ownership and administrator-only deletion', () => {
   assert.equal(calendarMutationPermission({ session:member, permissions:enabled, method:'POST', item:{ sourceId:'', owner:'Nyla' } }).allowed, false)
   assert.equal(calendarMutationPermission({ session:member, permissions:enabled, method:'PUT', current:{ sourceId:'native-apple', owner:'Nyla' } }).allowed, false)
+  assert.equal(calendarMutationPermission({ session:member, permissions:enabled, method:'PUT', current:{ sourceId:'', owner:'Family' }, trustedAction:true }).allowed, true)
   assert.equal(calendarMutationPermission({ session:member, permissions:enabled, method:'POST', item:{ sourceId:'assistant-one', owner:'Larry' } }).allowed, false)
   assert.equal(calendarMutationPermission({ session:member, permissions:enabled, method:'PUT', current:{ sourceId:'assistant-one', owner:'Nyla', participants:['Nyla'] } }).allowed, false)
   assert.equal(calendarMutationPermission({ session:member, permissions:enabled, method:'PUT', current:{ sourceId:'assistant-one', owner:'Larry', participants:['Nyla'] }, trustedAction:true }).allowed, true)
@@ -173,6 +174,28 @@ test('timed Calendar records preserve their reviewed all-day semantics',()=>{
   const parsed=parseEvent(makeIcs({sourceId:'assistant-one',actionId:'execute-one',title:'Dinner',date:'2026-09-08',time:'7:00 PM',allDay:false,owner:'Larry'},'event-one'),'/event-one.ics','etag-one')
   assert.equal(parsed.allDay,false)
   assert.match(parsed.time,/7:00\s*PM/i)
+})
+
+test('Calendar ICS round-trips end time recurrence location URL and two notifications',()=>{
+  const item={sourceId:'assistant-one',actionId:'execute-one',title:'Weekday tutoring',date:'2026-09-16',time:'15:30',endDate:'2026-09-16',endTime:'16:15',allDay:false,owner:'Larry',location:'Barnwell Elementary',url:'https://example.com/lesson',recurrenceFrequency:'weekdays',recurrenceInterval:1,recurrenceDays:[1,2,3,4,5],recurrenceEndDate:'2026-10-22',alert1Minutes:15,alert2Minutes:60}
+  const ics=makeIcs(item,'event-series')
+  const parsed=parseEvent(ics,'/event-series.ics','etag-one')
+  assert.equal(parsed.endTime,'4:15 PM')
+  assert.equal(parsed.location,'Barnwell Elementary')
+  assert.equal(parsed.url,'https://example.com/lesson')
+  assert.equal(parsed.recurrenceFrequency,'weekdays')
+  assert.equal(parsed.recurrenceEndDate,'2026-10-22')
+  assert.deepEqual([parsed.alert1Minutes,parsed.alert2Minutes],[15,60])
+})
+
+test('native Apple edits preserve unsupported metadata while replacing reviewed fields',()=>{
+  const original=['BEGIN:VCALENDAR','VERSION:2.0','BEGIN:VEVENT','UID:native-one','DTSTART;TZID=America/New_York:20260916T090000','DTEND;TZID=America/New_York:20260916T093000','SUMMARY:Original','DESCRIPTION:Old notes','LOCATION:Old room','URL:https://old.example','ATTENDEE:mailto:guest@example.com','BEGIN:VALARM','TRIGGER:-PT5M','ACTION:DISPLAY','DESCRIPTION:Reminder','END:VALARM','END:VEVENT','END:VCALENDAR',''].join('\r\n')
+  const updated=patchNativeCalendarIcs(original,{title:'Updated',date:'2026-09-17',time:'10:00',endDate:'2026-09-17',endTime:'11:30',allDay:false,notes:'New notes',location:'New room',url:'https://new.example',owner:'Family',participants:[],recurrenceFrequency:'daily',recurrenceInterval:1,recurrenceDays:[],recurrenceEndDate:'2026-09-20',alert1Minutes:15,alert2Minutes:60,actionId:'execute-one'},{uid:'native-one'})
+  assert.match(updated,/ATTENDEE:mailto:guest@example.com/)
+  assert.match(updated,/SUMMARY:Updated/)
+  assert.match(updated,/DTEND;TZID=America\/New_York:20260917T113000/)
+  assert.match(updated,/RRULE:FREQ=DAILY;UNTIL=20260920T235959Z/)
+  assert.equal((updated.match(/BEGIN:VALARM/g)||[]).length,2)
 })
 
 test('Action Mode Calendar identity is stable per mutation and source',()=>{

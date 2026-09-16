@@ -226,7 +226,7 @@ test('Health and Fitness analysis cannot invent clinical authority or outcomes',
 })
 
 test('pillar analysis UI presents insight and growth without an ownership section', async () => {
-  const source = await readFile(new URL('./PillarAnalysis.jsx', import.meta.url), 'utf8')
+  const source = await readFile(new URL('./PillarAnalysisCore.jsx', import.meta.url), 'utf8')
   assert.match(source, /Meaningful Next Moves/)
   assert.match(source, /Questions Worth Considering/)
   assert.match(source, /How Progress Will Show/)
@@ -292,7 +292,7 @@ test('pillar analyses are retained server-side and force refresh bypasses that c
 })
 
 test('pillar analysis UI identifies evidence without presenting a vague fallback as safe analysis', async () => {
-  const source = await readFile(new URL('./PillarAnalysis.jsx', import.meta.url), 'utf8')
+  const source = await readFile(new URL('./PillarAnalysisCore.jsx', import.meta.url), 'utf8')
   assert.match(source, /Evidence & Provenance/)
   assert.match(source, /What This Is Based On/)
   assert.doesNotMatch(source, /Source-grounded safe analysis/)
