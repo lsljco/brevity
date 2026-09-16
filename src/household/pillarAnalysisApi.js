@@ -1,5 +1,5 @@
 import { canonicalizeCalendarReadEvent } from '../family/calendarNames.js'
-import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
+import { calendarSnapshotHealth, readCurrentCalendarSnapshot } from '../family/calendarSnapshot.js'
 import { buildCanonicalFinanceModel } from '../finance/financeDomain.js'
 import { migrateFinanceData } from '../finance/financeData.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
@@ -423,7 +423,7 @@ function buildHouseholdAnalysisSummary({ projects = [], calendar = {}, maintenan
 
 function calendarContext(storage) {
   const legacy = safeJson(storage.getItem('family_calendar_events_v1') || '[]', [])
-  const snapshot = safeJson(storage.getItem('brevity_icloud_calendar_cache_v1') || 'null', null)
+  const snapshot = readCurrentCalendarSnapshot(storage)
   const appleEvents = Array.isArray(snapshot) ? snapshot : snapshot?.events
   const snapshotForHealth = Array.isArray(snapshot) ? { events:snapshot } : snapshot
   const health = calendarSnapshotHealth(snapshotForHealth)

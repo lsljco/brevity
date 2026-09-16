@@ -1,3 +1,5 @@
+import { readCurrentCalendarSnapshot } from '../family/calendarSnapshot.js'
+
 export const INTELLIGENCE_STORAGE_KEY='brevity_household_intelligence_v1'
 export const DEFAULT_PILLARS=[
   {id:'spiritual',name:'Spiritual Maturity',icon:'ti-sun'},
@@ -161,6 +163,6 @@ export function projectPerformance(model,{today=dateKey(new Date())}={}){
 export function intelligenceSummary(model){const scored=model.householdPillars.filter(item=>item.attainment!=null).sort((a,b)=>b.attainment-a.attainment);return{headline:model.overall==null?'Household alignment needs configured targets or completed plans.':`Household alignment is ${model.overall}% for ${model.period.label.toLowerCase()}.`,strengths:scored.filter(item=>item.attainment>=80).slice(0,2),attention:[...scored].reverse().filter(item=>item.attainment<80).slice(0,2),incomplete:model.reviewQueue.length,notice:model.activities.length?'Scores use classified Brevity records; calendar time is allocation evidence and is not assumed complete.':'No qualifying activity was found for this period.'}}
 
 export function loadPerformanceSources(storage=window.localStorage){
-  const calendar=safeJson(storage,'family_calendar_events_v1',[]),icloud=safeJson(storage,'brevity_icloud_calendar_cache_v1',{}),projects=safeJson(storage,'homehq_items_v1',[]),schedule=safeJson(storage,'brevity_household_schedule_v1',{}),maintenance=safeJson(storage,'brevity_household_maintenance_v1',{})
+  const calendar=safeJson(storage,'family_calendar_events_v1',[]),icloud=readCurrentCalendarSnapshot(storage)||{},projects=safeJson(storage,'homehq_items_v1',[]),schedule=safeJson(storage,'brevity_household_schedule_v1',{}),maintenance=safeJson(storage,'brevity_household_maintenance_v1',{})
   return{calendarEvents:[...(Array.isArray(calendar)?calendar:[]),...((icloud&&Array.isArray(icloud.events))?icloud.events:[])],projects:Array.isArray(projects)?projects:[],schedule,maintenance,dailyPlans:[]}
 }
