@@ -313,6 +313,28 @@
   min-height: 16px;
   accent-color: #c5a46d;
 }
+.family-calendar-editor form > label.family-calendar-all-day {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.family-calendar-editor form > label.family-calendar-all-day input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: #c5a46d;
+}
+.family-calendar-series-note {
+  display: flex;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(197, 164, 109, 0.24);
+  border-radius: 10px;
+  background: rgba(197, 164, 109, 0.08);
+  color: rgba(247, 243, 234, 0.72);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.family-calendar-series-note i { color: #c5a46d; }
 .family-calendar-review > p {
   margin: 0;
   color: rgba(247, 243, 234, 0.58);

@@ -49,10 +49,6 @@ export function calendarMutationPermission({ session, permissions, method, item 
   if (!trustedAction) {
     return { allowed:false, domain, reason:"Direct Family Calendar changes must use Brevity's reviewed Action Mode workflow." };
   }
-  if (!String(reference.sourceId || "").startsWith("assistant-")) {
-    return { allowed:false, domain, reason:"Native Apple Calendar records and unreviewed calendar writes are read-only in Brevity." };
-  }
-
   const owners = [reference.owner, ...(reference.participants || [])].filter(Boolean);
   if (method === "DELETE") {
     const reviewedUndo=trustedAction&&/^undo-/.test(sourceField(item.actionId))&&owners.includes(session.member);
@@ -258,11 +254,31 @@ function parseDate(value) {
   return { year: +match[1], month: +match[2], day: +match[3], hour: +(match[4] || 0), minute: +(match[5] || 0), allDay: !match[4] };
 }
 
+const WEEKDAYS=["SU","MO","TU","WE","TH","FR","SA"];
+const parseRRule = ics => {
+  const raw=icsValue(ics,"RRULE");
+  if(!raw)return{recurrenceFrequency:"none",recurrenceInterval:1,recurrenceDays:[],recurrenceEndDate:""};
+  const values=Object.fromEntries(raw.split(";").map(part=>part.split("=",2)));
+  const frequency={DAILY:"daily",WEEKLY:"weekly",MONTHLY:"monthly",YEARLY:"yearly"}[values.FREQ]||"none";
+  const days=String(values.BYDAY||"").split(",").map(day=>WEEKDAYS.indexOf(day.replace(/^[-+]?\d+/,""))).filter(day=>day>=0);
+  const weekdays=frequency==="weekly"&&days.length===5&&[1,2,3,4,5].every(day=>days.includes(day));
+  const until=parseDate(values.UNTIL||"");
+  return{recurrenceFrequency:weekdays?"weekdays":frequency,recurrenceInterval:Math.max(1,Number(values.INTERVAL)||1),recurrenceDays:days,recurrenceEndDate:until?`${until.year}-${String(until.month).padStart(2,"0")}-${String(until.day).padStart(2,"0")}`:""};
+};
+const parseAlerts = ics => [...unfold(ics).matchAll(/BEGIN:VALARM[\s\S]*?END:VALARM/gi)].map(match=>{
+  const trigger=icsValue(match[0],"TRIGGER");
+  const parsed=trigger.match(/^-P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/i);
+  return parsed?Number(parsed[1]||0)*1440+Number(parsed[2]||0)*60+Number(parsed[3]||0):null;
+}).filter(Number.isFinite).slice(0,2);
+
 export function parseEvent(ics, href, etag, forceOccurrenceId = false) {
   const start = parseDate(icsValue(ics, "DTSTART"));
   if (!start) return null;
+  const end = parseDate(icsValue(ics, "DTEND"));
+  const inclusiveEnd=end&&start.allDay?new Date(Date.UTC(end.year,end.month-1,end.day-1)):null;
   const uid = icsValue(ics, "UID");
   const recurrenceId = icsValue(ics, "RECURRENCE-ID");
+  const recurrence=parseRRule(ics),alerts=parseAlerts(ics);
   return {
     id: recurrenceId || forceOccurrenceId ? `${uid}::${recurrenceId || icsValue(ics, "DTSTART")}` : uid,
     uid,
@@ -271,22 +287,31 @@ export function parseEvent(ics, href, etag, forceOccurrenceId = false) {
     title: unescapeIcs(icsValue(ics, "SUMMARY")) || "Untitled event",
     date: `${start.year}-${String(start.month).padStart(2, "0")}-${String(start.day).padStart(2, "0")}`,
     time: start.allDay ? "" : new Date(2000, 0, 1, start.hour, start.minute).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    endDate:inclusiveEnd?`${inclusiveEnd.getUTCFullYear()}-${String(inclusiveEnd.getUTCMonth()+1).padStart(2,"0")}-${String(inclusiveEnd.getUTCDate()).padStart(2,"0")}`:end?`${end.year}-${String(end.month).padStart(2,"0")}-${String(end.day).padStart(2,"0")}`:`${start.year}-${String(start.month).padStart(2,"0")}-${String(start.day).padStart(2,"0")}`,
+    endTime:end&&!end.allDay?new Date(2000,0,1,end.hour,end.minute).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"",
     allDay: start.allDay,
     pillar: unescapeIcs(icsValue(ics, "CATEGORIES")).toLowerCase() || "household",
     priority: icsValue(ics, "PRIORITY") === "1" || icsValue(ics, "X-BREVITY-PRIORITY") === "TRUE",
     owner: unescapeIcs(icsValue(ics, "X-BREVITY-OWNER")) || "Family",
     participants: unescapeIcs(icsValue(ics, "X-BREVITY-PARTICIPANTS")).split("|").filter(Boolean),
     notes: unescapeIcs(icsValue(ics, "DESCRIPTION")),
+    location:unescapeIcs(icsValue(ics,"LOCATION")),
+    url:unescapeIcs(icsValue(ics,"URL")),
+    ...recurrence,
+    alert1Minutes:alerts[0],
+    alert2Minutes:alerts[1],
+    recurring: Boolean(icsValue(ics, "RRULE") || recurrenceId),
     href,
     etag,
   };
 }
 
-function formatIcsDate(dateKey, time, allDay) {
+function formatIcsDate(dateKey, time, allDay, endDateKey = dateKey, endTime = "") {
   const [year, month, day] = dateKey.split("-").map(Number);
   const ymd = `${year}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`;
   if (allDay || !time) {
-    const next = new Date(year, month - 1, day + 1);
+    const [endYear,endMonth,endDay]=String(endDateKey||dateKey).split("-").map(Number);
+    const next = new Date(endYear, endMonth - 1, endDay + 1);
     const nextYmd = `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, "0")}${String(next.getDate()).padStart(2, "0")}`;
     return { start: `DTSTART;VALUE=DATE:${ymd}`, end: `DTEND;VALUE=DATE:${nextYmd}` };
   }
@@ -297,14 +322,34 @@ function formatIcsDate(dateKey, time, allDay) {
   if (meridiem === "PM" && hour < 12) hour += 12;
   if (meridiem === "AM" && hour === 12) hour = 0;
   const start = new Date(year, month - 1, day, hour, minute);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const [endYear,endMonth,endDay]=String(endDateKey||dateKey).split("-").map(Number);
+  const endParsed=String(endTime||"").match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  let endHour=endParsed?+endParsed[1]:hour+1;
+  const endMinute=endParsed?+endParsed[2]:minute;
+  const endMeridiem=endParsed?.[3]?.toUpperCase();
+  if(endMeridiem==="PM"&&endHour<12)endHour+=12;
+  if(endMeridiem==="AM"&&endHour===12)endHour=0;
+  const end = new Date(endYear, endMonth - 1, endDay, endHour, endMinute);
   const localStamp = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
   const timeZone = /^[A-Za-z0-9_+\-/]+$/.test(process.env.BREVITY_TIME_ZONE || "") ? process.env.BREVITY_TIME_ZONE : "America/New_York";
   return { start: `DTSTART;TZID=${timeZone}:${localStamp(start)}`, end: `DTEND;TZID=${timeZone}:${localStamp(end)}` };
 }
 
+const recurrenceLine=item=>{
+  const frequency=String(item.recurrenceFrequency||"none");
+  if(frequency==="none")return"";
+  const values=[`FREQ:${({daily:"DAILY",weekdays:"WEEKLY",weekly:"WEEKLY",monthly:"MONTHLY",yearly:"YEARLY"})[frequency]||"DAILY"}`.replace(":","=")];
+  const interval=Math.max(1,Number(item.recurrenceInterval)||1);if(interval!==1)values.push(`INTERVAL=${interval}`);
+  const days=frequency==="weekdays"?[1,2,3,4,5]:item.recurrenceDays||[];
+  if((frequency==="weekdays"||frequency==="weekly")&&days.length)values.push(`BYDAY=${days.map(day=>WEEKDAYS[day]).filter(Boolean).join(",")}`);
+  if(item.recurrenceEndDate)values.push(`UNTIL=${String(item.recurrenceEndDate).replaceAll("-","")}T235959Z`);
+  return`RRULE:${values.join(";")}`;
+};
+const alertBlock=minutes=>Number.isFinite(minutes)&&minutes>=0?["BEGIN:VALARM",`TRIGGER:-PT${minutes}M`,"ACTION:DISPLAY","DESCRIPTION:Reminder","END:VALARM"]:[];
+
 export function makeIcs(item, uid) {
-  const dates = formatIcsDate(item.date, item.time, item.allDay);
+  const dates = formatIcsDate(item.date, item.time, item.allDay,item.endDate,item.endTime);
+  const recurrence=recurrenceLine(item);
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   return [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Brevity//Household OS//EN", "CALSCALE:GREGORIAN",
@@ -315,9 +360,52 @@ export function makeIcs(item, uid) {
     `X-BREVITY-OWNER:${escapeIcs(item.owner || "Family")}`,
     `X-BREVITY-PARTICIPANTS:${escapeIcs((item.participants || []).join("|"))}`,
     `DESCRIPTION:${escapeIcs(item.notes || "")}`,
+    `LOCATION:${escapeIcs(item.location||"")}`,
+    ...(item.url?[`URL:${escapeIcs(item.url)}`]:[]),
+    ...(recurrence?[recurrence]:[]),
     `PRIORITY:${item.priority ? 1 : 0}`, `X-BREVITY-PRIORITY:${item.priority ? "TRUE" : "FALSE"}`,
+    ...alertBlock(item.alert1Minutes),...alertBlock(item.alert2Minutes),
     "END:VEVENT", "END:VCALENDAR", "",
   ].join("\r\n");
+}
+
+const propertyLine = (ics, key) => unfold(ics).split(/\r?\n/).find(line => new RegExp(`^${key}(?:;[^:]*)?:`, "i").test(line)) || "";
+const replaceEventProperty = (eventIcs, key, value, { remove = false } = {}) => {
+  const lines = unfold(eventIcs).split(/\r?\n/);
+  const matcher = new RegExp(`^${key}(?:;[^:]*)?:`, "i");
+  const index = lines.findIndex(line => matcher.test(line));
+  if (remove) {
+    if (index >= 0) lines.splice(index, 1);
+  } else if (index >= 0) lines[index] = value;
+  else lines.splice(Math.max(1, lines.findIndex(line => /^END:VEVENT$/i.test(line))), 0, value);
+  return lines.join("\r\n");
+};
+// Native Apple records may carry alarms, locations, attendees, URLs, and other
+// properties Brevity does not edit. Patch only the reviewed fields instead of
+// regenerating the VEVENT and silently deleting those Apple-owned details.
+export function patchNativeCalendarIcs(ics, item, current) {
+  const unfolded=unfold(ics);
+  const events=[...unfolded.matchAll(/BEGIN:VEVENT[\s\S]*?END:VEVENT/gi)];
+  if(events.length!==1)throw Object.assign(new Error("Compound Apple Calendar events must be edited in Apple Calendar."),{status:409});
+  let eventIcs=events[0][0];
+  if(icsValue(eventIcs,"UID")!==String(current?.uid||current?.id||""))throw Object.assign(new Error("The Apple Calendar event identity changed after review."),{status:409});
+  const oldEnd=propertyLine(eventIcs,"DTEND");
+  const dates=formatIcsDate(item.date,item.time,item.allDay,item.endDate,item.endTime);
+  eventIcs=replaceEventProperty(eventIcs,"DTSTART",dates.start);
+  if(oldEnd)eventIcs=replaceEventProperty(eventIcs,"DTEND",dates.end);
+  eventIcs=replaceEventProperty(eventIcs,"SUMMARY",`SUMMARY:${escapeIcs(item.title)}`);
+  eventIcs=replaceEventProperty(eventIcs,"DESCRIPTION",`DESCRIPTION:${escapeIcs(item.notes||"")}`);
+  eventIcs=replaceEventProperty(eventIcs,"LOCATION",`LOCATION:${escapeIcs(item.location||"")}`);
+  eventIcs=replaceEventProperty(eventIcs,"URL",item.url?`URL:${escapeIcs(item.url)}`:"",{remove:!item.url});
+  const recurrence=recurrenceLine(item);
+  eventIcs=replaceEventProperty(eventIcs,"RRULE",recurrence,{remove:!recurrence});
+  eventIcs=replaceEventProperty(eventIcs,"X-BREVITY-ACTION-ID",`X-BREVITY-ACTION-ID:${escapeIcs(item.actionId||"")}`);
+  eventIcs=replaceEventProperty(eventIcs,"X-BREVITY-OWNER",`X-BREVITY-OWNER:${escapeIcs(item.owner||"Family")}`);
+  eventIcs=replaceEventProperty(eventIcs,"X-BREVITY-PARTICIPANTS",`X-BREVITY-PARTICIPANTS:${escapeIcs((item.participants||[]).join("|"))}`);
+  eventIcs=eventIcs.replace(/\r?\nBEGIN:VALARM[\s\S]*?END:VALARM/gi,"");
+  const alerts=[...alertBlock(item.alert1Minutes),...alertBlock(item.alert2Minutes)];
+  if(alerts.length)eventIcs=eventIcs.replace(/\r?\nEND:VEVENT/i,`\r\n${alerts.join("\r\n")}\r\nEND:VEVENT`);
+  return `${unfolded.slice(0,events[0].index)}${eventIcs}${unfolded.slice(events[0].index+events[0][0].length)}`.replace(/\r?\n/g,"\r\n");
 }
 
 export function actionCalendarUid(item = {}) {
@@ -379,8 +467,16 @@ export async function putCalendarEventIdempotently({item,uid,href,trustedAction=
   }
 }
 
-export async function putCalendarUpdateWithFreshEtag({item,uid,href,reviewedEtag,request=caldav}) {
-  const result=await request(href,"PUT",makeIcs(item,uid),{"if-match":reviewedEtag})
+export async function putCalendarUpdateWithFreshEtag({item,current,uid,href,reviewedEtag,request=caldav}) {
+  let body=makeIcs(item,uid)
+  const reviewedCurrent=current||item
+  if(!String(reviewedCurrent?.sourceId||"").startsWith("assistant-")){
+    const existing=await request(href,"GET","",{},"calendar metadata preservation request")
+    const freshEtag=existing.response.headers.get("etag")||reviewedEtag
+    if(freshEtag!==reviewedEtag)throw Object.assign(new Error("The Family Calendar changed after review."),{status:409})
+    body=patchNativeCalendarIcs(existing.text,item,reviewedCurrent)
+  }
+  const result=await request(href,"PUT",body,{"if-match":reviewedEtag})
   const headerEtag=result.response.headers.get("etag")||""
   const verified=headerEtag?null:await readVerifiedCalendarPut({item,uid,href,request})
   return{ok:true,sourceId:item.sourceId||"",actionId:item.actionId||"",etag:headerEtag||verified.etag}
@@ -401,7 +497,7 @@ export async function deleteCalendarEventWithIntent({item,current,href,repositor
 
 async function listEvents(calendar) {
   const report = await fetchCalendarReport({ calendarUrl:calendar.url, request:caldav });
-  const events = blocks(report.text, "response").flatMap(block => {
+  let events = blocks(report.text, "response").flatMap(block => {
     const href = firstTag(block, "href");
     const etag = firstTag(block, "getetag");
     const raw = block.match(/<(?:\w+:)?calendar-data[^>]*>([\s\S]*?)<\/(?:\w+:)?calendar-data>/i)?.[1] || "";
@@ -410,6 +506,22 @@ async function listEvents(calendar) {
     const records = occurrences.length ? occurrences : [decoded];
     return records.map(record => parseEvent(record, href, etag, records.length > 1)).filter(Boolean);
   }).filter(Boolean);
+  const recurringHrefs=[...new Set(events.filter(event=>event.recurring&&event.href).map(event=>event.href))];
+  if(recurringHrefs.length){
+    const masters=new Map();
+    await Promise.all(recurringHrefs.map(async href=>{
+      try{
+        const url=resolveAppleDavHref(href,calendar.url),result=await caldav(url,"GET","",{},"recurring calendar details request");
+        const masterBlock=[...unfold(result.text).matchAll(/BEGIN:VEVENT[\s\S]*?END:VEVENT/gi)].map(match=>match[0]).find(block=>!icsValue(block,"RECURRENCE-ID"));
+        const master=masterBlock&&parseEvent(masterBlock,href,result.response.headers.get("etag")||"");
+        if(master)masters.set(href,master);
+      }catch(error){console.warn("Brevity could not load recurring event details",href,error.message)}
+    }));
+    events=events.map(event=>{
+      const master=masters.get(event.href);if(!master)return event;
+      return{...event,recurrenceFrequency:master.recurrenceFrequency,recurrenceInterval:master.recurrenceInterval,recurrenceDays:master.recurrenceDays,recurrenceEndDate:master.recurrenceEndDate,alert1Minutes:master.alert1Minutes,alert2Minutes:master.alert2Minutes,location:master.location,url:master.url,notes:master.notes,seriesDate:master.date,seriesTime:master.time,seriesEndDate:master.endDate,seriesEndTime:master.endTime,recurrenceEditable:true};
+    });
+  }
   return { events, recurrenceMode:report.recurrenceMode };
 }
 
@@ -500,7 +612,7 @@ export const createICloudCalendarHandler = ({
     if (!item.etag || !current.etag || item.etag !== current.etag) return json(409, { error:"The Family Calendar event changed after it was loaded. Refresh and try again." });
 
     if (event.httpMethod === "PUT") {
-      return json(200,await putCalendarUpdateWithFreshEtag({item,uid:current.uid||current.id,href,reviewedEtag:current.etag,request:calendarTransport}));
+      return json(200,await putCalendarUpdateWithFreshEtag({item,current,uid:current.uid||current.id,href,reviewedEtag:current.etag,request:calendarTransport}));
     }
 
     if (event.httpMethod === "DELETE") {

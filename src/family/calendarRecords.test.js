@@ -6,6 +6,7 @@ import {
   calendarPermissionForActionMode,
   calendarTimeInputValue,
   canonicalizeBrevityCalendarEvent,
+  isDirectlyEditableAppleEvent,
   isBrevityManagedAppleEvent,
 } from './calendarRecords.js'
 
@@ -26,12 +27,15 @@ test('known transcription errors are corrected only in Brevity calendar records'
   assert.equal(apple.owner,'Tara')
 })
 
-test('only Action Mode-created Apple records are directly editable', () => {
+test('native and Action Mode-created Apple records are directly editable while source-managed records are not', () => {
   assert.equal(isBrevityManagedAppleEvent({source:'icloud',sourceId:'assistant-calendar-op'}),true)
   assert.equal(isBrevityManagedAppleEvent({source:'icloud',sourceId:'assistant-calendar-op',id:'event::20260908'}),false)
   assert.equal(isBrevityManagedAppleEvent({source:'icloud',sourceId:'daily-2026-09-07-task'}),false)
   assert.equal(isBrevityManagedAppleEvent({source:'icloud',sourceId:''}),false)
   assert.equal(isBrevityManagedAppleEvent({source:'finance-meeting',sourceId:'assistant-calendar-op'}),false)
+  assert.equal(isDirectlyEditableAppleEvent({source:'icloud',sourceId:'',id:'native-one'}),true)
+  assert.equal(isDirectlyEditableAppleEvent({source:'icloud',sourceId:'project-kitchen',id:'project-one'}),false)
+  assert.equal(isDirectlyEditableAppleEvent({source:'icloud',sourceId:'',id:'series::20260908',recurring:true,recurrenceEditable:true}),true)
 })
 
 test('calendar edits require a real record version and never use href as a version token', () => {
@@ -41,6 +45,12 @@ test('calendar edits require a real record version and never use href as a versi
   assert.equal(canEditBrevityCalendarEvent({...base,href:'/calendar/event.ics'},access),false)
   assert.equal(calendarEventVersion({...base,etag:'"calendar-v2"'}),'"calendar-v2"')
   assert.equal(canEditBrevityCalendarEvent({...base,etag:'"calendar-v2"'},access),true)
+})
+
+test('native Apple events use the same versioned editor boundary',()=>{
+  const event={source:'icloud',sourceId:'',id:'native-one',etag:'native-v1',owner:'Family'}
+  assert.equal(canEditBrevityCalendarEvent(event,{allowed:true,role:'admin',member:'Larry'}),true)
+  assert.equal(canEditBrevityCalendarEvent({...event,sourceId:'daily-2026-09-08-task'},{allowed:true,role:'admin',member:'Larry'}),false)
 })
 
 test('Apple locale times hydrate HTML time inputs without changing all-day events', () => {

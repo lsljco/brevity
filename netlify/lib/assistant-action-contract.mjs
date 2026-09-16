@@ -96,8 +96,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'project.create': ['title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.update': ['title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.delete': [],
-  'calendar.create': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'allDay', 'priority'],
-  'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'allDay', 'priority'],
+  'calendar.create': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
+  'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.delete': [],
   'transaction.categorize': ['category'],
   'transaction.update': ['name', 'category'],
@@ -122,10 +122,10 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
   'meal.substitute': ['mealType', 'mealId'],
 }
-const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
-const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta'])
+const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
+const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
 const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
-const DATE_FIELDS = new Set(['date', 'endDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
+const DATE_FIELDS = new Set(['date', 'endDate', 'recurrenceEndDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
 const ACTION_ENUMS = {
   'decision.create': { status:['needs-decision', 'determined', 'complete', 'deferred'] },
   'decision.update': { status:['needs-decision', 'determined', 'complete', 'deferred'] },
@@ -270,9 +270,9 @@ function normalizeActionPayload(type, input) {
     }else if ((type === 'meeting.correction.update'||type==='meeting.correction.create') && field === 'value') {
       if (!['string', 'number'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))) throw new Error('The meeting correction value must be text or a valid number.')
       normalized[field] = typeof value === 'number' ? value : canonicalMeetingNameText(clean(value, 1000))
-    } else if (field === 'days') {
+    } else if (field === 'days' || field === 'recurrenceDays') {
       if (!Array.isArray(value) || value.length > 7 || value.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error('A household routine requires days numbered from 0 through 6.')
-      normalized.days = [...new Set(value)].sort((left, right) => left - right)
+      normalized[field] = [...new Set(value)].sort((left, right) => left - right)
     } else if (type === 'sermon.activate' && field === 'candidateJson') {
       assertString(type, field, value)
       if (value.length > 800_000) throw new Error('The reviewed sermon candidate exceeds Brevity’s activation capacity.')
@@ -484,6 +484,12 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'calendar.create' && !isDate(payload.date || operation.targetDate)) throw new Error('A new calendar event requires an exact date.')
   if (type.startsWith('calendar.') && payload.allDay === false && !payload.time) throw new Error('A timed calendar event requires an exact time.')
   if (type.startsWith('calendar.') && payload.time && payload.allDay !== false) throw new Error('A calendar time requires allDay to be explicitly set to false.')
+  if (type.startsWith('calendar.') && payload.endDate && payload.date && payload.endDate < payload.date) throw new Error('A calendar event cannot end before it starts.')
+  if (type.startsWith('calendar.') && payload.recurrenceEndDate && payload.date && payload.recurrenceEndDate < payload.date) throw new Error('A calendar recurrence cannot end before the first event.')
+  if (type.startsWith('calendar.') && payload.recurrenceInterval !== undefined && (!Number.isInteger(payload.recurrenceInterval) || payload.recurrenceInterval < 1 || payload.recurrenceInterval > 365)) throw new Error('A calendar recurrence interval must be from 1 through 365.')
+  if (type.startsWith('calendar.') && payload.recurrenceFrequency && !['none','daily','weekdays','weekly','monthly','yearly'].includes(payload.recurrenceFrequency)) throw new Error('The calendar recurrence frequency is not supported.')
+  if (type.startsWith('calendar.') && payload.recurrenceFrequency === 'weekly' && payload.recurrenceDays && !payload.recurrenceDays.length) throw new Error('A weekly calendar recurrence requires at least one weekday.')
+  if (type.startsWith('calendar.') && [payload.alert1Minutes,payload.alert2Minutes].some(value=>value!==undefined&&(value < -1 || value > 525600))) throw new Error('Calendar notifications must be disabled or between the event time and one year before it.')
   if (type === 'transaction.categorize' && !payload.category) throw new Error('A transaction category is required.')
   if (type === 'transaction.update' && !operation.targetId) throw new Error('A transaction update requires the exact bank transaction id.')
   if (type === 'transaction.update' && !Object.keys(payload).some(field=>['name','category'].includes(field))) throw new Error('A transaction update requires a reviewed name or category change.')
