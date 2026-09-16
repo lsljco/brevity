@@ -75,21 +75,41 @@ test('calendar cache quota failures preserve the verified cache and do not rejec
   const session={setItem:(key,value)=>sessionWrites.push([key,value])}
   const snapshot={events:[{id:'live'}]}
   const result=writeCalendarSnapshotCache(snapshot,storage,session)
-  assert.equal(result.stored,false)
-  assert.match(result.warning,/recovery cache/i)
-  assert.match(result.warning,/last verified cache was preserved/i)
+  assert.equal(result.stored,true)
+  assert.equal(result.storage,'session')
+  assert.equal(result.warning,'')
   assert.equal(writes.length,1)
   assert.equal(sessionWrites.length,1)
   assert.equal(getLiveCalendarSnapshot(),snapshot)
 })
 
-test('calendar cache capacity is reported as a recoverable calendar issue', () => {
+test('calendar cache capacity is reported only when local and session recovery both fail', () => {
+  setLiveCalendarSnapshot(null)
+  const quota=()=>{const error=new Error('The quota has been exceeded.');error.name='QuotaExceededError';throw error}
+  const result=writeCalendarSnapshotCache({events:[{id:'live'}]},{setItem:quota},{setItem:quota})
   const issues=buildRefreshIssues({
     financeResult:{status:'fulfilled',value:{errors:[]}},
     planResult:{status:'fulfilled',value:{}},
-    calendar:{events:[{id:'live'}],cacheWarning:'This device could not update its calendar recovery cache because browser storage is full.'},
+    calendar:{events:[{id:'live'}],cacheWarning:result.warning},
   })
   assert.equal(issues.length,1)
   assert.equal(issues[0].source,'Family Calendar')
   assert.match(issues[0].action,/No calendar records were deleted/i)
+})
+
+test('a preserved balance timeout with current transactions is advisory rather than an attention item', () => {
+  const finance={
+    errors:['Pinnacle Financial Partners - TN: The institution did not complete the live balance check in time. Its last available account snapshot was preserved; balances were not marked current.'],
+    transactionFreshness:{status:'fresh',lastFullSuccessAt:'2026-09-16T20:00:00.000Z'},
+    balanceDataStatus:'partial',
+  }
+  const bankRefresh=buildBankRefreshState(finance,{requested:true})
+  assert.equal(bankRefresh.status,'preserved')
+  const issues=buildRefreshIssues({
+    financeResult:{status:'fulfilled',value:finance},
+    planResult:{status:'fulfilled',value:{}},
+    calendar:{events:[]},
+    bankRefresh,
+  })
+  assert.deepEqual(issues,[])
 })

@@ -34,13 +34,18 @@ export const isStorageQuotaError = error => {
 
 export function writeCalendarSnapshotCache(snapshot, storage = globalThis.localStorage, session = globalThis.sessionStorage) {
   setLiveCalendarSnapshot(snapshot)
+  const serialized = JSON.stringify(snapshot)
   try {
-    storage.setItem(ICLOUD_CACHE_KEY, JSON.stringify(snapshot))
-    return { stored:true, warning:'' }
+    storage.setItem(ICLOUD_CACHE_KEY, serialized)
+    return { stored:true, storage:'local', warning:'' }
   } catch (error) {
-    try { session?.setItem?.(ICLOUD_CACHE_KEY, JSON.stringify(snapshot)) } catch { /* memory remains authoritative */ }
+    try {
+      session?.setItem?.(ICLOUD_CACHE_KEY, serialized)
+      return { stored:true, storage:'session', warning:'' }
+    } catch { /* memory remains authoritative */ }
     return {
       stored:false,
+      storage:'memory',
       warning:isStorageQuotaError(error)
         ? CALENDAR_CACHE_CAPACITY_MESSAGE
         : 'This device could not update its calendar recovery cache. Live calendar data remains available for this session, and the last verified cache was preserved.',
@@ -76,6 +81,11 @@ export function buildBankRefreshState(finance, { requested = false, financeReadO
   const errors = Array.isArray(finance.errors) ? finance.errors : []
   const balanceFresh = balanceStatus === 'fresh'
   const transactionsFresh = transactionStatus === 'fresh'
+  const preservedBalanceTimeout = errors.length > 0
+    && errors.every(message => /did not complete the live balance check in time.*snapshot was preserved/i.test(String(message)))
+  if (preservedBalanceTimeout && transactionsFresh) {
+    return { requested:true, status:'preserved', transactionStatus, balanceStatus, lastSuccessfulAt, balanceCheckedAt }
+  }
   if (!errors.length && balanceFresh && transactionsFresh) {
     return { requested:true, status:'fresh', transactionStatus, balanceStatus, lastSuccessfulAt, balanceCheckedAt }
   }
@@ -84,10 +94,11 @@ export function buildBankRefreshState(finance, { requested = false, financeReadO
 
 export function buildRefreshIssues({ financeResult, planResult, calendar, healthResult, bankRefresh }) {
   const issues = []
-  ;(financeResult.status === 'fulfilled' ? financeResult.value?.errors || [] : [financeResult.reason?.message || 'Finance data could not be refreshed.'])
+  const financeErrors = financeResult.status === 'fulfilled' ? financeResult.value?.errors || [] : [financeResult.reason?.message || 'Finance data could not be refreshed.']
+  ;(bankRefresh?.status === 'preserved' ? [] : financeErrors)
     .forEach(message => issues.push({ id:`finance-${issues.length}`, source:'Finance & Plaid', message:String(message), action:'Open Finance > Accounts only if this persists after Brevity retries automatically.' }))
 
-  if (bankRefresh?.requested && !['fresh','processing'].includes(bankRefresh.status) && !issues.some(issue => issue.source === 'Finance & Plaid')) {
+  if (bankRefresh?.requested && !['fresh','processing','preserved'].includes(bankRefresh.status) && !issues.some(issue => issue.source === 'Finance & Plaid')) {
     const lastSuccess = bankRefresh.lastSuccessfulAt && Number.isFinite(Date.parse(bankRefresh.lastSuccessfulAt))
       ? ` Last successful transaction sync: ${new Date(bankRefresh.lastSuccessfulAt).toLocaleString()}.`
       : ''

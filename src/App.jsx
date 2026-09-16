@@ -153,6 +153,8 @@ export default function App() {
         const bankPending=detail.finance?.transactionRefresh?.stillProcessing
         const message=issues.length
           ? `Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`
+          : detail.bankRefresh?.status==='preserved'
+            ? 'Calendar, Today, and transactions refreshed. The last verified bank balance remains visible while Brevity retries the institution automatically.'
           : bankPending
             ? 'The bank accepted the update request. Brevity will show new transactions as soon as Plaid makes them available; refresh again shortly if they are still pending.'
             : `All Brevity data refreshed at ${new Date(detail.refreshedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`
