@@ -3,7 +3,7 @@
 
 /* Tablet portrait keeps a compact 60px rail. Expanding the menu overlays the
    content instead of shrinking every workspace to a phone-sized container. */
-@media (min-width: 641px) and (max-width: 900px) {
+@media (min-width: 641px) and (max-width: 1180px) {
   .app-sidebar.is-expanded {
     z-index: 1400;
     width: 240px;

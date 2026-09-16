@@ -171,7 +171,7 @@
 }
 
 /* Tablet: there is no bottom mobile nav, so the command lane sits on the edge. */
-@media(min-width:641px) and (max-width:900px){
+@media(min-width:641px) and (max-width:1180px){
   :root{
     --brevity-command-dock-height:64px;
     --brevity-command-dock-assistant-width:168px;
