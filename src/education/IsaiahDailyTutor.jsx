@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { calculateFluency, deriveMastery } from './masteryEngine.js'
-import { generateAiReadingExercise, gradeAiExercise, gradeReadingAudio } from './aiTutorApi.js'
+import { generateAiReadingExercise, gradeAiExercise, gradeDirections, gradeReadingAudio, readDirectionsAloud } from './aiTutorApi.js'
 import './IsaiahDailyTutor.css'
+import './IsaiahDirections.css'
 
 const FULTON_MATH_SOURCE='https://www.fultonschools.org/fs/resource-manager/view/65b41323-23cd-4ed4-bf43-ec9cea33de15'
 const FULTON_MATH_MAP='https://www.fultonschools.org/fs/resource-manager/view/a2d88005-ff7b-4064-995b-d178d62f7e91'
@@ -46,21 +47,57 @@ function AiPractice(){
   const[answers,setAnswers]=useState({})
   const[grade,setGrade]=useState(null)
   const[gradeState,setGradeState]=useState('idle')
+  const[directionSummary,setDirectionSummary]=useState('')
+  const[directionResult,setDirectionResult]=useState(null)
+  const[directionState,setDirectionState]=useState('idle')
+  const[directionError,setDirectionError]=useState('')
+  const[speechState,setSpeechState]=useState('idle')
+  const[speechUsed,setSpeechUsed]=useState(false)
   const[readingResult,setReadingResult]=useState(null)
   const[recordingState,setRecordingState]=useState('idle')
   const[recordingError,setRecordingError]=useState('')
   const[secondsLeft,setSecondsLeft]=useState(60)
-  const recorderRef=useRef(null),streamRef=useRef(null),chunksRef=useRef([]),startedAtRef=useRef(0),timerRef=useRef(null)
+  const recorderRef=useRef(null),streamRef=useRef(null),chunksRef=useRef([]),startedAtRef=useRef(0),timerRef=useRef(null),speechAudioRef=useRef(null)
   const stopTracks=()=>{streamRef.current?.getTracks?.().forEach(track=>track.stop());streamRef.current=null}
+  const directionsComplete=Boolean(directionResult&&Array.isArray(directionResult.missedPoints)&&directionResult.missedPoints.length===0)
 
-  useEffect(()=>()=>{if(timerRef.current)clearInterval(timerRef.current);if(recorderRef.current)recorderRef.current.onstop=null;try{if(recorderRef.current?.state==='recording')recorderRef.current.stop()}catch{}stopTracks()},[])
+  useEffect(()=>()=>{
+    if(timerRef.current)clearInterval(timerRef.current)
+    if(recorderRef.current)recorderRef.current.onstop=null
+    try{if(recorderRef.current?.state==='recording')recorderRef.current.stop()}catch{}
+    try{speechAudioRef.current?.pause?.()}catch{}
+    stopTracks()
+  },[])
 
   const createExercise=async continuation=>{
-    setExerciseState('loading');setExerciseError('');setGrade(null);setAnswers({});setReadingResult(null)
+    setExerciseState('loading');setExerciseError('');setGrade(null);setAnswers({});setReadingResult(null);setDirectionSummary('');setDirectionResult(null);setDirectionError('');setDirectionState('idle');setSpeechState('idle');setSpeechUsed(false)
+    try{speechAudioRef.current?.pause?.()}catch{}
     try{
       const data=await generateAiReadingExercise({instructionalDate:todayKey(),targetMinutes,standardCodes:AI_STANDARD_CODES,masteryTargets:AI_MASTERY_TARGETS,curriculum:AI_CURRICULUM,continuationContext:continuation?`${exercise?.title||''}: ${exercise?.intro||''}`:''})
       setExercise(data.exercise);setExerciseState('ready')
     }catch(error){setExerciseState('error');setExerciseError(error.message||'Could not create the reading exercise.')}
+  }
+
+  const checkDirections=async()=>{
+    if(!exercise?.id)return
+    setDirectionState('loading');setDirectionError('')
+    try{
+      const result=await gradeDirections({exerciseId:exercise.id,studentSummary:directionSummary,supportUsed:speechUsed})
+      setDirectionResult(result);setDirectionState('ready')
+    }catch(error){setDirectionState('error');setDirectionError(error.message||'Could not check the directions explanation.')}
+  }
+
+  const playDirections=async()=>{
+    if(!exercise?.id)return
+    setSpeechState('loading');setDirectionError('')
+    try{
+      const result=await readDirectionsAloud({exerciseId:exercise.id})
+      const audio=new Audio(`data:${result.mimeType};base64,${result.audioBase64}`)
+      speechAudioRef.current=audio;setSpeechUsed(true);setSpeechState('playing')
+      audio.onended=()=>setSpeechState('idle')
+      audio.onerror=()=>setSpeechState('error')
+      await audio.play()
+    }catch(error){setSpeechState('error');setDirectionError(error.message||'Brevity could not read the directions aloud.')}
   }
 
   const finishRecording=async recorder=>{
@@ -76,7 +113,7 @@ function AiPractice(){
   }
 
   const startReadingProbe=async()=>{
-    if(!exercise?.passage)return
+    if(!exercise?.passage||!directionsComplete)return
     setRecordingError('');setReadingResult(null);setSecondsLeft(60)
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){
       setRecordingError('Microphone recording is not available in this browser. Use Adult Guided Mode to enter fluency manually.')
@@ -99,7 +136,7 @@ function AiPractice(){
   }
   const stopReadingProbe=()=>{if(recorderRef.current?.state==='recording')recorderRef.current.stop()}
   const submitAnswers=async()=>{
-    if(!exercise?.id)return
+    if(!exercise?.id||!directionsComplete)return
     setGradeState('loading')
     try{setGrade(await gradeAiExercise({exerciseId:exercise.id,answers}));setGradeState('ready')}
     catch(error){setGrade({error:error.message||'Could not grade comprehension.'});setGradeState('error')}
@@ -107,20 +144,21 @@ function AiPractice(){
   const itemGrade=id=>grade?.items?.find(item=>item.id===id)
 
   return <div className="edu-panel edu-ai-studio">
-    <div className="edu-ai-heading"><div><p className="edu-kicker">ChatGPT-powered interactive practice</p><h2>Isaiah AI Reading Studio</h2><p>Brevity creates an original standards-aligned reading section, listens to a timed oral-reading sample, calculates fluency against the exact displayed text, and grades comprehension.</p></div><span className="edu-draft-evidence">Adult review controls mastery</span></div>
+    <div className="edu-ai-heading"><div><p className="edu-kicker">ChatGPT-powered interactive practice</p><h2>Isaiah AI Reading Studio</h2><p>Brevity creates an original standards-aligned reading section, checks whether Isaiah understood the written directions, listens to a timed oral-reading sample, calculates fluency against the exact displayed text, and grades comprehension.</p></div><span className="edu-draft-evidence">Adult review controls mastery</span></div>
     <div className="edu-ai-controls"><label>Overall reading assignment<select value={targetMinutes} onChange={event=>setTargetMinutes(Number(event.target.value))}>{assignmentDurations.map(minutes=><option key={minutes} value={minutes}>{minutes} minutes</option>)}</select></label><button type="button" className="edu-ai-primary" disabled={exerciseState==='loading'} onClick={()=>createExercise(false)}>{exerciseState==='loading'?'Creating…':'Create AI reading exercise'}</button>{exercise&&<button type="button" disabled={exerciseState==='loading'} onClick={()=>createExercise(true)}>Create next reading section</button>}</div>
-    <p className="edu-ai-note">A 45-minute assignment is delivered in manageable sections. Oral-reading fluency is measured with a controlled 60-second probe rather than one 45-minute audio upload.</p>
+    <p className="edu-ai-note">A 45-minute assignment is delivered in manageable sections. Isaiah reads directions independently first; spoken directions are available as support. Oral-reading fluency uses a controlled 60-second probe rather than one 45-minute audio upload.</p>
     {exerciseError&&<div className="edu-ai-error" role="alert">{exerciseError}</div>}
     {exercise&&<>
-      <section className="edu-reading-card"><div className="edu-reading-title"><div><span>{exercise.sectionMinutes} min section</span><h3>{exercise.title}</h3><p>{exercise.intro}</p></div><a href={FULTON_ELA_SOURCE} target="_blank" rel="noreferrer">Fulton Grade 3 ELA standards ↗</a></div>
+      <section className="edu-directions-card"><div className="edu-directions-head"><div><p className="edu-kicker">Step 1 · Read for meaning</p><h3>Read the directions yourself</h3><p>Do not start the exercise yet. Read every direction, then tell Brevity what you are supposed to do.</p></div><button type="button" className="edu-directions-audio" disabled={speechState==='loading'||speechState==='playing'} onClick={playDirections}><i className="ti ti-volume" aria-hidden="true"/> {speechState==='loading'?'Preparing audio…':speechState==='playing'?'Reading directions…':'Read directions to me'}</button></div><blockquote>{exercise.directions}</blockquote><label className="edu-directions-summary">In your own words, what do you need to do?<textarea rows="4" value={directionSummary} onChange={event=>setDirectionSummary(event.target.value)} placeholder="Explain all of the steps before you begin…"/></label><button type="button" className="edu-ai-primary" disabled={directionState==='loading'} onClick={checkDirections}>{directionState==='loading'?'Checking directions…':'Check my understanding'}</button>{directionError&&<div className="edu-ai-error" role="alert">{directionError}</div>}{directionResult&&<div className={`edu-directions-result ${directionsComplete?'complete':'review'}`}><div><strong>{directionResult.score}% directions understood</strong><span>{directionResult.supportUsed?'Audio support used':'Read independently'}</span></div><p>{directionResult.feedback}</p>{directionResult.capturedPoints?.length>0&&<details><summary>What you captured</summary><ul>{directionResult.capturedPoints.map(point=><li key={point}>{point}</li>)}</ul></details>}{directionResult.missedPoints?.length>0&&<div className="edu-directions-missed"><strong>Review these directions and try again:</strong><ul>{directionResult.missedPoints.map(point=><li key={point}>{point}</li>)}</ul></div>}</div>}{!directionsComplete&&directionResult&&<p className="edu-directions-lock"><i className="ti ti-lock" aria-hidden="true"/> The exercise stays locked until all material directions are understood. Read them again, revise your explanation, and re-check.</p>}</section>
+      {directionsComplete&&<><section className="edu-reading-card"><div className="edu-reading-title"><div><span>{exercise.sectionMinutes} min section</span><h3>{exercise.title}</h3><p>{exercise.intro}</p></div><a href={FULTON_ELA_SOURCE} target="_blank" rel="noreferrer">Fulton Grade 3 ELA standards ↗</a></div>
         <div className="edu-reading-passage" aria-label="Reading passage">{exercise.passage.split(/\n+/).filter(Boolean).map((paragraph,paragraphIndex)=><p key={paragraphIndex}>{paragraph}</p>)}</div>
         <div className="edu-vocabulary"><strong>Words to know</strong>{exercise.vocabulary.map(item=><span key={item.word}><b>{item.word}</b> — {item.meaning}</span>)}</div>
         <div className="edu-mic-panel"><div><strong>60-second oral reading probe</strong><p>Isaiah reads the passage aloud. Brevity transcribes the recording, then calculates WCPM and accuracy from the exact text above.</p></div>{recordingState==='recording'?<button type="button" className="edu-mic recording" onClick={stopReadingProbe}><i className="ti ti-player-stop" aria-hidden="true"/> Recording · {secondsLeft}s</button>:<button type="button" className="edu-mic" disabled={recordingState==='grading'} onClick={startReadingProbe}><i className="ti ti-microphone" aria-hidden="true"/> {recordingState==='grading'?'Grading reading…':'Start 60-second reading probe'}</button>}</div>
         {recordingError&&<div className="edu-ai-error" role="alert">{recordingError}</div>}
         {readingResult&&<div className="edu-reading-result"><div className="edu-ai-metrics"><div><span>WCPM</span><b>{readingResult.score.wcpm}</b></div><div><span>Accuracy</span><b>{readingResult.score.accuracy}%</b></div><div><span>Correct words</span><b>{readingResult.score.correctWords}/{readingResult.score.referenceWordsAssessed}</b></div><div><span>Word differences</span><b>{readingResult.score.errorCount}</b></div></div><details><summary>Review transcript and word differences</summary><p className="edu-transcript">{readingResult.transcript||'No transcript returned.'}</p><div className="edu-word-differences"><span>Substitutions: {readingResult.score.substitutions.length}</span><span>Omissions: {readingResult.score.omissions.length}</span><span>Insertions/repetitions: {readingResult.score.insertions.length}</span></div></details><p className="edu-review-note">{readingResult.note}</p></div>}
       </section>
-      <section className="edu-questions"><div><p className="edu-kicker">Comprehension & vocabulary</p><h3>Show what you understood</h3></div>{exercise.questions.map((question,questionIndex)=>{const result=itemGrade(question.id);return <article className="edu-question" key={question.id}><strong>{questionIndex+1}. {question.prompt}</strong><small>{question.skill}</small>{question.type==='multiple_choice'?<div className="edu-answer-options">{question.choices.map(choice=><label key={choice}><input type="radio" name={question.id} checked={answers[question.id]===choice} onChange={()=>setAnswers(current=>({...current,[question.id]:choice}))}/><span>{choice}</span></label>)}</div>:<textarea rows="3" value={answers[question.id]||''} onChange={event=>setAnswers(current=>({...current,[question.id]:event.target.value}))} placeholder="Type your answer here…"/>}{result&&<div className={`edu-ai-feedback ${result.correct===true?'correct':result.correct===false?'needs-work':''}`}><b>{result.score==null?'Adult review needed':`${result.score}/${result.possible}`}</b><span>{result.feedback}</span>{result.evidence&&<small>{result.evidence}</small>}</div>}</article>})}<button type="button" className="edu-ai-primary" disabled={gradeState==='loading'} onClick={submitAnswers}>{gradeState==='loading'?'Grading…':'Grade my answers'}</button>{grade?.percent!=null&&<div className="edu-comprehension-score"><strong>{grade.percent}%</strong><span>{grade.earned} of {grade.possible} points · draft instructional evidence</span></div>}{grade?.error&&<div className="edu-ai-error">{grade.error}</div>}</section>
-      <section className="edu-ai-provenance"><strong>Why this is aligned</strong><p>{AI_CURRICULUM}</p><div>{AI_STANDARD_CODES.map(code=><span key={code}>{code}</span>)}</div><small>Generated exercise and AI scoring are instructional evidence only. Isaiah cannot directly change mastery status; an approved adult reviews the session before evidence becomes authoritative.</small></section>
+      <section className="edu-questions"><div><p className="edu-kicker">Comprehension & vocabulary</p><h3>Show what you understood</h3></div>{exercise.questions.map((question,questionIndex)=>{const result=itemGrade(question.id);return <article className="edu-question" key={question.id}><strong>{questionIndex+1}. {question.prompt}</strong><small>{question.skill}</small>{question.type==='multiple_choice'?<div className="edu-answer-options">{question.choices.map(choice=><label key={choice}><input type="radio" name={question.id} checked={answers[question.id]===choice} onChange={()=>setAnswers(current=>({...current,[question.id]:choice}))}/><span>{choice}</span></label>)}</div>:<textarea rows="3" value={answers[question.id]||''} onChange={event=>setAnswers(current=>({...current,[question.id]:event.target.value}))} placeholder="Type your answer here…"/>}{result&&<div className={`edu-ai-feedback ${result.correct===true?'correct':result.correct===false?'needs-work':''}`}><b>{result.score==null?'Adult review needed':`${result.score}/${result.possible}`}</b><span>{result.feedback}</span>{result.evidence&&<small>{result.evidence}</small>}</div>}</article>})}<button type="button" className="edu-ai-primary" disabled={gradeState==='loading'} onClick={submitAnswers}>{gradeState==='loading'?'Grading…':'Grade my answers'}</button>{grade?.percent!=null&&<div className="edu-comprehension-score"><strong>{grade.percent}%</strong><span>{grade.earned} of {grade.possible} points · draft instructional evidence</span></div>}{grade?.error&&<div className="edu-ai-error">{grade.error}</div>}</section></>}
+      <section className="edu-ai-provenance"><strong>Why this is aligned</strong><p>{AI_CURRICULUM}</p><div>{AI_STANDARD_CODES.map(code=><span key={code}>{code}</span>)}</div><small>Directions comprehension, oral-reading evidence, and content scoring remain separate. Generated exercise and AI scoring are instructional evidence only. Isaiah cannot directly change mastery status; an approved adult reviews the session before evidence becomes authoritative.</small></section>
     </>}
   </div>
 }
