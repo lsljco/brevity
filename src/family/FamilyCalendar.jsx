@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
 import { calendarSnapshotHealth, readCurrentCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
-import { dedupeCalendarEvents } from './calendarOverlay.js'
+import { compareCalendarEventsChronologically, dedupeCalendarEvents } from './calendarOverlay.js'
 import {
   canEditBrevityCalendarEvent,
   calendarEventVersion,
@@ -257,7 +257,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       if(!key)return
       ;(map[key]??=[]).push(event)
     })
-    Object.values(map).forEach(items=>items.sort((a,b)=>(a.time||'').localeCompare(b.time||'')))
+    Object.values(map).forEach(items=>items.sort(compareCalendarEventsChronologically))
     return map
   },[filtered])
   const agendaDays=useMemo(()=>Object.entries(byDate).sort(([left],[right])=>left.localeCompare(right)),[byDate])
