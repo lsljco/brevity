@@ -34,11 +34,21 @@ export function createMealLibraryItem(meal) {
 }
 
 export function regenerateMealImage(mealId) {
-  return request(ENDPOINT, {
-    timeoutMs:90000,
-    method:'PUT',
+  const jobId=globalThis.crypto?.randomUUID?.()||`meal-image-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return request('/.netlify/functions/meal-image-generate-background', {
+    timeoutMs:15000,
+    method:'POST',
     headers:{'content-type':'application/json'},
-    body:JSON.stringify({ action:'regenerate-image', mealId }),
+    body:JSON.stringify({jobId,mealId}),
+  }).then(async()=>{
+    const deadline=Date.now()+180000
+    while(Date.now()<deadline){
+      await new Promise(resolve=>setTimeout(resolve,2000))
+      const job=await request(`/.netlify/functions/meal-image-job-status?jobId=${encodeURIComponent(jobId)}`,{timeoutMs:10000})
+      if(job.state==='ready')return{meal:job.meal}
+      if(job.state==='error')throw new Error(job.error||'Brevity could not generate the meal image.')
+    }
+    throw new Error('The image is still being generated. Keep this meal open and try again shortly.')
   })
 }
 

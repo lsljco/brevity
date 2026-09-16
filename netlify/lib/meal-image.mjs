@@ -1,7 +1,9 @@
 const clean = value => String(value || '').replace(/\s+/g, ' ').trim()
 
 export const MEAL_IMAGE_STORE = 'brevity-meal-images'
+export const MEAL_IMAGE_JOB_STORE = 'brevity-meal-image-jobs'
 export const mealImageKey = (householdId, assetId) => `${String(householdId || 'lslj-family').replace(/[^a-zA-Z0-9_-]/g, '-')}/meals/${String(assetId || '').replace(/[^a-zA-Z0-9_-]/g, '')}.png`
+export const mealImageJobKey = (householdId, jobId) => `${String(householdId || 'lslj-family').replace(/[^a-zA-Z0-9_-]/g, '-')}/jobs/${String(jobId || '').replace(/[^a-zA-Z0-9_-]/g, '')}.json`
 
 export function buildMealImagePrompt(meal = {}) {
   const ingredients = (Array.isArray(meal.ingredients) ? meal.ingredients : []).map(clean).filter(Boolean).slice(0, 20).join(', ')
