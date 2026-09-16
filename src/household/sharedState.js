@@ -17,6 +17,8 @@ const HEALTH_KEY = 'brevity_shared_state_health_v1'
 const REQUEST_TIMEOUT_MS = 20000
 const SHARED_STATE_KEY_SET = new Set(SHARED_STATE_KEYS)
 const PLAID_SOURCE_KEY_SET = new Set(['lslj_finance_v9', 'plaid_actuals_cache'])
+const RECOVERABLE_CACHE_KEYS = new Set(['brevity_icloud_calendar_cache_v1', 'brevity_health_alerts_v1'])
+const RECOVERABLE_CACHE_PREFIXES = ['brevity_pillar_analysis_v', 'brevity_assistant_history_v']
 let suppressWriteThrough = false
 let pendingWrites = 0
 const uploadChains = new WeakMap()
@@ -34,7 +36,35 @@ function readMeta(storage) {
   try { return JSON.parse(storage.getItem(META_KEY) || '{}') }
   catch { return {} }
 }
-function writeMeta(storage, meta) { storage.setItem(META_KEY, JSON.stringify(meta)) }
+export function isSharedStorageQuotaError(error) {
+  const name=String(error?.name||'')
+  const message=String(error?.message||error||'')
+  return /QuotaExceededError|NS_ERROR_DOM_QUOTA_REACHED/i.test(name)||/quota.{0,24}(exceed|full)/i.test(message)
+}
+const recoverableCacheKey=key=>RECOVERABLE_CACHE_KEYS.has(String(key))||RECOVERABLE_CACHE_PREFIXES.some(prefix=>String(key).startsWith(prefix))
+export function recoverSharedStorageCapacity(storage) {
+  const keys=[]
+  try {
+    for(let index=0;index<Number(storage?.length||0);index+=1){const key=storage.key(index);if(recoverableCacheKey(key))keys.push(key)}
+  } catch { return [] }
+  // Largest expendable entries are removed first so one recovery pass usually
+  // creates enough room while retaining as many recent analyses as possible.
+  keys.sort((left,right)=>String(storage.getItem(right)||'').length-String(storage.getItem(left)||'').length)
+  const removed=[]
+  for(const key of keys){try{storage.removeItem(key);removed.push(key)}catch{/* continue with any other recoverable cache */}}
+  return removed
+}
+export function setSharedStorageItem(storage, key, value) {
+  try { storage.setItem(key,value);return{recovered:false,removed:[]} }
+  catch(error){
+    if(!isSharedStorageQuotaError(error))throw error
+    const removed=recoverSharedStorageCapacity(storage)
+    if(!removed.length)throw error
+    storage.setItem(key,value)
+    return{recovered:true,removed}
+  }
+}
+function writeMeta(storage, meta) { return setSharedStorageItem(storage,META_KEY,JSON.stringify(meta)) }
 export function getSharedStateVersion(storage, key) {
   return Math.max(0, Number(readMeta(storage)?.[String(key)]?.version || 0))
 }
@@ -173,7 +203,7 @@ function applyServerRecord(storage, record) {
     try { storage.setItem(`${record.key}_local_backup_before_cloud`, localValue) } catch {}
   }
   suppressWriteThrough = true
-  try { storage.setItem(record.key, record.value) } finally { suppressWriteThrough = false }
+  try { setSharedStorageItem(storage,record.key,record.value) } finally { suppressWriteThrough = false }
   const meta = readMeta(storage)
   meta[record.key] = {
     hash:record.hash || hashValue(record.value),
@@ -420,6 +450,7 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
   const uploads = []
   const applied = []
   const blockedLocal = []
+  const recoveredCaches = new Set()
   suppressWriteThrough = true
   try {
     SHARED_STATE_KEYS.forEach(key => {
@@ -434,7 +465,8 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
         if (localValue != null && localValue !== remote.value) {
           try { storage.setItem(`${key}_local_backup_before_cloud`, localValue) } catch {}
         }
-        storage.setItem(key, remote.value)
+        const cacheRecovery=setSharedStorageItem(storage,key,remote.value)
+        cacheRecovery.removed.forEach(cacheKey=>recoveredCaches.add(cacheKey))
         meta[key] = { hash:remote.hash || hashValue(remote.value), updatedAt:remote.updatedAt, version:remoteVersion }
         if (localValue !== remote.value) applied.push(key)
         return
@@ -450,9 +482,10 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
       delete meta[key]
       blockedLocal.push(key)
     })
-    writeMeta(storage, meta)
+    const metaRecovery=writeMeta(storage, meta)
+    metaRecovery.removed.forEach(cacheKey=>recoveredCaches.add(cacheKey))
   } finally { suppressWriteThrough = false }
-  return { uploads, applied, blockedLocal, meta }
+  return { uploads, applied, blockedLocal, meta, recoveredCaches:[...recoveredCaches] }
 }
 
 export async function syncSharedState(storage = window.localStorage, onError) {

@@ -9,6 +9,8 @@ import {
   installSharedStateWriteThrough,
   persistSharedSourceImport,
   reconcileSharedRecords,
+  recoverSharedStorageCapacity,
+  setSharedStorageItem,
   shouldUploadSharedWrite,
   startSharedStateSync,
   syncSharedState,
@@ -21,9 +23,48 @@ function memoryStorage(values = {}) {
     getItem:key => data.has(String(key)) ? data.get(String(key)) : null,
     setItem:(key, value) => data.set(String(key), String(value)),
     removeItem:key => data.delete(String(key)),
+    get length() { return data.size },
+    key:index => [...data.keys()][index] ?? null,
     dump:() => Object.fromEntries(data),
   }
 }
+
+test('quota recovery removes only reproducible caches before retrying authoritative household state',()=>{
+  const protectedFinance='x'.repeat(40)
+  const storage=memoryStorage({
+    lslj_finance_v9:protectedFinance,
+    homehq_items_v1_local_backup_before_cloud:'protected recovery',
+    brevity_icloud_calendar_cache_v1:'c'.repeat(80),
+    'brevity_pillar_analysis_v8_2026-09-16_finance_larry':'p'.repeat(60),
+    brevity_assistant_history_v1_larry:'a'.repeat(50),
+  })
+  const originalSet=storage.setItem
+  storage.setItem=(key,value)=>{
+    const current=Object.values(storage.dump()).reduce((sum,item)=>sum+String(item).length,0)
+    const prior=String(storage.getItem(key)||'').length
+    if(current-prior+String(value).length>180){const error=new Error('The quota has been exceeded.');error.name='QuotaExceededError';throw error}
+    originalSet(key,value)
+  }
+  const result=setSharedStorageItem(storage,'brevity_household_schedule_v1','s'.repeat(70))
+  assert.equal(result.recovered,true)
+  assert.ok(result.removed.includes('brevity_icloud_calendar_cache_v1'))
+  assert.equal(storage.getItem('brevity_household_schedule_v1'),'s'.repeat(70))
+  assert.equal(storage.getItem('lslj_finance_v9'),protectedFinance)
+  assert.equal(storage.getItem('homehq_items_v1_local_backup_before_cloud'),'protected recovery')
+})
+
+test('capacity recovery never removes authoritative records metadata or recovery backups',()=>{
+  const storage=memoryStorage({
+    brevity_health_alerts_v1:'cache',
+    brevity_shared_state_meta_v1:'metadata',
+    plaid_actuals_cache:'transactions',
+    plaid_actuals_cache_backup:'backup',
+  })
+  assert.deepEqual(recoverSharedStorageCapacity(storage),['brevity_health_alerts_v1'])
+  assert.equal(storage.getItem('brevity_shared_state_meta_v1'),'metadata')
+  assert.equal(storage.getItem('plaid_actuals_cache'),'transactions')
+  assert.equal(storage.getItem('plaid_actuals_cache_backup'),'backup')
+})
 
 function installBrowserGlobals(dispatchEvent = () => {}) {
   const originals = { window:globalThis.window, CustomEvent:globalThis.CustomEvent }
