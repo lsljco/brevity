@@ -1,0 +1,3 @@
+import {refreshHealthAlerts} from '../lib/health-alert-monitor.mjs'
+export default async function handler(request){if(!process.env.BREVITY_AUTOMATION_KEY||request.headers.get('x-brevity-automation-key')!==process.env.BREVITY_AUTOMATION_KEY)return new Response(JSON.stringify({error:'Unauthorized.'}),{status:401,headers:{'content-type':'application/json'}});const record=await refreshHealthAlerts();console.log(`[health-alerts-background] ${record.status} with ${record.alerts.length} alert(s) for Fulton County, GA`);return new Response(JSON.stringify({updated:true,status:record.status}),{headers:{'content-type':'application/json'}})}
+export const config={background:true,path:'/.netlify/functions/health-alerts-background'}

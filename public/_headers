@@ -1,0 +1,17 @@
+# Never cache HTML — ensures browser always loads the latest JS bundle references
+/*
+  Permissions-Policy: microphone=(self)
+
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Static assets with content hashes can be cached aggressively
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

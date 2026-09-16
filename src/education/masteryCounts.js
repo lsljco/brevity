@@ -1,0 +1,1 @@
+export function masteryCounts(record){const counts={RED:0,YELLOW:0,GREEN:0,BLUE:0};for(const item of Object.values(record?.skillMastery||{}))if(item&&counts[item.status]!==undefined)counts[item.status]+=1;return counts}

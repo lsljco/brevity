@@ -1,0 +1,23 @@
+.today-devotion-hero{position:relative;min-height:330px;overflow:hidden;border:1px solid rgba(197,164,109,.28);border-radius:22px;background:radial-gradient(circle at 78% 18%,rgba(197,164,109,.18),transparent 32%),linear-gradient(135deg,#17130d,#070707 58%);box-shadow:0 24px 60px rgba(0,0,0,.34)}
+.today-devotion-hero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.today-devotion-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,4,4,.93) 0%,rgba(4,4,4,.72) 42%,rgba(4,4,4,.22) 78%,rgba(4,4,4,.38) 100%),linear-gradient(0deg,rgba(4,4,4,.58),transparent 50%)}
+.today-devotion-copy{position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:330px;width:min(680px,72%);padding:34px 38px}
+.today-devotion-copy>span,.today-pillar-brief-copy>span,.today-pillar-stack-heading>span{color:var(--gold);font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+.today-devotion-copy h2{margin:10px 0 8px;color:#fff;font:500 39px/1.08 var(--font-serif);text-shadow:0 3px 20px rgba(0,0,0,.62)}
+.today-devotion-copy>strong{color:var(--gold-light);font:600 13px/1.3 var(--font);letter-spacing:.08em;text-transform:uppercase}
+.today-devotion-copy p{max-width:610px;margin:14px 0 20px;color:rgba(255,255,255,.82);font-size:14px;line-height:1.65}
+.today-devotion-copy button,.today-pillar-brief>button{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:9px 14px;border:1px solid rgba(197,164,109,.38);border-radius:10px;background:rgba(197,164,109,.12);color:var(--gold-light);font:700 11px var(--font);cursor:pointer}
+.today-devotion-visual-status{position:absolute;z-index:1;right:24px;bottom:20px;max-width:310px;color:var(--muted);font-size:9px;line-height:1.5;text-align:right}
+.today-pillar-brief{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px;min-height:132px}
+.today-pillar-brief-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:15px;background:rgba(197,164,109,.12);color:var(--gold);font-size:24px}
+.today-pillar-brief-copy{min-width:0}
+.today-pillar-brief-copy h2{margin:7px 0 6px;font:500 25px/1.2 var(--font-serif)}
+.today-pillar-brief-copy p{margin:0;color:var(--soft-white);font-size:12px;line-height:1.55}
+.today-pillar-brief-copy>div{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.today-pillar-brief-copy em{padding:5px 8px;border:1px solid rgba(255,255,255,.07);border-radius:999px;background:rgba(255,255,255,.035);color:var(--muted);font-size:9px;font-style:normal;line-height:1.2}
+.today-pillar-stack{display:grid;gap:14px;padding:20px 0 0;border-top:1px solid rgba(197,164,109,.18)}
+.today-pillar-stack-heading{padding:0 4px}
+.today-pillar-stack-heading h2{margin:6px 0 2px;font:500 29px/1.15 var(--font-serif)}
+.today-pillar-stack>.today-section,.today-pillar-stack>.today-attention,.today-pillar-stack>.today-focus-card{margin:0}
+@media(max-width:900px){.today-devotion-copy{width:80%;padding:30px}.today-devotion-copy h2{font-size:34px}.today-pillar-brief{grid-template-columns:auto minmax(0,1fr)}.today-pillar-brief>button{grid-column:2;justify-self:start}}
+@media(max-width:640px){.today-devotion-hero,.today-devotion-copy{min-height:390px}.today-devotion-copy{width:100%;justify-content:flex-end;padding:24px}.today-devotion-shade{background:linear-gradient(0deg,rgba(3,3,3,.96) 4%,rgba(3,3,3,.68) 58%,rgba(3,3,3,.2) 100%)}.today-devotion-copy h2{font-size:31px}.today-devotion-copy p{font-size:13px}.today-devotion-visual-status{display:none}.today-pillar-brief{grid-template-columns:1fr;padding:18px}.today-pillar-brief-icon{width:44px;height:44px}.today-pillar-brief>button{grid-column:1;width:100%;justify-content:center}.today-pillar-stack-heading h2{font-size:26px}}

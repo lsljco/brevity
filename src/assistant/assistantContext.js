@@ -1,0 +1,68 @@
+import { getHouseholdDateKey } from '../finance/financeTime.js'
+import { isRealizedIncomeTransaction, isTransferTransaction } from '../finance/reportingData.js'
+import { PILLAR_ANALYSIS_SCHEMA_VERSION } from '../household/pillarAnalysisCache.js'
+import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
+import { calculatePerformance,INTELLIGENCE_STORAGE_KEY,loadPerformanceSources,normalizeIntelligenceConfig,normalizePerformanceActivities,projectPerformance,resolveIntelligencePeriod } from '../household/performanceIntelligence.js'
+
+const STORAGE_KEYS={financePlan:'lslj_finance_v9',actuals:'plaid_actuals_cache',budgets:'lslj_budget_v1',actualOverrides:'lslj_actuals_v1',transactionOverrides:'lslj_tx_overrides_v1',transactionRules:'lslj_tx_rules_v1',categories:'brevity_finance_categories_v1',scenarios:'brevity_finance_scenarios_v1',goals:'fp_goals',projects:'homehq_items_v1',familyEvents:'family_calendar_events_v1',iCloudCalendar:'brevity_icloud_calendar_cache_v1',dailyAlignment:'brevity_daily_financial_alignment_v1',healthAlerts:'brevity_health_alerts_v1'}
+const SENSITIVE_KEY=/token|secret|password|credential|api.?key|access.?key|client.?id|private.?key/i
+const LARGE_VALUE=/^(?:data:|[A-Za-z0-9+/]{300,}={0,2}$)/
+
+export function safeJson(raw,fallback=null){if(raw==null||raw==='')return fallback;try{return JSON.parse(raw)}catch{return fallback}}
+export function sanitizeForAssistant(value,depth=0){
+  if(depth>8)return'[omitted]'
+  if(Array.isArray(value))return value.map(item=>sanitizeForAssistant(item,depth+1))
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!SENSITIVE_KEY.test(key)).map(([key,item])=>[key,sanitizeForAssistant(item,depth+1)]))
+  if(typeof value==='string'){if(LARGE_VALUE.test(value))return'[large value omitted]';return value.length>4000?`${value.slice(0,4000)}…`:value}
+  return value
+}
+function read(storage,key,fallback){return sanitizeForAssistant(safeJson(storage?.getItem?.(key),fallback))}
+function transactionText(transaction){return[transaction?.name,transaction?.merchant_name,transaction?.originalStatement,transaction?.original_description,transaction?.category,transaction?.cat,transaction?.accountName,transaction?.institution,transaction?.date].filter(Boolean).join(' ').toLowerCase()}
+function meaningfulTerms(query=''){const ignored=new Set(['what','when','where','which','with','from','that','this','have','does','about','show','tell','please','could','would']);return[...new Set(String(query).toLowerCase().match(/[a-z0-9]{3,}/g)||[])].filter(term=>!ignored.has(term)).slice(0,12)}
+export function summarizeTransactions(transactions=[]){
+  const summary={count:0,firstDate:null,lastDate:null,income:0,otherInflows:0,pendingInflows:0,inflows:0,expenses:0,pendingExpenses:0,transfers:0,byCategory:{},byMerchant:{},byMonth:{},byAccount:{}}
+  transactions.forEach(transaction=>{
+    const amount=Number(transaction?.amount)||0
+    const absoluteAmount=Math.abs(amount)
+    const date=String(transaction?.date||'')
+    const category=String(transaction?.category||transaction?.cat||'Uncategorized')
+    const merchant=String(transaction?.merchant_name||transaction?.name||'Unknown')
+    const account=String(transaction?.accountName||transaction?.account_name||transaction?.institution||transaction?.account_id||'Unknown')
+    const transfer=isTransferTransaction(transaction)
+    const pendingExpense=!transfer&&amount>=0&&Boolean(transaction?.pending)
+    summary.count+=1
+    if(date){
+      summary.firstDate=!summary.firstDate||date<summary.firstDate?date:summary.firstDate
+      summary.lastDate=!summary.lastDate||date>summary.lastDate?date:summary.lastDate
+    }
+    if(transfer)summary.transfers+=absoluteAmount
+    else if(amount<0){
+      if(transaction?.pending)summary.pendingInflows+=absoluteAmount
+      else{
+        summary.inflows+=absoluteAmount
+        if(isRealizedIncomeTransaction(transaction))summary.income+=absoluteAmount
+        else summary.otherInflows+=absoluteAmount
+      }
+    }else if(pendingExpense)summary.pendingExpenses+=amount
+    else summary.expenses+=amount
+    if(!transaction?.pending&&!transfer){
+      summary.byCategory[category]=(summary.byCategory[category]||0)+absoluteAmount
+      summary.byMerchant[merchant]=(summary.byMerchant[merchant]||0)+absoluteAmount
+      summary.byAccount[account]=(summary.byAccount[account]||0)+absoluteAmount
+      if(date)summary.byMonth[date.slice(0,7)]=(summary.byMonth[date.slice(0,7)]||0)+(amount<0?absoluteAmount:-amount)
+    }
+  })
+  const ranked=(object,limit)=>Object.entries(object).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,limit).map(([name,amount])=>({name,amount}))
+  return{...summary,net:summary.inflows-summary.expenses,byCategory:ranked(summary.byCategory,30),byMerchant:ranked(summary.byMerchant,30),byMonth:ranked(summary.byMonth,24),byAccount:ranked(summary.byAccount,20)}
+}
+function compactTransaction(transaction){return sanitizeForAssistant({id:transaction?.id||transaction?.transaction_id,date:transaction?.date,amount:Number(transaction?.amount)||0,name:transaction?.name,merchant:transaction?.merchant_name,statement:transaction?.originalStatement||transaction?.original_description,category:transaction?.category||transaction?.cat,account:transaction?.accountName||transaction?.account_name||transaction?.institution||transaction?.account_id,pending:Boolean(transaction?.pending),notes:transaction?.notes,tags:transaction?.tags})}
+export function selectRelevantTransactions(transactions=[],query='',max=250){const sorted=[...transactions].sort((a,b)=>String(b?.date||'').localeCompare(String(a?.date||'')));const terms=meaningfulTerms(query);const matches=terms.length?sorted.filter(transaction=>terms.some(term=>transactionText(transaction).includes(term))):[];const selected=[];const seen=new Set();[...matches.slice(0,180),...sorted.slice(0,120)].forEach((transaction,index)=>{const key=transaction?.id||transaction?.transaction_id||`${transaction?.date}-${transaction?.name}-${transaction?.amount}-${index}`;if(selected.length<max&&!seen.has(key)){seen.add(key);selected.push(compactTransaction(transaction))}});return selected}
+const memberSegment=member=>String(member||'unknown').trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'-')||'unknown'
+function currentPillarAnalyses(storage,date,member){const prefix=`brevity_pillar_analysis_v${PILLAR_ANALYSIS_SCHEMA_VERSION}_${date}_`,suffix=`_${memberSegment(member)}`,result={};for(let index=0;index<(storage?.length||0);index+=1){const key=storage.key(index);if(!key?.startsWith(prefix)||!key.endsWith(suffix))continue;const value=read(storage,key,null);if(value?.schemaVersion!==PILLAR_ANALYSIS_SCHEMA_VERSION||memberSegment(value.member)!==memberSegment(member))continue;result[key.slice(prefix.length,-suffix.length)]=value}return result}
+function boundedArray(value,limit){if(Array.isArray(value))return value.slice(0,limit);if(Array.isArray(value?.events))return{...value,events:value.events.slice(0,limit)};return value}
+function performanceContext(storage,member,now){try{const config=normalizeIntelligenceConfig(safeJson(storage?.getItem?.(INTELLIGENCE_STORAGE_KEY),{}),HOUSEHOLD_MEMBERS),activities=normalizePerformanceActivities({...loadPerformanceSources(storage),members:HOUSEHOLD_MEMBERS,config}),model=projectPerformance(calculatePerformance({activities,config,members:HOUSEHOLD_MEMBERS,period:resolveIntelligencePeriod('week',{now}),viewer:member,isAdmin:false}));return sanitizeForAssistant({period:model.period,overall:model.overall,planAdherence:model.planAdherence,totalClassifiedMinutes:model.totalMinutes,pillars:model.householdPillars.map(item=>({id:item.id,name:item.name,attainment:item.attainment,timeAllocation:item.timeAllocation,projected:item.projected,status:item.status})),members:model.memberScores.map(item=>({member:item.member,overall:item.overall,planAdherence:item.planAdherence,pillars:item.pillars.map(pillar=>({id:pillar.id,name:pillar.name,attainment:pillar.attainment,adherence:pillar.adherence,minutes:pillar.minutes,targetConfigured:pillar.targetConfigured,targets:pillar.targets,activities:pillar.activities.slice(0,30).map(activity=>({id:activity.id,title:activity.title,date:activity.date,kind:activity.kind,completed:activity.completed,allocation:activity.allocation}))}))})),classificationReviewCount:model.reviewQueue.length,dataNotice:'Calendar time is not treated as completion. No Data is distinct from zero attainment.'})}catch{return null}}
+
+export function buildAssistantContext({storage,member,activeView,activePillar,pageLabel,query,now=new Date()}){
+  const date=getHouseholdDateKey(now);const actuals=read(storage,STORAGE_KEYS.actuals,[]);const transactions=Array.isArray(actuals)?actuals:(actuals?.transactions||[])
+  return{generatedAt:now.toISOString(),signedInMember:member,currentPage:{view:activeView,pillar:activePillar||null,label:pageLabel||activeView},householdPerformanceIntelligence:performanceContext(storage,member,now),todayPillarAnalyses:currentPillarAnalyses(storage,date,member),publicHealthAlerts:read(storage,STORAGE_KEYS.healthAlerts,null),finance:{plan:read(storage,STORAGE_KEYS.financePlan,{}),transactionSummary:summarizeTransactions(transactions),relevantTransactions:selectRelevantTransactions(transactions,query),budgets:read(storage,STORAGE_KEYS.budgets,{}),actualOverrides:read(storage,STORAGE_KEYS.actualOverrides,{}),transactionOverrides:read(storage,STORAGE_KEYS.transactionOverrides,{}),transactionRules:read(storage,STORAGE_KEYS.transactionRules,[]),categories:read(storage,STORAGE_KEYS.categories,[]),scenarios:read(storage,STORAGE_KEYS.scenarios,[]),goals:read(storage,STORAGE_KEYS.goals,[]),dailyAlignment:read(storage,STORAGE_KEYS.dailyAlignment,{})},projects:boundedArray(read(storage,STORAGE_KEYS.projects,[]),250),calendars:{brevityEvents:boundedArray(read(storage,STORAGE_KEYS.familyEvents,[]),300),appleFamilyCalendar:boundedArray(read(storage,STORAGE_KEYS.iCloudCalendar,null),300)}}
+}

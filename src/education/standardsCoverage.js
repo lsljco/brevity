@@ -1,0 +1,1 @@
+export function standardsCoverage(record){return Object.entries(record?.standardProgress||{}).map(([code,state])=>({code,status:state.status,evidenceCount:state.evidence?.length||0,lastAssessedAt:state.lastAssessedAt||''})).sort((a,b)=>a.code.localeCompare(b.code))}

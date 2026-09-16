@@ -1,0 +1,49 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { applyTransactionRules, transactionMatchesRule } from './transactionRules.js'
+
+const rule = {
+  createdDate: '2026-08-01',
+  applyToExisting: true,
+  conditions: {
+    merchantName: { on: true, match: 'contains', value: 'market' },
+    amount: { on: true, min: '10', max: '100' },
+    accounts: { on: true, value: 'operating' },
+  },
+  actions: {
+    renameMerchant: { on: true, value: 'Neighborhood Market' },
+    updateCategory: { on: true, value: 'Groceries' },
+    addTags: { on: true, value: 'food, household' },
+  },
+}
+
+test('saved transaction rules match Plaid accounts and apply their actions', () => {
+  const tx = { id: 'tx1', accountId: 'plaid-1', date: '2026-08-20', name: 'THE MARKET #2', amount: 54 }
+  const accounts = [{ id: 'operating', plaidAccountId: 'plaid-1' }]
+  assert.equal(transactionMatchesRule(tx, rule, accounts), true)
+  assert.deepEqual(applyTransactionRules(tx, [rule], accounts), {
+    ...tx,
+    name: 'Neighborhood Market',
+    category: 'Groceries',
+    tags: ['food', 'household'],
+  })
+})
+
+test('future-only rules leave older transactions unchanged', () => {
+  const futureOnly = { ...rule, applyToExisting: false, createdDate: '2026-08-21' }
+  const tx = { id: 'old', accountId: 'plaid-1', date: '2026-08-20', name: 'Market', amount: 20 }
+  assert.equal(applyTransactionRules(tx, [futureOnly], [{ id: 'operating', plaidAccountId: 'plaid-1' }]), tx)
+})
+
+test('categorization rules wait until a bank transaction is posted', () => {
+  const pending = { id: 'pending', pending: true, accountId: 'plaid-1', date: '2026-08-20', name: 'Market', amount: 20 }
+  assert.equal(applyTransactionRules(pending, [rule], [{ id: 'operating', plaidAccountId: 'plaid-1' }]), pending)
+})
+
+test('statement rules support exact and starts-with matching', () => {
+  const exact = { ...rule, conditions:{ originalStatement:{ on:true, match:'exactly', value:'Amazon Prime' } } }
+  const starts = { ...rule, conditions:{ originalStatement:{ on:true, match:'starts', value:'Amazon' } } }
+  const transaction = { id:'amazon', date:'2026-09-01', originalStatement:'AMAZON PRIME', amount:4.99 }
+  assert.equal(transactionMatchesRule(transaction, exact), true)
+  assert.equal(transactionMatchesRule(transaction, starts), true)
+})

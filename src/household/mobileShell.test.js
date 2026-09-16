@@ -1,0 +1,132 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+const mainSource = readFileSync(new URL('../main.jsx', import.meta.url), 'utf8')
+const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
+const mobileShellSource = readFileSync(new URL('../MobileShell.css', import.meta.url), 'utf8')
+const themeCoverageSource = readFileSync(new URL('../ThemeCoverage.css', import.meta.url), 'utf8')
+const financePlannerSource = readFileSync(new URL('../finance/FinancePlanner.jsx', import.meta.url), 'utf8')
+const familyCalendarSource = readFileSync(new URL('../family/FamilyCalendar.jsx', import.meta.url), 'utf8')
+const homeHqSource = readFileSync(new URL('../homehq/HomeHQ.jsx', import.meta.url), 'utf8')
+
+test('phone drawer styles load after the general app shell styles', () => {
+  const appStyles = mainSource.indexOf("import './App.css'")
+  const mobileStyles = mainSource.indexOf("import './MobileShell.css'")
+
+  assert.ok(appStyles >= 0, 'App.css must be imported by the entry point')
+  assert.ok(mobileStyles > appStyles, 'MobileShell.css must load after App.css')
+  assert.equal(appSource.includes("import './MobileShell.css'"), false)
+})
+
+test('phone drawer remains above its backdrop when open', () => {
+  assert.match(mobileShellSource, /\.app-sidebar\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*1400;/s)
+  assert.match(mobileShellSource, /\.mobile-sidebar-backdrop\s*\{[^}]*z-index:\s*1350;/s)
+  assert.match(mobileShellSource, /\.app-sidebar\.is-expanded\s*\{[^}]*transform:\s*translateX\(0\);/s)
+})
+
+test('phone drawer uses the visual viewport and keeps footer controls reachable', () => {
+  assert.match(mobileShellSource, /\.app-sidebar\s*\{[^}]*height:\s*100dvh\s*!important;[^}]*overflow:\s*hidden\s*!important;/s)
+  assert.match(mobileShellSource, /\.sidebar-nav\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto\s*!important;/s)
+  assert.match(mobileShellSource, /\.sidebar-footer\s*\{[^}]*flex:\s*0 0 auto;[^}]*safe-area-inset-bottom/s)
+})
+
+test('app-wide theme coverage loads last and includes every native tab family', () => {
+  const mobileStyles = mainSource.indexOf("import './MobileShell.css'")
+  const themeStyles = mainSource.indexOf("import './ThemeCoverage.css'")
+  assert.ok(themeStyles > mobileStyles, 'ThemeCoverage.css must be the final shell stylesheet')
+
+  for (const selector of ['.today-dashboard', '.household-maintenance', '.family-calendar', '.finance-root', '.meal-planner', '.home-hq', '.estate-workspace', '.settings-page']) {
+    assert.ok(themeCoverageSource.includes(selector), `${selector} must participate in app-wide light mode`)
+  }
+})
+
+test('Finance appearance overrides do not replace the app drawer positioning', () => {
+  const selector = '#primary-navigation-drawer.app-sidebar {'
+  const blockStart = financePlannerSource.indexOf(selector)
+  const blockEnd = financePlannerSource.indexOf('}', blockStart)
+
+  assert.ok(blockStart >= 0, 'Finance sidebar appearance block must remain identifiable')
+  assert.doesNotMatch(financePlannerSource.slice(blockStart, blockEnd), /position:\s*relative\s*!important/)
+})
+
+test('Finance appearance styles cannot target every sidebar descendant or replace app theme variables', () => {
+  assert.doesNotMatch(financePlannerSource, /:where\(aside,[^)]+\)/)
+  assert.doesNotMatch(financePlannerSource, /\[class\*="sidebar"\]/)
+  assert.doesNotMatch(financePlannerSource, /const LUXURY_CSS = `\s*:root\s*\{/)
+  assert.match(financePlannerSource, /#primary-navigation-drawer\.app-sidebar::before/)
+})
+
+test('mobile Menu button identifies the navigation drawer it controls', () => {
+  assert.match(appSource, /id="primary-navigation-drawer"/)
+  assert.match(appSource, /aria-controls="primary-navigation-drawer"/)
+})
+
+test('sidebar account controls are consolidated under one Settings destination', () => {
+  const footer = appSource.match(/<div className="sidebar-footer">([\s\S]*?)<\/div><\/aside>/)?.[1] || ''
+  assert.match(footer, /aria-label="Open settings"/)
+  assert.doesNotMatch(footer, /Light Mode|Dark Mode|Sign Out|sidebar-user/)
+  assert.match(appSource, /function SettingsPage\(\{ currentMember, role, theme, onThemeChange, onSignOut \}\)/)
+  assert.match(appSource, /Use Light Mode.*Use Dark Mode/)
+  assert.match(appSource, /onClick=\{onSignOut\}/)
+  assert.match(mobileShellSource, /\.settings-action-button\s*\{[^}]*min-height:\s*44px;/s)
+})
+
+test('sidebar state is explicit, persistent, and unaffected by module navigation at every viewport', () => {
+  assert.match(appSource, /useState\(initialSidebarExpanded\)/)
+  assert.doesNotMatch(appSource, /closeSidebarAfterNavigation/)
+  assert.doesNotMatch(appSource, /const navigateTo=[\s\S]*?setSidebarExpanded[\s\S]*?const returnToPreviousView/)
+  assert.doesNotMatch(appSource, /const returnToPreviousView=[\s\S]*?setSidebarExpanded[\s\S]*?const openPillar/)
+  assert.doesNotMatch(appSource, /<aside[^>]+onBlur=/)
+  assert.match(appSource, /localStorage\.setItem\(SIDEBAR_STATE_KEY,next\?'expanded':'collapsed'\)/)
+})
+
+test('collapsed desktop rail keeps its toggle, brand, and navigation icons visible', () => {
+  const appCssSource = readFileSync(new URL('../App.css', import.meta.url), 'utf8')
+  assert.match(appCssSource, /\.sidebar-collapse-toggle\s*\{[^}]*z-index:\s*10;[^}]*visibility:\s*visible;/s)
+  assert.match(appCssSource, /\.app-sidebar:not\(\.is-expanded\) \.sidebar-collapse-toggle\s*\{[^}]*bottom:\s*8px;[^}]*transform:\s*translateX\(50%\);/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar:not\(\.is-expanded\) \.sidebar-brand-logo\s*\{[^}]*width:\s*40px\s*!important;/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar:not\(\.is-expanded\) :is\([^}]+> i:first-child\s*\{[^}]*opacity:\s*1\s*!important;[^}]*visibility:\s*visible\s*!important;/s)
+})
+
+test('expanded desktop navigation protects readable labels and a visible toggle icon', () => {
+  const appCssSource = readFileSync(new URL('../App.css', import.meta.url), 'utf8')
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar \.sidebar-collapse-toggle > i\s*\{[^}]*font-size:\s*18px\s*!important;/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar \.sidebar-nav-item,[^}]+color:\s*var\(--white\)\s*!important;[^}]+opacity:\s*1\s*!important;/s)
+  assert.match(appCssSource, /#primary-navigation-drawer\.app-sidebar \.pillar-header\s*\{[^}]*color:\s*var\(--soft-white\)\s*!important;[^}]+opacity:\s*1\s*!important;/s)
+})
+
+test('mobile refresh status stays in the page flow instead of covering page controls', () => {
+  assert.match(mobileShellSource, /\.app-refresh-status\s*\{[^}]*position:\s*relative;[^}]*width:\s*calc\(100% - 24px\);[^}]*margin:\s*10px 12px 0;/s)
+})
+
+test('drill-down screens expose a labeled Back control sized for phone use', () => {
+  assert.match(appSource, /aria-label={`Back to \$\{navigationHistory\.at\(-1\)\.label\}`}/)
+  assert.match(appSource, /Back to \{navigationHistory\.at\(-1\)\.label\}/)
+  assert.match(appSource, /return pillar \? `\$\{pillar\.label\} overview` : 'Pillar overview'/)
+  assert.match(mobileShellSource, /\.app-context-navigation button\s*\{[^}]*min-height:\s*40px;/s)
+})
+
+test('top-level sidebar pillar links establish Today as the parent screen', () => {
+  const handler=appSource.slice(appSource.indexOf('const handlePillarClick='),appSource.indexOf('const navigateFromFinance='))
+  assert.match(handler, /setNavigationHistory\(\[\{pillarId:'',viewId:'today',label:'Today',scrollTop:0\}\]\)/)
+  assert.match(handler, /setActiveView\('pillar-analysis'\)/)
+  assert.doesNotMatch(handler, /openPillar\(pillar\.id\)/)
+})
+
+test('a successful background household sync clears only its stale warning', () => {
+  assert.match(appSource, /onSuccess:clearRecoveredHouseholdSyncWarning/)
+  assert.match(appSource, /brevity-finance-sync-recovered/)
+  assert.match(appSource, /issues\.filter\(issue=>issue\.source!=='Finance & Plaid'\)/)
+  assert.match(appSource, /current\.issues\.filter\(issue=>issue\.id!=='household-sync'\)/)
+})
+
+test('background household sync preserves every active drill-down and editor', () => {
+  assert.doesNotMatch(appSource, /sharedRevision/)
+  assert.doesNotMatch(appSource, /key={`\$\{activePillar==='finance'/)
+  assert.doesNotMatch(appSource, /Household changes synchronized automatically/)
+  assert.match(financePlannerSource, /addEventListener\(SHARED_STATE_EVENT, receiveSharedUpdate\)/)
+  assert.match(familyCalendarSource, /addEventListener\(SHARED_STATE_EVENT,refresh\)/)
+  assert.match(homeHqSource, /addEventListener\(SHARED_STATE_EVENT,receiveSharedUpdate\)/)
+  assert.match(appSource, /navigateFromFinance=viewId=>navigateTo\(viewId==='property'\?'household':'finance',viewId\)/)
+})

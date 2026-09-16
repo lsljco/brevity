@@ -1,0 +1,70 @@
+.meal-plan-insight { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr); gap:18px; margin-bottom:18px; padding:18px; border:1px solid rgba(197,164,109,.2); border-radius:15px; background:rgba(197,164,109,.045); }
+.meal-plan-insight span,.meal-plan-insight small { color:var(--muted); font-size:10px; }
+.meal-plan-insight span { color:var(--gold); font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.meal-plan-insight strong { display:block; margin-top:6px; color:var(--soft-white); font-size:16px; }
+.meal-plan-insight p { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+.meal-plan-insight dl { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:0; }
+.meal-plan-insight dl div { padding:10px; border-radius:10px; background:rgba(0,0,0,.2); }
+.meal-plan-insight dt { color:var(--muted); font-size:9px; }
+.meal-plan-insight dd { margin:5px 0 0; color:var(--soft-white); font-size:11px; font-weight:700; }
+.meal-plan-insight > small { grid-column:1/-1; }
+
+.meal-library > section > header { justify-content:space-between; }
+.meal-library-heading { display:flex; gap:12px; align-items:center; }
+.meal-library-add { flex:0 0 auto; padding:9px 12px; border:1px solid rgba(197,164,109,.32); border-radius:9px; background:rgba(197,164,109,.08); color:var(--gold); font-size:11px; cursor:pointer; }
+.meal-library-add:hover { background:rgba(197,164,109,.14); }
+.meal-image-placeholder { display:flex!important; align-items:center; justify-content:center; flex-direction:column; gap:6px; min-height:68px; background:linear-gradient(145deg,rgba(197,164,109,.08),rgba(255,255,255,.025))!important; color:var(--gold); }
+.meal-image-placeholder span { color:var(--muted)!important; font-size:9px!important; font-weight:500!important; letter-spacing:0!important; text-transform:none!important; }
+.meal-library-grid article > .meal-image-placeholder { width:100%; height:155px; }
+.meal-choice > .meal-image-placeholder { width:92px; height:68px; border-radius:9px; }
+.meal-slot > .meal-image-placeholder { width:100%; height:170px; }
+
+.meal-add-dialog { width:min(720px,100%); }
+.meal-add-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:20px 24px 24px; overflow:auto; }
+.meal-add-form label { display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.meal-add-form label > span { color:var(--gold); }
+.meal-add-form label > span small { color:var(--muted); font-weight:500; letter-spacing:0; text-transform:none; }
+.meal-add-form input,.meal-add-form select,.meal-add-form textarea { width:100%; box-sizing:border-box; border:1px solid var(--glass-border); border-radius:9px; outline:0; padding:10px 11px; background:rgba(255,255,255,.035); color:var(--soft-white); font:inherit; font-size:12px; font-weight:500; letter-spacing:0; text-transform:none; }
+.meal-add-form select option { background:#111820; color:var(--soft-white); }
+.meal-add-form textarea { min-height:72px; resize:vertical; }
+.meal-add-form input:focus,.meal-add-form select:focus,.meal-add-form textarea:focus { border-color:rgba(197,164,109,.5); }
+.meal-add-form--wide { grid-column:1/-1; }
+.meal-add-form footer { grid-column:1/-1; display:flex; justify-content:flex-end; gap:8px; padding-top:4px; }
+.meal-add-form footer button { padding:9px 12px; border:1px solid var(--glass-border); border-radius:9px; background:transparent; color:var(--soft-white); cursor:pointer; }
+.meal-add-form footer button.is-primary { border-color:rgba(197,164,109,.45); background:rgba(197,164,109,.14); color:var(--gold); }
+.meal-add-form footer button:disabled { cursor:not-allowed; opacity:.45; }
+.meal-recipe-import { display:grid; gap:12px; padding:15px; border:1px solid rgba(197,164,109,.3); border-radius:13px; background:rgba(197,164,109,.055); }
+.meal-recipe-import > div:first-child { display:grid; gap:4px; }
+.meal-recipe-import strong { color:var(--soft-white); font-size:13px; }
+.meal-recipe-import > div:first-child > span { color:var(--muted); font-size:10px; line-height:1.45; }
+.meal-recipe-import-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; }
+.meal-recipe-import-controls button { min-height:39px; padding:9px 13px; border:1px solid rgba(197,164,109,.42); border-radius:9px; background:rgba(197,164,109,.14); color:var(--gold); cursor:pointer; }
+.meal-recipe-import-controls button:disabled { cursor:not-allowed; opacity:.45; }
+.meal-recipe-import-notice { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; color:var(--soft-white); font-size:10px; line-height:1.45; }
+.meal-recipe-import-notice a { color:var(--gold); }
+.meal-nutrition-action { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px; border:1px solid rgba(197,164,109,.24); border-radius:12px; background:rgba(197,164,109,.055); }
+.meal-nutrition-action div { display:grid; gap:4px; }
+.meal-nutrition-action strong { color:var(--soft-white); font-size:12px; }
+.meal-nutrition-action span { color:var(--muted); font-size:10px; line-height:1.4; }
+.meal-nutrition-action button { flex:0 0 auto; min-height:42px; padding:9px 13px; border:1px solid rgba(197,164,109,.42); border-radius:9px; background:rgba(197,164,109,.14); color:var(--gold); cursor:pointer; }
+.meal-nutrition-action button:disabled { cursor:not-allowed; opacity:.45; }
+.meal-nutrition-error { padding:11px 13px; border:1px solid rgba(209,135,120,.4); border-radius:10px; background:rgba(209,135,120,.09); color:#e3aa9d; font-size:11px; line-height:1.45; }
+.meal-nutrition-preview { display:grid; gap:12px; padding:15px; border:1px solid rgba(197,164,109,.3); border-radius:13px; background:rgba(0,0,0,.22); }
+.meal-nutrition-preview > header span,.meal-nutrition-preview > header strong { display:block; }
+.meal-nutrition-preview > header span { color:var(--gold); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.meal-nutrition-preview > header strong { margin-top:4px; color:var(--soft-white); font-size:14px; }
+.meal-nutrition-totals { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.meal-nutrition-totals article { padding:11px; border-radius:10px; background:rgba(255,255,255,.035); }
+.meal-nutrition-totals article > span { display:block; margin-bottom:8px; color:var(--gold); font-size:10px; font-weight:700; }
+.meal-nutrition-preview details { border-top:1px solid var(--glass-border); padding-top:10px; }
+.meal-nutrition-preview summary { color:var(--gold); cursor:pointer; font-size:11px; font-weight:700; }
+.meal-nutrition-row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--glass-border); text-transform:none; letter-spacing:0; }
+.meal-nutrition-row div { display:grid; gap:3px; min-width:0; }
+.meal-nutrition-row strong { color:var(--soft-white); font-size:11px; overflow-wrap:anywhere; }
+.meal-nutrition-row small,.meal-nutrition-row > span,.meal-nutrition-preview > small,.meal-nutrition-preview li { color:var(--muted); font-size:9px; line-height:1.45; text-transform:none; letter-spacing:0; }
+.meal-nutrition-row > span { flex:0 0 auto; color:var(--soft-white); }
+.meal-nutrition-preview ul { margin:0; padding-left:18px; }
+
+@media (max-width:800px) { .meal-plan-insight { grid-template-columns:1fr; }.meal-plan-insight > small { grid-column:auto; } }
+@media (max-width:620px) { .meal-library > section > header { align-items:flex-start; flex-direction:column; }.meal-library-add { width:100%; } .meal-add-form { grid-template-columns:1fr; padding:18px; }.meal-add-form--wide,.meal-add-form footer { grid-column:auto; }.meal-recipe-import-controls { grid-template-columns:1fr; }.meal-recipe-import-controls button,.meal-nutrition-action button { width:100%; }.meal-nutrition-action,.meal-nutrition-row { align-items:stretch; flex-direction:column; }.meal-nutrition-totals { grid-template-columns:1fr; }.meal-nutrition-row > span { flex:auto; } }
+@media (max-width:520px) { .meal-plan-insight dl { grid-template-columns:repeat(2,1fr); } .meal-choice > .meal-image-placeholder { width:72px; height:60px; } }
