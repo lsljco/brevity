@@ -5,7 +5,7 @@ export const mealImageKey = (householdId, assetId) => `${String(householdId || '
 
 export function buildMealImagePrompt(meal = {}) {
   const ingredients = (Array.isArray(meal.ingredients) ? meal.ingredients : []).map(clean).filter(Boolean).slice(0, 20).join(', ')
-  return `Create a premium editorial food photograph of ${clean(meal.name)}. ${clean(meal.description)} Ingredients and plating cues: ${ingredients || 'use the meal description faithfully'}. Luxury restaurant and private-chef cookbook aesthetic, ultra-photorealistic food photography, dramatic controlled lighting, deep black and navy shadow structure, warm antique-gold highlights, ivory tableware where appropriate, rich authentic food texture, sophisticated plating, appetizing but natural proportions, shallow depth of field, restrained elegant composition, no generic stock-photo appearance. Show only the finished meal and appropriate table setting. No people, hands, words, lettering, logos, packaging, watermarks, collages, or split screens. Landscape 3:2 composition suitable for a meal-library card.`
+  return `Create a premium editorial food photograph of ${clean(meal.name)}. ${clean(meal.description)} Exact ingredients that must visibly define the finished dish: ${ingredients || 'use the meal description faithfully'}. Do not add, replace, or feature ingredients that are not listed. Luxury American steakhouse and private-chef cookbook aesthetic, ultra-photorealistic food photography, dramatic controlled lighting, deep black and navy shadow structure, warm antique-gold highlights, ivory tableware where appropriate, rich authentic food texture, sophisticated plated presentation, appetizing but natural proportions, shallow depth of field, restrained elegant composition, no generic stock-photo appearance. Show only the finished meal and appropriate table setting. No people, hands, words, lettering, logos, packaging, watermarks, collages, or split screens. Landscape 3:2 composition suitable for a meal-library card.`
 }
 
 export function assertMealImagePng(value) {
@@ -17,6 +17,14 @@ export function assertMealImagePng(value) {
     throw error
   }
   return bytes
+}
+
+export function mealImageContentType(value) {
+  const bytes=Buffer.from(value||[])
+  if(bytes.length>=8&&[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((byte,index)=>bytes[index]===byte))return'image/png'
+  if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return'image/jpeg'
+  if(bytes.length>=12&&bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP')return'image/webp'
+  throw Object.assign(new Error('Upload a valid PNG, JPEG, or WebP meal image.'),{code:'VALIDATION_ERROR'})
 }
 
 export async function generateMealImage({ meal, assetId, householdId = 'lslj-family', store, fetcher = fetch }) {

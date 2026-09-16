@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MEAL_TYPES } from './mealLibrary.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
-import { calculateMealNutrition, importRecipeFromUrl } from './mealPlanApi.js'
+import { calculateMealNutrition, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
@@ -28,9 +28,24 @@ function Macros({ meal }) {
   return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{Number(meal.macros.calories).toLocaleString()}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
 }
 
-function MealDetailDialog({ meal, onClose }) {
+function MealDetailDialog({ meal, onClose, onImageGenerated }) {
   const ingredients = Array.isArray(meal?.ingredients) ? meal.ingredients : []
   const instructions = Array.isArray(meal?.instructions) ? meal.instructions : []
+  const [imageState,setImageState]=useState('idle')
+  const [imageError,setImageError]=useState('')
+  const uploadInputId=`meal-image-upload-${meal.id}`
+  const generateImage=async()=>{
+    setImageState('loading');setImageError('')
+    try{const result=await regenerateMealImage(meal.id);setImageState('ready');await onImageGenerated(result.meal)}
+    catch(error){setImageState('error');setImageError(error.message||'Could not generate a new meal image.')}
+  }
+  const uploadImage=async event=>{
+    const file=event.target.files?.[0];event.target.value=''
+    if(!file)return
+    setImageState('uploading');setImageError('')
+    try{const result=await uploadMealImage(meal.id,file);setImageState('ready');await onImageGenerated(result.meal)}
+    catch(error){setImageState('error');setImageError(error.message||'Could not upload that meal image.')}
+  }
   useEffect(() => {
     const close = event => { if (event.key === 'Escape') onClose() }
     window.addEventListener('keydown', close)
@@ -41,6 +56,8 @@ function MealDetailDialog({ meal, onClose }) {
       <header><div><span>{LABELS[meal.mealType]} recipe</span><h2 id="meal-detail-title">{meal.name}</h2><p>{meal.description}</p></div><button type="button" onClick={onClose} aria-label="Close meal details"><i className="ti ti-x" /></button></header>
       <div className="meal-detail-body">
         <MealImage meal={meal} className="meal-detail-image" alt={meal.name} loading="eager" />
+        <div className="meal-detail-image-action"><div><strong>Meal photo</strong><span>Upload your own photo, or generate one from this exact ingredient list in Brevity’s luxury steakhouse aesthetic.</span></div><div className="meal-detail-image-buttons"><input id={uploadInputId} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadImage} disabled={imageState==='loading'||imageState==='uploading'} /><label htmlFor={uploadInputId} aria-disabled={imageState==='loading'||imageState==='uploading'}><i className="ti ti-upload" /> {imageState==='uploading'?'Uploading…':'Upload Image'}</label><button type="button" onClick={generateImage} disabled={imageState==='loading'||imageState==='uploading'||!ingredients.length}><i className="ti ti-photo-spark" /> {imageState==='loading'?'Generating…':'Generate New Image'}</button></div></div>
+        {imageError&&<div className="meal-nutrition-error" role="alert">{imageError}</div>}
         <div className="meal-detail-facts"><span><strong>{formatPrepMinutes(meal.totalMinutes ?? meal.prepMinutes)}</strong> total</span><span><strong>{formatPrepMinutes(meal.prepMinutes)}</strong> prep</span>{Number(meal.cookMinutes) > 0 && <span><strong>{formatPrepMinutes(meal.cookMinutes)}</strong> cook</span>}<span><strong>{meal.serving || '1 serving'}</strong> serving</span></div>
         <Macros meal={meal} />
         <div className="meal-detail-columns">
@@ -250,6 +267,11 @@ export default function MealPlanner() {
   const [replacementError, setReplacementError] = useState('')
   const [addMealError, setAddMealError] = useState('')
   const planInsight = useMemo(() => summarizeMealPlan(data?.days), [data])
+  const imageGenerated=async meal=>{
+    setDetailMeal(meal)
+    setMessage(`${meal.name} now has a newly generated luxury steakhouse image.`)
+    await reload({supersede:true}).catch(()=>undefined)
+  }
 
   useEffect(()=>setSelection(current=>{
     if(!current)return current
@@ -295,7 +317,7 @@ export default function MealPlanner() {
     {error && !data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {error && data && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan refresh needed</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {data && (view === 'plan' ? <PlanView days={data.days} onOpenMeal={setDetailMeal} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} /> : <LibraryView library={data.library} onAdd={setAddingMealType} onOpenMeal={setDetailMeal} />)}
-    {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} />}
+    {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} onImageGenerated={imageGenerated} />}
     {selection && <ReplaceDialog selection={selection} library={data.library} saving={state === 'saving'} error={replacementError} onClose={() => { setReplacementError(''); setSelection(null) }} onChoose={chooseReplacement} onReview={reviewReplacement} />}
     {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} error={addMealError} onClose={()=>{setAddMealError('');setAddingMealType('')}} onSave={saveMeal} />}
   </main>

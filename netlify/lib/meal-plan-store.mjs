@@ -99,6 +99,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
   const household = safeSegment(householdId)
   const dayKey = date => `${household}/days/${date}`
   const customLibraryKey = `${household}/library/custom`
+  const imageOverridesKey = `${household}/library/image-overrides`
   const getDayEntry=async date=>{
     if(typeof store.getWithMetadata==='function'){
       const entry=await store.getWithMetadata(dayKey(date),{type:'json'})
@@ -117,9 +118,29 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
   }
 
   const getLibrary = async () => {
-    const entry = await getCustomLibraryEntry()
+    const [entry, imageEntry] = await Promise.all([getCustomLibraryEntry(), typeof store.getWithMetadata === 'function'
+      ? store.getWithMetadata(imageOverridesKey, { type:'json' }).then(result => result ? { data:result.data, etag:result.etag || '', metadata:true } : { data:null, etag:'', metadata:true })
+      : store.get(imageOverridesKey, { type:'json' }).then(data => ({ data, etag:'', metadata:false }))])
     const customMeals = Array.isArray(entry.data?.meals) ? entry.data.meals : []
-    return { entry, customMeals, library:[...MEAL_LIBRARY, ...customMeals] }
+    const imageOverrides = imageEntry.data?.images && typeof imageEntry.data.images === 'object' ? imageEntry.data.images : {}
+    const library = [...MEAL_LIBRARY, ...customMeals].map(meal => imageOverrides[meal.id] ? { ...meal, image:imageOverrides[meal.id], imageGenerated:true } : meal)
+    return { entry, imageEntry, customMeals, library }
+  }
+
+  const setMealImage = async ({ mealId, image, actor = 'Household member' }) => {
+    const safeMealId = safeText(mealId, 180)
+    const safeImage = safeText(image, 500)
+    if (!safeMealId || !safeImage) throw Object.assign(new Error('A valid meal and generated image are required.'), { code:'VALIDATION_ERROR' })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { imageEntry, library } = await getLibrary()
+      if (!library.some(meal => meal.id === safeMealId)) throw Object.assign(new Error('That meal is no longer in the household library.'), { code:'VALIDATION_ERROR' })
+      const currentImages = imageEntry.data?.images && typeof imageEntry.data.images === 'object' ? imageEntry.data.images : {}
+      const payload = { version:Number(imageEntry.data?.version || 0) + 1, images:{ ...currentImages, [safeMealId]:safeImage }, updatedAt:now().toISOString(), updatedBy:actor }
+      const options = imageEntry.metadata ? (imageEntry.data ? { onlyIfMatch:imageEntry.etag } : { onlyIfNew:true }) : {}
+      const written = await store.setJSON(imageOverridesKey, payload, options)
+      if (written?.modified !== false) return { mealId:safeMealId, image:safeImage }
+    }
+    throw Object.assign(new Error('The meal image changed on another device. Please try again.'), { code:'VERSION_CONFLICT' })
   }
 
   const createDay = date => createRollingMealDay(date, {
@@ -210,7 +231,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
-  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, substitute }
+  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, setMealImage, substitute }
 }
 
 export async function productionMealPlanRepository(options = {}) {

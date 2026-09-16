@@ -89,6 +89,16 @@
 .meal-detail-body { overflow:auto; padding:20px 24px 26px; }
 .meal-detail-image { display:block; width:100%; height:min(320px,35vh); border-radius:14px; object-fit:cover; background:rgba(255,255,255,.03); }
 .meal-detail-body > .meal-image-placeholder { height:220px; border-radius:14px; }
+.meal-detail-image-action { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-top:12px; padding:13px 14px; border:1px solid rgba(197,164,109,.24); border-radius:11px; background:rgba(197,164,109,.06); }
+.meal-detail-image-action div { display:grid; gap:4px; }
+.meal-detail-image-action strong { color:var(--soft-white); font-size:12px; }
+.meal-detail-image-action span { color:var(--muted); font-size:10px; line-height:1.45; }
+.meal-detail-image-action button { flex:0 0 auto; padding:10px 12px; border:1px solid rgba(197,164,109,.42); border-radius:9px; background:rgba(197,164,109,.14); color:var(--gold); cursor:pointer; }
+.meal-detail-image-action button:disabled { cursor:not-allowed; opacity:.5; }
+.meal-detail-image-buttons { display:flex!important; grid:initial!important; flex:0 0 auto; gap:8px!important; }
+.meal-detail-image-buttons input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.meal-detail-image-buttons label { padding:10px 12px; border:1px solid var(--glass-border); border-radius:9px; color:var(--soft-white); font-size:11px; cursor:pointer; white-space:nowrap; }
+.meal-detail-image-buttons label[aria-disabled="true"] { pointer-events:none; opacity:.5; }
 .meal-detail-facts { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
 .meal-detail-facts span { padding:9px 11px; border-radius:9px; background:rgba(255,255,255,.04); color:var(--muted); font-size:10px; }
 .meal-detail-facts strong { display:block; margin-bottom:3px; color:var(--soft-white); font-size:12px; }
@@ -128,4 +138,7 @@
   .meal-dialog-review > div:last-child { width: 100%; }
   .meal-dialog-review button { flex: 1; }
   .meal-detail-columns { grid-template-columns:1fr; }
+  .meal-detail-image-action { align-items:stretch; flex-direction:column; }
+  .meal-detail-image-buttons { flex-direction:column; }
+  .meal-detail-image-buttons label,.meal-detail-image-buttons button { text-align:center; }
 }
