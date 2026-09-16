@@ -56,7 +56,7 @@ const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling'
 // Keep tablet navigation collapsed by default as well. Feature breakpoints are
 // based on the viewport, so an expanded 240px rail at 768px can otherwise leave
 // less usable content width than their phone layouts expect.
-const MOBILE_NAVIGATION_QUERY = '(max-width: 900px)'
+const MOBILE_NAVIGATION_QUERY = '(max-width: 1180px)'
 const SIDEBAR_STATE_KEY = 'brevity_sidebar_state'
 const isCompactNavigation = () => typeof window !== 'undefined' && window.matchMedia(MOBILE_NAVIGATION_QUERY).matches
 const savedDesktopSidebarState = () => typeof window === 'undefined' || localStorage.getItem(SIDEBAR_STATE_KEY) !== 'collapsed'

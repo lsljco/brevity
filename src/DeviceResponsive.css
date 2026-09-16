@@ -1,0 +1,106 @@
+/* Device-aware foundation loaded after all feature and shell styles. */
+html {
+  min-width: 320px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body, #root, .app-shell { max-width: 100%; }
+body { overflow-x: hidden; }
+img, video, canvas, svg { max-width: 100%; }
+button, input, select, textarea { font: inherit; }
+
+/* Never allow a feature workspace or long household content to widen the app. */
+:where(
+  .today-dashboard,.pillar-analysis-page,.household-os,.household-maintenance,
+  .family-calendar,.finance-root,.meal-planner,.home-hq,.estate-workspace,
+  .settings-page,.edu-tutor,.scenario-page,.debt-workspace
+) { box-sizing: border-box; width: 100%; min-width: 0; }
+
+:where(
+  .today-dashboard,.pillar-analysis-page,.household-os,.household-maintenance,
+  .family-calendar,.finance-root,.meal-planner,.home-hq,.estate-workspace,
+  .settings-page,.edu-tutor,.scenario-page,.debt-workspace
+) :where(h1,h2,h3,p,span,strong,small,li,dd,dt,label) { overflow-wrap: anywhere; }
+
+:where(.finance-root,.family-calendar,.estate-workspace,.household-os,.settings-page)
+:where(.table-wrap,[class$="-table-wrap"],[class*="table-scroll"]) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tablet includes iPad landscape: expanded navigation overlays instead of
+   squeezing data-heavy workspaces into a narrow desktop column. */
+@media (min-width: 641px) and (max-width: 1180px) {
+  .app-main { min-width: 0; }
+  :where(.today-dashboard,.pillar-analysis-page,.family-calendar,.finance-root,.meal-planner,.home-hq,.estate-workspace,.settings-page,.edu-tutor) {
+    padding-inline: clamp(18px, 3vw, 30px);
+  }
+  :where(.kpi-grid,.finance-summary-grid,.finance-budget-summary,.finance-cashflow-summary,.estate-command-grid,.inventory-metrics) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .meal-day-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .meal-slot:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--glass-border); }
+  .meal-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Phone layout: readable controls, safe insets, one-column forms and cards. */
+@media (max-width: 640px) {
+  :root { --brevity-page-gutter: 14px; }
+  :where(input,select,textarea) { font-size: 16px !important; }
+  :where(button,[role="button"],a) { -webkit-tap-highlight-color: rgba(197,164,109,.18); }
+  :where(.today-dashboard,.pillar-analysis-page,.household-os,.household-maintenance,.family-calendar,.finance-root,.meal-planner,.home-hq,.estate-workspace,.settings-page,.edu-tutor,.scenario-page,.debt-workspace) {
+    padding-left: max(var(--brevity-page-gutter), env(safe-area-inset-left)) !important;
+    padding-right: max(var(--brevity-page-gutter), env(safe-area-inset-right)) !important;
+  }
+  :where(.kpi-grid,.finance-summary-grid,.finance-budget-summary,.finance-cashflow-summary,.finance-cashflow-breakdowns,.report-stat-grid,.estate-command-grid,.inventory-metrics,.meal-day-slots,.meal-library-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .meal-slot:nth-child(3) { grid-column: auto; }
+  :where(.meal-dialog,.today-decision-dialog,.metric-drilldown-dialog,.finance-modal,.brevity-action-review) {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))) !important;
+  }
+  :where(.finance-root,.family-calendar,.estate-workspace,.household-os) table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Short landscape phones need shallower fixed lanes and dialogs. */
+@media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
+  :root {
+    --brevity-command-dock-height: 56px;
+    --brevity-mobile-nav-reserve: 68px;
+  }
+  .mobile-app-nav { min-height: 52px; }
+  .mobile-app-nav button { min-height: 42px; }
+  :where(.meal-dialog,.today-decision-dialog,.metric-drilldown-dialog,.finance-modal,.brevity-action-review) {
+    max-height: calc(100dvh - 12px) !important;
+  }
+}
+
+/* Touch hardware gets usable targets even when its viewport is desktop-sized. */
+@media (pointer: coarse) {
+  :where(button,[role="button"],input,select) { min-height: 44px; }
+  :where(button,[role="button"],a) { touch-action: manipulation; }
+}
+
+@media (hover: none) {
+  :where(button,[role="button"],a):hover { transform: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
