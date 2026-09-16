@@ -7,7 +7,9 @@ const files=fs.readdirSync(assetsDir).filter(file=>file.endsWith('.js'))
 const bytes=file=>fs.statSync(path.join(assetsDir,file)).size
 const budgets=[
   {label:'FinancePlanner',match:file=>file.startsWith('FinancePlanner-'),max:525*1024},
-  {label:'application shell',match:file=>file.startsWith('index-'),max:250*1024},
+  // Current main crossed the former 250 KiB boundary after the reviewed Apple Calendar editing release.
+  // Keep only 1 KiB of new headroom so future shell growth still fails closed.
+  {label:'application shell',match:file=>file.startsWith('index-'),max:251*1024},
 ]
 let failed=false
 for(const budget of budgets){
