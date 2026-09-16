@@ -7,4 +7,6 @@ async function postJson(path,payload){
 
 export const generateAiReadingExercise=payload=>postJson('/.netlify/functions/education-ai-exercise',payload)
 export const gradeAiExercise=payload=>postJson('/.netlify/functions/education-ai-grade',payload)
+export const gradeDirections=payload=>postJson('/.netlify/functions/education-ai-grade',{...payload,mode:'directions'})
 export const gradeReadingAudio=payload=>postJson('/.netlify/functions/education-reading-grade',payload)
+export const readDirectionsAloud=payload=>postJson('/.netlify/functions/education-directions-speech',payload)
