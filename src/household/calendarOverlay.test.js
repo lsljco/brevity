@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calendarAppointmentsForPlan, dedupeCalendarEvents, mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
+import { calendarAppointmentsForPlan, compareCalendarEventsChronologically, dedupeCalendarEvents, mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
 
 const plan = {
   date: '2026-08-26',
@@ -50,4 +50,24 @@ test('calendar overlay is derived without mutating the saved daily plan', () => 
   assert.equal(plan.household.appointments.length, 1)
   assert.equal(overlaid.household.appointments.length, 2)
   assert.notEqual(overlaid.household, plan.household)
+})
+
+test('calendar events sort all-day first and timed events by the actual clock', () => {
+  const events = [
+    {title:'Bedtime medicine',time:'8:00 PM'},
+    {title:'Pick up Javin',time:'4:30 PM'},
+    {title:'Principal coffee chat',time:'8:00 AM'},
+    {title:'Month close',time:'9:15 AM'},
+    {title:'Kitchen detail',time:'',allDay:true},
+    {title:'Daily tutor',time:'2:45 PM'},
+  ].sort(compareCalendarEventsChronologically)
+
+  assert.deepEqual(events.map(event=>event.title),[
+    'Kitchen detail',
+    'Principal coffee chat',
+    'Month close',
+    'Daily tutor',
+    'Pick up Javin',
+    'Bedtime medicine',
+  ])
 })

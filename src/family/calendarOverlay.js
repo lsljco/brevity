@@ -13,6 +13,16 @@ const timeMinutes = value => {
   return hour * 60 + minute
 }
 
+export function compareCalendarEventsChronologically(left, right) {
+  const leftAllDay = Boolean(left?.allDay || !clean(left?.time || left?.startTime))
+  const rightAllDay = Boolean(right?.allDay || !clean(right?.time || right?.startTime))
+  if (leftAllDay !== rightAllDay) return leftAllDay ? -1 : 1
+  const leftMinutes = timeMinutes(left?.time || left?.startTime)
+  const rightMinutes = timeMinutes(right?.time || right?.startTime)
+  if (leftMinutes !== rightMinutes) return leftMinutes - rightMinutes
+  return clean(left?.title).localeCompare(clean(right?.title))
+}
+
 const appointmentSignature = (item, fallbackDate = '') => [
   normalizeText(item?.title),
   clean(item?.date || fallbackDate),
@@ -85,13 +95,7 @@ export function calendarAppointmentsForPlan(plan, events) {
     additions.push(calendarAppointmentFromEvent(event))
   })
 
-  return [...existing, ...additions].sort((left, right) => {
-    const leftTime = timeMinutes(left.startTime)
-    const rightTime = timeMinutes(right.startTime)
-    if (leftTime < 0 && rightTime >= 0) return -1
-    if (rightTime < 0 && leftTime >= 0) return 1
-    return leftTime - rightTime || left.title.localeCompare(right.title)
-  })
+  return [...existing, ...additions].sort(compareCalendarEventsChronologically)
 }
 
 export function mergeCalendarEventsIntoPlan(plan, events) {
