@@ -11,7 +11,7 @@ import {
   canonicalizeBrevityCalendarEvent,
   isBrevityManagedAppleEvent,
 } from './calendarRecords.js'
-import { ICLOUD_CACHE_KEY } from '../household/appRefresh.js'
+import { ICLOUD_CACHE_KEY, writeCalendarSnapshotCache } from '../household/appRefresh.js'
 import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 import { executeAssistantProposal, getActionMode, prepareCalendarAction } from '../assistant/assistantApi.js'
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
@@ -179,14 +179,16 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       const snapshot=stampCalendarSuccess(result)
       setIcloudEvents((snapshot.events || []).map(normalizeIcloud))
       setCalendarName(snapshot.calendar || 'Apple/iCloud Calendar')
-      try{localStorage.setItem(ICLOUD_CACHE_KEY,JSON.stringify(snapshot))}catch{}
+      const cacheWrite=writeCalendarSnapshotCache(snapshot)
+      if(cacheWrite.warning)setFeedback(cacheWrite.warning)
       const health=calendarSnapshotHealth(snapshot)
       setCalendarHealth(health)
       setIcloudState(health.state)
     } catch (error) {
       const previous=readJson(localStorage,ICLOUD_CACHE_KEY,cachedCalendar||{})
       const snapshot=stampCalendarFailure(previous,error)
-      try{localStorage.setItem(ICLOUD_CACHE_KEY,JSON.stringify(snapshot))}catch{}
+      const cacheWrite=writeCalendarSnapshotCache(snapshot)
+      if(cacheWrite.warning)setFeedback(cacheWrite.warning)
       setIcloudEvents((snapshot.events||[]).map(normalizeIcloud))
       setIcloudError(snapshot.error)
       const health=calendarSnapshotHealth(snapshot)

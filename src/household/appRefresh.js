@@ -25,10 +25,33 @@ const readCalendarCache = () => {
   catch { return null }
 }
 
+export const CALENDAR_CACHE_CAPACITY_MESSAGE = 'This device could not update its calendar recovery cache because browser storage is full. Live calendar data remains available for this session, and the last verified cache was preserved.'
+
+export const isStorageQuotaError = error => {
+  const name = String(error?.name || '')
+  const message = String(error?.message || error || '')
+  return /QuotaExceededError|NS_ERROR_DOM_QUOTA_REACHED/i.test(name) || /quota.{0,24}(exceed|full)/i.test(message)
+}
+
+export function writeCalendarSnapshotCache(snapshot, storage = globalThis.localStorage) {
+  try {
+    storage.setItem(ICLOUD_CACHE_KEY, JSON.stringify(snapshot))
+    return { stored:true, warning:'' }
+  } catch (error) {
+    return {
+      stored:false,
+      warning:isStorageQuotaError(error)
+        ? CALENDAR_CACHE_CAPACITY_MESSAGE
+        : 'This device could not update its calendar recovery cache. Live calendar data remains available for this session, and the last verified cache was preserved.',
+    }
+  }
+}
+
 const publishCalendarSnapshot = snapshot => {
-  localStorage.setItem(ICLOUD_CACHE_KEY, JSON.stringify(snapshot))
-  window.dispatchEvent(new CustomEvent('brevity-icloud-calendar-refreshed', { detail: snapshot }))
-  return snapshot
+  const cacheWrite = writeCalendarSnapshotCache(snapshot)
+  const published = cacheWrite.warning ? { ...snapshot, cacheWarning:cacheWrite.warning } : snapshot
+  window.dispatchEvent(new CustomEvent('brevity-icloud-calendar-refreshed', { detail: published }))
+  return published
 }
 
 export function shouldRequestBankUpdate({ requestBankUpdate = false, financeReadOnly = false, automaticAlreadyRequested = false } = {}) {
@@ -80,6 +103,7 @@ export function buildRefreshIssues({ financeResult, planResult, calendar, health
 
   if (planResult.status === 'rejected') issues.push({ id:'today-plan', source:'Today', message:planResult.reason?.message || 'Today’s household plan could not be refreshed.', action:'Your previously saved plan remains available. Brevity will retry automatically on the next foreground or connectivity event.' })
   if (calendar?.error) issues.push({ id:'family-calendar', source:'Family Calendar', message:String(calendar.error), action:'Your last verified calendar remains visible. Brevity will retry automatically; review Family Calendar only if the issue persists.' })
+  if (calendar?.cacheWarning) issues.push({ id:'family-calendar-cache', source:'Family Calendar', message:String(calendar.cacheWarning), action:'Brevity will retry the recovery-cache update automatically. No calendar records were deleted.' })
   if (healthResult?.status === 'fulfilled') issues.push(...systemHealthIssues(healthResult.value))
   else if (healthResult?.status === 'rejected') issues.push({id:'system-health',source:'Brevity System Health',message:healthResult.reason?.message||'Integration health could not be verified.',action:'Brevity will retry health verification on the next application refresh.'})
   return Array.from(new Map(issues.map(issue=>[`${issue.source}:${issue.message}`,issue])).values())

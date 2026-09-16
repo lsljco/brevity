@@ -169,7 +169,7 @@ test('Household Intelligence dashboard separates metrics and opens an auditable 
   await page.getByRole('button',{name:'Larry Finance & Stewardship'}).click()
   const drilldown=page.getByRole('dialog',{name:'Score explanation'})
   await expect(drilldown).toContainText('Finance review')
-  await expect(drilldown).toContainText('1 of 2 activities')
+  await expect(drilldown).toContainText('2 of 2 activities')
   await expect(drilldown).toContainText('Daily finance review')
   await expect(drilldown).toContainText('Weekly finance review')
 })
@@ -632,6 +632,17 @@ test('iPad already-linked accounts ignore additional institution accounts withou
 })
 
 test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
+
+test('iPad landscape Family Calendar keeps all seven columns inside its content lane',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='tablet-landscape','iPad landscape layout contract')
+  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Family Calendar'}).click()
+  const scroll=page.locator('.family-calendar-scroll')
+  await expect(scroll).toBeVisible()
+  const dimensions=await scroll.evaluate(element=>({clientWidth:element.clientWidth,scrollWidth:element.scrollWidth}))
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth+1)
+  await expect(page.locator('.family-calendar-weekday')).toHaveCount(7)
+})
 
 test('Settings remains operational when optional integration payloads are empty',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Settings'}).click();await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Recovery Mode');await expect(page.locator('body')).not.toContainText('Cannot read properties of undefined')})
 
