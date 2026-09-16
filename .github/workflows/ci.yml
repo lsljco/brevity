@@ -39,6 +39,15 @@ jobs:
           retention-days: 3
       - name: Enforce Finance source budget
         run: node scripts/check-source-budget.mjs
+      - name: Verify Education server-function bundles
+        run: >-
+          npx esbuild
+          netlify/functions/education-ai-exercise.mjs
+          netlify/functions/education-ai-grade.mjs
+          netlify/functions/education-reading-grade.mjs
+          netlify/functions/education-directions-speech.mjs
+          --bundle --platform=node --format=esm --target=node20
+          --outdir=.tmp-education-functions
       - name: Build production application
         run: npm run build
       - name: Enforce production bundle budget
