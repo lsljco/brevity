@@ -86,3 +86,12 @@ test('custom meals generate a Brevity image and replacements open standard Actio
   assert.match(source,/requestActionReview\(proposal\)/)
   assert.match(source,/meal-dialog-error/)
 })
+
+test('meal cards open an accessible ingredient and recipe detail dialog', () => {
+  const source=readFileSync(new URL('./MealPlanner.jsx',import.meta.url),'utf8')
+  assert.match(source,/function MealDetailDialog/)
+  assert.match(source,/Ingredients/)
+  assert.match(source,/Recipe/)
+  assert.match(source,/View ingredients &amp; recipe/)
+  assert.match(source,/role="dialog" aria-modal="true" aria-labelledby="meal-detail-title"/)
+})

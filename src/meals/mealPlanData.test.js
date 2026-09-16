@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { MEAL_LIBRARY, MEAL_TYPES, mealsForType } from './mealLibrary.js'
+import { fallbackMealImage, MEAL_LIBRARY, MEAL_TYPES, mealsForType } from './mealLibrary.js'
 import { addMealDays, createRollingMealDay, mealDateInTimeZone, mealLibrarySummary, resolveMealDay, rollingMealDates, rotatingMealForDate, validateMealSubstitution } from './mealPlanData.js'
 
 test('meal library contains 30 options for every meal type', () => {
@@ -21,6 +21,13 @@ test('every meal has a project image and complete estimated macros', () => {
       assert.ok(meal.macros[field] > 0, `${meal.id} ${field}`)
     }
   }
+})
+
+test('legacy custom meals receive the closest relevant library image without replacing an existing image', () => {
+  const legacy = { mealType:'dinner', name:'Salmon, rice, and broccoli', description:'Salmon, Rice, and Broccoli Meal', ingredients:['salmon','rice','broccoli'], image:'' }
+  assert.equal(fallbackMealImage(legacy), '/meal-images/dinner-02.webp')
+  assert.equal(fallbackMealImage({ ...legacy, image:'/custom.png' }), '/custom.png')
+  assert.equal(fallbackMealImage({ mealType:'dinner', name:'Completely Unknown', image:'' }), '')
 })
 
 test('breakfast library excludes the heavy American breakfast foods the household rejected', () => {

@@ -7,7 +7,7 @@ const response = (body, {statusCode=200,headers={'content-type':'text/html; char
 
 const recipeHtml = `<!doctype html><html><head>
   <meta property="og:image" content="/fallback.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":["Recipe","NewsArticle"],"name":"Fluffy &amp; Golden Pancakes","description":"A <strong>family</strong> breakfast.","recipeCategory":["Breakfast"],"recipeIngredient":["2 cups Pearl Milling Company pancake mix","1 cup water","1 stick salted butter"],"prepTime":"PT5M","cookTime":"PT15M","totalTime":"PT20M","recipeYield":"12 pancakes","image":{"url":"/pancakes.jpg"}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":["Recipe","NewsArticle"],"name":"Fluffy &amp; Golden Pancakes","description":"A <strong>family</strong> breakfast.","recipeCategory":["Breakfast"],"recipeIngredient":["2 cups Pearl Milling Company pancake mix","1 cup water","1 stick salted butter"],"recipeInstructions":[{"@type":"HowToStep","text":"Whisk the ingredients."},{"@type":"HowToStep","text":"Cook on a hot griddle."}],"prepTime":"PT5M","cookTime":"PT15M","totalTime":"PT20M","recipeYield":"12 pancakes","image":{"url":"/pancakes.jpg"}}]}</script>
 </head></html>`
 
 test('structured recipe import populates editable meal fields from nested JSON-LD', () => {
@@ -16,6 +16,7 @@ test('structured recipe import populates editable meal fields from nested JSON-L
   assert.equal(result.description,'A family breakfast.')
   assert.equal(result.mealType,'breakfast')
   assert.deepEqual(result.ingredients,['2 cups Pearl Milling Company pancake mix','1 cup water','1 stick salted butter'])
+  assert.deepEqual(result.instructions,['Whisk the ingredients.','Cook on a hot griddle.'])
   assert.deepEqual([result.prepMinutes,result.cookMinutes,result.totalMinutes],[5,15,20])
   assert.deepEqual([result.yieldQuantity,result.yieldUnit],[12,'pancakes'])
   assert.equal(result.image,'https://recipes.example.com/pancakes.jpg')

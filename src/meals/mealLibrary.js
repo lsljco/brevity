@@ -138,6 +138,25 @@ export const MEAL_LIBRARY = Object.freeze(MEAL_TYPES.flatMap(mealType => SOURCE[
   tags: mealType === 'breakfast' ? ['light-breakfast', 'no-heavy-breakfast'] : ['protein-and-vegetable', 'simple'],
 }))))
 
+const IMAGE_MATCH_STOP_WORDS = new Set(['and', 'with', 'the', 'meal', 'your', 'to', 'a', 'an', 'of', 'for', 'plus'])
+const IMAGE_MATCH_PRIORITY = new Set(['salmon', 'chicken', 'turkey', 'beef', 'steak', 'pork', 'shrimp', 'cod', 'tilapia', 'tuna', 'trout', 'grouper', 'mahi', 'lamb', 'broccoli', 'asparagus', 'spinach', 'rice'])
+const imageWords = value => new Set(String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(/\s+/).filter(word => word.length > 2 && !IMAGE_MATCH_STOP_WORDS.has(word)))
+
+export function fallbackMealImage(meal, library = MEAL_LIBRARY) {
+  if (meal?.image) return meal.image
+  const words = imageWords([meal?.name, meal?.description, ...(Array.isArray(meal?.ingredients) ? meal.ingredients : [])].join(' '))
+  let bestImage = ''
+  let bestScore = 0
+  for (const candidate of Array.isArray(library) ? library : MEAL_LIBRARY) {
+    if (!candidate?.image || candidate.mealType !== meal?.mealType) continue
+    const candidateWords = imageWords(`${candidate.name} ${candidate.description}`)
+    let score = 0
+    words.forEach(word => { if (candidateWords.has(word)) score += IMAGE_MATCH_PRIORITY.has(word) ? 4 : 1 })
+    if (score > bestScore) { bestScore = score; bestImage = candidate.image }
+  }
+  return bestScore > 0 ? bestImage : ''
+}
+
 export const MEALS_BY_ID = new Map(MEAL_LIBRARY.map(meal => [meal.id, meal]))
 
 export function mealsForType(mealType) {
