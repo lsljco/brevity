@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { getLiveCalendarSnapshot, setLiveCalendarSnapshot } from '../family/calendarSnapshot.js'
 import { applicationRefreshDate, buildBankRefreshState, buildRefreshIssues, shouldRequestBankUpdate, writeCalendarSnapshotCache } from './appRefresh.js'
 
 test('application refresh requests the authoritative household date across UTC boundaries', () => {
@@ -67,13 +68,19 @@ test('an incomplete requested bank refresh cannot be hidden behind an all-clear 
 })
 
 test('calendar cache quota failures preserve the verified cache and do not reject live calendar data', () => {
+  setLiveCalendarSnapshot(null)
   const writes=[]
   const storage={setItem:(key,value)=>{writes.push([key,value]);const error=new Error('The quota has been exceeded.');error.name='QuotaExceededError';throw error}}
-  const result=writeCalendarSnapshotCache({events:[{id:'live'}]},storage)
+  const sessionWrites=[]
+  const session={setItem:(key,value)=>sessionWrites.push([key,value])}
+  const snapshot={events:[{id:'live'}]}
+  const result=writeCalendarSnapshotCache(snapshot,storage,session)
   assert.equal(result.stored,false)
   assert.match(result.warning,/recovery cache/i)
   assert.match(result.warning,/last verified cache was preserved/i)
   assert.equal(writes.length,1)
+  assert.equal(sessionWrites.length,1)
+  assert.equal(getLiveCalendarSnapshot(),snapshot)
 })
 
 test('calendar cache capacity is reported as a recoverable calendar issue', () => {

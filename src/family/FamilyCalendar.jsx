@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
-import { calendarSnapshotHealth, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+import { calendarSnapshotHealth, readCurrentCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
 import { dedupeCalendarEvents } from './calendarOverlay.js'
 import {
   canEditBrevityCalendarEvent,
@@ -11,7 +11,7 @@ import {
   canonicalizeBrevityCalendarEvent,
   isBrevityManagedAppleEvent,
 } from './calendarRecords.js'
-import { ICLOUD_CACHE_KEY, writeCalendarSnapshotCache } from '../household/appRefresh.js'
+import { writeCalendarSnapshotCache } from '../household/appRefresh.js'
 import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 import { executeAssistantProposal, getActionMode, prepareCalendarAction } from '../assistant/assistantApi.js'
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
@@ -101,7 +101,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [meetingEvents,setMeetingEvents]=useState(readMeetingEvents)
   const [scheduleState,setScheduleState]=useState(readScheduleState)
   const [maintenanceState,setMaintenanceState]=useState(readMaintenanceState)
-  const cachedCalendar=useMemo(()=>readJson(localStorage,ICLOUD_CACHE_KEY,null),[])
+  const cachedCalendar=useMemo(()=>readCurrentCalendarSnapshot(),[])
   const [icloudEvents,setIcloudEvents]=useState(()=>(cachedCalendar?.events||[]).map(normalizeIcloud))
   const [calendarHealth,setCalendarHealth]=useState(()=>calendarSnapshotHealth(cachedCalendar))
   const [icloudState,setIcloudState]=useState(()=>calendarSnapshotHealth(cachedCalendar).state)
@@ -185,7 +185,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       setCalendarHealth(health)
       setIcloudState(health.state)
     } catch (error) {
-      const previous=readJson(localStorage,ICLOUD_CACHE_KEY,cachedCalendar||{})
+      const previous=readCurrentCalendarSnapshot()||cachedCalendar||{}
       const snapshot=stampCalendarFailure(previous,error)
       const cacheWrite=writeCalendarSnapshotCache(snapshot)
       if(cacheWrite.warning)setFeedback(cacheWrite.warning)
@@ -202,7 +202,10 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     getActionMode()
       .then(result=>{if(active)setCalendarAccess({state:'ready',role:result.role,...calendarPermissionForActionMode(result)})})
       .catch(error=>{if(active)setCalendarAccess({state:'error',allowed:false,member:'',reason:error.message||'Family Calendar permissions could not be verified.'})})
-    if(!cachedCalendar||calendarSnapshotHealth(cachedCalendar).stale)loadIcloud()
+    // Opening Family Calendar is an explicit request for Apple's current
+    // contents. The cached snapshot paints immediately, then this authoritative
+    // refresh picks up events added or changed since the last app refresh.
+    loadIcloud()
     const refresh=event=>{
       const keys=event.detail?.keys||[]
       const derivedKeys=[FAMILY_CALENDAR_KEY,FINANCE_MEETINGS_KEY,HOUSEHOLD_SCHEDULE_STORAGE_KEY,HOUSEHOLD_MAINTENANCE_STORAGE_KEY]

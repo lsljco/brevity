@@ -1,6 +1,31 @@
 export const CALENDAR_CACHE_VERSION = 2
 export const CALENDAR_STALE_AFTER_MS = 30 * 60 * 1000
 
+// localStorage is only the recovery copy. Keep the latest verified Apple
+// response in memory so a full browser store cannot make the application fall
+// back to an older, incomplete calendar during the same session.
+let liveCalendarSnapshot = null
+
+export function setLiveCalendarSnapshot(snapshot) {
+  liveCalendarSnapshot = snapshot && typeof snapshot === 'object' ? snapshot : null
+  return liveCalendarSnapshot
+}
+
+export function getLiveCalendarSnapshot() {
+  return liveCalendarSnapshot
+}
+
+export function readCurrentCalendarSnapshot(storage = globalThis.localStorage, session = globalThis.sessionStorage) {
+  if (liveCalendarSnapshot) return liveCalendarSnapshot
+  for (const source of [session, storage]) {
+    try {
+      const snapshot = JSON.parse(source?.getItem?.('brevity_icloud_calendar_cache_v1') || 'null')
+      if (snapshot && typeof snapshot === 'object') return snapshot
+    } catch { /* use the next recovery source */ }
+  }
+  return null
+}
+
 const validDate = value => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date

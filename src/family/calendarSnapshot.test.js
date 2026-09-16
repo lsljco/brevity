@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calendarSnapshotHealth, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+import { calendarSnapshotHealth, readCurrentCalendarSnapshot, setLiveCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+
+test('the live session snapshot takes priority over an older persistent cache', () => {
+  const stored={events:[{id:'old'}],lastSuccessfulSyncAt:'2026-08-26T09:00:00.000Z'}
+  const live={events:[{id:'new'}],lastSuccessfulSyncAt:'2026-08-26T10:00:00.000Z'}
+  const storage={getItem:()=>JSON.stringify(stored)}
+  setLiveCalendarSnapshot(live)
+  assert.equal(readCurrentCalendarSnapshot(storage,null),live)
+  setLiveCalendarSnapshot(null)
+})
+
+test('the temporary session cache is preferred when persistent storage is full', () => {
+  const stored={events:[{id:'old'}]}
+  const session={events:[{id:'session'}]}
+  setLiveCalendarSnapshot(null)
+  assert.deepEqual(
+    readCurrentCalendarSnapshot({getItem:()=>JSON.stringify(stored)},{getItem:()=>JSON.stringify(session)}),
+    session,
+  )
+})
 
 test('successful calendar snapshots carry a verifiable synchronization time', () => {
   const snapshot = stampCalendarSuccess({ calendar: 'Family', events: [{ id: 'doctor' }] }, '2026-08-26T10:00:00.000Z')
@@ -31,4 +50,3 @@ test('legacy calendar caches are visible but never described as current', () => 
   assert.equal(health.usable, true)
   assert.match(health.message, /freshness cannot be verified/i)
 })
-

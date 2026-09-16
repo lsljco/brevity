@@ -1,6 +1,6 @@
 import { fetchICloudCalendarEvents } from '../family/icloudCalendarApi.js'
 import { mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
-import { stampCalendarFailure, stampCalendarSuccess } from '../family/calendarSnapshot.js'
+import { readCurrentCalendarSnapshot, setLiveCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from '../family/calendarSnapshot.js'
 import { refreshFinanceData } from '../finance/financeRefresh.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { fetchDailyPlan } from './householdApi.js'
@@ -21,8 +21,7 @@ let activeRefresh = null
 let automaticBankRefreshRequested = false
 
 const readCalendarCache = () => {
-  try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
-  catch { return null }
+  return readCurrentCalendarSnapshot()
 }
 
 export const CALENDAR_CACHE_CAPACITY_MESSAGE = 'This device could not update its calendar recovery cache because browser storage is full. Live calendar data remains available for this session, and the last verified cache was preserved.'
@@ -33,11 +32,13 @@ export const isStorageQuotaError = error => {
   return /QuotaExceededError|NS_ERROR_DOM_QUOTA_REACHED/i.test(name) || /quota.{0,24}(exceed|full)/i.test(message)
 }
 
-export function writeCalendarSnapshotCache(snapshot, storage = globalThis.localStorage) {
+export function writeCalendarSnapshotCache(snapshot, storage = globalThis.localStorage, session = globalThis.sessionStorage) {
+  setLiveCalendarSnapshot(snapshot)
   try {
     storage.setItem(ICLOUD_CACHE_KEY, JSON.stringify(snapshot))
     return { stored:true, warning:'' }
   } catch (error) {
+    try { session?.setItem?.(ICLOUD_CACHE_KEY, JSON.stringify(snapshot)) } catch { /* memory remains authoritative */ }
     return {
       stored:false,
       warning:isStorageQuotaError(error)
