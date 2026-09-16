@@ -100,3 +100,11 @@ test('meal cards open an accessible ingredient and recipe detail dialog', () => 
   assert.match(source,/regenerateMealImage\(meal\.id\)/)
   assert.match(source,/uploadMealImage\(meal\.id,file\)/)
 })
+
+test('generated images use a background job instead of a timeout-prone meal-plan request',()=>{
+  const api=readFileSync(new URL('./mealPlanApi.js',import.meta.url),'utf8')
+  assert.match(api,/meal-image-generate-background/)
+  assert.match(api,/meal-image-job-status\?jobId=/)
+  assert.match(api,/job\.state==='ready'/)
+  assert.match(api,/job\.state==='error'/)
+})

@@ -41,22 +41,18 @@ export const handler = async event => {
 
     if (event.httpMethod === 'PUT') {
       const body = JSON.parse(event.body || '{}')
-      if (!['regenerate-image','upload-image'].includes(body.action)) return response(409, { error: 'Meal substitutions require review and confirmation. Refresh Brevity and use the meal replacement review.' })
+      if (body.action !== 'upload-image') return response(409, { error: 'Meal substitutions require review and confirmation. Refresh Brevity and use the meal replacement review.' })
       const libraryState = await repository.getLibrary()
       const meal = libraryState.library.find(candidate => candidate.id === body.mealId)
       if (!meal) return response(404, { error:'That meal is no longer in the household library.' })
       const imageStore = getStore({ name:MEAL_IMAGE_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
       const assetId = `${meal.id}-${randomUUID()}`
       let image
-      if (body.action === 'upload-image') {
-        const bytes=Buffer.from(String(body.imageBase64||''),'base64')
-        if(!bytes.length||bytes.length>8*1024*1024)return response(400,{error:'Choose an image smaller than 8 MB.'})
-        mealImageContentType(bytes)
-        await imageStore.set(mealImageKey(process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family',assetId),bytes)
-        image=`/.netlify/functions/meal-images?id=${encodeURIComponent(assetId)}`
-      } else {
-        image = await generateMealImage({ meal:{ ...meal, image:'' }, assetId, householdId:process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family', store:imageStore })
-      }
+      const bytes=Buffer.from(String(body.imageBase64||''),'base64')
+      if(!bytes.length||bytes.length>8*1024*1024)return response(400,{error:'Choose an image smaller than 8 MB.'})
+      mealImageContentType(bytes)
+      await imageStore.set(mealImageKey(process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family',assetId),bytes)
+      image=`/.netlify/functions/meal-images?id=${encodeURIComponent(assetId)}`
       await repository.setMealImage({ mealId:meal.id, image, actor:session.member || 'Household member' })
       return response(200, { meal:{ ...meal, image, imageGenerated:true } })
     }

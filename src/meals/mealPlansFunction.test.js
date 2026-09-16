@@ -16,15 +16,8 @@ test('meal-plan GET requests use the non-persisting window reader', () => {
   assert.doesNotMatch(getBranch, /repository\.getWindow\s*\(/)
 })
 
-test('meal image regeneration uses the authoritative meal ingredients and persists an override', () => {
-  assert.match(source,/\['regenerate-image','upload-image'\]\.includes\(body\.action\)/)
-  assert.match(source,/libraryState\.library\.find\(candidate => candidate\.id === body\.mealId\)/)
-  assert.match(source,/generateMealImage\(\{ meal:\{ \.\.\.meal, image:'' \}/)
-  assert.match(source,/repository\.setMealImage\(/)
-})
-
 test('meal image upload validates bytes and saves them through the same household override',()=>{
-  assert.match(source,/body\.action === 'upload-image'/)
+  assert.match(source,/body\.action !== 'upload-image'/)
   assert.match(source,/mealImageContentType\(bytes\)/)
   assert.match(source,/imageStore\.set\(mealImageKey/)
 })
