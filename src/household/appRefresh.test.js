@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { applicationRefreshDate, buildBankRefreshState, buildRefreshIssues, shouldRequestBankUpdate } from './appRefresh.js'
+import { applicationRefreshDate, buildBankRefreshState, buildRefreshIssues, shouldRequestBankUpdate, writeCalendarSnapshotCache } from './appRefresh.js'
 
 test('application refresh requests the authoritative household date across UTC boundaries', () => {
   assert.equal(applicationRefreshDate(new Date('2026-09-07T02:30:00.000Z')), '2026-09-06')
@@ -64,4 +64,25 @@ test('an incomplete requested bank refresh cannot be hidden behind an all-clear 
   assert.equal(issues[0].source,'Finance & Plaid')
   assert.match(issues[0].message,/did not fully complete/i)
   assert.match(issues[0].message,/Last successful transaction sync/i)
+})
+
+test('calendar cache quota failures preserve the verified cache and do not reject live calendar data', () => {
+  const writes=[]
+  const storage={setItem:(key,value)=>{writes.push([key,value]);const error=new Error('The quota has been exceeded.');error.name='QuotaExceededError';throw error}}
+  const result=writeCalendarSnapshotCache({events:[{id:'live'}]},storage)
+  assert.equal(result.stored,false)
+  assert.match(result.warning,/recovery cache/i)
+  assert.match(result.warning,/last verified cache was preserved/i)
+  assert.equal(writes.length,1)
+})
+
+test('calendar cache capacity is reported as a recoverable calendar issue', () => {
+  const issues=buildRefreshIssues({
+    financeResult:{status:'fulfilled',value:{errors:[]}},
+    planResult:{status:'fulfilled',value:{}},
+    calendar:{events:[{id:'live'}],cacheWarning:'This device could not update its calendar recovery cache because browser storage is full.'},
+  })
+  assert.equal(issues.length,1)
+  assert.equal(issues[0].source,'Family Calendar')
+  assert.match(issues[0].action,/No calendar records were deleted/i)
 })

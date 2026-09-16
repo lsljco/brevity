@@ -633,6 +633,17 @@ test('iPad already-linked accounts ignore additional institution accounts withou
 
 test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
+test('iPad landscape Family Calendar keeps all seven columns inside its content lane',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='tablet-landscape','iPad landscape layout contract')
+  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Family Calendar'}).click()
+  const scroll=page.locator('.family-calendar-scroll')
+  await expect(scroll).toBeVisible()
+  const dimensions=await scroll.evaluate(element=>({clientWidth:element.clientWidth,scrollWidth:element.scrollWidth}))
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth+1)
+  await expect(page.locator('.family-calendar-weekday')).toHaveCount(7)
+})
+
 test('Settings remains operational when optional integration payloads are empty',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Settings'}).click();await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Recovery Mode');await expect(page.locator('body')).not.toContainText('Cannot read properties of undefined')})
 
 test('iPhone alignment keeps Next Pillar above fixed bottom navigation',async({page},testInfo)=>{test.skip(testInfo.project.name!=='iphone','iPhone layout contract');await page.getByRole('button',{name:/Start Today’s Alignment/}).click();const next=page.getByRole('button',{name:'Next Pillar'}),bottomNav=page.locator('.mobile-app-nav'),main=page.locator('.app-main');await expect(next).toBeVisible();await expect(bottomNav).toBeVisible();await main.evaluate(element=>{element.scrollTop=element.scrollHeight});await expect.poll(async()=>{const nextBox=await next.boundingBox(),navBox=await bottomNav.boundingBox();return nextBox&&navBox?Math.round(navBox.y-(nextBox.y+nextBox.height)):-999},{timeout:5000}).toBeGreaterThanOrEqual(0)})

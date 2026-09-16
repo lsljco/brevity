@@ -28,8 +28,9 @@ test('native Apple and source-managed Brevity events remain read-only in the dir
 })
 
 test('phone and tablet Calendar controls avoid known overflow and touch-target failures', () => {
-  assert.match(styles,/@media \(min-width:721px\) and \(max-width:900px\)/)
-  assert.match(styles,/\.family-calendar-grid\{min-width:640px\}/)
+  assert.match(styles,/@media \(min-width:\s*721px\) and \(max-width:\s*900px\)/)
+  assert.match(styles,/\.family-calendar-grid\s*\{\s*min-width:\s*640px/)
+  assert.match(styles,/@media \(min-width:\s*901px\) and \(max-width:\s*1200px\)/)
   assert.match(styles,/\.family-calendar-month-navigation \{ display: none !important; \}/)
   assert.match(styles,/@media \(pointer: coarse\)/)
   assert.match(styles,/width: 44px;/)
