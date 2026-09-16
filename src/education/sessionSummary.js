@@ -1,1 +1,0 @@
-export function sessionCompletionSummary(record){const s=record?.sessions?.[0];if(!s)return null;const statuses={};for(const r of s.responses||[])statuses[r.skillId]=record.skillMastery?.[r.skillId]?.status||'RED';return{sessionId:s.id,date:s.date,assessor:s.assessor,completedAt:s.completedAt,fluency:s.fluency||null,skillStatuses:statuses}}

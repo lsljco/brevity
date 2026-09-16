@@ -21,10 +21,10 @@ result?.pillar===pillar.id && result?.date===plan?.date
 inFlightRef.current===requestKey
 if(inFlightRef.current===requestKey)return
 Refreshing analysis…
->Who
->When
->Done when
->Where
+>Who<
+>When<
+>Done when<
+>Where<
 [currentMember, pillar.id]
 useRollingMealPlan({enabled:isHealth,startDate:plan?.date,requireFresh:true,reloadOnRefreshEvents:true})
 mealDetails:meals.map
@@ -46,3 +46,4 @@ planState!=='ready' || planRefreshError || !analysisPlan?.date
 isHealth&&rollingMeals.state!=='ready')}
 analysis.evidence
 */
+474b0fb86976cb6698d27037ed3ac4e024bca65f

@@ -1,1 +1,0 @@
-export function standardsEvidenceForSession(session){const out={};for(const r of session?.responses||[])for(const code of r.standardCodes||[])(out[code]??=[]).push({responseId:r.id,skillId:r.skillId,result:r.result});return out}
