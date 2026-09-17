@@ -1,3 +1,5 @@
+import { FUEL_WITH_PURPOSE_MEALS } from './fuelWithPurposeMeals.js'
+
 export const MEAL_TYPES = Object.freeze(['breakfast', 'lunch', 'dinner'])
 
 const BREAKFASTS = [
@@ -125,7 +127,7 @@ function estimatedMacros(name, mealType) {
   return macros
 }
 
-export const MEAL_LIBRARY = Object.freeze(MEAL_TYPES.flatMap(mealType => SOURCE[mealType].map(([name, description, prepMinutes], index) => Object.freeze({
+const CORE_MEAL_LIBRARY = MEAL_TYPES.flatMap(mealType => SOURCE[mealType].map(([name, description, prepMinutes], index) => Object.freeze({
   id: `${mealType}-${String(index + 1).padStart(2, '0')}`,
   mealType,
   name,
@@ -136,7 +138,9 @@ export const MEAL_LIBRARY = Object.freeze(MEAL_TYPES.flatMap(mealType => SOURCE[
   macros: estimatedMacros(name, mealType),
   nutritionBasis: 'Estimated from standard portions; actual values vary by ingredients and preparation.',
   tags: mealType === 'breakfast' ? ['light-breakfast', 'no-heavy-breakfast'] : ['protein-and-vegetable', 'simple'],
-}))))
+})))
+
+export const MEAL_LIBRARY = Object.freeze([...CORE_MEAL_LIBRARY, ...FUEL_WITH_PURPOSE_MEALS])
 
 const IMAGE_MATCH_STOP_WORDS = new Set(['and', 'with', 'the', 'meal', 'your', 'to', 'a', 'an', 'of', 'for', 'plus'])
 const IMAGE_MATCH_PRIORITY = new Set(['salmon', 'chicken', 'turkey', 'beef', 'steak', 'pork', 'shrimp', 'cod', 'tilapia', 'tuna', 'trout', 'grouper', 'mahi', 'lamb', 'broccoli', 'asparagus', 'spinach', 'rice'])

@@ -18,6 +18,7 @@ const formatPrepMinutes = value => {
   if (!hours) return `${minutes} min`
   return `${hours} hr${hours === 1 ? '' : 's'}${minutes ? ` ${minutes} min` : ''}`
 }
+const mealTimingLabel = meal => meal?.timingRecorded === false ? 'Time not recorded' : formatPrepMinutes(meal?.totalMinutes ?? meal?.prepMinutes)
 
 function MealImage({ meal, className = '', loading = 'lazy', alt = '' }) {
   if (meal?.image) return <img className={className} src={meal.image} alt={alt} loading={loading} />
@@ -58,7 +59,7 @@ function MealDetailDialog({ meal, onClose, onImageGenerated }) {
         <MealImage meal={meal} className="meal-detail-image" alt={meal.name} loading="eager" />
         <div className="meal-detail-image-action"><div><strong>Meal photo</strong><span>Upload your own photo, or generate one from this exact ingredient list in Brevity’s luxury steakhouse aesthetic.</span></div><div className="meal-detail-image-buttons"><input id={uploadInputId} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadImage} disabled={imageState==='loading'||imageState==='uploading'} /><label htmlFor={uploadInputId} aria-disabled={imageState==='loading'||imageState==='uploading'}><i className="ti ti-upload" /> {imageState==='uploading'?'Uploading…':'Upload Image'}</label><button type="button" onClick={generateImage} disabled={imageState==='loading'||imageState==='uploading'||!ingredients.length}><i className="ti ti-photo-spark" /> {imageState==='loading'?'Generating…':'Generate New Image'}</button></div></div>
         {imageError&&<div className="meal-nutrition-error" role="alert">{imageError}</div>}
-        <div className="meal-detail-facts"><span><strong>{formatPrepMinutes(meal.totalMinutes ?? meal.prepMinutes)}</strong> total</span><span><strong>{formatPrepMinutes(meal.prepMinutes)}</strong> prep</span>{Number(meal.cookMinutes) > 0 && <span><strong>{formatPrepMinutes(meal.cookMinutes)}</strong> cook</span>}<span><strong>{meal.serving || '1 serving'}</strong> serving</span></div>
+        <div className="meal-detail-facts">{meal.timingRecorded === false ? <span><strong>Not recorded</strong> preparation time</span> : <><span><strong>{formatPrepMinutes(meal.totalMinutes ?? meal.prepMinutes)}</strong> total</span><span><strong>{formatPrepMinutes(meal.prepMinutes)}</strong> prep</span>{Number(meal.cookMinutes) > 0 && <span><strong>{formatPrepMinutes(meal.cookMinutes)}</strong> cook</span>}</>}<span><strong>{meal.serving || '1 serving'}</strong> serving</span></div>
         <Macros meal={meal} />
         <div className="meal-detail-columns">
           <section><h3>Ingredients</h3>{ingredients.length ? <ul>{ingredients.map((ingredient,index)=><li key={`${ingredient}-${index}`}>{ingredient}</li>)}</ul> : <p>Ingredient quantities have not been recorded for this library meal.</p>}</section>
@@ -76,7 +77,7 @@ function MealChoice({ meal, onChoose, selected, current }) {
     <MealImage meal={meal} alt="" />
     <span className="meal-choice-mark"><i className={`ti ${selected ? 'ti-circle-check-filled' : 'ti-circle'}`} /></span>
     <span><strong>{meal.name}</strong><small>{meal.description}</small><Macros meal={meal} /></span>
-    <em>{current ? 'Current' : selected ? 'Selected' : `${meal.prepMinutes} min`}</em>
+    <em>{current ? 'Current' : selected ? 'Selected' : mealTimingLabel(meal)}</em>
   </button>
 }
 
@@ -253,7 +254,7 @@ function PlanView({ days, onSelect, onOpenMeal }) {
 function LibraryView({ library, onAdd, onOpenMeal }) {
   return <div className="meal-library">{MEAL_TYPES.map(mealType => {
     const meals = library.filter(meal => meal.mealType === mealType)
-    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{LABELS[mealType]}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {LABELS[mealType]}</button></header><div className="meal-library-grid">{meals.map(meal => <article className="meal-card-action" key={meal.id} role="button" tabIndex="0" aria-label={`View ${meal.name} details`} onClick={()=>onOpenMeal(meal)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{meal.prepMinutes} min</span></div><p>{meal.description}</p><Macros meal={meal} /><small className="meal-library-view">View ingredients &amp; recipe</small></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
+    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{LABELS[mealType]}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {LABELS[mealType]}</button></header><div className="meal-library-grid">{meals.map(meal => <article className="meal-card-action" key={meal.id} role="button" tabIndex="0" aria-label={`View ${meal.name} details`} onClick={()=>onOpenMeal(meal)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{mealTimingLabel(meal)}</span></div><p>{meal.description}</p><Macros meal={meal} /><small className="meal-library-view">View ingredients &amp; recipe</small></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
   })}</div>
 }
 
@@ -309,7 +310,7 @@ export default function MealPlanner() {
   }
 
   return <main className="meal-planner">
-    <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>Rolling 7-Day Meal Plan</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>{data?.librarySummary?.total ?? 90}</strong><span>household meals</span></div></header>
+    <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>Rolling 7-Day Meal Plan</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>{data?.librarySummary?.total ?? 117}</strong><span>household meals</span></div></header>
     <div className="meal-planner-controls"><nav aria-label="Meal planner views"><button type="button" className={view === 'plan' ? 'is-active' : ''} onClick={() => setView('plan')}><i className="ti ti-calendar-week" /> 7-Day Plan</button><button type="button" className={view === 'library' ? 'is-active' : ''} onClick={() => setView('library')}><i className="ti ti-tools-kitchen-2" /> Meal Library</button></nav><p><i className="ti ti-refresh" /> The window rolls forward daily; replacements remain attached to their date.</p></div>
     {message && <div className="meal-planner-message" role="status">{message}</div>}
     {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Today’s plan insight</span><strong>{planInsight.mealCount} meals are planned for {formatDay(planInsight.selectedDate)}.</strong><p>The totals below aggregate breakfast, lunch, and dinner for this day. Preparation uses each meal’s total time, or prep time when no separate cook time exists.</p></div><dl><div><dt>Total planned time</dt><dd>{formatPrepMinutes(planInsight.totalPrepMinutes)}</dd></div><div><dt>Total calories</dt><dd>{planInsight.totalCalories.toLocaleString()} cal</dd></div><div><dt>Total protein</dt><dd>{planInsight.totalProteinGrams}g</dd></div><div><dt>Total carbs</dt><dd>{planInsight.totalCarbohydrateGrams}g</dd></div><div><dt>Total fat</dt><dd>{planInsight.totalFatGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are estimates for the three meals shown for this day, not evidence that a meal was prepared or eaten.</small></section>}
