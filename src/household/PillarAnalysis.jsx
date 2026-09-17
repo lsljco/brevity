@@ -1,8 +1,10 @@
 import PillarAnalysisCore from './PillarAnalysisCore.jsx'
 import IsaiahDailyTutor from '../education/IsaiahDailyTutor.jsx'
+import DailyFitnessWorkout from '../fitness/DailyFitnessWorkout.jsx'
 
 export default function PillarAnalysis(props) {
   if (props.pillar?.id === 'education') return <IsaiahDailyTutor currentMember={props.currentMember}/>
+  if (props.pillar?.id === 'fitness') return <DailyFitnessWorkout currentMember={props.currentMember}/>
   return <PillarAnalysisCore {...props}/>
 }
 
