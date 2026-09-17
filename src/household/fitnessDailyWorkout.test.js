@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { fitnessProfileForMember, workoutForDate } from '../fitness/fitnessWorkoutPlan.js'
+import { BODY_PARTS, EXERCISE_LIBRARY, fitnessProfileForMember, weeklyScheduleForMember, workoutForDate } from '../fitness/fitnessWorkoutPlan.js'
 
 test('Physical Fitness assigns adult physique tracks and a separate youth-safe track', () => {
   assert.equal(fitnessProfileForMember('Larry'),'men')
@@ -12,31 +12,49 @@ test('Physical Fitness assigns adult physique tracks and a separate youth-safe t
   assert.equal(fitnessProfileForMember('Isaiah'),'youth')
 })
 
-test('Thursday serves an executable member-specific workout instead of a missing-analysis card', () => {
+test('Thursday follows the household leg schedule with daily abs and steps', () => {
   const men=workoutForDate('2026-09-17','Larry')
   const women=workoutForDate('2026-09-17','Terica')
   const youth=workoutForDate('2026-09-17','Isaiah')
-  assert.equal(men.title,'V-Taper Pull')
-  assert.equal(women.title,'Back + Glute Sculpt')
-  assert.equal(youth.title,'Youth Strength Foundations')
+  assert.match(men.title,/Legs/)
+  assert.match(women.title,/Legs/)
+  assert.equal(youth.title,'Youth Strength + Movement')
   for(const workout of [men,women,youth]){
     assert.equal(workout.stepGoal,12000)
-    assert.equal(workout.weeklyWorkoutTarget,4)
+    assert.equal(workout.weeklyWorkoutTarget,5)
     assert.ok(workout.exercises.length>=4)
-    assert.ok(workout.exercises.every(item=>item.sets&&item.reps&&item.rest&&item.muscles.length&&item.cue&&item.visual))
+    assert.ok(workout.exercises.some(item=>item.bodyParts.includes('Abs')))
+    assert.ok(workout.exercises.every(item=>item.sets&&item.reps&&item.rest&&item.muscles.length&&item.cue&&item.image.endsWith('.webp')))
   }
 })
 
-test('daily workout UI contains exercise illustrations, muscle targets, form cues and progression',async()=>{
+test('weekly schedule matches the requested five-day household split',()=>{
+  const schedule=weeklyScheduleForMember('Larry')
+  assert.deepEqual(schedule.slice(0,5).map(day=>day.focus),['Chest + Back','Legs','Arms + Shoulders','Legs','Chest + Back'])
+  assert.ok(schedule.every(day=>day.daily==='Abs · 12,000 steps'))
+})
+
+test('exercise library covers all major body parts with exercise-specific photography',()=>{
+  assert.equal(EXERCISE_LIBRARY.length,25)
+  for(const part of ['Chest','Back','Shoulders','Biceps','Triceps','Quadriceps','Hamstrings','Glutes','Calves','Abs','Conditioning']){
+    assert.ok(BODY_PARTS.includes(part))
+    assert.ok(EXERCISE_LIBRARY.some(item=>item.bodyParts.includes(part)),`${part} is covered`)
+  }
+  assert.equal(new Set(EXERCISE_LIBRARY.map(item=>item.image)).size,EXERCISE_LIBRARY.length)
+})
+
+test('daily workout UI contains photographs, schedule, searchable library and progression',async()=>{
   const source=await readFile(new URL('../fitness/DailyFitnessWorkout.jsx',import.meta.url),'utf8')
-  assert.match(source,/fitness-exercise-visual/)
-  assert.match(source,/targets \$\{muscleText\}/)
+  assert.match(source,/fitness-exercise-photo/)
+  assert.match(source,/Weekly Workout Schedule/)
+  assert.match(source,/Exercise Library/)
+  assert.match(source,/Search exercise library/)
   assert.match(source,/Perform in this order/)
   assert.match(source,/Sets/)
   assert.match(source,/Reps \/ time/)
   assert.match(source,/Rest/)
   assert.match(source,/Progression/)
+  assert.match(source,/12,000 total steps/)
   assert.doesNotMatch(source,/What Matters Today/)
   assert.doesNotMatch(source,/Evidence & Provenance/)
 })
-
