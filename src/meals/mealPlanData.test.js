@@ -16,6 +16,12 @@ test('every meal has a project image and complete estimated macros', () => {
     assert.match(meal.image, /^\/meal-images\/(?:breakfast|lunch|dinner|fuel)-[a-z0-9-]+\.webp$/)
     assert.equal(existsSync(fileURLToPath(new URL(`../../public${meal.image}`, import.meta.url))), true, `${meal.id} image`)
     assert.ok(meal.serving)
+    assert.ok(meal.ingredients.length >= 4, `${meal.id} measured ingredients`)
+    assert.ok(meal.ingredients.every(ingredient => !/not specified|not recorded/i.test(ingredient)), `${meal.id} has no ingredient placeholders`)
+    assert.ok(meal.instructions.length >= 3, `${meal.id} recipe instructions`)
+    assert.ok(meal.prepMinutes > 0, `${meal.id} prep time`)
+    assert.ok(meal.totalMinutes >= meal.prepMinutes, `${meal.id} total time`)
+    assert.equal(meal.timingRecorded, true, `${meal.id} timing recorded`)
     for (const field of ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams']) {
       assert.equal(Number.isInteger(meal.macros[field]), true, `${meal.id} ${field}`)
       assert.ok(meal.macros[field] >= 0, `${meal.id} ${field}`)
@@ -43,15 +49,25 @@ test('lunch and dinner defaults are simple protein-and-vegetable meals', () => {
   }
 })
 
-test('Fuel with Purpose imports preserve source details without inventing recipes or timing', () => {
+test('Fuel with Purpose meals retain provenance and receive complete standardized recipes', () => {
   const imported = MEAL_LIBRARY.filter(meal => meal.tags.includes('fuel-with-purpose'))
   assert.equal(imported.length, 27)
   assert.ok(imported.every(meal => meal.ingredients.length > 0))
-  assert.ok(imported.every(meal => meal.instructions.length === 0))
-  assert.ok(imported.every(meal => meal.timingRecorded === false))
+  assert.ok(imported.every(meal => meal.instructions.length >= 3))
+  assert.ok(imported.every(meal => meal.timingRecorded === true))
+  assert.ok(imported.every(meal => meal.ingredients.every(ingredient => !/not specified|not recorded/i.test(ingredient))))
   assert.ok(imported.every(meal => /Week 9\.16\.26/.test(meal.sourceName)))
   assert.ok(imported.some(meal => meal.name === 'Chicken Chipotle Bowl' && meal.serving === '1 entire bowl'))
   assert.ok(imported.some(meal => meal.name === 'Lean Beef Spaghetti' && meal.serving === 'approximately 2 cups'))
+  assert.ok(imported.some(meal => meal.name === 'Grilled Pork Chop + Broccolini' && meal.ingredients.includes('8 oz pork chop')))
+})
+
+test('Spinach & Mushroom Eggs includes measured ingredients and teachable steps',()=>{
+  const meal=MEAL_LIBRARY.find(item=>item.name==='Spinach & Mushroom Eggs')
+  assert.ok(meal.ingredients.includes('1/2 cup sliced cremini mushrooms'))
+  assert.ok(meal.ingredients.includes('1 cup baby spinach'))
+  assert.ok(meal.instructions.some(step=>/skillet/i.test(step)))
+  assert.equal(meal.totalMinutes,15)
 })
 
 test('rolling dates and rotation provide seven stable days without category repeats', () => {
