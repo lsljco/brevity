@@ -1,4 +1,5 @@
 import { FUEL_WITH_PURPOSE_MEALS } from './fuelWithPurposeMeals.js'
+import { completeMealRecipe } from './mealRecipeDetails.js'
 
 export const MEAL_TYPES = Object.freeze(['breakfast', 'lunch', 'dinner'])
 
@@ -140,7 +141,7 @@ const CORE_MEAL_LIBRARY = MEAL_TYPES.flatMap(mealType => SOURCE[mealType].map(([
   tags: mealType === 'breakfast' ? ['light-breakfast', 'no-heavy-breakfast'] : ['protein-and-vegetable', 'simple'],
 })))
 
-export const MEAL_LIBRARY = Object.freeze([...CORE_MEAL_LIBRARY, ...FUEL_WITH_PURPOSE_MEALS])
+export const MEAL_LIBRARY = Object.freeze([...CORE_MEAL_LIBRARY, ...FUEL_WITH_PURPOSE_MEALS].map(completeMealRecipe))
 
 const IMAGE_MATCH_STOP_WORDS = new Set(['and', 'with', 'the', 'meal', 'your', 'to', 'a', 'an', 'of', 'for', 'plus'])
 const IMAGE_MATCH_PRIORITY = new Set(['salmon', 'chicken', 'turkey', 'beef', 'steak', 'pork', 'shrimp', 'cod', 'tilapia', 'tuna', 'trout', 'grouper', 'mahi', 'lamb', 'broccoli', 'asparagus', 'spinach', 'rice'])
