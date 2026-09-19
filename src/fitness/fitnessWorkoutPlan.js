@@ -1,12 +1,12 @@
 const exercise=(id,name,bodyParts,sets,reps,rest,muscles,cue,image)=>Object.freeze({id,name,bodyParts:Object.freeze(bodyParts),sets,reps,rest,muscles:Object.freeze(muscles),cue,image:`/fitness/exercises/${image}.webp`})
 
 export const EXERCISE_LIBRARY=Object.freeze([
-  exercise('incline-press','Incline dumbbell press',['Chest','Shoulders','Triceps'],4,'8–12','90 sec',['Upper chest','Front delts','Triceps'],'Pin the shoulder blades down and back; lower with control.','incline-dumbbell-press'),
-  exercise('cable-fly','Low-to-high cable fly',['Chest','Shoulders'],3,'12–15','60 sec',['Upper chest','Front delts'],'Sweep the handles up and inward without rolling the shoulders forward.','cable-fly'),
-  exercise('push-up','Push-up',['Chest','Triceps','Abs'],3,'8–15','60 sec',['Chest','Triceps','Core'],'Keep one straight line from head to heels and lower the chest between the hands.','push-up'),
-  exercise('lat-pulldown','Wide-neutral lat pulldown',['Back','Biceps'],4,'8–12','90 sec',['Lats','Upper back','Biceps'],'Drive elbows toward the hips without leaning backward.','lat-pulldown'),
+  exercise('incline-press','Incline dumbbell press',['Chest','Shoulders','Triceps'],4,'8–12','90 sec',['Upper chest','Front delts','Triceps'],'Pin the shoulder blades down and back; lower with control.','family-lorenzo-incline-press-v1'),
+  exercise('cable-fly','Low-to-high cable fly',['Chest','Shoulders'],3,'12–15','60 sec',['Upper chest','Front delts'],'Sweep the handles up and inward without rolling the shoulders forward.','family-terica-cable-fly-v1'),
+  exercise('push-up','Push-up',['Chest','Triceps','Abs'],3,'8–15','60 sec',['Chest','Triceps','Core'],'Keep one straight line from head to heels and lower the chest between the hands.','family-larry-push-up-v1'),
+  exercise('lat-pulldown','Wide-neutral lat pulldown',['Back','Biceps'],4,'8–12','90 sec',['Lats','Upper back','Biceps'],'Drive elbows toward the hips without leaning backward.','family-javin-lat-pulldown-v1'),
   exercise('chest-row','Chest-supported row',['Back','Shoulders'],4,'8–12','90 sec',['Mid-back','Lats','Rear delts'],'Keep the chest supported; pause as the shoulder blades draw together.','chest-supported-row'),
-  exercise('single-row','Single-arm cable row',['Back','Biceps'],3,'10–12 each','60 sec',['Lats','Mid-back','Biceps'],'Keep the torso quiet and pull the elbow toward the back pocket.','single-arm-row'),
+  exercise('single-row','Single-arm cable row',['Back','Biceps'],3,'10–12 each','60 sec',['Lats','Mid-back','Biceps'],'Keep the torso quiet and pull the elbow toward the back pocket.','family-nyla-single-arm-row-v1'),
   exercise('shoulder-press','Seated dumbbell shoulder press',['Shoulders','Triceps'],3,'8–12','75 sec',['Front delts','Side delts','Triceps'],'Keep ribs stacked over hips and press without shrugging.','shoulder-press'),
   exercise('lateral-raise','Dumbbell lateral raise',['Shoulders'],4,'12–18','45 sec',['Side delts'],'Lead with the elbows and stop around shoulder height.','lateral-raise'),
   exercise('reverse-fly','Chest-supported reverse fly',['Shoulders','Back'],3,'12–18','45 sec',['Rear delts','Upper back'],'Use a light load and open the arms without shrugging.','reverse-fly'),
@@ -23,7 +23,7 @@ export const EXERCISE_LIBRARY=Object.freeze([
   exercise('calf-raise','Standing calf raise',['Calves'],3,'12–20','45 sec',['Calves'],'Use a full stretch and pause at the top over the big toe.','calf-raise'),
   exercise('ab-wheel','Ab-wheel rollout',['Abs','Back'],3,'6–12','60 sec',['Deep core','Rectus abdominis','Lats'],'Roll only as far as the torso stays rigid and the low back does not sag.','ab-wheel'),
   exercise('hanging-raise','Hanging knee raise',['Abs'],3,'8–15','60 sec',['Lower abs','Deep core','Hip flexors'],'Tuck the pelvis first, then raise the knees without swinging.','hanging-knee-raise'),
-  exercise('dead-bug','Dead bug',['Abs'],3,'6–10 each','45 sec',['Deep core','Rectus abdominis'],'Extend opposite limbs only while the low back stays gently pressed down.','dead-bug'),
+  exercise('dead-bug','Dead bug',['Abs'],3,'6–10 each','45 sec',['Deep core','Rectus abdominis'],'Extend opposite limbs only while the low back stays gently pressed down.','family-isaiah-dead-bug-v1'),
   exercise('plank','Front plank',['Abs','Shoulders'],3,'20–40 sec','45 sec',['Deep core','Abs','Shoulders'],'Squeeze the glutes, pull the ribs down, and breathe behind the brace.','front-plank'),
   exercise('incline-walk','Incline treadmill walk',['Conditioning','Glutes','Calves'],1,'20–30 min','As needed',['Heart and lungs','Glutes','Calves'],'Use a pace that allows short sentences; stay tall and off the rails.','incline-walk'),
 ])

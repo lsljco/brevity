@@ -61,7 +61,7 @@ test('daily workout UI contains photographs, schedule, searchable library and pr
 })
 
 test('approved family workout renders are permanent bundled exercise assets',async()=>{
-  const files=['push-up','incline-dumbbell-press','dead-bug','cable-fly','single-arm-row','lat-pulldown']
+  const files=['family-larry-push-up-v1','family-lorenzo-incline-press-v1','family-isaiah-dead-bug-v1','family-terica-cable-fly-v1','family-nyla-single-arm-row-v1','family-javin-lat-pulldown-v1']
   const assets=await Promise.all(files.map(name=>readFile(new URL(`../../public/fitness/exercises/${name}.webp`,import.meta.url))))
   for(const asset of assets){
     assert.equal(asset.subarray(0,4).toString(),'RIFF')
