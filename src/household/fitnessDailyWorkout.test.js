@@ -60,8 +60,10 @@ test('daily workout UI contains photographs, schedule, searchable library and pr
   assert.doesNotMatch(source,/Create .*Workout Photos|Generate .*Workout Photos/)
 })
 
-test('approved family workout renders are permanent bundled exercise assets',async()=>{
-  const files=['family-larry-push-up-v1','family-lorenzo-incline-press-v1','family-isaiah-dead-bug-v1','family-terica-cable-fly-v1','family-nyla-single-arm-row-v1','family-javin-lat-pulldown-v1']
+test('every workout uses a permanent bundled family render',async()=>{
+  const files=EXERCISE_LIBRARY.map(item=>item.image.replace('/fitness/exercises/','').replace(/\.webp$/,''))
+  assert.equal(files.length,25)
+  assert.ok(files.every(name=>name.startsWith('family-')))
   const assets=await Promise.all(files.map(name=>readFile(new URL(`../../public/fitness/exercises/${name}.webp`,import.meta.url))))
   for(const asset of assets){
     assert.equal(asset.subarray(0,4).toString(),'RIFF')
