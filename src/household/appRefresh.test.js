@@ -8,11 +8,11 @@ test('application refresh requests the authoritative household date across UTC b
   assert.equal(applicationRefreshDate(new Date('2026-09-07T04:30:00.000Z')), '2026-09-07')
 })
 
-test('the first administrator refresh after app open requests a live Plaid update', () => {
-  assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:false, financeReadOnly:false }), true)
-  assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:true, financeReadOnly:false }), false)
-  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true, automaticAlreadyRequested:true, financeReadOnly:false }), true)
-  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true, automaticAlreadyRequested:false, financeReadOnly:true }), false)
+test('app startup reads the verified Plaid snapshot and reserves live updates for explicit actions', () => {
+  assert.equal(shouldRequestBankUpdate({ financeReadOnly:false }), false)
+  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:false, financeReadOnly:false }), false)
+  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true, financeReadOnly:false }), true)
+  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true, financeReadOnly:true }), false)
 })
 
 test('bank refresh state never reports fresh while Plaid is still processing or data is stale', () => {
