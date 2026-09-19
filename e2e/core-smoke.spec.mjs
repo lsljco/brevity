@@ -18,7 +18,7 @@ const plan = () => ({
   spiritual: { owner:'Family', scope:'household', scripture:['Psalm 1:3'], devotionFocus:'Shared household devotion', prayerFocus:['Wisdom'], discussionPrompts:[], obedienceAction:'Practice the teaching.' },
   health: { owner:'Terica', breakfast:'Eggs', lunch:'Chicken and vegetables', dinner:'Fish and vegetables', snacks:'Fruit', hydration:'Water', groceries:[], nextDayPrep:'' },
   fitness: { owner:'Larry', location:'Lifetime Gym', participants:[], workout:'Strength', objective:'Train', departureTime:'', returnTime:'', stepGoal:10000, recovery:'', requiresDecision:false },
-  household: { owner:'Larry', appointments:[], priorities:[], errands:[], openItems:[] },
+  household: { owner:'Larry', appointments:[{ id:'school-meeting', title:'School planning meeting', date:today(), startTime:'9:15 AM', owner:'Larry', status:'pending', priority:'normal' }], priorities:[], errands:[], openItems:[] },
   education: { owner:'Larry', thinkTankTopic:'', thinkTankDeliverable:'', isaiah:{ owner:'Family', readingMinutes:20, sightWordsMinutes:10, comprehensionMinutes:10, mathMinutes:10, notes:'' } },
   finance: { owner:'Larry', bills:[], purchases:[], transfers:[], accountsToFund:[], incomePipeline:[], decisionRule:'' },
   ministry: { owners:['Larry','Lorenzo'], meetings:[], contentFocus:'', fellowshipFollowUps:[], prayerNeeds:[] },
@@ -40,7 +40,7 @@ async function mockBackend(page) {
       } else body = { records:{}, serverTime:new Date().toISOString() }
     }
     else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan() }
-    else if (path.endsWith('/icloud-calendar')) body = { events:[], connected:true, syncedAt:new Date().toISOString() }
+    else if (path.endsWith('/icloud-calendar')) body = { events:[{ id:'doctor-appointment', uid:'doctor-appointment', source:'icloud', title:'Doctor appointment', date:today(), time:'2:30 PM', owner:'Family' }], connected:true, syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-transactions')) body = { transactions:[], errors:[] }
     else if (path.endsWith('/health-alerts')) body = { alerts:[] }
@@ -137,6 +137,30 @@ test('Today renders operating content without a fatal application error', async 
   await expect(page.getByRole('button', { name:'Today' }).first()).toBeVisible()
   await expect(page.locator('body')).not.toContainText('Something went wrong')
   await expect(page.locator('body')).not.toContainText('Application error')
+})
+
+test('Today Pillar 3 shows the dated workout exercise photography and opens the full workout', async ({ page }) => {
+  const fitness = page.locator('.today-fitness-workout')
+  await expect(fitness).toBeVisible()
+  expect(await fitness.locator('.today-fitness-exercise').count()).toBeGreaterThanOrEqual(2)
+  const images = fitness.locator('.today-fitness-exercise img')
+  expect(await images.count()).toBeGreaterThanOrEqual(2)
+  for (let index = 0; index < await images.count(); index += 1) {
+    await expect(images.nth(index)).toHaveJSProperty('complete', true)
+    expect(await images.nth(index).evaluate(image => image.naturalWidth)).toBeGreaterThan(0)
+  }
+  await fitness.getByRole('button', { name:'Open Full Workout' }).click()
+  await expect(page.locator('.daily-fitness-hero h1')).toBeVisible()
+})
+
+test('Today Pillar 4 lists every calendar commitment and today’s Household Operations chores', async ({ page }) => {
+  const household = page.locator('[data-pillar="household"]')
+  await expect(household.getByRole('heading', { name:'Today’s Appointments & Meetings' })).toBeVisible()
+  await expect(household.getByText('School planning meeting')).toBeVisible()
+  await expect(household.getByText('Doctor appointment')).toBeVisible()
+  await expect(household.getByRole('heading', { name:'Today’s Chores' })).toBeVisible()
+  expect(await household.locator('.today-chore-item').count()).toBeGreaterThan(0)
+  await expect(household.getByRole('button', { name:'Open Household Operations' })).toBeVisible()
 })
 
 test('mobile shell keeps fixed navigation inside the viewport without horizontal overflow', async ({ page }, testInfo) => {
