@@ -541,6 +541,20 @@ test('a failed optional bank-update request still drains the durable transaction
   assert.equal(result.refresh.errors.length,1)
 })
 
+test('an automatic bank-update failure stays advisory while the durable cursor still drains',async()=>{
+  const result=await fetchLatestPlaidTransactions({
+    requestBankUpdate:true,
+    suppressRefreshRequestErrors:true,
+    fetcher:async path=>{
+      if(path.includes('refresh_only=1'))throw new Error('Finance refresh failed (502).')
+      return {mode:'incremental',transactions:[{id:'current',amount:10,date:'2026-09-18'}],removed:[],errors:[],sourceReceipts:[]}
+    },
+  })
+  assert.equal(result.transactions[0].id,'current')
+  assert.deepEqual(result.refresh.errors,[])
+  assert.equal(result.refresh.advisoryErrors[0].message,'Finance refresh failed (502).')
+})
+
 test('read-only refresh returns current bank data without changing browser or shared finance state', async () => {
   const values=new Map([['lslj_finance_v9',JSON.stringify({
     calendarDataVersion:6,

@@ -269,6 +269,7 @@ function cachedPlaidTransactions(storage) {
 
 export async function fetchLatestPlaidTransactions({
   requestBankUpdate = false,
+  suppressRefreshRequestErrors = false,
   fetcher = apiFetch,
 } = {}) {
   let refreshResponse = null
@@ -276,13 +277,15 @@ export async function fetchLatestPlaidTransactions({
     try {
       refreshResponse = await fetcher('/plaid-transactions?refresh=1&refresh_only=1', { timeoutMs: TRANSACTION_REFRESH_REQUEST_TIMEOUT_MS })
     } catch (error) {
+      const refreshError = { institution:'Bank', code:error?.code || 'TRANSACTION_REFRESH_REQUEST_FAILED', message:error?.message || 'The bank update request could not be confirmed.' }
       refreshResponse = {
         refresh:{
           requested:true,
           accepted:0,
           requestStatus:'unconfirmed',
           stillProcessing:false,
-          errors:[{ institution:'Bank', code:error?.code || 'TRANSACTION_REFRESH_REQUEST_FAILED', message:error?.message || 'The bank update request could not be confirmed.' }],
+          errors:suppressRefreshRequestErrors ? [] : [refreshError],
+          advisoryErrors:suppressRefreshRequestErrors ? [refreshError] : [],
         },
       }
     }
@@ -549,6 +552,7 @@ function hasImportableLiveBalanceProof(payload) {
 
 export async function refreshFinanceData(storage = window.localStorage, {
   requestBankUpdate = false,
+  suppressRefreshRequestErrors = false,
   persist = true,
   fetchAccounts = ({ requestBankUpdate:requestLiveBalances = false } = {}) => apiFetch(
     requestLiveBalances ? '/plaid-accounts?live=1' : '/plaid-accounts',
@@ -559,7 +563,7 @@ export async function refreshFinanceData(storage = window.localStorage, {
 } = {}) {
   const [accountResult, transactionResult] = await Promise.allSettled([
     fetchAccounts({ requestBankUpdate }),
-    fetchTransactions({ requestBankUpdate }),
+    fetchTransactions({ requestBankUpdate, suppressRefreshRequestErrors }),
   ])
 
   const loadedFinance = loadFinanceData(storage, FINANCE_STORAGE_KEY)
@@ -661,8 +665,14 @@ export async function refreshFinanceData(storage = window.localStorage, {
         : 'The bank source reported a connection but returned no verified account balances. Existing balances and the last complete balance-check time remain unchanged.')
     }
   } else {
-    balanceDataStatus = 'stale'
-    addBalanceError(accountResult.reason?.message || 'Account balances could not be refreshed.')
+    const message = accountResult.reason?.message || 'Account balances could not be refreshed.'
+    if (suppressRefreshRequestErrors) {
+      balanceDataStatus = 'preserved'
+      balanceErrors.push(message)
+    } else {
+      balanceDataStatus = 'stale'
+      addBalanceError(message)
+    }
   }
 
   if (transactionResult.status === 'fulfilled') {
