@@ -11,6 +11,8 @@ import { assignmentUpdateOperation, buildAlignmentOperations, buildCalendarInten
 import { clearLocalAlignmentDraft, clearLocalRecapDraft } from './dailyPlanLocalDraft.js'
 import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 import { clearPillarAnalyses } from './pillarAnalysisCache.js'
+import { buildHouseholdMaintenanceWeek, householdOccurrence, HOUSEHOLD_MAINTENANCE_STORAGE_KEY, normalizeHouseholdMaintenanceState, occurrenceStatus } from './householdMaintenanceData.js'
+import { SHARED_STATE_EVENT } from './sharedState.js'
 import './HouseholdOS.css'
 const TodayIntelligenceSummary = lazy(() => import('./TodayIntelligenceSummary.jsx'))
 const OperatingPracticesPanel = lazy(() => import('./OperatingPractices.jsx').then(module => ({ default: module.OperatingPracticesPanel })))
@@ -40,6 +42,17 @@ const applyRollingMeals = (plan, rollingPlan) => {
   }
 }
 
+const choresForDate = date => {
+  let maintenance
+  try { maintenance = normalizeHouseholdMaintenanceState(JSON.parse(localStorage.getItem(HOUSEHOLD_MAINTENANCE_STORAGE_KEY) || '{}')) }
+  catch { maintenance = normalizeHouseholdMaintenanceState() }
+  const tasks = buildHouseholdMaintenanceWeek(date, maintenance).find(day => day.date === date)?.tasks || []
+  return tasks.map(task => {
+    const occurrence = householdOccurrence(maintenance, task)
+    return { ...task, occurrence, status:occurrenceStatus(task, occurrence) }
+  })
+}
+
 export default function HouseholdToday({ currentMember = 'Larry', canEditPlanning = true, planningAccessStatus = 'ready', isAdministrator = false, onOpenPillar, onOpenMealPlan, onOpenCalendar, onOpenIntelligence, onOpenPractices, onNavigatePracticeArea }) {
   const { plan, state, error, reload } = useDailyPlan()
   const alignmentDate = nextDailyPlanDate(plan.date)
@@ -57,6 +70,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const pendingPlanReviewRef = useRef(null)
   const calendarReviewQueueRef = useRef([])
   const [calendarData, setCalendarData] = useState(cachedCalendar)
+  const [householdChores, setHouseholdChores] = useState(() => choresForDate(plan.date))
   const planWithMeals = useMemo(() => applyRollingMeals(plan, mealPlan.data), [mealPlan.data, plan])
   const alignmentPlanWithMeals = useMemo(() => applyRollingMeals(alignmentPlan, mealPlan.data), [alignmentPlan, mealPlan.data])
   const todayMeals = useMemo(
@@ -98,6 +112,18 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     window.addEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
     return () => window.removeEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
   }, [])
+
+  useEffect(() => {
+    const refreshChores = event => {
+      if (event?.type === 'storage' && event.key !== HOUSEHOLD_MAINTENANCE_STORAGE_KEY) return
+      if (event?.type === SHARED_STATE_EVENT && !event.detail?.keys?.includes(HOUSEHOLD_MAINTENANCE_STORAGE_KEY)) return
+      setHouseholdChores(choresForDate(plan.date))
+    }
+    refreshChores()
+    window.addEventListener('storage', refreshChores)
+    window.addEventListener(SHARED_STATE_EVENT, refreshChores)
+    return () => { window.removeEventListener('storage', refreshChores); window.removeEventListener(SHARED_STATE_EVENT, refreshChores) }
+  }, [plan.date])
 
   useEffect(() => {
     let active=true
@@ -199,6 +225,6 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
     <Suspense fallback={null}><TodayIntelligenceSummary currentMember={currentMember} onOpen={onOpenIntelligence}/></Suspense>
     {todayReadiness()}
-    <TodayDashboard plan={planWithMeals} meals={todayMeals} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} readOnly={!canEditPlanning} canGeneratePlan={isAdministrator} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onReviewDecision={reviewDecision} onReviewAssignment={reviewAssignment} generationState={generationState} />
+    <TodayDashboard plan={planWithMeals} meals={todayMeals} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} readOnly={!canEditPlanning} canGeneratePlan={isAdministrator} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} householdChores={householdChores} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onReviewDecision={reviewDecision} onReviewAssignment={reviewAssignment} generationState={generationState} />
   </div>
 }
