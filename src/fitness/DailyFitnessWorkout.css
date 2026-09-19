@@ -19,3 +19,20 @@
 @media(max-width:1200px){.fitness-workout-card{grid-template-columns:34px 180px 1fr}.fitness-workout-card dl{grid-column:3}.fitness-week>div{grid-template-columns:repeat(3,minmax(0,1fr))}.fitness-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:850px){.daily-fitness{padding:34px 28px 70px}.daily-fitness-brief{grid-template-columns:1fr}.daily-fitness-guidance{grid-template-columns:1fr}.fitness-workout-card{grid-template-columns:30px 150px 1fr}.fitness-week>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.daily-fitness{padding:22px 16px 110px}.daily-fitness-hero{grid-template-columns:1fr}.daily-fitness-hero aside{min-width:0}.fitness-view-tabs{overflow-x:auto;padding-bottom:4px}.fitness-view-tabs button{flex:0 0 auto}.daily-fitness-brief{padding:18px}.daily-fitness-brief dl{grid-template-columns:1fr 1fr}.daily-fitness-workout,.fitness-week,.fitness-library{padding:16px}.daily-fitness-workout>header,.fitness-library>header{align-items:flex-start;flex-direction:column}.fitness-workout-card{grid-template-columns:28px 92px minmax(0,1fr);gap:9px;padding:11px}.fitness-workout-card .fitness-exercise-photo{height:112px}.fitness-exercise-copy h3{font-size:16px}.fitness-exercise-copy p{font-size:11px}.fitness-workout-card dl{grid-column:1/-1}.fitness-week>div,.fitness-library-grid{grid-template-columns:1fr}.fitness-library-card .fitness-exercise-photo{height:210px}.daily-fitness-error{align-items:flex-start;flex-wrap:wrap}.daily-fitness-error button{margin-left:0}}
+
+/* Exercise photography is instructional: preserve the complete 4:3 frame instead of cropping it. */
+.fitness-exercise-photo,
+.fitness-library-card .fitness-exercise-photo{
+  width:100%;
+  height:auto;
+  aspect-ratio:4/3;
+  object-fit:contain;
+  object-position:center;
+}
+
+@media(max-width:700px){
+  .fitness-workout-card{grid-template-columns:28px minmax(0,1fr)}
+  .fitness-workout-card .fitness-exercise-photo{grid-column:2;width:100%;height:auto;aspect-ratio:4/3;object-fit:contain}
+  .fitness-workout-card .fitness-exercise-copy{grid-column:2}
+  .fitness-library-card .fitness-exercise-photo{height:auto;aspect-ratio:4/3;object-fit:contain}
+}

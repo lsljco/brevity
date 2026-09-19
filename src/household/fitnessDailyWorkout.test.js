@@ -45,6 +45,8 @@ test('exercise library covers all major body parts with exercise-specific photog
 
 test('daily workout UI contains photographs, schedule, searchable library and progression',async()=>{
   const source=await readFile(new URL('../fitness/DailyFitnessWorkout.jsx',import.meta.url),'utf8')
+  const fitnessCss=await readFile(new URL('../fitness/DailyFitnessWorkout.css',import.meta.url),'utf8')
+  const todayCss=await readFile(new URL('./TodayDashboard.css',import.meta.url),'utf8')
   assert.match(source,/fitness-exercise-photo/)
   assert.match(source,/Weekly Workout Schedule/)
   assert.match(source,/Exercise Library/)
@@ -58,6 +60,9 @@ test('daily workout UI contains photographs, schedule, searchable library and pr
   assert.doesNotMatch(source,/What Matters Today/)
   assert.doesNotMatch(source,/Evidence & Provenance/)
   assert.doesNotMatch(source,/Create .*Workout Photos|Generate .*Workout Photos/)
+  assert.match(fitnessCss,/\.fitness-library-card \.fitness-exercise-photo[\s\S]*object-fit:contain/)
+  assert.match(fitnessCss,/@media\(max-width:700px\)[\s\S]*\.fitness-workout-card \.fitness-exercise-photo[\s\S]*aspect-ratio:4\/3/)
+  assert.match(todayCss,/\.today-fitness-exercise-image img\{object-fit:contain/)
 })
 
 test('every workout uses a permanent bundled family render',async()=>{
