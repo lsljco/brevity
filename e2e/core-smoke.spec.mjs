@@ -149,6 +149,23 @@ test('Today Pillar 3 shows the dated workout exercise photography and opens the 
     await expect(images.nth(index)).toHaveJSProperty('complete', true)
     expect(await images.nth(index).evaluate(image => image.naturalWidth)).toBeGreaterThan(0)
   }
+  await fitness.getByRole('button', { name:/Enlarge .* exercise image/ }).first().click()
+  const imageViewer = page.getByRole('dialog', { name:/enlarged exercise image/ })
+  await expect(imageViewer).toBeVisible()
+  const enlargedImage = imageViewer.locator('img')
+  await expect(enlargedImage).toHaveCSS('object-fit', 'contain')
+  const sizing = await enlargedImage.evaluate(image => ({
+    clientWidth:image.clientWidth,
+    clientHeight:image.clientHeight,
+    naturalWidth:image.naturalWidth,
+    naturalHeight:image.naturalHeight,
+  }))
+  expect(sizing.clientWidth).toBeGreaterThan(0)
+  expect(sizing.clientHeight).toBeGreaterThan(0)
+  expect(sizing.naturalWidth).toBeGreaterThan(0)
+  expect(sizing.naturalHeight).toBeGreaterThan(0)
+  await page.keyboard.press('Escape')
+  await expect(imageViewer).toHaveCount(0)
   await fitness.getByRole('button', { name:'Open Full Workout' }).click()
   await expect(page.locator('.daily-fitness-hero h1')).toBeVisible()
 })

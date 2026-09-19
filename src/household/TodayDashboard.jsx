@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './TodayDashboard.css'
+import ExerciseImageViewer from '../fitness/ExerciseImageViewer.jsx'
 import './TodayOperating.css'
 import './TodayPillarOrder.css'
 import { DECISION_STATUS, DECISION_STATUS_OPTIONS, HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
@@ -183,10 +184,9 @@ function TodayFitnessWorkout({ date, currentMember, location, onOpenPillar }) {
     </div>
     <div className="today-fitness-exercises">
       {workout.exercises.map((exercise, index) => <article className="today-fitness-exercise" key={exercise.id}>
-        <div className="today-fitness-exercise-image">
-          <img src={exercise.image} alt={`${exercise.name} performed with correct form`} loading={index < 2 ? 'eager' : 'lazy'} />
-          <span>{String(index + 1).padStart(2, '0')}</span>
-        </div>
+        <ExerciseImageViewer exercise={exercise} className="today-fitness-exercise-image" loading={index < 2 ? 'eager' : 'lazy'}>
+          <span className="today-fitness-exercise-number">{String(index + 1).padStart(2, '0')}</span>
+        </ExerciseImageViewer>
         <div className="today-fitness-exercise-copy">
           <small>{exercise.muscles.join(' · ')}</small>
           <strong>{exercise.name}</strong>
