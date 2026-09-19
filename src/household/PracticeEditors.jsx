@@ -1,26 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { PRACTICE_ADULTS, PRACTICE_STATUSES, blankMealReadiness, practiceRoutineNotes, shiftPracticeDate, validPracticeTime } from './operatingPractices.js'
 
 export function PracticeDialog({ title, children, onClose }) {
   const ref = useRef(null)
   useEffect(() => {
     const previous = document.activeElement
+    const app = document.querySelector('.app-shell')
+    const wasInert = app?.hasAttribute('inert')
+    const previousOverflow = document.body.style.overflow
+    app?.setAttribute('inert', '')
+    document.body.style.overflow = 'hidden'
     ref.current?.querySelector('input,select,textarea,button')?.focus()
     const key = event => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
       if (event.key !== 'Tab') return
-      const elements = [...(ref.current?.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]') || [])]
+      const elements = [...(ref.current?.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]') || [])].filter(element => element.getClientRects().length)
       const first = elements[0], last = elements.at(-1)
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
     }
     const node = ref.current
     node?.addEventListener('keydown', key)
-    return () => { node?.removeEventListener('keydown', key); previous?.focus?.() }
+    return () => {
+      node?.removeEventListener('keydown', key)
+      if (!wasInert) app?.removeAttribute('inert')
+      document.body.style.overflow = previousOverflow
+      if (previous?.isConnected) previous.focus?.()
+    }
   }, [onClose])
-  return <div className="practice-dialog-backdrop"><section ref={ref} className="practice-dialog" role="dialog" aria-modal="true" aria-label={title}>
+  // A body portal avoids fixed-position containing blocks and clipping created
+  // by Today sidebars, mobile disclosures, transforms, and scrolling panels.
+  return createPortal(<div className="practice-dialog-backdrop" onClick={event => event.stopPropagation()}><section ref={ref} className="practice-dialog" role="dialog" aria-modal="true" aria-label={title}>
     <header><h2>{title}</h2><button type="button" onClick={onClose} aria-label="Close practice editor">Close</button></header>{children}
-  </section></div>
+  </section></div>, document.body)
 }
 const Adult = ({ label, value, onChange, required = false }) => <label><span>{label}</span><select value={value} onChange={event => onChange(event.target.value)} required={required}><option value="">Choose an agreed owner</option>{PRACTICE_ADULTS.map(name => <option key={name}>{name}</option>)}</select></label>
 function ReviewFooter({ busy, error, disabled = false }) {
