@@ -1,5 +1,6 @@
 import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
+import { practiceRoutineDateAllowed } from './operatingPractices.js'
 
 export const HOUSEHOLD_SCHEDULE_STORAGE_KEY = 'brevity_household_schedule_v1'
 export const HOUSEHOLD_SCHEDULE_SOURCE = 'household-schedule'
@@ -92,7 +93,7 @@ export function overrideRoutineOccurrence(state, routineId, date, patch, current
 export function routineOccurrencesForDate(state, date) {
   const target = new Date(`${dateKey(date)}T12:00:00`)
   const day = target.getDay()
-  return state.routines.filter(routine => routine.enabled && routine.days.includes(day)).map(routine => {
+  return state.routines.filter(routine => routine.enabled && routine.days.includes(day) && practiceRoutineDateAllowed(routine, dateKey(date))).map(routine => {
     const key = `${routine.id}:${dateKey(date)}`
     const override = state.routineOverrides[key] || {}
     return { ...routine, ...override, id: key, routineId: routine.id, date: dateKey(date), sourceType: 'routine', cancelled: Boolean(override.cancelled) }
