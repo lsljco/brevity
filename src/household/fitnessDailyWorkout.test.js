@@ -46,7 +46,6 @@ test('exercise library covers all major body parts with exercise-specific photog
 test('daily workout UI contains photographs, schedule, searchable library and progression',async()=>{
   const source=await readFile(new URL('../fitness/DailyFitnessWorkout.jsx',import.meta.url),'utf8')
   assert.match(source,/fitness-exercise-photo/)
-  assert.match(source,/Create \$\{currentMember\}’s Workout Photos/)
   assert.match(source,/Weekly Workout Schedule/)
   assert.match(source,/Exercise Library/)
   assert.match(source,/Search exercise library/)
@@ -58,4 +57,16 @@ test('daily workout UI contains photographs, schedule, searchable library and pr
   assert.match(source,/12,000 total steps/)
   assert.doesNotMatch(source,/What Matters Today/)
   assert.doesNotMatch(source,/Evidence & Provenance/)
+  assert.doesNotMatch(source,/Create .*Workout Photos|Generate .*Workout Photos/)
+})
+
+test('approved family workout renders are permanent bundled exercise assets',async()=>{
+  const files=['push-up','incline-dumbbell-press','dead-bug','cable-fly','single-arm-row','lat-pulldown']
+  const assets=await Promise.all(files.map(name=>readFile(new URL(`../../public/fitness/exercises/${name}.webp`,import.meta.url))))
+  for(const asset of assets){
+    assert.equal(asset.subarray(0,4).toString(),'RIFF')
+    assert.equal(asset.subarray(8,12).toString(),'WEBP')
+    assert.ok(asset.length>60000,'family workout render should be a full photographic asset')
+  }
+  assert.equal(new Set(assets.map(asset=>asset.toString('base64'))).size,files.length)
 })
