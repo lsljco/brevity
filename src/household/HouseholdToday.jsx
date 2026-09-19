@@ -16,6 +16,7 @@ import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 import { clearPillarAnalyses } from './pillarAnalysisCache.js'
 import './HouseholdOS.css'
 const TodayIntelligenceSummary = lazy(() => import('./TodayIntelligenceSummary.jsx'))
+const OperatingPracticesPanel = lazy(() => import('./OperatingPractices.jsx').then(module => ({ default: module.OperatingPracticesPanel })))
 
 const cachedCalendar = () => {
   try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
@@ -38,7 +39,7 @@ const applyRollingMeals = (plan, rollingPlan) => {
   }
 }
 
-export default function HouseholdToday({ currentMember = 'Larry', canEditPlanning = true, planningAccessStatus = 'ready', isAdministrator = false, onOpenPillar, onOpenMealPlan, onOpenCalendar, onOpenIntelligence }) {
+export default function HouseholdToday({ currentMember = 'Larry', canEditPlanning = true, planningAccessStatus = 'ready', isAdministrator = false, onOpenPillar, onOpenMealPlan, onOpenCalendar, onOpenIntelligence, onOpenPractices, onNavigatePracticeArea }) {
   const { plan, state, error, reload } = useDailyPlan()
   const alignmentDate = nextDailyPlanDate(plan.date)
   const {
@@ -60,6 +61,10 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const todayMeals = useMemo(
     () => mealPlan.data?.days?.find(day => day.date === plan.date)?.resolvedMeals || {},
     [mealPlan.data, plan.date],
+  )
+  const tomorrowMeals = useMemo(
+    () => mealPlan.data?.days?.find(day => day.date === alignmentPlan.date)?.resolvedMeals || {},
+    [mealPlan.data, alignmentPlan.date],
   )
   const calendarAppointments = useMemo(
     () => calendarAppointmentsForPlan(planWithMeals, calendarData?.events),
@@ -174,13 +179,16 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const reviewDecision = async (decisionId, patch, expectedVersion) => stageDailyPlanReview({ summary:`Review a Today decision for ${plan.date}`, operations:[decisionUpdateOperation(plan, decisionId, patch)], expectedVersion })
   const reviewAssignment = async (assignmentId, patch, expectedVersion) => stageDailyPlanReview({ summary:`Review an assignment for ${plan.date}`, operations:[assignmentUpdateOperation(plan, assignmentId, patch)], expectedVersion })
   const reviewCalendarItem = (item,date) => stageCalendarIntentReview({operation:calendarIntentOperation(item,date),date})
+  const readiness = (targetPlan, targetState, targetMeals, targetError, reloadTarget) => <Suspense fallback={<div className="today-sync-banner">Loading household readiness…</div>}><OperatingPracticesPanel key={targetPlan.date} plan={targetPlan} planState={targetState} planError={targetError} meals={targetMeals} mealState={mealPlan.state} currentMember={currentMember} canEditPlanning={canEditPlanning} compact onNavigate={onNavigatePracticeArea} onOpenPractices={onOpenPractices} onReload={reloadTarget}/></Suspense>
+  const todayReadiness = () => readiness(planWithMeals, state, todayMeals, error, reload)
+  const tomorrowReadiness = () => readiness(alignmentPlanWithMeals, alignmentState, tomorrowMeals, alignmentError, reloadAlignment)
 
-  if (mode === 'today-alignment') return <MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} />
+  if (mode === 'today-alignment') return <div className="household-today-workspace">{todayReadiness()}<MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} /></div>
   if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
   if (mode === 'alignment' && alignmentError) return <div className="household-today-workspace"><div className="today-sync-banner today-sync-banner--error"><div><strong>Tomorrow’s plan could not be loaded</strong><span>{alignmentError}</span></div><button onClick={reloadAlignment}>Retry</button><button onClick={() => setMode('today')}>Return to Today</button></div></div>
-  if (mode === 'alignment') return <MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} />
-  if (mode === 'recap') return <EveningRecap plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} />
-  if (mode === 'tomorrow') return <div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header><TomorrowProposal plan={planWithMeals} targetPlan={alignmentPlan} readOnly={!isAdministrator} /></div>
+  if (mode === 'alignment') return <div className="household-today-workspace">{tomorrowReadiness()}<MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} /></div>
+  if (mode === 'recap') return <div className="household-today-workspace">{todayReadiness()}<EveningRecap plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} /></div>
+  if (mode === 'tomorrow') return <div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header>{tomorrowReadiness()}<TomorrowProposal plan={planWithMeals} targetPlan={alignmentPlan} readOnly={!isAdministrator} /></div>
 
   return <div className="household-today-workspace">
     {!canEditPlanning && <div className="today-sync-banner today-sync-banner--permission" role="status"><i className="ti ti-lock" aria-hidden="true" /><div><strong>Today is view-only for {currentMember}</strong><span>{planningAccessMessage}</span></div></div>}
@@ -189,6 +197,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     {generationMessage && <div className={`today-sync-banner${generationState === 'error' ? ' today-sync-banner--error' : ''}`}><i className="ti ti-sparkles" /> {generationMessage}</div>}
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
     <Suspense fallback={null}><TodayIntelligenceSummary currentMember={currentMember} onOpen={onOpenIntelligence}/></Suspense>
+    {todayReadiness()}
     <TodayDashboard plan={planWithMeals} meals={todayMeals} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} readOnly={!canEditPlanning} canGeneratePlan={isAdministrator} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onReviewDecision={reviewDecision} onReviewAssignment={reviewAssignment} generationState={generationState} />
   </div>
 }
