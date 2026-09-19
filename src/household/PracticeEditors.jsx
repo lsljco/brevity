@@ -29,7 +29,7 @@ function ReviewFooter({ busy, error, disabled = false }) {
 function useReview(onReview) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const review = async value => { setBusy(true); setError(''); try { await onReview(value) } catch (failure) { setError(failure.message || 'The review could not be opened.') } finally { setBusy(false) } }
-  return { busy, error, review }
+  return { busy, error, review, setError }
 }
 
 export function PracticeAgreementEditor({ template, practice, date, onReview, onClose }) {
@@ -43,13 +43,13 @@ export function PracticeAgreementEditor({ template, practice, date, onReview, on
     enabled: practice?.routine.enabled ?? true, agreed: false,
   }))
   const set = (field, value) => setDraft(previous => ({ ...previous, [field]: value }))
-  const { busy, error, review } = useReview(onReview)
+  const { busy, error, review, setError } = useReview(onReview)
   const submit = event => {
     event.preventDefault()
     if (!draft.agreed || !draft.owner || !draft.backup || draft.owner === draft.backup || !validPracticeTime(draft.startTime) || !validPracticeTime(draft.endTime) || draft.endTime <= draft.startTime || !draft.days.length) return
     let notes
     try { notes = practiceRoutineNotes({ policyId: template.id, revision: (practice?.revision || 0) + 1, ...draft }) }
-    catch (failure) { review(Promise.reject(failure)); return }
+    catch (failure) { setError(failure.message); return }
     review({ title: draft.title, owner: draft.owner, participants: [], startTime: draft.startTime, endTime: draft.endTime, days: draft.days, pillar: template.pillar, enabled: draft.enabled, notes })
   }
   const valid = draft.agreed && draft.owner && draft.backup && draft.owner !== draft.backup && draft.days.length && validPracticeTime(draft.startTime) && validPracticeTime(draft.endTime) && draft.endTime > draft.startTime
@@ -70,8 +70,8 @@ export function PracticeAgreementEditor({ template, practice, date, onReview, on
 }
 
 export function PracticeCheckinEditor({ card, onReview, onClose }) {
-  const [status, setStatus] = useState(card.checkin?.status || 'unrecorded')
-  const [note, setNote] = useState(card.checkin?.note || ''), [recovery, setRecovery] = useState(card.checkin?.recovery || '')
+  const [status, setStatus] = useState(card.checkin?.revision === card.practice.revision ? card.checkin.status : 'unrecorded')
+  const [note, setNote] = useState(card.checkin?.revision === card.practice.revision ? card.checkin.note : ''), [recovery, setRecovery] = useState(card.checkin?.revision === card.practice.revision ? card.checkin.recovery : '')
   const { busy, error, review } = useReview(onReview)
   const needsReason = status === 'blocked' || status === 'exception'
   return <PracticeDialog title={`Check in: ${card.template.title}`} onClose={onClose}><form onSubmit={event => { event.preventDefault(); review({ status, note, recovery }) }}>
