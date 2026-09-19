@@ -167,11 +167,16 @@ export function dailyPracticeCards(schedule, plan) {
     const override = schedule.routineOverrides?.[`${practice.routine.id}:${plan.date}`]
     const due = practiceAppliesOn(practice.routine, plan.date)
     if (override?.cancelled) return { template, practice, state: 'exception', label: 'Occurrence skipped through Schedule', due: false, matches }
+    // Display and record the actual one-date coverage without changing the
+    // standing agreement or turning an override into a policy revision.
+    const effectiveRoutine = { ...practice.routine }
+    for (const field of ['owner', 'participants', 'startTime', 'endTime', 'title']) {
+      if (override && Object.hasOwn(override, field)) effectiveRoutine[field] = override[field]
+    }
+    const effectivePractice = { ...practice, routine: effectiveRoutine }
     const checkin = data.checkins.find(item => item.routineId === practice.routine.id)
-    // Keep the historical record visible but do not count an old policy version
-    // as proof that a revised agreement has been carried out.
-    const current = checkin?.revision === practice.revision ? checkin : null
-    return { template, practice, due, matches, checkin, state: current?.status || (due ? 'unrecorded' : 'not-due'), label: current ? ({ complete: 'Completion reported', blocked: 'Blocked; needs support', exception: 'Exception recorded', unrecorded: 'Not yet recorded' }[current.status]) : due ? 'Not yet recorded — not a violation' : 'Not scheduled for this date', reviewDue: practice.reviewDate <= plan.date }
+    const current = checkin?.revision === practice.revision && checkin.owner === effectiveRoutine.owner ? checkin : null
+    return { template, practice, effectivePractice, due, matches, checkin, state: current?.status || (due ? 'unrecorded' : 'not-due'), label: current ? ({ complete: 'Completion reported', blocked: 'Blocked; needs support', exception: 'Exception recorded', unrecorded: 'Not yet recorded' }[current.status]) : due ? 'Not yet recorded — not a violation' : 'Not scheduled for this date', reviewDue: practice.reviewDate <= plan.date }
   })
 }
 export function practiceDayOperation(plan, next) {
@@ -189,16 +194,16 @@ export function withPracticeCheckin(plan, practice, status, note = '', recovery 
   return validatePracticeDay(data)
 }
 export function summarizePracticeWeek(results) {
-  const summary = { complete: 0, blocked: 0, exception: 0, unrecorded: 0, unavailableDates: [], reviews: [], records: [] }
+  const summary = { complete: 0, blocked: 0, exception: 0, unrecorded: 0, unrecordedDates: [], unavailableDates: [], reviews: [], records: [] }
   for (const result of results) {
-    if (result.error || !result.plan) { summary.unavailableDates.push(result.date); continue }
+    if (result.error || !result.plan || result.plan.date !== result.date) { summary.unavailableDates.push(result.date); continue }
     const saved = readPracticeDay(result.plan)
     if (saved.error) { summary.unavailableDates.push(result.date); continue }
     for (const checkin of saved.data.checkins) {
       summary[checkin.status] += 1
       summary.records.push({ ...checkin, date: result.date })
     }
-    if (!saved.data.checkins.length) summary.unrecorded += 1
+    if (!saved.data.checkins.length) summary.unrecordedDates.push(result.date)
     if (saved.data.review.completed) summary.reviews.push({ date: result.date, notes: saved.data.review.notes })
   }
   return summary
