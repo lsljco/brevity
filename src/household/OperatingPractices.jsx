@@ -99,7 +99,7 @@ function ScheduleCoverage({ schedule, date, currentMember, plan, onNavigate }) {
   for (let index = 0; index < blocks.length; index += 1) for (let other = index + 1; other < blocks.length; other += 1) {
     if (blocks[index].startTime < blocks[other].endTime && blocks[other].startTime < blocks[index].endTime) conflicts.push(`${blocks[index].title} / ${blocks[other].title}`)
   }
-  return <section className="practice-coverage"><header><div><h3>Protected time and next actions</h3><p>Shared anchors, separate focus, and realistic coverage. Rest does not need to be justified as productivity.</p></div><button type="button" onClick={() => onNavigate?.('schedule')}>Open Schedule</button></header>
+  return <section className="practice-coverage"><header><div><h3>Protected time and next actions</h3><p>Shared anchors, separate focus, and realistic coverage. Rest does not need to be justified as productivity.</p></div><button type="button" onClick={() => onNavigate?.('schedule')}>Review personal Schedule</button></header>
     <label className="practice-member"><span>Household member</span><select value={member} onChange={event => setMember(event.target.value)}>{[...PRACTICE_ADULTS, 'Isaiah'].map(name => <option key={name}>{name}</option>)}</select></label>
     {conflicts.length > 0 && <p className="practice-error">Overlapping saved Schedule blocks: {conflicts.join('; ')}. Check travel, work, study and backup coverage.</p>}
     {blocks.length ? <ol className="practice-blocks">{blocks.map(block => <li key={block.id}><time>{block.startTime}–{block.endTime}</time><div><strong>{block.title}</strong><span>{block.pillar}</span></div></li>)}</ol> : <p>No blocks are recorded here for {member} on this date. This is a planning gap to review—not evidence that the person is inactive.</p>}
@@ -181,7 +181,7 @@ export function OperatingPracticesPanel({ plan, planState = 'loading', planError
       {card.reviewDue && <p className="practice-error">Policy review due {card.practice.reviewDate}. Review what is working; do not merely re-sign.</p>}
       {mode === 'policies' && card.practice && <details><summary>Procedure and review record</summary><p>{card.practice.procedure}</p><p>Effective {card.practice.effectiveDate}. Next review {card.practice.reviewDate}. Actual actor and changes are retained in Action Mode's Audit History.</p></details>}
       {card.checkin?.recovery && <p><strong>Recovery:</strong> {card.checkin.recovery}</p>}
-      <div className="practice-actions"><button type="button" onClick={() => onNavigate?.(card.template.id === 'FIN-001' ? 'finance' : card.template.id === 'OPS-001' ? 'schedule' : 'meals')}>{card.template.id === 'FIN-001' ? 'Open financial review' : card.template.id === 'OPS-001' ? 'Open Schedule' : 'Open Meal Plan'}</button>
+      <div className="practice-actions"><button type="button" onClick={() => onNavigate?.(card.template.id === 'FIN-001' ? 'finance' : card.template.id === 'OPS-001' ? 'schedule' : 'meals')}>{card.template.id === 'FIN-001' ? 'Open financial review' : card.template.id === 'OPS-001' ? 'Review daily Schedule' : 'Review meal planning'}</button>
         {card.practice && card.due && <button type="button" disabled={!canEdit} onClick={() => open('checkin', { card })}>Record result</button>}
         {(mode === 'policies' || !card.practice || card.reviewDue) && <button type="button" disabled={!canEdit || card.matches?.filter(value => value.routine.enabled).length > 1} onClick={() => open('agreement', { card })}>{card.practice ? 'Review agreement' : 'Set up agreement'}</button>}
       </div>
