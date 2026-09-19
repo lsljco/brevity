@@ -9,6 +9,7 @@ import DailyCommandSchedule from './DailyCommandSchedule.jsx'
 import { educationBrief, financeBrief, ministryBrief } from './todayPillarBriefs.js'
 import WeatherHeader from './WeatherHeader.jsx'
 import { workoutForDate } from '../fitness/fitnessWorkoutPlan.js'
+import MemberExerciseImage from '../fitness/MemberExerciseImage.jsx'
 
 const PILLAR_META = {
   spiritual: ['Spiritual Maturity', 'ti-sun'],
@@ -184,7 +185,7 @@ function TodayFitnessWorkout({ date, currentMember, location, onOpenPillar }) {
     <div className="today-fitness-exercises">
       {workout.exercises.map((exercise, index) => <article className="today-fitness-exercise" key={exercise.id}>
         <div className="today-fitness-exercise-image">
-          <img src={exercise.image} alt={`${exercise.name} performed with correct form`} loading={index < 2 ? 'eager' : 'lazy'} />
+          <MemberExerciseImage member={currentMember} exercise={exercise} loading={index < 2 ? 'eager' : 'lazy'} />
           <span>{String(index + 1).padStart(2, '0')}</span>
         </div>
         <div className="today-fitness-exercise-copy">
