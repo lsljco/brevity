@@ -2,10 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
-import EveningRecap from './EveningRecap.jsx'
-import MorningAlignment from './MorningAlignment.jsx'
 import TodayDashboard from './TodayDashboard.jsx'
-import TomorrowProposal from './TomorrowProposal.jsx'
 import { fetchScheduledDailyPlanDraft, generateDailyPlan } from './dailyPlanGeneratorApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
 import { ICLOUD_CACHE_KEY } from './appRefresh.js'
@@ -17,6 +14,10 @@ import { clearPillarAnalyses } from './pillarAnalysisCache.js'
 import './HouseholdOS.css'
 const TodayIntelligenceSummary = lazy(() => import('./TodayIntelligenceSummary.jsx'))
 const OperatingPracticesPanel = lazy(() => import('./OperatingPractices.jsx').then(module => ({ default: module.OperatingPracticesPanel })))
+const MorningAlignment = lazy(() => import('./MorningAlignment.jsx'))
+const EveningRecap = lazy(() => import('./EveningRecap.jsx'))
+const TomorrowProposal = lazy(() => import('./TomorrowProposal.jsx'))
+const WorkflowBoundary = ({ children }) => <Suspense fallback={<div className="today-sync-banner" role="status">Loading the reviewed planning workflow…</div>}>{children}</Suspense>
 
 const cachedCalendar = () => {
   try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
@@ -183,12 +184,12 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const todayReadiness = () => readiness(planWithMeals, state, todayMeals, error, reload)
   const tomorrowReadiness = () => readiness(alignmentPlanWithMeals, alignmentState, tomorrowMeals, alignmentError, reloadAlignment)
 
-  if (mode === 'today-alignment') return <div className="household-today-workspace">{todayReadiness()}<MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} /></div>
+  if (mode === 'today-alignment') return <WorkflowBoundary><div className="household-today-workspace">{todayReadiness()}<MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} /></div></WorkflowBoundary>
   if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
   if (mode === 'alignment' && alignmentError) return <div className="household-today-workspace"><div className="today-sync-banner today-sync-banner--error"><div><strong>Tomorrow’s plan could not be loaded</strong><span>{alignmentError}</span></div><button onClick={reloadAlignment}>Retry</button><button onClick={() => setMode('today')}>Return to Today</button></div></div>
-  if (mode === 'alignment') return <div className="household-today-workspace">{tomorrowReadiness()}<MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} /></div>
-  if (mode === 'recap') return <div className="household-today-workspace">{todayReadiness()}<EveningRecap plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} /></div>
-  if (mode === 'tomorrow') return <div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header>{tomorrowReadiness()}<TomorrowProposal plan={planWithMeals} targetPlan={alignmentPlan} readOnly={!isAdministrator} /></div>
+  if (mode === 'alignment') return <WorkflowBoundary><div className="household-today-workspace">{tomorrowReadiness()}<MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} /></div></WorkflowBoundary>
+  if (mode === 'recap') return <WorkflowBoundary><div className="household-today-workspace">{todayReadiness()}<EveningRecap plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} /></div></WorkflowBoundary>
+  if (mode === 'tomorrow') return <WorkflowBoundary><div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header>{tomorrowReadiness()}<TomorrowProposal plan={planWithMeals} targetPlan={alignmentPlan} readOnly={!isAdministrator} /></div></WorkflowBoundary>
 
   return <div className="household-today-workspace">
     {!canEditPlanning && <div className="today-sync-banner today-sync-banner--permission" role="status"><i className="ti ti-lock" aria-hidden="true" /><div><strong>Today is view-only for {currentMember}</strong><span>{planningAccessMessage}</span></div></div>}
