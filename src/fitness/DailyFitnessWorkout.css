@@ -29,10 +29,12 @@
   object-fit:contain;
   object-position:center;
 }
+.fitness-exercise-image-button{width:100%;border-radius:12px}.fitness-library-card .fitness-exercise-image-button{border-radius:0}
 
 @media(max-width:700px){
   .fitness-workout-card{grid-template-columns:28px minmax(0,1fr)}
-  .fitness-workout-card .fitness-exercise-photo{grid-column:2;width:100%;height:auto;aspect-ratio:4/3;object-fit:contain}
+  .fitness-workout-card .fitness-exercise-image-button{grid-column:2;width:100%}
+  .fitness-workout-card .fitness-exercise-photo{width:100%;height:auto;aspect-ratio:4/3;object-fit:contain}
   .fitness-workout-card .fitness-exercise-copy{grid-column:2}
   .fitness-library-card .fitness-exercise-photo{height:auto;aspect-ratio:4/3;object-fit:contain}
 }

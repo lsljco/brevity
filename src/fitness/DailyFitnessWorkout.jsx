@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useDailyPlan } from '../household/useDailyPlan.js'
 import { BODY_PARTS, EXERCISE_LIBRARY, weeklyScheduleForMember, workoutForDate } from './fitnessWorkoutPlan.js'
+import ExerciseImageViewer from './ExerciseImageViewer.jsx'
 import './DailyFitnessWorkout.css'
 
 const dateLabel=date=>new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})
@@ -8,7 +9,7 @@ const dateLabel=date=>new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{w
 function ExerciseCard({exercise,index,compact=false}){
   return <article className={compact?'fitness-library-card':'fitness-workout-card'}>
     {!compact&&<div className="fitness-exercise-number">{String(index+1).padStart(2,'0')}</div>}
-    <img className="fitness-exercise-photo" src={exercise.image} alt={`${exercise.name} performed with correct form`} loading="lazy"/>
+    <ExerciseImageViewer exercise={exercise} className="fitness-exercise-image-button" imageClassName="fitness-exercise-photo" />
     <div className="fitness-exercise-copy"><span>{exercise.muscles.join(' · ')}</span><h3>{exercise.name}</h3><p>{exercise.cue}</p><div>{exercise.bodyParts.map(part=><small key={part}>{part}</small>)}</div></div>
     <dl><div><dt>Sets</dt><dd>{exercise.sets}</dd></div><div><dt>Reps / time</dt><dd>{exercise.reps}</dd></div><div><dt>Rest</dt><dd>{exercise.rest}</dd></div></dl>
   </article>
