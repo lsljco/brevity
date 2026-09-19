@@ -60,6 +60,22 @@ async function fits(page) {
   expect(overflow.main).toBeLessThanOrEqual(8)
 }
 
+test('Today readiness stays compact and routes to authoritative controls', async ({ page }, testInfo) => {
+  await backend(page, { activated: true })
+  await page.goto('/')
+  const panel = page.getByTestId('operating-practices')
+  await expect(panel).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Policies & Practices', exact: true })).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Meal plan', exact: true })).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Calendar', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Start Today’s Alignment/ })).toBeAttached()
+  await expect(page.getByRole('button', { name: /Open Meal Plan/ })).toBeAttached()
+  const height = await panel.evaluate(element => element.getBoundingClientRect().height)
+  expect(height).toBeLessThanOrEqual(testInfo.project.name === 'iphone' ? 280 : 230)
+  await fits(page)
+  await page.screenshot({ path: testInfo.outputPath('today-readiness.png'), fullPage: false })
+})
+
 test('agreement activation is explicit and opens review without changing the Schedule', async ({ page }, testInfo) => {
   const fixture = await backend(page)
   await enter(page)
