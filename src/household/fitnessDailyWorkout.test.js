@@ -46,6 +46,7 @@ test('exercise library covers all major body parts with exercise-specific photog
 test('daily workout UI contains photographs, schedule, searchable library and progression',async()=>{
   const source=await readFile(new URL('../fitness/DailyFitnessWorkout.jsx',import.meta.url),'utf8')
   assert.match(source,/fitness-exercise-photo/)
+  assert.match(source,/Create \$\{currentMember\}’s Workout Photos/)
   assert.match(source,/Weekly Workout Schedule/)
   assert.match(source,/Exercise Library/)
   assert.match(source,/Search exercise library/)

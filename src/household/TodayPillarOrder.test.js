@@ -19,7 +19,7 @@ test('Today Pillar 3 renders every exercise image from the shared dated member w
   assert.match(source,/import \{ workoutForDate \} from '\.\.\/fitness\/fitnessWorkoutPlan\.js'/)
   assert.match(source,/workoutForDate\(date, currentMember\)/)
   assert.match(source,/workout\.exercises\.map/)
-  assert.match(source,/src=\{exercise\.image\}/)
+  assert.match(source,/MemberExerciseImage member=\{currentMember\} exercise=\{exercise\}/)
   assert.match(source,/Open Full Workout/)
   assert.match(source,/Abs \+ \{workout\.stepGoal\.toLocaleString\(\)\} steps/)
 })
