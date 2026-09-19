@@ -30,10 +30,12 @@ test('Projects remains viewable while every supported mutation requires reviewed
 test('Household Operations keeps navigation visible while every occurrence change requires reviewed Action Mode', () => {
   const source = read('./HouseholdMaintenance.jsx')
 
-  assert.match(source, /HouseholdMaintenance\(\{ currentMember, canEdit=true, isAdmin=false \}\)/)
+  // A navigation-only prop must not change the existing permission defaults.
+  assert.match(source, /HouseholdMaintenance\(\{ currentMember, canEdit=true, isAdmin=false, initialWorkspace='operations' \}\)/)
   assert.match(source, /<OperationsTabs workspace=\{workspace\} setWorkspace=\{setWorkspace\}/, 'workspace navigation stays enabled')
   assert.match(source, /Every operations change requires review/)
   assert.match(source, /requestHouseholdActionReview\(\{summary,operation\}\)/)
+  assert.match(source, /if\(!canEdit&&!responsibility\)return false/)
   assert.match(source, /maintenanceCompletionOperation\(task,'submit','','',?checklistFor\(task\)\)|maintenanceCompletionOperation\(task,'submit','',checklistFor\(task\)\)/)
   assert.match(source, /maintenanceCompletionOperation\(task,'start'\)/)
   assert.match(source, /Start task/)
