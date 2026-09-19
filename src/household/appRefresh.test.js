@@ -8,11 +8,11 @@ test('application refresh requests the authoritative household date across UTC b
   assert.equal(applicationRefreshDate(new Date('2026-09-07T04:30:00.000Z')), '2026-09-07')
 })
 
-test('app startup reads the verified Plaid snapshot and reserves live updates for explicit actions', () => {
-  assert.equal(shouldRequestBankUpdate({ financeReadOnly:false }), false)
-  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:false, financeReadOnly:false }), false)
-  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true, financeReadOnly:false }), true)
-  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true, financeReadOnly:true }), false)
+test('app startup requests Plaid once while explicit actions can always request again', () => {
+  assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:false,financeReadOnly:false }), true)
+  assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:true,financeReadOnly:false }), false)
+  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true,automaticAlreadyRequested:true,financeReadOnly:false }), true)
+  assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true,automaticAlreadyRequested:false,financeReadOnly:true }), false)
 })
 
 test('bank refresh state never reports fresh while Plaid is still processing or data is stale', () => {
@@ -112,4 +112,11 @@ test('a preserved balance timeout with current transactions is advisory rather t
     bankRefresh,
   })
   assert.deepEqual(issues,[])
+})
+
+test('an automatic gateway failure can preserve verified finance data without an attention banner',()=>{
+  const finance={errors:[],transactionFreshness:{status:'fresh',lastFullSuccessAt:'2026-09-18T20:00:00.000Z'},balanceDataStatus:'preserved'}
+  const bankRefresh=buildBankRefreshState(finance,{requested:true})
+  assert.equal(bankRefresh.status,'preserved')
+  assert.deepEqual(buildRefreshIssues({financeResult:{status:'fulfilled',value:finance},planResult:{status:'fulfilled',value:{}},calendar:{events:[]},bankRefresh}),[])
 })
