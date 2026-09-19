@@ -13,9 +13,12 @@ test('Calendar exposes an agenda-first phone flow and correctly labels its timef
   assert.match(styles, /max-width: 720px[\s\S]*family-calendar-mobile-agenda \{ display: block/)
 })
 
-test('Operations offers a direct all-overdue view and uses honest empty copy', () => {
+test('Operations defaults to its Operations workspace and honors an explicit protected-workflow destination', () => {
   const operations = read('./HouseholdMaintenance.jsx')
-  assert.match(operations, /useState\('operations'\)/, 'Household Operations should open on its Operations workspace')
+  assert.match(operations, /initialWorkspace='operations'/, 'ordinary navigation still opens Operations')
+  assert.match(operations, /operatingWorkspaces = \['schedule', 'routines', 'operations', 'inventory'\]/)
+  assert.match(operations, /useState\(\(\) => operatingWorkspaces\.includes\(initialWorkspace\) \? initialWorkspace : 'operations'\)/)
+  assert.match(operations, /if \(operatingWorkspaces\.includes\(initialWorkspace\)\) setWorkspace\(initialWorkspace\)/)
   assert.match(operations, /Show all.*overdue.*responsibilit/)
   assert.match(operations, /overdueOnly/)
   assert.doesNotMatch(operations, /responsibility\{visibleTasks\.length === 1 \? '' : 'ies'\}/)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createEmptyDailyPlan, normalizeDailyPlan } from './dailyPlan.js'
 import { fetchDailyPlan } from './householdApi.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
@@ -15,27 +15,40 @@ export function useDailyPlan(date = currentDailyPlanDate()) {
   const [plan, setPlan] = useState(() => createEmptyDailyPlan(date))
   const [state, setState] = useState('loading')
   const [error, setError] = useState('')
+  const requests = useRef(0)
+  const mounted = useRef(true)
+  const selectedDate = useRef(date)
+  selectedDate.current = date
 
   const reload = useCallback(async () => {
+    const request = ++requests.current
     setState('loading')
     setError('')
     try {
       const remote = await fetchDailyPlan(date)
+      if (!mounted.current || request !== requests.current || selectedDate.current !== date) return
+      if (remote && remote.date !== date) throw new Error('The returned plan does not match the selected date. Refresh before changing any responsibility.')
       setPlan(remote || createEmptyDailyPlan(date))
       setState('ready')
     } catch (err) {
+      if (!mounted.current || request !== requests.current || selectedDate.current !== date) return
       setPlan(createEmptyDailyPlan(date))
       setError(err.message || 'Could not load the household plan.')
       setState('error')
     }
   }, [date])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    mounted.current = true
+    reload()
+    return () => { mounted.current = false; requests.current += 1 }
+  }, [reload])
 
   useEffect(() => {
     const receiveRefresh = event => {
       const refreshedPlan = dailyPlanFromRefresh(event?.detail, date)
       if (!refreshedPlan) return
+      requests.current += 1
       setPlan(refreshedPlan)
       setError('')
       setState('ready')
@@ -54,5 +67,8 @@ export function useDailyPlan(date = currentDailyPlanDate()) {
     return () => window.removeEventListener(ACTION_COMPLETED_EVENT, refreshAfterReviewedAction)
   }, [date, reload])
 
-  return { plan, state, error, reload }
+  // Never expose yesterday's record/version in the render between a date change
+  // and the new request resolving. The server still checks the exact version.
+  const matches = plan.date === date
+  return { plan: matches ? plan : createEmptyDailyPlan(date), state: matches ? state : 'loading', error: matches ? error : '', reload }
 }
