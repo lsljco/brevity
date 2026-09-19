@@ -65,8 +65,10 @@ function ChoreEditor({task,currentMember,isAdmin,busy,onClose,onReview,onDelete}
   </form></div>
 }
 
-export default function HouseholdMaintenance({ currentMember, canEdit=true, isAdmin=false }) {
-  const [workspace, setWorkspace] = useState('operations')
+const operatingWorkspaces = ['schedule', 'routines', 'operations', 'inventory']
+export default function HouseholdMaintenance({ currentMember, canEdit=true, isAdmin=false, initialWorkspace='operations' }) {
+  const [workspace, setWorkspace] = useState(() => operatingWorkspaces.includes(initialWorkspace) ? initialWorkspace : 'operations')
+  useEffect(() => { if (operatingWorkspaces.includes(initialWorkspace)) setWorkspace(initialWorkspace) }, [initialWorkspace])
   const [weekStart, setWeekStart] = useState(() => maintenanceWeekStart(maintenanceToday()))
   const [state, setState] = useState(loadState)
   const [ownerFilter, setOwnerFilter] = useState('Mine')
@@ -161,11 +163,11 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
 
     {isVerifier && awaitingApproval.length > 0 && <section className="operations-signoff-queue"><header><div><p>Verification queue</p><h2>{awaitingApproval.length} chore{awaitingApproval.length===1?'':'s'} awaiting your sign-off</h2></div><span>Either Larry or Terica may review; approval is never automatic.</span></header>{awaitingApproval.map(({day,task,occurrence})=><article key={task.occurrenceId}><div><strong>{task.title}</strong><span>{day.label} · {task.zone} · submitted by {occurrence.submittedBy || occurrence.completedBy}</span></div><div><button className="approve" disabled={Boolean(reviewBusy)} onClick={()=>approveTask(task)}>Review approval</button><button disabled={Boolean(reviewBusy)} onClick={()=>returnTask(task)}>Review return</button></div></article>)}</section>}
 
-    <section className="maintenance-operating-rule operations-principles">
-      <div><i className="ti ti-clock" /><span><strong>Nyla · 2–4 PM</strong> Primary weekday operator: assigned zone and completion before evening.</span></div>
-      <div><i className="ti ti-moon" /><span><strong>Javin · After work</strong> 20–30 minute closeout: floors, finishing work, or the assigned support task.</span></div>
-      <div><i className="ti ti-calendar-week" /><span><strong>Saturday · Rotation</strong> Light reset plus one heavier maintenance item only when it is actually needed.</span></div>
-      <div><i className="ti ti-home-check" /><span><strong>Sunday · Joint reset</strong> 60–90 minutes together to restore a clean, organized Monday baseline.</span></div>
+    <section className="maintenance-operating-rule operations-principles" aria-label="Coverage principles">
+      <div><i className="ti ti-clock" /><span><strong>Protect work and study</strong> Review actual availability before accepting a household assignment. An old time window is not proof someone remains available.</span></div>
+      <div><i className="ti ti-users" /><span><strong>Agree on coverage</strong> Keep the saved owner or explicitly review a replacement and backup. Nobody becomes the automatic substitute.</span></div>
+      <div><i className="ti ti-calendar-week" /><span><strong>Plan realistically</strong> Use Schedule and Routines to place the work alongside existing commitments and rest.</span></div>
+      <div><i className="ti ti-home-check" /><span><strong>Close and review</strong> Finish the checklist, record an obstacle when needed, and complete the agreed verification.</span></div>
     </section>
 
     <section className="maintenance-operating-rule operations-principles" aria-label="Household cleaning standards">
