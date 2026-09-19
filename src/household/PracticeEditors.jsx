@@ -50,7 +50,7 @@ export function PracticeAgreementEditor({ template, practice, date, onReview, on
     let notes
     try { notes = practiceRoutineNotes({ policyId: template.id, revision: (practice?.revision || 0) + 1, ...draft }) }
     catch (failure) { setError(failure.message); return }
-    review({ title: draft.title, owner: draft.owner, participants: [], startTime: draft.startTime, endTime: draft.endTime, days: draft.days, pillar: template.pillar, enabled: draft.enabled, notes })
+    review({ title: draft.title, owner: draft.owner, participants: practice?.routine.participants || [], startTime: draft.startTime, endTime: draft.endTime, days: draft.days, pillar: template.pillar, enabled: draft.enabled, notes })
   }
   const valid = draft.agreed && draft.owner && draft.backup && draft.owner !== draft.backup && draft.days.length && validPracticeTime(draft.startTime) && validPracticeTime(draft.endTime) && draft.endTime > draft.startTime
   return <PracticeDialog title={practice ? `Revise ${template.id}` : `Activate ${template.id}`} onClose={onClose}><form onSubmit={submit}>
@@ -70,8 +70,9 @@ export function PracticeAgreementEditor({ template, practice, date, onReview, on
 }
 
 export function PracticeCheckinEditor({ card, onReview, onClose }) {
-  const [status, setStatus] = useState(card.checkin?.revision === card.practice.revision ? card.checkin.status : 'unrecorded')
-  const [note, setNote] = useState(card.checkin?.revision === card.practice.revision ? card.checkin.note : ''), [recovery, setRecovery] = useState(card.checkin?.revision === card.practice.revision ? card.checkin.recovery : '')
+  const sameAssignment = card.checkin?.revision === card.practice.revision && card.checkin?.owner === card.practice.routine.owner
+  const [status, setStatus] = useState(sameAssignment ? card.checkin.status : 'unrecorded')
+  const [note, setNote] = useState(sameAssignment ? card.checkin.note : ''), [recovery, setRecovery] = useState(sameAssignment ? card.checkin.recovery : '')
   const { busy, error, review } = useReview(onReview)
   const needsReason = status === 'blocked' || status === 'exception'
   return <PracticeDialog title={`Check in: ${card.template.title}`} onClose={onClose}><form onSubmit={event => { event.preventDefault(); review({ status, note, recovery }) }}>
