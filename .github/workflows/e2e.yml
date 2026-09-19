@@ -15,6 +15,16 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+      - name: Record tested source identity
+        run: |
+          git rev-parse HEAD
+          git log -1 --format='%h %s'
+          git ls-tree HEAD src/household/TodayDashboard.jsx src/household/HouseholdToday.jsx src/household/OperatingPractices.jsx src/household/PracticeEditors.jsx e2e/critical-workflows.spec.mjs e2e/operating-practices.spec.mjs
+          grep -R -n -E 'mobile-practical-disclosure|today-operations-sidebar|Morning prep' src e2e || true
+          mkdir -p browser-diagnostics
+          for source in src/household/TodayDashboard.jsx src/household/HouseholdToday.jsx src/household/OperatingPractices.jsx src/household/OperatingPractices.css src/household/PracticeEditors.jsx src/household/HouseholdOS.css e2e/critical-workflows.spec.mjs e2e/operating-practices.spec.mjs playwright.config.mjs; do
+            if test -f "$source"; then cp --parents "$source" browser-diagnostics/; fi
+          done
       - name: Use Node.js
         uses: actions/setup-node@v5
         with:
@@ -30,3 +40,14 @@ jobs:
         run: npm run build
       - name: Run browser regression suite
         run: npx playwright test
+      - name: Preserve browser failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics-${{ github.run_id }}
+          path: |
+            browser-diagnostics/
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: warn
