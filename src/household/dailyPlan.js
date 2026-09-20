@@ -165,6 +165,9 @@ export function createEmptyDailyPlan(date) {
       participants: [],
       workout: '',
       objective: '',
+      goal: '',
+      exerciseIds: [],
+      exerciseImages: [],
       departureTime: '',
       returnTime: '',
       stepGoal: 12000,
@@ -270,6 +273,8 @@ export function normalizeDailyPlan(input = {}) {
       location: normalizeFitnessLocation(fitness.location),
       requiresDecision: false,
       participants: arrayOrEmpty(fitness.participants),
+      exerciseIds: arrayOrEmpty(fitness.exerciseIds).map(String),
+      exerciseImages: arrayOrEmpty(fitness.exerciseImages).map(String),
     },
     household: {
       ...base.household,
