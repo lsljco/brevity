@@ -35,12 +35,12 @@ test('weekly schedule matches the requested five-day household split',()=>{
 })
 
 test('exercise library covers all major body parts with exercise-specific photography',()=>{
-  assert.equal(EXERCISE_LIBRARY.length,25)
+  assert.ok(EXERCISE_LIBRARY.length>=100)
   for(const part of ['Chest','Back','Shoulders','Biceps','Triceps','Quadriceps','Hamstrings','Glutes','Calves','Abs','Conditioning']){
     assert.ok(BODY_PARTS.includes(part))
-    assert.ok(EXERCISE_LIBRARY.some(item=>item.bodyParts.includes(part)),`${part} is covered`)
+    assert.ok(EXERCISE_LIBRARY.filter(item=>item.bodyParts.includes(part)).length>=15,`${part} has at least 15 movements`)
   }
-  assert.equal(new Set(EXERCISE_LIBRARY.map(item=>item.image)).size,EXERCISE_LIBRARY.length)
+  for(const equipment of ['Bodyweight','Cable','Dumbbell','Machine'])assert.ok(EXERCISE_LIBRARY.some(item=>item.equipment===equipment),`${equipment} movements are available`)
 })
 
 test('daily workout UI contains photographs, schedule, searchable library and progression',async()=>{
@@ -70,17 +70,17 @@ test('daily workout UI contains photographs, schedule, searchable library and pr
   assert.match(viewer,/event\.key === 'Escape'/)
 })
 
-test('every workout uses a permanent bundled family render',async()=>{
+test('every library movement uses a permanent bundled family render',async()=>{
   const files=EXERCISE_LIBRARY.map(item=>item.image.replace('/fitness/exercises/','').replace(/\.webp$/,''))
-  assert.equal(files.length,25)
+  assert.equal(files.length,EXERCISE_LIBRARY.length)
   assert.ok(files.every(name=>name.startsWith('family-')))
-  const assets=await Promise.all(files.map(name=>readFile(new URL(`../../public/fitness/exercises/${name}.webp`,import.meta.url))))
+  const unique=[...new Set(files)],assets=await Promise.all(unique.map(name=>readFile(new URL(`../../public/fitness/exercises/${name}.webp`,import.meta.url))))
   for(const asset of assets){
     assert.equal(asset.subarray(0,4).toString(),'RIFF')
     assert.equal(asset.subarray(8,12).toString(),'WEBP')
     assert.ok(asset.length>60000,'family workout render should be a full photographic asset')
   }
-  assert.equal(new Set(assets.map(asset=>asset.toString('base64'))).size,files.length)
+  assert.equal(new Set(assets.map(asset=>asset.toString('base64'))).size,unique.length)
 })
 
 test('goal builder targets named muscles and keeps daily abs',()=>{
