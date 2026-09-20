@@ -96,7 +96,7 @@ function isaiah(value) {
 const PILLAR_FIELDS = {
   spiritual: { text:['devotionFocus', 'obedienceAction', 'requiredOutput'], strings:['scripture', 'prayerFocus', 'discussionPrompts'] },
   health: { text:['breakfast', 'lunch', 'dinner', 'snacks', 'hydration', 'nextDayPrep', 'discussionPrompt'], strings:['groceries'] },
-  fitness: { text:['location', 'workout', 'objective', 'departureTime', 'returnTime', 'recovery', 'discussionPrompt'], members:['participants'], numbers:['stepGoal'], booleans:['requiresDecision'] },
+  fitness: { text:['location', 'workout', 'objective', 'goal', 'departureTime', 'returnTime', 'recovery', 'discussionPrompt'], strings:['exerciseIds', 'exerciseImages'], members:['participants'], numbers:['stepGoal'], booleans:['requiresDecision'] },
   household: { text:['keyFocus'], strings:['errands', 'openItems', 'careerPriorities'], items:['appointments', 'priorities'] },
   education: { text:['thinkTankTopic', 'thinkTankDeliverable'], strings:['discussionPrompts'], nested:['isaiah'] },
   finance: { text:['decisionRule', 'discussionPrompt', 'requiredOutput'], strings:['incomePipeline'], items:['bills', 'purchases', 'transfers', 'accountsToFund'] },
