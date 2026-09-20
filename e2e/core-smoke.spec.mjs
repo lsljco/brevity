@@ -183,6 +183,11 @@ test('Physical Fitness builds and refines a goal-driven workout before Action Mo
   expect(selected).toEqual(expect.arrayContaining(['lateral-raise','lat-pulldown','incline-press']))
   await expect(draft.getByLabel('Use in generated images')).toHaveValue('Larry')
   await expect(draft.getByRole('button', { name:'Review & Replace Today’s Workout' })).toBeVisible()
+  await page.getByRole('button',{name:'Exercise Library'}).click()
+  await page.locator('.fitness-body-filters').getByRole('button',{name:'Chest',exact:true}).click()
+  await expect(page.locator('.fitness-result-count')).toHaveText('19 exercises')
+  await page.getByLabel('Filter exercise equipment').selectOption('Cable')
+  expect(await page.locator('.fitness-library-card').count()).toBeGreaterThanOrEqual(4)
 })
 
 test('Today Pillar 4 lists every calendar commitment and today’s Household Operations chores', async ({ page }) => {
