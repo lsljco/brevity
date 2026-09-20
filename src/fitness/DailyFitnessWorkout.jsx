@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useDailyPlan } from '../household/useDailyPlan.js'
-import { BODY_PARTS, EXERCISE_BY_ID, EXERCISE_LIBRARY, suggestWorkoutFromGoal, weeklyScheduleForMember, workoutForDate } from './fitnessWorkoutPlan.js'
+import { BODY_PARTS, EQUIPMENT_TYPES, EXERCISE_BY_ID, EXERCISE_LIBRARY, suggestWorkoutFromGoal, weeklyScheduleForMember, workoutForDate } from './fitnessWorkoutPlan.js'
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import ExerciseImageViewer from './ExerciseImageViewer.jsx'
@@ -12,19 +12,19 @@ function ExerciseCard({exercise,index,compact=false}){
   return <article className={compact?'fitness-library-card':'fitness-workout-card'}>
     {!compact&&<div className="fitness-exercise-number">{String(index+1).padStart(2,'0')}</div>}
     <ExerciseImageViewer exercise={exercise} className="fitness-exercise-image-button" imageClassName="fitness-exercise-photo" />
-    <div className="fitness-exercise-copy"><span>{exercise.muscles.join(' · ')}</span><h3>{exercise.name}</h3><p>{exercise.cue}</p><div>{exercise.bodyParts.map(part=><small key={part}>{part}</small>)}</div></div>
+    <div className="fitness-exercise-copy"><span>{exercise.muscles.join(' · ')}</span><h3>{exercise.name}</h3><p>{exercise.cue}</p><div><small>{exercise.equipment}</small>{exercise.bodyParts.map(part=><small key={part}>{part}</small>)}</div></div>
     <dl><div><dt>Sets</dt><dd>{exercise.sets}</dd></div><div><dt>Reps / time</dt><dd>{exercise.reps}</dd></div><div><dt>Rest</dt><dd>{exercise.rest}</dd></div></dl>
   </article>
 }
 
 export default function DailyFitnessWorkout({currentMember='Larry'}){
   const {plan,state,error,reload}=useDailyPlan()
-  const [view,setView]=useState('today'),[query,setQuery]=useState(''),[bodyPart,setBodyPart]=useState('All')
+  const [view,setView]=useState('today'),[query,setQuery]=useState(''),[bodyPart,setBodyPart]=useState('All'),[equipment,setEquipment]=useState('All')
   const [goal,setGoal]=useState(''),[draft,setDraft]=useState(null),[builderState,setBuilderState]=useState('idle'),[builderError,setBuilderError]=useState('')
   const [imageMember,setImageMember]=useState(currentMember)
   const workout=useMemo(()=>workoutForDate(plan?.date,currentMember,plan?.fitness),[plan?.date,currentMember,plan?.fitness])
   const schedule=useMemo(()=>weeklyScheduleForMember(currentMember),[currentMember])
-  const filteredExercises=useMemo(()=>EXERCISE_LIBRARY.filter(item=>(bodyPart==='All'||item.bodyParts.includes(bodyPart))&&`${item.name} ${item.muscles.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())),[bodyPart,query])
+  const filteredExercises=useMemo(()=>EXERCISE_LIBRARY.filter(item=>(bodyPart==='All'||item.bodyParts.includes(bodyPart))&&(equipment==='All'||item.equipment===equipment)&&`${item.name} ${item.muscles.join(' ')} ${item.equipment}`.toLowerCase().includes(query.trim().toLowerCase())),[bodyPart,equipment,query])
   const recordedWorkout=String(plan?.fitness?.workout||'').trim(),recordedRecovery=String(plan?.fitness?.recovery||'').trim()
   const location=String(plan?.fitness?.location||'').trim()||(new Date(`${plan?.date}T12:00:00`).getDay()===1?'Lifetime Buckhead':'Lifetime Perimeter')
   const profileLabel=workout.profile==='women'?'Lean athletic physique':workout.profile==='youth'?'Youth movement foundations':'V-taper + fat loss'
@@ -61,6 +61,6 @@ export default function DailyFitnessWorkout({currentMember='Larry'}){
 
     {view==='week'&&<section className="fitness-week"><header><span>Household training rhythm</span><h2>Weekly Workout Schedule</h2><p>Five lifting days, daily abs, and a daily 12,000-step goal. Weekend sessions preserve movement while reducing fatigue.</p></header><div>{schedule.map(day=><article key={day.day} className={day.day===currentDay?'today':''}><div><span>{day.day}</span>{day.day===currentDay&&<small>Today</small>}<h3>{day.focus}</h3><p>{day.session.title}</p></div><strong>{day.daily}</strong><ul>{day.session.exercises.map(item=><li key={item.id}>{item.name}</li>)}</ul></article>)}</div></section>}
 
-    {view==='library'&&<section className="fitness-library"><header><div><span>Movement reference</span><h2>Exercise Library</h2><p>Search the household’s exercise collection by movement or target muscle.</p></div><label><i className="ti ti-search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search exercises or muscles" aria-label="Search exercise library"/></label></header><div className="fitness-body-filters">{BODY_PARTS.map(part=><button key={part} className={bodyPart===part?'active':''} onClick={()=>setBodyPart(part)}>{part}</button>)}</div><p className="fitness-result-count">{filteredExercises.length} exercise{filteredExercises.length===1?'':'s'}</p><div className="fitness-library-grid">{filteredExercises.map(item=><ExerciseCard key={item.id} exercise={item} compact/>)}</div>{!filteredExercises.length&&<div className="fitness-empty">No exercises match this search and body-part filter.</div>}</section>}
+    {view==='library'&&<section className="fitness-library"><header><div><span>Movement reference</span><h2>Exercise Library</h2><p>Search more than 100 movements by target muscle and equipment.</p></div><div className="fitness-library-controls"><label><i className="ti ti-search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search exercises or muscles" aria-label="Search exercise library"/></label><label><i className="ti ti-barbell"/><select value={equipment} onChange={event=>setEquipment(event.target.value)} aria-label="Filter exercise equipment">{EQUIPMENT_TYPES.map(type=><option key={type}>{type}</option>)}</select></label></div></header><div className="fitness-body-filters">{BODY_PARTS.map(part=><button key={part} className={bodyPart===part?'active':''} onClick={()=>setBodyPart(part)}>{part}</button>)}</div><p className="fitness-result-count">{filteredExercises.length} exercise{filteredExercises.length===1?'':'s'}</p><div className="fitness-library-grid">{filteredExercises.map(item=><ExerciseCard key={item.id} exercise={item} compact/>)}</div>{!filteredExercises.length&&<div className="fitness-empty">No exercises match this search, body-part, and equipment filter.</div>}</section>}
   </main>
 }
