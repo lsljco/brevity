@@ -170,8 +170,8 @@ function PillarBrief({ number, pillar, title, detail, meta = [], onOpenPillar })
   </section>
 }
 
-function TodayFitnessWorkout({ date, currentMember, location, onOpenPillar }) {
-  const workout = useMemo(() => workoutForDate(date, currentMember), [date, currentMember])
+function TodayFitnessWorkout({ date, currentMember, fitness, onOpenPillar }) {
+  const workout = useMemo(() => workoutForDate(date, currentMember, fitness), [date, currentMember, fitness])
   return <section className="today-section today-fitness-workout" data-pillar="fitness" aria-labelledby="today-fitness-title">
     <div className="today-section-heading today-fitness-heading">
       <div><span>Pillar 3 · Physical Fitness</span><h2 id="today-fitness-title">{workout.title}</h2><p>{workout.focus}</p></div>
@@ -179,7 +179,7 @@ function TodayFitnessWorkout({ date, currentMember, location, onOpenPillar }) {
     </div>
     <div className="today-fitness-summary" aria-label="Today’s workout summary">
       <span><i className="ti ti-clock" aria-hidden="true" /> {workout.duration}</span>
-      <span><i className="ti ti-map-pin" aria-hidden="true" /> {location || 'Workout location not set'}</span>
+      <span><i className="ti ti-map-pin" aria-hidden="true" /> {fitness?.location || 'Workout location not set'}</span>
       <span><i className="ti ti-walk" aria-hidden="true" /> Abs + {workout.stepGoal.toLocaleString()} steps</span>
     </div>
     <div className="today-fitness-exercises">
@@ -238,7 +238,7 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
     <TodayMeals meals={meals} state={mealPlanState} error={mealPlanError} onOpenMealPlan={onOpenMealPlan} />
 
-    <TodayFitnessWorkout date={dailyPlan.date} currentMember={currentMember} location={fitness.location} onOpenPillar={onOpenPillar} />
+    <TodayFitnessWorkout date={dailyPlan.date} currentMember={currentMember} fitness={fitness} onOpenPillar={onOpenPillar} />
 
     <section className="today-pillar-stack" data-pillar="household">
       <div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Household Operations</h2></div>
