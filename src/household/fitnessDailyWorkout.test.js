@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { BODY_PARTS, EXERCISE_LIBRARY, fitnessProfileForMember, weeklyScheduleForMember, workoutForDate } from '../fitness/fitnessWorkoutPlan.js'
+import { BODY_PARTS, EXERCISE_LIBRARY, fitnessProfileForMember, suggestWorkoutFromGoal, weeklyScheduleForMember, workoutForDate } from '../fitness/fitnessWorkoutPlan.js'
 
 test('Physical Fitness assigns adult physique tracks and a separate youth-safe track', () => {
   assert.equal(fitnessProfileForMember('Larry'),'men')
@@ -81,4 +81,19 @@ test('every workout uses a permanent bundled family render',async()=>{
     assert.ok(asset.length>60000,'family workout render should be a full photographic asset')
   }
   assert.equal(new Set(assets.map(asset=>asset.toString('base64'))).size,files.length)
+})
+
+test('goal builder targets named muscles and keeps daily abs',()=>{
+  const suggestion=suggestWorkoutFromGoal('Build wider shoulders and lats with upper chest emphasis','Larry')
+  assert.ok(suggestion.exerciseIds.includes('lateral-raise'))
+  assert.ok(suggestion.exerciseIds.includes('lat-pulldown'))
+  assert.ok(suggestion.exerciseIds.includes('incline-press'))
+  assert.ok(suggestion.exerciseIds.includes('ab-wheel'))
+})
+
+test('reviewed custom workout and generated images override only the dated workout',()=>{
+  const workout=workoutForDate('2026-09-21','Larry',{goal:'Upper chest',workout:'Upper Chest Target',objective:'Target upper chest',exerciseIds:['incline-press','cable-fly'],exerciseImages:['incline-press|/.netlify/functions/fitness-images?id=custom-1']})
+  assert.equal(workout.title,'Upper Chest Target')
+  assert.deepEqual(workout.exercises.map(item=>item.id),['incline-press','cable-fly'])
+  assert.equal(workout.exercises[0].image,'/.netlify/functions/fitness-images?id=custom-1')
 })
