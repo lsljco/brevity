@@ -28,9 +28,9 @@ export const EXERCISE_LIBRARY=Object.freeze([
   exercise('incline-walk','Incline treadmill walk',['Conditioning','Glutes','Calves'],1,'20–30 min','As needed',['Heart and lungs','Glutes','Calves'],'Use a pace that allows short sentences; stay tall and off the rails.','family-incline-walk-v2'),
 ])
 
-const BY_ID=Object.freeze(Object.fromEntries(EXERCISE_LIBRARY.map(item=>[item.id,item])))
+export const EXERCISE_BY_ID=Object.freeze(Object.fromEntries(EXERCISE_LIBRARY.map(item=>[item.id,item])))
 export const BODY_PARTS=Object.freeze(['All','Chest','Back','Shoulders','Biceps','Triceps','Quadriceps','Hamstrings','Glutes','Calves','Abs','Conditioning'])
-const session=(id,title,focus,duration,intensity,ids,note)=>Object.freeze({id,title,focus,duration,intensity,exercises:Object.freeze(ids.map(id=>BY_ID[id])),note})
+const session=(id,title,focus,duration,intensity,ids,note)=>Object.freeze({id,title,focus,duration,intensity,exercises:Object.freeze(ids.map(id=>EXERCISE_BY_ID[id])),note})
 
 const MEN=Object.freeze([
   session('men-chest-back-a','Chest + Back · V-Taper A','Upper chest, lat width, back thickness and abs','60–70 min','Hypertrophy · 1–2 reps in reserve',['incline-press','lat-pulldown','chest-row','cable-fly','single-row','ab-wheel'],'Build a wider upper frame while preserving a tight, braced waist.'),
@@ -72,7 +72,30 @@ export function weeklyScheduleForMember(member='Larry'){
   const profile=fitnessProfileForMember(member),schedule=profile==='women'?WOMEN:profile==='youth'?YOUTH:MEN
   return WEEKLY_WORKOUT_SCHEDULE.map((day,index)=>({...day,session:schedule[index]}))
 }
-export function workoutForDate(date,member='Larry'){
+const imageOverrides=value=>Object.fromEntries((Array.isArray(value)?value:[]).map(item=>String(item).split('|')).filter(parts=>parts.length>=2&&EXERCISE_BY_ID[parts[0]]).map(([id,...url])=>[id,url.join('|')]))
+export function workoutForDate(date,member='Larry',fitness={}){
   const parsed=new Date(`${date}T12:00:00Z`),day=Number.isFinite(parsed.getTime())?parsed.getUTCDay():new Date().getDay(),profile=fitnessProfileForMember(member),schedule=profile==='women'?WOMEN:profile==='youth'?YOUTH:MEN
-  return {...schedule[day===0?6:day-1],profile,date,member,stepGoal:12000,weeklyWorkoutTarget:5}
+  const base=schedule[day===0?6:day-1],ids=Array.isArray(fitness?.exerciseIds)?fitness.exerciseIds.filter(id=>EXERCISE_BY_ID[id]).slice(0,10):[],images=imageOverrides(fitness?.exerciseImages)
+  const exercises=(ids.length?ids:base.exercises.map(item=>item.id)).map(id=>images[id]?{...EXERCISE_BY_ID[id],image:images[id]}:EXERCISE_BY_ID[id]).filter(Boolean)
+  return {...base,...(ids.length?{id:`custom-${date}-${member}`,title:String(fitness.workout||'Custom Target Workout'),focus:String(fitness.objective||fitness.goal||base.focus),note:String(fitness.goal||fitness.objective||base.note),exercises}:{}),profile,date,member,stepGoal:Number(fitness?.stepGoal)||12000,weeklyWorkoutTarget:5}
+}
+
+const TARGETS={
+  chest:['incline-press','cable-fly','push-up'],back:['lat-pulldown','chest-row','single-row','face-pull'],lat:['lat-pulldown','chest-row','single-row'],shoulder:['shoulder-press','lateral-raise','reverse-fly','face-pull'],
+  arm:['hammer-curl','rope-triceps','shoulder-press'],bicep:['hammer-curl','single-row'],tricep:['rope-triceps','push-up','incline-press'],
+  leg:['goblet-squat','romanian-deadlift','reverse-lunge','leg-curl','calf-raise'],quad:['goblet-squat','reverse-lunge','step-up'],hamstring:['romanian-deadlift','leg-curl','hip-thrust'],
+  glute:['hip-thrust','romanian-deadlift','glute-kickback','step-up'],calf:['calf-raise'],ab:['ab-wheel','hanging-raise','dead-bug','plank'],core:['ab-wheel','dead-bug','plank'],conditioning:['incline-walk'],fat:['incline-walk'],waist:['dead-bug','plank','hanging-raise'],
+}
+export function suggestWorkoutFromGoal(goal,member='Larry'){
+  const text=String(goal||'').trim().toLowerCase(),profile=fitnessProfileForMember(member)
+  if(text.length<3)throw new Error('Describe the muscles or physique goal you want to target.')
+  const ranked=[]
+  for(const [term,ids] of Object.entries(TARGETS))if(text.includes(term))ids.forEach(id=>{if(!ranked.includes(id))ranked.push(id)})
+  for(const [term,id] of [['chest','incline-press'],['lat','lat-pulldown'],['shoulder','lateral-raise'],['glute','hip-thrust'],['hamstring','romanian-deadlift'],['quad','goblet-squat'],['ab','ab-wheel'],['core','dead-bug']])if(text.includes(term)){const index=ranked.indexOf(id);if(index>=0)ranked.splice(index,1);ranked.unshift(id)}
+  if(!ranked.length)(profile==='women'?['hip-thrust','goblet-squat','lateral-raise','chest-row','dead-bug']:profile==='youth'?['goblet-squat','push-up','single-row','step-up','dead-bug']:['lat-pulldown','incline-press','lateral-raise','chest-row','ab-wheel']).forEach(id=>ranked.push(id))
+  const core=profile==='youth'?'dead-bug':text.includes('ab')||text.includes('core')||text.includes('waist')?null:(profile==='women'?'dead-bug':'ab-wheel')
+  const limit=profile==='youth'?5:8,ids=ranked.filter(id=>id!==core).slice(0,core?limit-1:limit)
+  if(core&&!ids.includes(core))ids.push(core)
+  const muscles=[...new Set(ids.flatMap(id=>EXERCISE_BY_ID[id].muscles))].slice(0,6)
+  return {goal:String(goal).trim(),member,exerciseIds:ids,title:`${muscles.slice(0,2).join(' + ')} Target Workout`,objective:`Target ${muscles.join(', ')} with controlled, progressive training.`,exercises:ids.map(id=>EXERCISE_BY_ID[id])}
 }

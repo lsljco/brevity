@@ -170,6 +170,21 @@ test('Today Pillar 3 shows the dated workout exercise photography and opens the 
   await expect(page.locator('.daily-fitness-hero h1')).toBeVisible()
 })
 
+test('Physical Fitness builds and refines a goal-driven workout before Action Mode review', async ({ page }, testInfo) => {
+  if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Menu'}).click()
+  await page.getByRole('button', { name:'Physical Fitness' }).click()
+  if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Close navigation'}).evaluate(button=>button.click())
+  await expect(page.getByRole('heading', { name:'Tell Brevity what you want to target' })).toBeVisible()
+  await page.getByLabel('Today’s goal').fill('Build wider shoulders and lats with upper chest emphasis')
+  await page.getByRole('button', { name:'Build Workout' }).click()
+  const draft=page.locator('.fitness-goal-draft')
+  await expect(draft.getByText('Proposed for Larry')).toBeVisible()
+  const selected=await draft.locator('select[aria-label^="Replace "]').evaluateAll(selects=>selects.map(select=>select.value))
+  expect(selected).toEqual(expect.arrayContaining(['lateral-raise','lat-pulldown','incline-press']))
+  await expect(draft.getByLabel('Use in generated images')).toHaveValue('Larry')
+  await expect(draft.getByRole('button', { name:'Review & Replace Today’s Workout' })).toBeVisible()
+})
+
 test('Today Pillar 4 lists every calendar commitment and today’s Household Operations chores', async ({ page }) => {
   const household = page.locator('[data-pillar="household"]')
   await expect(household.getByRole('heading', { name:'Today’s Appointments & Meetings' })).toBeVisible()
