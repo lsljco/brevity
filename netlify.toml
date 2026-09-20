@@ -36,3 +36,6 @@
 [functions."sermon-slides-background"]
   external_node_modules = ["pptxgenjs"]
   included_files = ["netlify/assets/sermon-characters/**"]
+
+[functions."fitness-image-generate"]
+  included_files = ["netlify/assets/sermon-characters/**"]
