@@ -17,7 +17,7 @@ test('Today renders its primary content in the canonical seven-pillar order',asy
 test('Today Pillar 3 renders every exercise image from the shared dated member workout',async()=>{
   const source=await readFile(new URL('./TodayDashboard.jsx',import.meta.url),'utf8')
   assert.match(source,/import \{ workoutForDate \} from '\.\.\/fitness\/fitnessWorkoutPlan\.js'/)
-  assert.match(source,/workoutForDate\(date, currentMember\)/)
+  assert.match(source,/workoutForDate\(date, currentMember, fitness\)/)
   assert.match(source,/workout\.exercises\.map/)
   assert.match(source,/ExerciseImageViewer/)
   assert.match(source,/exercise=\{exercise\}/)
