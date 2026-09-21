@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test'
 
 const today = () => {
-  const date = new Date()
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(new Date()).map(part => [part.type, part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
-const plan = () => ({
-  id: `daily-plan-${today()}`,
-  date: today(),
+const plan = (date = today()) => ({
+  id: `daily-plan-${date}`,
+  date,
   theme: 'Steady stewardship',
   dayObjective: 'Execute the household plan without avoidable exceptions.',
   governingPrinciple: 'Do the known work in the right order.',
@@ -18,7 +18,7 @@ const plan = () => ({
   spiritual: { owner:'Family', scope:'household', scripture:['Psalm 1:3'], devotionFocus:'Shared household devotion', prayerFocus:['Wisdom'], discussionPrompts:[], obedienceAction:'Practice the teaching.' },
   health: { owner:'Terica', breakfast:'Eggs', lunch:'Chicken and vegetables', dinner:'Fish and vegetables', snacks:'Fruit', hydration:'Water', groceries:[], nextDayPrep:'' },
   fitness: { owner:'Larry', location:'Lifetime Gym', participants:[], workout:'Strength', objective:'Train', departureTime:'', returnTime:'', stepGoal:10000, recovery:'', requiresDecision:false },
-  household: { owner:'Larry', appointments:[{ id:'school-meeting', title:'School planning meeting', date:today(), startTime:'9:15 AM', owner:'Larry', status:'pending', priority:'normal' }], priorities:[], errands:[], openItems:[] },
+  household: { owner:'Larry', appointments:[{ id:'school-meeting', title:'School planning meeting', date, startTime:'9:15 AM', owner:'Larry', status:'pending', priority:'normal' }], priorities:[], errands:[], openItems:[] },
   education: { owner:'Larry', thinkTankTopic:'', thinkTankDeliverable:'', isaiah:{ owner:'Family', readingMinutes:20, sightWordsMinutes:10, comprehensionMinutes:10, mathMinutes:10, notes:'' } },
   finance: { owner:'Larry', bills:[], purchases:[], transfers:[], accountsToFund:[], incomePipeline:[], decisionRule:'' },
   ministry: { owners:['Larry','Lorenzo'], meetings:[], contentFocus:'', fellowshipFollowUps:[], prayerNeeds:[] },
@@ -39,7 +39,7 @@ async function mockBackend(page) {
         body = { conflict:false, record:{ ...payload, version:Number(payload.expectedVersion || 0)+1, updatedAt:new Date().toISOString(), updatedBy:'Larry' } }
       } else body = { records:{}, serverTime:new Date().toISOString() }
     }
-    else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan() }
+    else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan(url.searchParams.get('date') || today()) }
     else if (path.endsWith('/icloud-calendar')) body = { events:[{ id:'doctor-appointment', uid:'doctor-appointment', source:'icloud', title:'Doctor appointment', date:today(), time:'2:30 PM', owner:'Family' }], connected:true, syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-transactions')) body = { transactions:[], errors:[] }

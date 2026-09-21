@@ -13,6 +13,12 @@ test('periods use inclusive local date boundaries and a comparable prior period'
   assert.equal(resolveIntelligencePeriod('quarter',{now:new Date(2026,8,15)}).from,'2026-07-01')
 })
 
+test('current periods follow the household date instead of the browser time zone',()=>{
+  const period=resolveIntelligencePeriod('today',{now:new Date('2026-09-21T01:00:00.000Z')})
+  assert.equal(period.from,'2026-09-20')
+  assert.equal(period.to,'2026-09-20')
+})
+
 test('multi-pillar time allocation never doubles event duration',()=>{
   const cfg=config({overrides:{meeting:[{pillarId:'finance',percent:70},{pillarId:'household',percent:30}]}})
   const activities=normalizePerformanceActivities({calendarEvents:[{id:'meeting',title:'Family meeting',date:'2026-09-08',time:'09:00',endTime:'10:00',owner:'A'}],members,config:cfg})
@@ -52,6 +58,17 @@ test('elapsed calendar occurrences calculate as performed while future and expli
   assert.equal(fitness.completed,1)
   assert.equal(fitness.planned,3)
   assert.equal(fitness.attainment,33)
+})
+
+test('a planned household-day calendar record is not completed by a browser time-zone rollover',()=>{
+  const cfg=config(),activities=normalizePerformanceActivities({
+    calendarEvents:[{id:'planned',title:'Finance review',date:'2026-09-20',owner:'A',pillar:'finance'}],
+    members,
+    config:cfg,
+    now:new Date('2026-09-21T01:00:00.000Z'),
+  })
+  assert.equal(activities[0].completed,false)
+  assert.equal(activities[0].completionEvidence,'pending')
 })
 
 test('missing targets and activities remain No Data rather than zero',()=>{

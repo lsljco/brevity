@@ -5,7 +5,7 @@ import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import TodayDashboard from './TodayDashboard.jsx'
 import { fetchScheduledDailyPlanDraft, generateDailyPlan } from './dailyPlanGeneratorApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
-import { ICLOUD_CACHE_KEY } from './appRefresh.js'
+import { APP_REFRESH_EVENT, ICLOUD_CACHE_KEY } from './appRefresh.js'
 import { nextDailyPlanDate } from './alignmentDate.js'
 import { assignmentUpdateOperation, buildAlignmentOperations, buildCalendarIntentOperations, buildPlanDraftOperations, buildRecapOperations, calendarIntentOperation, decisionUpdateOperation, stageCalendarIntentReview, stageDailyPlanReview } from './dailyPlanActionReview.js'
 import { clearLocalAlignmentDraft, clearLocalRecapDraft } from './dailyPlanLocalDraft.js'
@@ -109,8 +109,18 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
 
   useEffect(() => {
     const receiveCalendar = event => setCalendarData(event.detail || null)
+    const receiveApplicationRefresh = event => {
+      if (event.detail?.calendar) setCalendarData(event.detail.calendar)
+    }
     window.addEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
-    return () => window.removeEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
+    window.addEventListener(APP_REFRESH_EVENT, receiveApplicationRefresh)
+    // The refresh can finish before Today mounts. Re-read the in-memory/live
+    // snapshot so that event timing cannot hide an otherwise verified event.
+    setCalendarData(cachedCalendar())
+    return () => {
+      window.removeEventListener('brevity-icloud-calendar-refreshed', receiveCalendar)
+      window.removeEventListener(APP_REFRESH_EVENT, receiveApplicationRefresh)
+    }
   }, [])
 
   useEffect(() => {

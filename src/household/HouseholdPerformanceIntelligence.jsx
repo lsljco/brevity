@@ -4,13 +4,14 @@ import { executeAssistantProposal,prepareDirectAction } from '../assistant/assis
 import { getAcknowledgedSharedStateVersion,SHARED_STATE_EVENT,syncSharedState } from './sharedState.js'
 import { calculatePerformance,classifyActivity,DEFAULT_PILLARS,INTELLIGENCE_STORAGE_KEY,intelligenceSummary,loadPerformanceSources,normalizeIntelligenceConfig,normalizePerformanceActivities,projectPerformance,resolveIntelligencePeriod } from './performanceIntelligence.js'
 import { classifyCalendarActivities } from './performanceIntelligenceApi.js'
+import { getHouseholdCalendarDate } from '../finance/financeTime.js'
 import './HouseholdPerformanceIntelligence.css'
 
 const pct=value=>value==null?'No Data':`${value}%`
 const trend=(current,previous)=>current==null||previous==null?null:current-previous
 const readConfig=()=>{try{return normalizeIntelligenceConfig(JSON.parse(localStorage.getItem(INTELLIGENCE_STORAGE_KEY)||'{}'),HOUSEHOLD_MEMBERS)}catch{return normalizeIntelligenceConfig({},HOUSEHOLD_MEMBERS)}}
 const dayKey=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
-const rollingRange=days=>{const end=new Date(),start=new Date(end);start.setDate(start.getDate()-days+1);return{preset:'custom',from:dayKey(start),to:dayKey(end),days,label:`${days}-day window`,previous:{}}}
+const rollingRange=days=>{const end=getHouseholdCalendarDate(),start=new Date(end);start.setDate(start.getDate()-days+1);return{preset:'custom',from:dayKey(start),to:dayKey(end),days,label:`${days}-day window`,previous:{}}}
 
 function Score({value,onClick,label}){return <button type="button" className={`hpi-score${value==null?' is-empty':value<60?' is-off':value<80?' is-risk':' is-good'}`} onClick={onClick} disabled={!onClick} aria-label={`${label}: ${pct(value)}`}><strong>{pct(value)}</strong>{value!=null&&<span>{value>=80?'On Track':value>=60?'At Risk':'Off Track'}</span>}</button>}
 

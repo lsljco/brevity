@@ -1,4 +1,5 @@
 import { readCurrentCalendarSnapshot } from '../family/calendarSnapshot.js'
+import { getHouseholdCalendarDate, getHouseholdDateKey } from '../finance/financeTime.js'
 
 export const INTELLIGENCE_STORAGE_KEY='brevity_household_intelligence_v1'
 export const DEFAULT_PILLARS=[
@@ -24,7 +25,8 @@ const safeJson=(storage,key,fallback)=>{try{return JSON.parse(storage?.getItem?.
 const minutesBetween=(start,end,fallback=60)=>{if(!start||!end)return fallback;const toMinutes=value=>{const match=String(value).match(/(\d{1,2}):(\d{2})/);return match?Number(match[1])*60+Number(match[2]):NaN};const a=toMinutes(start),b=toMinutes(end);return Number.isFinite(a)&&Number.isFinite(b)&&b>a?b-a:fallback}
 
 export function resolveIntelligencePeriod(preset='week',{now=new Date(),from='',to=''}={}){
-  const current=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12)
+  const householdDate=getHouseholdCalendarDate(now)
+  const current=new Date(householdDate.getFullYear(),householdDate.getMonth(),householdDate.getDate(),12)
   let start=current,end=current
   if(preset==='week'){const monday=(current.getDay()+6)%7;start=addDays(current,-monday);end=addDays(start,6)}
   if(preset==='month'){start=new Date(current.getFullYear(),current.getMonth(),1,12);end=endOfMonth(current)}
@@ -86,7 +88,7 @@ const activityDate=record=>clean(temporalValue(record.date||record.start||record
 const calendarOccurred=(record,date,now)=>{
   if(explicitCompleted(record))return true
   if(record.complete===false||record.completed===false||['missed','skipped','incomplete','not completed'].includes(statusOf(record)))return false
-  const today=dateKey(now)
+  const today=getHouseholdDateKey(now)
   if(date<today)return true
   if(date>today||record.allDay)return false
   const endValue=temporalValue(record.end||record.endDate||record.endAt)
@@ -139,7 +141,7 @@ export function calculatePerformance({activities=[],config,members=[],period,vie
 }
 
 const projectionStatus=value=>value==null?'No Data':value>=100?'Complete':value>=80?'On Track':value>=60?'At Risk':'Off Track'
-export function projectPerformance(model,{today=dateKey(new Date())}={}){
+export function projectPerformance(model,{today=getHouseholdDateKey()}={}){
   const memberScores=model.memberScores.map(member=>({...member,pillars:member.pillars.map(pillar=>{
     const remaining=pillar.activities.filter(activity=>activity.date>=today&&!activity.completed)
     let projected=null
