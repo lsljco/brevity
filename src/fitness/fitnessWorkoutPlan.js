@@ -1,5 +1,7 @@
+import {canonicalExerciseImage} from './exerciseImageManifest.js'
+
 const inferEquipment=name=>/cable|pallof|rope pressdown/i.test(name)?'Cable':/dumbbell|arnold|goblet/i.test(name)?'Dumbbell':/machine|pec deck|leg press|hack squat|leg curl|leg extension|assisted|captain/i.test(name)?'Machine':/push-up|pushup|pull-up|pullup|chin-up|chinup|plank|crunch|dip|burpee|mountain climber|wall sit|nordic|pogo/i.test(name)?'Bodyweight':/barbell|deadlift|good morning|front squat|skull crusher|landmine/i.test(name)?'Barbell':'Other'
-const exercise=(id,name,bodyParts,sets,reps,rest,muscles,cue,image,equipment=inferEquipment(name))=>Object.freeze({id,name,bodyParts:Object.freeze(bodyParts),sets,reps,rest,muscles:Object.freeze(muscles),cue,image:`/fitness/exercises/${image}.webp`,equipment})
+const exercise=(id,name,bodyParts,sets,reps,rest,muscles,cue,_legacyImage,equipment=inferEquipment(name))=>Object.freeze({id,name,bodyParts:Object.freeze(bodyParts),sets,reps,rest,muscles:Object.freeze(muscles),cue,image:canonicalExerciseImage(id),equipment})
 
 export const EXERCISE_LIBRARY=Object.freeze([
   exercise('incline-press','Incline dumbbell press',['Chest','Shoulders','Triceps'],4,'8–12','90 sec',['Upper chest','Front delts','Triceps'],'Pin the shoulder blades down and back; lower with control.','family-lorenzo-incline-press-v1'),

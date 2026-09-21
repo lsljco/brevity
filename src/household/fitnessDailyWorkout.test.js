@@ -70,15 +70,15 @@ test('daily workout UI contains photographs, schedule, searchable library and pr
   assert.match(viewer,/event\.key === 'Escape'/)
 })
 
-test('every library movement uses a permanent bundled family render',async()=>{
+test('every library movement uses a permanent versioned exercise render',async()=>{
   const files=EXERCISE_LIBRARY.map(item=>item.image.replace('/fitness/exercises/','').replace(/\.webp$/,''))
   assert.equal(files.length,EXERCISE_LIBRARY.length)
-  assert.ok(files.every(name=>name.startsWith('family-')))
+  assert.ok(files.every(name=>/^exercise-[a-z0-9-]+-r[1-9]\d*$/.test(name)))
   const unique=[...new Set(files)],assets=await Promise.all(unique.map(name=>readFile(new URL(`../../public/fitness/exercises/${name}.webp`,import.meta.url))))
   for(const asset of assets){
     assert.equal(asset.subarray(0,4).toString(),'RIFF')
     assert.equal(asset.subarray(8,12).toString(),'WEBP')
-    assert.ok(asset.length>60000,'family workout render should be a full photographic asset')
+    assert.ok(asset.length>60000,'workout render should be a full photographic asset')
   }
   assert.equal(new Set(assets.map(asset=>asset.toString('base64'))).size,unique.length)
 })
@@ -92,8 +92,9 @@ test('goal builder targets named muscles and keeps daily abs',()=>{
 })
 
 test('reviewed custom workout and generated images override only the dated workout',()=>{
-  const workout=workoutForDate('2026-09-21','Larry',{goal:'Upper chest',workout:'Upper Chest Target',objective:'Target upper chest',exerciseIds:['incline-press','cable-fly'],exerciseImages:['incline-press|/.netlify/functions/fitness-images?id=custom-1']})
+  const generated='/.netlify/functions/fitness-images?id=incline-press-larry-3b1d88c2-25c0-4e49-93b3-f0bf8b20df82'
+  const workout=workoutForDate('2026-09-21','Larry',{goal:'Upper chest',workout:'Upper Chest Target',objective:'Target upper chest',exerciseIds:['incline-press','cable-fly'],exerciseImages:[`incline-press|${generated}`]})
   assert.equal(workout.title,'Upper Chest Target')
   assert.deepEqual(workout.exercises.map(item=>item.id),['incline-press','cable-fly'])
-  assert.equal(workout.exercises[0].image,'/.netlify/functions/fitness-images?id=custom-1')
+  assert.equal(workout.exercises[0].image,generated)
 })

@@ -1,8 +1,16 @@
 # Workout image accuracy correction — September 20, 2026
 
 ## Status
-Draft safeguard, NOT a completed image replacement or production deployment.
-Do not describe this work as a fully corrected Workout Library.
+Release candidate complete on `fix/workout-image-accuracy-natural-gaze`; production deployment remains pending PR #209 merge.
+
+- 108/108 canonical exercises have accepted, exercise-specific images.
+- 0 legacy images retained; 108 replaced.
+- Manifest audit: 108 unique paths, 108 unique SHA-256 contents, 0 missing, 0 duplicates.
+- Final asset cache version: `2026-09-21-r6`.
+- Final SkiErg asset: `exercise-ski-erg-r6.webp`, visually accepted with exactly two cords connected one-to-one to two handles and no floating third cord.
+- Brisk walk: `exercise-brisk-walk-r4.webp`, aligned with the marked track lane.
+- Stair climber: `exercise-stair-climber-r3.webp`, stairs and movement travel right-to-left toward the monitor.
+- All accepted assets show no visible socks.
 
 ## Confirmed defect
 The exercise expansion in PR #208 assigns existing photographs to different
@@ -29,33 +37,19 @@ camera-facing exercise imagery.
   and variation in future generation prompts.
 - Include detailed movement constraints for the screenshot-reported exercises.
 
-Seven isolated Node policy/prompt tests passed locally. No image-generation API
-request was made. Full application build, browser regression tests, and live
-visual verification have not been completed in this working environment.
+Final local validation on September 21, 2026:
+
+- Unit suite: 1,030 passed, 0 failed.
+- Production build: passed; only the existing large-chunk advisory remains.
+- Playwright suite: 174 passed, 22 intentional device-specific skips, 0 failed.
+- Browser projects: desktop Chromium, iPhone 14 emulation, iPad Pro 11, and iPad Pro 11 landscape.
+- Workout-specific checks cover Today Pillar 3, the full Workout Library, full workout cards, and tap-to-enlarge behavior.
 
 ## Remaining release work
-1. Replace every mismatched or withdrawn image with an individually generated,
-   exercise-specific asset. Do not rename or crop one existing photograph to
-   make it appear to be several different movements.
-2. Use the established approved family PORTRAITS as identity authority, not app
-   screenshots or later exercise renders. Verify the bundled identity reference
-   source against those approved portraits before batch generation.
-3. Visually review the remaining legacy originals. An exact filename binding is
-   NOT proof of correct form, natural gaze, or identity fidelity.
-4. Review every replacement for the exact exercise, actual equipment, grip,
-   stance, unilateral/bilateral action, bench angle/support points, natural gaze,
-   head/neck alignment, full-body framing, anatomy, and recognizable identity.
-5. Register new approved, versioned assets against their exact exercise IDs.
-   Check both duplicate paths and duplicate image content; different filenames
-   must not disguise the same photograph. The same exact exercise may use its
-   image in multiple views, but different exercises/variants must not share it.
-6. Run the full application build and browser tests for Exercise Library,
-   Today's Workout, the goal builder, Today Pillar 3, and tap-to-enlarge on phone
-   and desktop. Update existing image-click tests to use a retained valid image
-   and add coverage for the non-clickable pending state.
-7. Keep this PR in draft until the partial-photo/pending-state impact and
-   replacement assets have been reviewed. Do not merge/deploy this safeguard
-   while representing the replacements as already done.
+1. Push this release candidate to the existing PR #209 branch.
+2. Confirm required GitHub checks pass, then mark the draft ready and merge through the protected workflow.
+3. Allow the existing Netlify pipeline to deploy the merged commit.
+4. Verify the deployed commit and actual production cards/enlarged views, including cache-busted r6 SkiErg and r4 brisk-walk requests.
 
 Preserve exercise instructions, sets, repetitions, rest periods, filters,
 family identity selection, full-frame image behavior, and enlargement.
