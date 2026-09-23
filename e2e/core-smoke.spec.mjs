@@ -83,6 +83,22 @@ test('seven pillars remain in the approved order', async ({ page }) => {
   ])
 })
 
+test('Today displays every recorded Pillar 7 prayer request', async ({ page }) => {
+  const prayers = Array.from({ length:14 }, (_, index) => `Household prayer request ${index + 1}`)
+  await page.route('**/.netlify/functions/household-data?*', async route => {
+    const date = new URL(route.request().url()).searchParams.get('date') || today()
+    const householdPlan = plan(date)
+    householdPlan.ministry = { ...householdPlan.ministry, contentFocus:'Serve together', prayerNeeds:prayers }
+    await route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ householdId:'lslj-family', plan:householdPlan }) })
+  })
+  await page.reload()
+  const ministry = page.locator('.today-pillar-brief[data-pillar="ministry"]')
+  await expect(ministry).toContainText('14 prayer needs')
+  await ministry.getByText('View all 14 prayer needs').click()
+  await expect(ministry.locator('.today-prayer-needs li')).toHaveCount(14)
+  await expect(ministry).toContainText('Household prayer request 14')
+})
+
 test('deprecated My Planner workspace is not present in navigation', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') {
     await page.getByRole('button', { name:'Menu' }).click()

@@ -161,11 +161,11 @@ function TodayDevotionHero({ plan, onOpenPillar }) {
   </section>
 }
 
-function PillarBrief({ number, pillar, title, detail, meta = [], onOpenPillar }) {
+function PillarBrief({ number, pillar, title, detail, meta = [], prayerNeeds = [], onOpenPillar }) {
   const [label,icon]=PILLAR_META[pillar]
   return <section className="today-section today-pillar-brief" data-pillar={pillar}>
     <div className="today-pillar-brief-icon"><i className={`ti ${icon}`} /></div>
-    <div className="today-pillar-brief-copy"><span>Pillar {number} · {label}</span><h2>{title||label}</h2>{detail&&<p>{detail}</p>}{meta.filter(Boolean).length>0&&<div>{meta.filter(Boolean).map((item,index)=><em key={`${pillar}-${index}`}>{item}</em>)}</div>}</div>
+    <div className="today-pillar-brief-copy"><span>Pillar {number} · {label}</span><h2>{title||label}</h2>{detail&&<p>{detail}</p>}{meta.filter(Boolean).length>0&&<div>{meta.filter(Boolean).map((item,index)=><em key={`${pillar}-${index}`}>{item}</em>)}</div>}{prayerNeeds.length>0&&<details className="today-prayer-needs"><summary>View all {prayerNeeds.length} prayer needs</summary><ol>{prayerNeeds.map((prayer,index)=><li key={`${index}-${prayer}`}>{prayer}</li>)}</ol></details>}</div>
     <button type="button" onClick={()=>onOpenPillar?.(pillar)} aria-label={`Open ${label}`}>Open <i className="ti ti-arrow-right" /></button>
   </section>
 }
@@ -272,7 +272,7 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
     <PillarBrief number={6} pillar="finance" title={financeCard.title} detail={financeCard.detail} meta={financeCard.meta} onOpenPillar={onOpenPillar} />
 
-    <PillarBrief number={7} pillar="ministry" title={ministryCard.title} detail={ministryCard.detail} meta={ministryCard.meta} onOpenPillar={onOpenPillar} />
+    <PillarBrief number={7} pillar="ministry" title={ministryCard.title} detail={ministryCard.detail} meta={ministryCard.meta} prayerNeeds={ministryCard.prayerNeeds} onOpenPillar={onOpenPillar} />
 
     <DailyCommandSchedule plan={dailyPlan} showDecisions={false} />
   </div>

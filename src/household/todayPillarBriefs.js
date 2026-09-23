@@ -32,7 +32,7 @@ export function financeBrief(finance={}) {
 export function ministryBrief(ministry={}) {
   const meetings=names(ministry.meetings)
   const followUps=names(ministry.fellowshipFollowUps)
-  const prayers=names(ministry.prayerNeeds)
+  const prayers=names(ministry.prayerNeeds,40)
   const evidence=[...meetings,...followUps,...prayers]
   const remaining=joined(evidence.slice(text(ministry.contentFocus)?0:1,3))
   const recordedDetail=remaining||(meetings.length?'Meeting recorded for today.':followUps.length?'Fellowship follow-up recorded for today.':prayers.length?'Prayer need recorded for today.':'')
@@ -40,5 +40,6 @@ export function ministryBrief(ministry={}) {
     title:text(ministry.contentFocus)||text(ministry.framework)||evidence[0]||'Ministry plan not defined',
     detail:text(ministry.framework)||recordedDetail||'No ministry focus, meeting, fellowship follow-up, or prayer need is recorded for today.',
     meta:[meetings.length?`${meetings.length} meeting${meetings.length===1?'':'s'}`:'',followUps.length?`${followUps.length} follow-up${followUps.length===1?'':'s'}`:'',prayers.length?`${prayers.length} prayer need${prayers.length===1?'':'s'}`:''].filter(Boolean),
+    prayerNeeds:prayers,
   }
 }
