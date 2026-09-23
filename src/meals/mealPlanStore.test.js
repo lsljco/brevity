@@ -151,6 +151,18 @@ test('read-only meal windows never create missing records', async () => {
   assert.equal(memory.size, 0)
 })
 
+test('a selected month returns every dated plan without writing missing days', async () => {
+  const memory = new Map()
+  const store = { get: async key => memory.get(key) || null, setJSON: async (key, value) => memory.set(key, value) }
+  const repository = createMealPlanRepository({ store })
+  const plan = await repository.getWindowReadOnly({ startDate:'2028-02-01', count:29 })
+  assert.equal(plan.days.length, 29)
+  assert.equal(plan.days[0].date, '2028-02-01')
+  assert.equal(plan.days.at(-1).date, '2028-02-29')
+  assert.ok(plan.days.every(day => ['breakfast','lunch','dinner'].every(type => day.resolvedMeals[type]?.name)))
+  assert.equal(memory.size, 0)
+})
+
 test('legacy direct substitutions cannot bypass Action Mode review', async () => {
   const store = memoryStore()
   const repository = createMealPlanRepository({
