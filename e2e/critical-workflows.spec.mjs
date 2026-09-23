@@ -229,6 +229,36 @@ test('Today last three pillar cards expose recorded detail instead of generic he
   await expect(finance).not.toContainText('Financial Stewardship')
 })
 
+test('Meal Library finds ingredients and month view shows every selected day',async({page})=>{
+  const steak={id:'breakfast-steak-eggs',mealType:'breakfast',name:'Morning skillet',description:'A savory breakfast',ingredients:['6 oz steak','2 eggs'],prepMinutes:15,totalMinutes:20,serving:'1 plate',macros:{calories:520,proteinGrams:42,carbohydrateGrams:5,fatGrams:35}}
+  await page.route('**/.netlify/functions/meal-plans?*',async route=>{
+    const url=new URL(route.request().url())
+    const response=mealPlanResponse()
+    response.library.push(steak)
+    if(url.searchParams.has('count')){
+      const first=url.searchParams.get('startDate'),count=Number(url.searchParams.get('count'))
+      response.startDate=first
+      response.days=Array.from({length:count},(_,index)=>{
+        const date=new Date(`${first}T12:00:00.000Z`);date.setUTCDate(date.getUTCDate()+index)
+        return {...response.days[0],date:date.toISOString().slice(0,10)}
+      })
+    }
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)})
+  })
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'Meal Library'}).click()
+  await page.getByRole('searchbox',{name:'Search Meal Library'}).fill('steak and eggs')
+  await expect(page.locator('.meal-library-grid article')).toHaveCount(1)
+  await expect(page.locator('.meal-library-grid')).toContainText('Morning skillet')
+  await page.getByRole('searchbox',{name:'Search Meal Library'}).fill('salmon steak')
+  await expect(page.getByText('No meals match')).toBeVisible()
+  await page.getByRole('button',{name:'Month Plan'}).click()
+  await page.getByLabel('Select month').fill('2028-02')
+  await expect(page.locator('.meal-day')).toHaveCount(29)
+  await expect(page.getByText('29 days · 87 planned meals')).toBeVisible()
+  await expect(page.locator('.meal-day').last()).toContainText('Feb 29')
+})
+
 test('Meal Library calculates batch and per-serving nutrition from measured ingredients',async({page})=>{
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Rolling 7-Day Meal Plan'})).toBeVisible()

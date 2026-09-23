@@ -39,6 +39,17 @@
 .meal-macros span { padding: 6px 3px; border-radius: 7px; background: rgba(255,255,255,.035); color: var(--muted); font-size: 8px!important; font-weight: 500!important; letter-spacing: 0!important; text-align: center; text-transform: uppercase; }
 .meal-macros strong { display: block; margin: 0; color: var(--soft-white); font-size: 10px; }
 .meal-library { display: grid; gap: 32px; }
+.meal-library-search { display: grid; gap: 8px; }
+.meal-library-search > label { color: var(--soft-white); font-size: 14px; font-weight: 700; }
+.meal-library-search > div { display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid var(--glass-border); border-radius: 12px; background: var(--glass); color: var(--gold); }
+.meal-library-search input { width: 100%; min-height: 46px; border: 0; outline: 0; background: transparent; color: var(--white); font: inherit; }
+.meal-library-search input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.meal-library-search > span, .meal-library-no-results { color: var(--muted); font-size: 13px; }
+.meal-month-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 22px; color: var(--soft-white); }
+.meal-month-controls label { font-weight: 700; }
+.meal-month-controls input { padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 10px; background: var(--glass); color: var(--white); color-scheme: dark; font: inherit; }
+.meal-month-controls input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.meal-month-controls span, .meal-month-summary { color: var(--muted); font-size: 13px; }
 .meal-library > section { border: 1px solid var(--glass-border); border-radius: 18px; background: var(--glass); overflow: hidden; }
 .meal-library > section > header { display: flex; gap: 12px; align-items: center; padding: 20px; border-bottom: 1px solid var(--glass-border); }
 .meal-library-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(197,164,109,.1); color: var(--gold); }

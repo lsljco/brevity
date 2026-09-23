@@ -19,8 +19,8 @@ async function request(url, { timeoutMs = REQUEST_TIMEOUT_MS, ...options } = {})
   }
 }
 
-export function fetchRollingMealPlan(startDate) {
-  const query = startDate ? `?startDate=${encodeURIComponent(startDate)}` : ''
+export function fetchRollingMealPlan(startDate, count = 7) {
+  const query = startDate ? `?startDate=${encodeURIComponent(startDate)}${count === 7 ? '' : `&count=${encodeURIComponent(count)}`}` : ''
   return request(`${ENDPOINT}${query}`)
 }
 

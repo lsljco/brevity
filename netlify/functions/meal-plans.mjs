@@ -24,7 +24,10 @@ export const handler = async event => {
     const repository = await productionMealPlanRepository()
 
     if (event.httpMethod === 'GET') {
-      const plan = await repository.getWindowReadOnly({ startDate: event.queryStringParameters?.startDate, count: 7 })
+      const requestedCount = event.queryStringParameters?.count
+      const count = requestedCount === undefined ? 7 : Number(requestedCount)
+      if (!Number.isInteger(count) || count < 1 || count > 31) return response(400, { error:'Choose a meal-plan window of 1 to 31 days.' })
+      const plan = await repository.getWindowReadOnly({ startDate: event.queryStringParameters?.startDate, count })
       return response(200, plan)
     }
 

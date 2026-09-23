@@ -5,7 +5,7 @@ import { createMealLibraryItem, executeMealSubstitution, fetchRollingMealPlan, p
 
 export const ROLLING_MEAL_APP_REFRESH_EVENT = 'brevity-app-refreshed'
 
-export const rollingMealPlanRequestKey = startDate => String(startDate || '__current-window__')
+export const rollingMealPlanRequestKey = (startDate,count = 7) => `${String(startDate || '__current-window__')}:${count}`
 export const rollingMealPlanScopeIsCurrent = (scope,requestKey) => Boolean(scope?.enabled&&scope.requestKey===requestKey)
 export const rollingMealPlanOperationIsCurrent = ({operation,currentOperation,mounted,scope,requestKey}) => Boolean(
   operation===currentOperation&&mounted&&rollingMealPlanScopeIsCurrent(scope,requestKey)
@@ -16,8 +16,8 @@ export const captureMealPlanRefreshError = async reload => {
   catch(error){return error}
 }
 
-export function rollingMealPlanView({ enabled = true, startDate, requireFresh = false, state = 'loading', stateRequestKey = '', data = null, dataRequestKey = '', error = '' } = {}) {
-  const requestKey=rollingMealPlanRequestKey(startDate)
+export function rollingMealPlanView({ enabled = true, startDate, count = 7, requireFresh = false, state = 'loading', stateRequestKey = '', data = null, dataRequestKey = '', error = '' } = {}) {
+  const requestKey=rollingMealPlanRequestKey(startDate,count)
   const visibleState=enabled?(stateRequestKey===requestKey?state:'loading'):'idle'
   const visibleData=enabled&&dataRequestKey===requestKey&&(!requireFresh||visibleState==='ready')?data:null
   const visibleError=visibleState==='error'&&stateRequestKey===requestKey?error:''
@@ -42,7 +42,7 @@ export function validateRollingMealPlan(result,startDate) {
   return result
 }
 
-export function useRollingMealPlan({ enabled = true, startDate, requireFresh = false, reloadOnRefreshEvents = false } = {}) {
+export function useRollingMealPlan({ enabled = true, startDate, count = 7, requireFresh = false, reloadOnRefreshEvents = false } = {}) {
   const [currentWindowStart,setCurrentWindowStart]=useState(()=>getHouseholdDateKey())
   const [data, setData] = useState(null)
   const [dataRequestKey, setDataRequestKey] = useState('')
@@ -55,7 +55,7 @@ export function useRollingMealPlan({ enabled = true, startDate, requireFresh = f
   const scopeRef=useRef(null)
   const reloadRef=useRef(null)
   const effectiveStartDate=startDate||currentWindowStart
-  const requestKey=rollingMealPlanRequestKey(effectiveStartDate)
+  const requestKey=rollingMealPlanRequestKey(effectiveStartDate,count)
   scopeRef.current={enabled,requestKey}
 
   const reload = useCallback(({ supersede = false } = {}) => {
@@ -69,7 +69,7 @@ export function useRollingMealPlan({ enabled = true, startDate, requireFresh = f
     let pendingRequest
     pendingRequest=(async()=>{
       try {
-        const result=validateRollingMealPlan(await fetchRollingMealPlan(effectiveStartDate),effectiveStartDate)
+        const result=validateRollingMealPlan(await fetchRollingMealPlan(effectiveStartDate,count),effectiveStartDate)
         if(request!==requestRef.current)return null
         setData(result)
         setDataRequestKey(requestKey)
@@ -87,7 +87,7 @@ export function useRollingMealPlan({ enabled = true, startDate, requireFresh = f
     })()
     activeRequestRef.current={requestKey,promise:pendingRequest}
     return pendingRequest
-  }, [effectiveStartDate, enabled, requestKey, requireFresh])
+  }, [effectiveStartDate, enabled, count, requestKey, requireFresh])
   reloadRef.current=reload
 
   useEffect(()=>{
@@ -192,6 +192,6 @@ export function useRollingMealPlan({ enabled = true, startDate, requireFresh = f
     }
   }, [requestKey])
 
-  const view=rollingMealPlanView({enabled,startDate:effectiveStartDate,requireFresh,state,stateRequestKey,data,dataRequestKey,error})
+  const view=rollingMealPlanView({enabled,startDate:effectiveStartDate,count,requireFresh,state,stateRequestKey,data,dataRequestKey,error})
   return { ...view, reload, addMeal, prepareReplacement, applyReplacement }
 }
