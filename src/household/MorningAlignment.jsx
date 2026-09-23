@@ -93,7 +93,7 @@ function FitnessStep({ draft, update }) {
 function HouseholdStep({ draft, update, onReviewCalendarItem }) {
   const value = draft.household
   return <div className="alignment-form-grid">
-    <Field label="Today's Top Household Outcomes" hint="One outcome per line"><textarea value={joinLines(value.priorities.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { priorities: splitLines(e.target.value).map((title, index) => ({ id: `household-priority-${index}`, title, owner: 'Larry', status: 'pending' })) })} /></Field>
+    <Field label="Today's Top 3 Outcomes" hint="One outcome per line; enter up to three"><textarea value={joinLines(value.priorities.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { priorities: splitLines(e.target.value).map(title => title.trim()).filter(Boolean).slice(0,3).map((title, index) => ({ id: `household-priority-${index}`, title, owner: 'Family', status: 'pending' })) })} /></Field>
     <Field label="Appointments" hint="Selected items open a separate Family Calendar review after the daily plan is approved.">
       <TimedCommitmentsEditor items={value.appointments} planDate={draft.date} prefix="appointment" onChange={appointments => update('household', { appointments })} onReviewCalendar={item=>onReviewCalendarItem?.(item,draft.date)} />
     </Field>

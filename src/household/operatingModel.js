@@ -56,6 +56,7 @@ const hasOperatingPlan=plan=>Boolean(
   ||clean(plan.ministry.contentFocus)
 )
 const todayFocus=(plan,{signals,outcomes,nextCommitment,actions})=>{
+  if(clean(plan.household?.keyFocus))return{headline:clean(plan.household.keyFocus),detail:'Set by the household for today.',source:'household-focus'}
   if(clean(plan.theme))return{headline:clean(plan.theme),detail:clean(plan.dayObjective),source:'recorded-theme'}
   const critical=signals.find(item=>item.priority==='critical')
   if(critical)return{headline:critical.title,detail:critical.detail,source:'critical-signal'}

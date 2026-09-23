@@ -143,6 +143,14 @@ export function assignmentUpdateOperation(plan, assignmentId, patch) {
   return operation('assignment.update', plan.date, assignmentId, `Review changes to “${current.title || 'daily assignment'}”`, reviewed)
 }
 
+export function dailyFocusUpdateOperation(planInput, keyFocus) {
+  const plan = normalizeDailyPlan(planInput)
+  const focus = String(keyFocus || '').trim()
+  if (!focus) throw new Error('Enter today’s focus before opening review.')
+  if (focus === String(plan.household?.keyFocus || '').trim()) throw new Error('Change today’s focus before opening review.')
+  return operation('plan.pillar.update', plan.date, 'household', `Set Today’s Focus to “${focus}”`, { pillar:'household', patch:{ keyFocus:focus } })
+}
+
 export async function stageDailyPlanReview({ summary, operations, expectedVersion }) {
   if (!operations?.length) throw new Error('Change at least one daily-plan field before opening review.')
   const version = Number(expectedVersion)

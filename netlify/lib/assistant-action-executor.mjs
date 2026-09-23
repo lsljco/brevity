@@ -111,6 +111,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       ? { ...current, ...patch, isaiah:{ ...(current.isaiah || {}), ...patch.isaiah } }
       : { ...current, ...patch }
     const after = { ...(value || {}), [pillar]:nextPillar }
+    if (pillar === 'household' && Object.hasOwn(patch, 'priorities')) after.topPriorities = clone(patch.priorities)
     if (payload.origin === 'generated-draft') after.generatedBy = 'brevity-daily-household-plan'
     if (JSON.stringify(after) === JSON.stringify(value)) throw new Error(`The ${pillar} daily plan already has the reviewed values. Refresh before preparing another change.`)
     return { before, after }

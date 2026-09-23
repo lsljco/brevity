@@ -86,7 +86,7 @@ function TodayMeals({ meals, state = 'loading', error = '', onOpenMealPlan }) {
     <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">Today’s Meals</h2></div><button type="button" className="today-meals-open" onClick={onOpenMealPlan}>Open Meal Plan <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
     <div className="today-meal-grid">{entries.map(({ mealType, label, meal }) => <article className="today-meal-card" key={mealType}>
       <img src={meal.image} alt={`${label}: ${meal.name}`} loading={mealType === 'breakfast' ? 'eager' : 'lazy'} />
-      <div className="today-meal-card-copy"><span>{label}</span><strong>{meal.name}</strong><small>{meal.prepMinutes} min · {meal.macros?.proteinGrams || 0}g protein</small></div>
+      <div className="today-meal-card-copy"><span>{label}</span><strong>{meal.name}</strong><small>{meal.prepMinutes} min</small><div className="today-meal-macros" aria-label={`${label} nutrition`}><em><b>{Number(meal.macros?.calories || 0).toLocaleString()}</b> cal</em><em><b>{meal.macros?.proteinGrams || 0}g</b> protein</em><em><b>{meal.macros?.carbohydrateGrams || 0}g</b> carbs</em><em><b>{meal.macros?.fatGrams || 0}g</b> fat</em></div></div>
     </article>)}</div>
   </section>
 }
@@ -197,16 +197,30 @@ function TodayFitnessWorkout({ date, currentMember, fitness, onOpenPillar }) {
   </section>
 }
 
-export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'loading', mealPlanError = '', readOnly = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, generationState = 'idle' }) {
+export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'loading', mealPlanError = '', readOnly = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle' }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
   const readModel = useMemo(() => buildTodayReadModel({ plan: dailyPlan, calendarAppointments, calendarHealth, currentMember }), [calendarAppointments, calendarHealth, currentMember, dailyPlan])
   const [showDecisions, setShowDecisions] = useState(false)
+  const [editingFocus, setEditingFocus] = useState(false)
+  const [focusDraft, setFocusDraft] = useState(dailyPlan.household?.keyFocus || '')
+  const [focusState, setFocusState] = useState('idle')
+  const [focusError, setFocusError] = useState('')
   const closed = Boolean(dailyPlan.recap?.completedAt)
   const generated = dailyPlan.generatedBy === 'brevity-daily-household-plan'
 
   const saveDecision = async (updatedDecision, decisionId, expectedVersion) => {
     if (readOnly) throw new Error('Plans & decisions permission is required to update the shared decision queue.')
     await onReviewDecision?.(decisionId, updatedDecision, expectedVersion)
+  }
+
+  const reviewFocus = async () => {
+    setFocusState('saving'); setFocusError('')
+    try {
+      await onReviewDailyFocus?.(focusDraft, Number(dailyPlan.version || 0))
+      setFocusState('reviewing')
+    } catch (reviewError) {
+      setFocusState('error'); setFocusError(reviewError.message || 'Could not open Today’s Focus review.')
+    }
   }
 
   useEffect(() => {
@@ -243,14 +257,16 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
     <section className="today-pillar-stack" data-pillar="household">
       <div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Household Operations</h2></div>
       <AttentionPanel items={readModel.attentionItems} onOpenCalendar={onOpenCalendar} />
-      <section className="today-focus-card"><div><span>Today's Focus</span><h2>{readModel.focus.headline}</h2>{readModel.focus.detail && <p>{readModel.focus.detail}</p>}{readModel.governingPrinciple && <p>{readModel.governingPrinciple}</p>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!readModel.counts.decisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{readModel.counts.decisions}</strong><span>{readModel.counts.decisions ? readModel.counts.decisions === 1 ? 'decision needs attention' : 'decisions need attention' : 'no decisions need attention'}</span><i className={`ti ${readModel.counts.decisions ? 'ti-chevron-right' : 'ti-circle-check'}`} aria-hidden="true" /></button></section>
-      <TodayCalendarAgenda commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} />
+      <section className="today-focus-card"><div><span>Today's Focus</span><h2>{readModel.focus.headline}</h2>{readModel.focus.detail && <p>{readModel.focus.detail}</p>}{readModel.governingPrinciple && <p>{readModel.governingPrinciple}</p>}{!readOnly && <button type="button" className="today-focus-edit" onClick={() => { setFocusDraft(dailyPlan.household?.keyFocus || ''); setFocusState('idle'); setFocusError(''); setEditingFocus(true) }}><i className="ti ti-pencil" /> Set Today’s Focus</button>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!readModel.counts.decisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{readModel.counts.decisions}</strong><span>{readModel.counts.decisions ? readModel.counts.decisions === 1 ? 'decision needs attention' : 'decisions need attention' : 'no decisions need attention'}</span><i className={`ti ${readModel.counts.decisions ? 'ti-chevron-right' : 'ti-circle-check'}`} aria-hidden="true" /></button></section>
       <TodayHouseholdChores chores={householdChores} onOpenPillar={onOpenPillar} />
+      <TodayCalendarAgenda commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} />
       <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Today’s Top 3</h2></div><small>Outcomes that make today successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
       <section className="today-section today-actions"><div className="today-section-heading"><div><span>Personal View</span><h2>{currentMember}'s Actions</h2></div><small>Assignment edits open Action Mode review before changing the shared plan.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <AssignmentEditor key={item.id} assignment={item} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => onReviewAssignment?.(item.id, updated, version)} />)}</div> : <div className="today-empty">{readModel.memberOutcomes.length ? `${currentMember} owns ${readModel.memberOutcomes.length} outcome${readModel.memberOutcomes.length===1?'':'s'} in Today’s Top 3, with no separate unresolved assignment.` : `No unresolved assignments or Top 3 outcomes currently involve ${currentMember}.`}</div>}</section>
     </section>
 
     {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Queue</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{readModel.counts.decisions} active {readModel.counts.decisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}. A determined decision remains visible until its resulting work is complete.</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{readModel.decisions.map((decision, index) => <DecisionEditor key={decision.id} decision={decision} number={index + 1} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => saveDecision(updated, decision.id, version)} />)}{!readModel.decisions.length && <div className="today-decision-all-clear"><i className="ti ti-circle-check" /><strong>All decisions are resolved.</strong><span>There are no remaining decisions needing attention.</span></div>}</div></section></div>}
+
+    {editingFocus && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditingFocus(false) }}><section className="today-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="today-focus-dialog-title"><header><div><span>Household Management</span><h2 id="today-focus-dialog-title">Set Today’s Focus</h2><p>Choose the single focus the household should keep in view today. Calendar appointments remain visible below, but they will not replace this focus.</p></div><button type="button" onClick={() => setEditingFocus(false)} aria-label="Close Today’s Focus editor"><i className="ti ti-x" /></button></header><label><span>Today’s Focus</span><textarea autoFocus value={focusDraft} maxLength={240} onChange={event => { setFocusDraft(event.target.value); setFocusState('idle'); setFocusError('') }} placeholder="What should the household focus on today?" /></label>{focusError && <p className="today-decision-save-error">{focusError}</p>}<footer><small>{focusState === 'reviewing' ? 'Review and approve this change in Action Mode.' : 'Nothing changes until this exact plan version is approved in Action Mode.'}</small><div><button type="button" onClick={() => setEditingFocus(false)}>Cancel</button><button type="button" className="primary" onClick={reviewFocus} disabled={focusState === 'saving' || !focusDraft.trim()}><i className="ti ti-shield-check" /> {focusState === 'saving' ? 'Opening review…' : 'Review focus'}</button></div></footer></section></div>}
 
     <PillarBrief number={5} pillar="education" title={educationCard.title} detail={educationCard.detail} meta={educationCard.meta} onOpenPillar={onOpenPillar} />
 
