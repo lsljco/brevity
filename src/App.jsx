@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import HouseholdToday from './household/HouseholdToday.jsx'
 import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
 import { initialsForMember } from './household/memberProfile.js'
 import { APP_REFRESH_STARTED_EVENT, refreshApplicationData } from './household/appRefresh.js'
@@ -11,6 +10,7 @@ import { popNavigationLocation, pushNavigationLocation } from './navigationHisto
 import './household/Readability.css'
 import './AppDeferred.css'
 
+const HouseholdToday = lazy(() => import('./household/HouseholdToday.jsx'))
 const FamilyCalendar = lazy(() => import('./family/FamilyCalendar.jsx'))
 const PillarAnalysis = lazy(() => import('./household/PillarAnalysis.jsx'))
 const FinancePlanner = lazy(() => import('./finance/FinancePlanner.jsx'))
@@ -300,7 +300,7 @@ export default function App() {
   const handleActionCompleted=async()=>{setActionPermissionRevision(value=>value+1);await syncSharedState();await refreshAll(currentMember).catch(()=>{})}
 
   const renderContent=()=>{
-    if(activeView==='today')return <HouseholdToday currentMember={currentMember} canEditPlanning={canEditPlanning} planningAccessStatus={planningAccessStatus} isAdministrator={auth.role==='admin'} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')} onOpenIntelligence={()=>navigateTo('household','household-intelligence')} onOpenPractices={openPractices} onNavigatePracticeArea={navigatePracticeArea}/>
+    if(activeView==='today')return <Suspense fallback={<div className="app-view-loading">Loading Today…</div>}><HouseholdToday currentMember={currentMember} canEditPlanning={canEditPlanning} planningAccessStatus={planningAccessStatus} isAdministrator={auth.role==='admin'} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')} onOpenIntelligence={()=>navigateTo('household','household-intelligence')} onOpenPractices={openPractices} onNavigatePracticeArea={navigatePracticeArea}/></Suspense>
     if(activeView==='household-practices')return <Suspense fallback={<div className="app-view-loading">Loading Policies &amp; Practices…</div>}><OperatingPracticesWorkspace currentMember={currentMember} canEditPlanning={canEditPlanning} initialDate={practiceLocation.date} initialTab={practiceLocation.tab} onNavigate={navigatePracticeArea}/></Suspense>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role} theme={theme} onThemeChange={()=>setTheme(value=>value==='dark'?'light':'dark')} onSignOut={auth.logout}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ readOnly={!canEditProjects} canDelete={auth.role==='admin'} currentMember={currentMember}/></Suspense>
