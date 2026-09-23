@@ -15,6 +15,10 @@
 .today-pillar-brief-copy p{margin:0;color:var(--soft-white);font-size:12px;line-height:1.55}
 .today-pillar-brief-copy>div{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
 .today-pillar-brief-copy em{padding:5px 8px;border:1px solid rgba(255,255,255,.07);border-radius:999px;background:rgba(255,255,255,.035);color:var(--muted);font-size:9px;font-style:normal;line-height:1.2}
+.today-prayer-needs{margin-top:14px;color:var(--soft-white);font-size:12px;line-height:1.5}
+.today-prayer-needs summary{width:max-content;max-width:100%;color:var(--gold-light);cursor:pointer;font-weight:700}
+.today-prayer-needs ol{padding-left:22px;margin:10px 0 0}
+.today-prayer-needs li+li{margin-top:7px}
 .today-pillar-stack{display:grid;gap:14px;padding:20px 0 0;border-top:1px solid rgba(197,164,109,.18)}
 .today-pillar-stack-heading{padding:0 4px}
 .today-pillar-stack-heading h2{margin:6px 0 2px;font:500 29px/1.15 var(--font-serif)}
