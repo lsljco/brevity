@@ -36,4 +36,13 @@ test('Today Pillar 4 names calendar commitments and synchronized Household Opera
   assert.match(today,/buildHouseholdMaintenanceWeek\(date, maintenance\)/)
   assert.match(today,/SHARED_STATE_EVENT/)
   assert.match(today,/householdChores=\{householdChores\}/)
+  assert.ok(dashboard.indexOf('<TodayHouseholdChores') < dashboard.indexOf('<TodayCalendarAgenda'),'today’s chores should appear before the calendar agenda')
+  assert.match(dashboard,/Set Today’s Focus/)
+  assert.match(today,/dailyFocusUpdateOperation/)
+})
+
+test('Today meal cards show complete nutrition macros',async()=>{
+  const dashboard=await readFile(new URL('./TodayDashboard.jsx',import.meta.url),'utf8')
+  for(const field of ['calories','proteinGrams','carbohydrateGrams','fatGrams'])assert.match(dashboard,new RegExp(`meal\\.macros\\?\\.${field}`))
+  for(const label of ['protein','carbs','fat'])assert.match(dashboard,new RegExp(` ${label}</em>`))
 })

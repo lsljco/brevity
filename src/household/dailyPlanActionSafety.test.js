@@ -5,8 +5,9 @@ import { defaultActionPermissions, normalizeActionProposal, permissionForOperati
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
 import { executeActionWithJournal, prepareDirectProposal, undoActionWithJournal } from '../../netlify/functions/brevity-assistant-actions.mjs'
 import { dailyPlanDraftKey, generateDailyPlanDraft, saveGeneratedDailyPlanDraft } from '../../netlify/lib/household-plan-generator.mjs'
+import { applyRecordOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 import { createEmptyDailyPlan } from './dailyPlan.js'
-import { buildAlignmentOperations, buildCalendarIntentOperations, buildPlanDraftOperations, calendarIntentOperation } from './dailyPlanActionReview.js'
+import { buildAlignmentOperations, buildCalendarIntentOperations, buildPlanDraftOperations, calendarIntentOperation, dailyFocusUpdateOperation } from './dailyPlanActionReview.js'
 import { clearLocalAlignmentDraft, clearLocalRecapDraft, loadLocalAlignmentDraft, loadLocalRecapDraft, saveLocalAlignmentDraft, saveLocalRecapDraft } from './dailyPlanLocalDraft.js'
 import { fetchScheduledDailyPlanDraft } from './dailyPlanGeneratorApi.js'
 
@@ -234,6 +235,24 @@ test('Today keeps the meal section truthful while rolling meals load, fail, or a
   assert.match(dashboard,/Open Meal Plan/)
   assert.match(today,/mealPlanState=\{mealPlan\.state\}/)
   assert.match(today,/mealPlanError=\{mealPlan\.error\}/)
+})
+
+test('Today focus changes use a versioned household pillar operation', () => {
+  const plan={...createEmptyDailyPlan('2026-09-07'),version:4}
+  const operation=dailyFocusUpdateOperation(plan,'Complete the kitchen reset')
+  assert.deepEqual(operation,{type:'plan.pillar.update',targetDate:'2026-09-07',targetId:'household',description:'Set Today’s Focus to “Complete the kitchen reset”',payload:{pillar:'household',patch:{keyFocus:'Complete the kitchen reset'}}})
+  assert.throws(()=>dailyFocusUpdateOperation(plan,'  '),/Enter today’s focus/)
+  plan.household.keyFocus='Complete the kitchen reset'
+  assert.throws(()=>dailyFocusUpdateOperation(plan,'Complete the kitchen reset'),/Change today’s focus/)
+})
+
+test('reviewed household outcomes populate Today’s Top 3 in the same atomic plan write', () => {
+  const plan={...createEmptyDailyPlan('2026-09-07'),version:4}
+  const priorities=[{id:'household-priority-0',title:'Secure household income',owner:'Family',status:'pending'}]
+  const operation={type:'plan.pillar.update',targetDate:plan.date,targetId:'household',payload:{pillar:'household',patch:{priorities}}}
+  const {after}=applyRecordOperation(plan,operation)
+  assert.deepEqual(after.household.priorities,priorities)
+  assert.deepEqual(after.topPriorities,priorities)
 })
 
 test('alignment drafts remain device-local and are discarded when the acknowledged version changes', () => {

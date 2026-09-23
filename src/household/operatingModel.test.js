@@ -101,6 +101,14 @@ test('Today names a truthful next step when no focus evidence exists', () => {
   assert.equal(model.focus.source,'missing-plan')
 })
 
+test('household-set daily focus takes precedence over themes and calendar appointments', () => {
+  const model=buildTodayReadModel({
+    plan:{...plan,theme:'Generated theme',household:{keyFocus:'Finish the kitchen reset together'}},
+    calendarAppointments:[{id:'review',title:'Family Finance Meeting',date:'2026-08-26',startTime:'9:00 AM'}],
+  })
+  assert.deepEqual(model.focus,{headline:'Finish the kitchen reset together',detail:'Set by the household for today.',source:'household-focus'})
+})
+
 test('pillar pulse communicates the daily meaning without announcing pillar owners', () => {
   const model = buildTodayReadModel({ plan:{
     ...plan,

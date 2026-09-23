@@ -176,6 +176,7 @@ export function createEmptyDailyPlan(date) {
     },
     household: {
       owner: 'Larry',
+      keyFocus: '',
       appointments: [],
       priorities: [],
       errands: [],

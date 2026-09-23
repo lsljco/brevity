@@ -25,6 +25,21 @@ const plan = (date = today()) => ({
   assignments:[], decisions:[], dayparts:[], recap:{ wins:[], carryovers:[], lessons:[], tomorrowPrep:[], completedAt:'' }, version:1,
 })
 
+const mealPlanResponse = () => {
+  const startDate = today()
+  const meals = [
+    { id:'breakfast-eggs', mealType:'breakfast', name:'Eggs and Toast', prepMinutes:10, macros:{ calories:350, proteinGrams:22, carbohydrateGrams:30, fatGrams:14 } },
+    { id:'lunch-chicken', mealType:'lunch', name:'Chicken and Vegetables', prepMinutes:15, macros:{ calories:480, proteinGrams:48, carbohydrateGrams:32, fatGrams:18 } },
+    { id:'dinner-fish', mealType:'dinner', name:'Fish and Vegetables', prepMinutes:20, macros:{ calories:520, proteinGrams:46, carbohydrateGrams:38, fatGrams:20 } },
+  ]
+  return {
+    householdId:'lslj-family',
+    startDate,
+    days:[{ id:`meal-plan-${startDate}`, date:startDate, version:1, meals:{ breakfast:meals[0].id, lunch:meals[1].id, dinner:meals[2].id }, substitutions:{}, resolvedMeals:{ breakfast:meals[0], lunch:meals[1], dinner:meals[2] } }],
+    library:meals,
+  }
+}
+
 async function mockBackend(page) {
   await page.route('**/.netlify/functions/**', async route => {
     const url = new URL(route.request().url())
@@ -41,6 +56,7 @@ async function mockBackend(page) {
     }
     else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan(url.searchParams.get('date') || today()) }
     else if (path.endsWith('/icloud-calendar')) body = { events:[{ id:'doctor-appointment', uid:'doctor-appointment', source:'icloud', title:'Doctor appointment', date:today(), time:'2:30 PM', owner:'Family' }], connected:true, syncedAt:new Date().toISOString() }
+    else if (path.endsWith('/meal-plans')) body = mealPlanResponse()
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-transactions')) body = { transactions:[], errors:[] }
     else if (path.endsWith('/health-alerts')) body = { alerts:[] }
@@ -192,12 +208,31 @@ test('Physical Fitness builds and refines a goal-driven workout before Action Mo
 
 test('Today Pillar 4 lists every calendar commitment and today’s Household Operations chores', async ({ page }) => {
   const household = page.locator('[data-pillar="household"]')
+  await expect(household.getByRole('button', { name:'Set Today’s Focus' })).toBeVisible()
+  await household.getByRole('button', { name:'Set Today’s Focus' }).click()
+  const focusDialog=page.getByRole('dialog',{name:'Set Today’s Focus'})
+  await expect(focusDialog.getByRole('textbox', { name:'Today’s Focus' })).toBeVisible()
+  await expect(focusDialog).toContainText('Calendar appointments remain visible below')
+  await focusDialog.getByRole('button',{name:'Cancel'}).click()
   await expect(household.getByRole('heading', { name:'Today’s Appointments & Meetings' })).toBeVisible()
   await expect(household.getByText('School planning meeting')).toBeVisible()
   await expect(household.getByText('Doctor appointment')).toBeVisible()
   await expect(household.getByRole('heading', { name:'Today’s Chores' })).toBeVisible()
   expect(await household.locator('.today-chore-item').count()).toBeGreaterThan(0)
   await expect(household.getByRole('button', { name:'Open Household Operations' })).toBeVisible()
+})
+
+test('Today meal cards show calories and all three macros',async({page})=>{
+  const cards=page.locator('.today-meal-card')
+  await expect(cards).toHaveCount(3)
+  const macros=page.locator('.today-meal-macros')
+  await expect(macros).toHaveCount(3)
+  for(const summary of await macros.all()){
+    await expect(summary).toContainText('cal')
+    await expect(summary).toContainText('protein')
+    await expect(summary).toContainText('carbs')
+    await expect(summary).toContainText('fat')
+  }
 })
 
 test('mobile shell keeps fixed navigation inside the viewport without horizontal overflow', async ({ page }, testInfo) => {
