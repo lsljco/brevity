@@ -21,3 +21,11 @@ test('meal image upload validates bytes and saves them through the same househol
   assert.match(source,/mealImageContentType\(bytes\)/)
   assert.match(source,/imageStore\.set\(mealImageKey/)
 })
+
+test('custom meal creation persists before image generation so the request cannot time out',()=>{
+  const postBranchStart=source.indexOf("if (event.httpMethod === 'POST')")
+  const putBranchStart=source.indexOf("if (event.httpMethod === 'PUT')",postBranchStart)
+  const postBranch=source.slice(postBranchStart,putBranchStart)
+  assert.match(postBranch,/repository\.createMeal/)
+  assert.doesNotMatch(postBranch,/generateMealImage|generateImage/)
+})

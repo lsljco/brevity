@@ -1,7 +1,7 @@
 import householdAuth from './household-auth.js'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { getStore } from '@netlify/blobs'
-import { generateMealImage, mealImageContentType, mealImageKey, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'
+import { mealImageContentType, mealImageKey, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'
 import { randomUUID } from 'node:crypto'
 
 const { readSession } = householdAuth
@@ -30,11 +30,9 @@ export const handler = async event => {
 
     if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}')
-      const imageStore = getStore({ name:MEAL_IMAGE_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
       const meal = await repository.createMeal({
         meal:{ ...body, image:'' },
         actor:session.member || 'Household member',
-        generateImage:(candidate, assetId) => generateMealImage({ meal:candidate, assetId, householdId:process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family', store:imageStore }),
       })
       return response(201, { meal })
     }
