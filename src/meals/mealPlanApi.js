@@ -95,6 +95,19 @@ export function importRecipeFromUrl(url) {
   })
 }
 
+export async function importMealsFromImage(file) {
+  if (!['image/jpeg','image/png','image/webp'].includes(file?.type)) throw new Error('Choose a JPEG, PNG, or WebP image.')
+  const bitmap=await createImageBitmap(file)
+  const scale=Math.min(1,1600/bitmap.width,1600/bitmap.height)
+  const canvas=document.createElement('canvas')
+  canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale))
+  canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height)
+  bitmap.close?.()
+  const optimized=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare the image.')),'image/jpeg',.88))
+  if(optimized.size>5*1024*1024)throw new Error('Choose an image smaller than 5 MB.')
+  return request('/.netlify/functions/meal-image-import',{timeoutMs:60000,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mimeType:'image/jpeg',imageBase64:await blobBase64(optimized)})})
+}
+
 export function prepareMealSubstitution({ date, mealType, mealId, expectedVersion }) {
   return request(`${ACTION_ENDPOINT}?action=prepare-meal`, {
     method: 'POST',

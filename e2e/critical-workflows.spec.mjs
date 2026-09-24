@@ -306,6 +306,29 @@ test('Meal Library imports a recipe website and calculates its per-serving nutri
   await expect(dialog.locator('footer button.is-primary')).toBeEnabled()
 })
 
+test('Meal Library reads distinct meals and printed macros from an uploaded image into an editable draft',async({page})=>{
+  await page.route('**/.netlify/functions/meal-image-import',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({meals:[
+    {name:'Grilled New York Strip Steak',ingredients:['New York strip steak','Green beans','Olive oil'],serving:'plate',macros:{calories:460,proteinGrams:54,carbohydrateGrams:21,fatGrams:20},warnings:[]},
+    {name:'Beef Brisket',ingredients:['Brisket','Mashed potatoes'],serving:'plate',macros:{calories:520,proteinGrams:52,carbohydrateGrams:37,fatGrams:18},warnings:[]},
+    {name:'Chicken Legs and Rice',ingredients:['Chicken legs','White rice'],serving:'plate',macros:{calories:430,proteinGrams:47,carbohydrateGrams:43,fatGrams:12},warnings:[]},
+  ],warnings:[]})}))
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'Meal Library'}).click()
+  await page.locator('.meal-library-add').filter({hasText:'Add Lunch'}).click()
+  const dialog=page.getByRole('dialog',{name:'Add a meal'})
+  await dialog.getByLabel('Choose meal image').setInputFiles({name:'meal.png',mimeType:'image/png',buffer:await page.screenshot()})
+  await expect(dialog.getByLabel('Meal name')).toHaveValue('Grilled New York Strip Steak')
+  await expect(dialog.getByLabel('Calories')).toHaveValue('460')
+  await dialog.getByLabel(/Choose a meal from the image/).selectOption('2')
+  await expect(dialog.getByLabel('Meal name')).toHaveValue('Chicken Legs and Rice')
+  await expect(dialog.getByLabel('Protein (g)')).toHaveValue('47')
+  await expect(dialog.getByLabel('Prep time (minutes)')).toHaveValue('')
+  await expect(dialog.locator('footer button.is-primary')).toBeDisabled()
+  await dialog.getByLabel('Prep time (minutes)').fill('10')
+  await dialog.getByLabel('Cook time (minutes)').fill('30')
+  await expect(dialog.locator('footer button.is-primary')).toBeEnabled()
+})
+
 test('Review change opens Action Mode for a custom meal replacement',async({page})=>{
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await page.evaluate(async()=>fetch('/.netlify/functions/meal-plans',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mealType:'breakfast',name:'Saturday Pancakes',description:'Golden pancakes',ingredients:['2 cups pancake mix'],prepMinutes:5,cookMinutes:15,totalMinutes:20,serving:'1 pancake',macros:{calories:168,proteinGrams:2,carbohydrateGrams:21,fatGrams:8}})}))

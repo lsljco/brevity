@@ -5,7 +5,7 @@ import { mealMonthRange } from './mealMonth.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
-import { calculateMealNutrition, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
+import { calculateMealNutrition, importMealsFromImage, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
@@ -127,12 +127,17 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
   const [importState,setImportState]=useState('idle')
   const [importError,setImportError]=useState('')
   const [importNotice,setImportNotice]=useState('')
+  const [imageMeals,setImageMeals]=useState([])
+  const [imageImportState,setImageImportState]=useState('idle')
+  const [imageImportError,setImageImportError]=useState('')
+  const [imageWarnings,setImageWarnings]=useState([])
+  const [imageNutrition,setImageNutrition]=useState(false)
   const [nutrition,setNutrition]=useState(null)
   const [nutritionState,setNutritionState]=useState('idle')
   const [nutritionError,setNutritionError]=useState('')
   const set = (field, value) => {
     setForm(current => ({ ...current, [field]:value }))
-    if(['ingredients','yieldQuantity','yieldUnit'].includes(field)){setNutrition(null);setNutritionError('');setNutritionState('idle')}
+    if(['ingredients','yieldQuantity','yieldUnit'].includes(field)&&!imageNutrition){setNutrition(null);setNutritionError('');setNutritionState('idle')}
   }
   const ingredientLines=value=>(value??form.ingredients).split(/\r?\n/).map(line=>line.trim()).filter(Boolean)
   const calculateFor=async(ingredients,yieldQuantity,yieldUnit)=>{
@@ -174,6 +179,26 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
       if(ingredients&&Number(yieldQuantity)>0&&yieldUnit)await calculateFor(ingredientLines(ingredients),yieldQuantity,yieldUnit)
     }catch(error){setImportError(error.message||'Could not import that recipe.');setImportState('error')}
   }
+  const chooseImageMeal=meal=>{
+    setForm(current=>({...current,name:meal.name,description:'',ingredients:meal.ingredients.join('\n'),instructions:'',prepMinutes:'',cookMinutes:'',totalMinutes:'',yieldQuantity:'1',yieldUnit:'plate',sourceUrl:'',sourceName:'Uploaded meal graphic'}))
+    setImageWarnings(meal.warnings)
+    const values=Object.values(meal.macros)
+    setImageNutrition(values.every(value=>value!==null))
+    setNutrition(values.every(value=>value!==null)?{serving:'1 plate',yieldQuantity:1,yieldUnit:'plate',perServingMacros:meal.macros,batchMacros:meal.macros,ingredients:[],warnings:meal.warnings,nutritionBasis:'Macros transcribed from an uploaded image; verify the figures and serving before saving.'}:null)
+    setNutritionState(values.every(value=>value!==null)?'ready':'idle')
+    setNutritionError(values.every(value=>value!==null)?'':'One or more macros are not legible. Enter measured ingredients and calculate nutrition before saving.')
+  }
+  const importFromImage=async event=>{
+    const file=event.target.files?.[0];event.target.value=''
+    if(!file)return
+    setImageImportState('loading');setImageImportError('');setImageMeals([])
+    try{
+      const result=await importMealsFromImage(file)
+      setImageMeals(result.meals||[]);setImageWarnings(result.warnings||[])
+      if(result.meals?.length)chooseImageMeal(result.meals[0])
+      setImageImportState('ready')
+    }catch(error){setImageImportError(error.message||'Could not read that image.');setImageImportState('error')}
+  }
   const submit = event => {
     event.preventDefault()
     if(!nutrition)return
@@ -209,6 +234,16 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
     <section className="meal-dialog meal-add-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-add-title">
       <header><div><span>Household meal library</span><h2 id="meal-add-title">Add a meal</h2><p>Add it once and it will be available as a replacement on any device.</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
       <form className="meal-add-form" onSubmit={submit}>
+        <section className="meal-recipe-import meal-add-form--wide" aria-labelledby="meal-image-import-title">
+          <div><strong id="meal-image-import-title">Import meals from an image</strong><span>Upload a meal graphic. Brevity reads each plate and its printed macros into an editable draft. Check every value before adding a meal.</span></div>
+          <label><span>Choose meal image</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={importFromImage} disabled={saving||imageImportState==='loading'} /></label>
+          {imageImportState==='loading'&&<p role="status">Reading the meal image…</p>}
+          {imageImportError&&<p role="alert">{imageImportError}</p>}
+          {imageImportState==='ready'&&!imageMeals.length&&<p>No distinct meals were found in this image.</p>}
+          {imageMeals.length>0&&<label><span>Choose a meal from the image ({imageMeals.length} found)</span><select onChange={event=>chooseImageMeal(imageMeals[Number(event.target.value)])}>{imageMeals.map((meal,index)=><option value={index} key={`${index}-${meal.name}`}>{meal.name}</option>)}</select></label>}
+          {imageWarnings.length>0&&<ul>{imageWarnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul>}
+          {imageNutrition&&<div className="meal-image-macros"><strong>Printed macros per plate · confirm or correct</strong>{[['calories','Calories'],['proteinGrams','Protein (g)'],['carbohydrateGrams','Carbs (g)'],['fatGrams','Fat (g)']].map(([key,label])=><label key={key}><span>{label}</span><input type="number" min="0" step="1" value={nutrition?.perServingMacros?.[key]??''} onChange={event=>setNutrition(current=>({...current,perServingMacros:{...current.perServingMacros,[key]:Number(event.target.value)},batchMacros:{...current.batchMacros,[key]:Number(event.target.value)}}))} /></label>)}</div>}
+        </section>
         <section className="meal-recipe-import meal-add-form--wide" aria-labelledby="recipe-import-title">
           <div><strong id="recipe-import-title">Import from a recipe website</strong><span>Paste the recipe page URL. Brevity will populate an editable draft and calculate nutrition from its measured ingredients.</span></div>
           <div className="meal-recipe-import-controls"><label><span>Recipe website URL</span><input autoFocus type="url" required={false} value={recipeUrl} onChange={event=>setRecipeUrl(event.target.value)} placeholder="https://example.com/recipe" /></label><button type="button" onClick={importFromWebsite} disabled={saving||importState==='loading'||!recipeUrl.trim()}>{importState==='loading'?'Importing…':'Import recipe'}</button></div>
@@ -225,18 +260,18 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
         <label><span>Total time (minutes) <small>optional override</small></span><input min="0" step="1" type="number" value={form.totalMinutes} onChange={event=>set('totalMinutes',event.target.value)} /></label>
         <label><span>Batch yield</span><input required min="0.1" max="500" step="0.1" type="number" value={form.yieldQuantity} onChange={event=>set('yieldQuantity',event.target.value)} placeholder="12" /></label>
         <label><span>Yield unit</span><input required value={form.yieldUnit} onChange={event=>set('yieldUnit',event.target.value)} placeholder="pancakes" /></label>
-        <div className="meal-nutrition-action meal-add-form--wide"><div><strong>Nutrition from ingredients</strong><span>Brevity totals the full batch, then divides it by the batch yield.</span></div><button type="button" onClick={calculate} disabled={saving||nutritionState==='loading'||!ingredientLines().length||!Number(form.yieldQuantity)||!form.yieldUnit.trim()}>{nutritionState==='loading'?'Calculating…':nutrition?'Recalculate nutrition':'Calculate nutrition'}</button></div>
+        <div className="meal-nutrition-action meal-add-form--wide"><div><strong>{imageNutrition?'Nutrition printed in image':'Nutrition from ingredients'}</strong><span>{imageNutrition?'Confirm or correct the transcribed figures above. They are source estimates, not values calculated from ingredient quantities.':'Brevity totals the full batch, then divides it by the batch yield.'}</span></div><button type="button" onClick={()=>{setImageNutrition(false);calculate()}} disabled={saving||nutritionState==='loading'||!ingredientLines().length||!Number(form.yieldQuantity)||!form.yieldUnit.trim()}>{nutritionState==='loading'?'Calculating…':imageNutrition?'Calculate from measured ingredients':nutrition?'Recalculate nutrition':'Calculate nutrition'}</button></div>
         {nutritionError&&<div className="meal-nutrition-error meal-add-form--wide" role="alert">{nutritionError}</div>}
         {nutrition&&<section className="meal-nutrition-preview meal-add-form--wide" aria-label="Calculated nutrition preview">
           <header><div><span>Calculated estimate</span><strong>Total batch and per {nutrition.serving}</strong></div></header>
           <div className="meal-nutrition-totals"><article><span>Total batch</span><Macros meal={{serving:'batch',macros:nutrition.batchMacros,nutritionBasis:nutrition.nutritionBasis}} /></article><article><span>Per {nutrition.serving}</span><Macros meal={{serving:nutrition.serving,macros:nutrition.perServingMacros,nutritionBasis:nutrition.nutritionBasis}} /></article></div>
-          <details><summary>Ingredient calculation details</summary>{nutrition.ingredients.map((ingredient,index)=><div className="meal-nutrition-row" key={`${ingredient.input}-${index}`}><div><strong>{ingredient.input}</strong><small>{ingredient.resolvedName} · {ingredient.basis} · {ingredient.confidence} confidence</small></div><span>{ingredient.macros.calories} cal · {ingredient.macros.proteinGrams}g P · {ingredient.macros.carbohydrateGrams}g C · {ingredient.macros.fatGrams}g F</span></div>)}</details>
+          {nutrition.ingredients.length>0&&<details><summary>Ingredient calculation details</summary>{nutrition.ingredients.map((ingredient,index)=><div className="meal-nutrition-row" key={`${ingredient.input}-${index}`}><div><strong>{ingredient.input}</strong><small>{ingredient.resolvedName} · {ingredient.basis} · {ingredient.confidence} confidence</small></div><span>{ingredient.macros.calories} cal · {ingredient.macros.proteinGrams}g P · {ingredient.macros.carbohydrateGrams}g C · {ingredient.macros.fatGrams}g F</span></div>)}</details>}
           {nutrition.warnings.length>0&&<ul>{nutrition.warnings.map((warning,index)=><li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
           <small>{nutrition.nutritionBasis}</small>
         </section>}
         <div className="meal-image-generation-note meal-add-form--wide"><i className="ti ti-photo-spark" /><div><strong>Meal image generated by Brevity</strong><span>When you save, Brevity creates an ultra-photorealistic editorial food image styled to match the Meal Library.</span></div></div>
         {error&&<div className="meal-nutrition-error meal-add-form--wide" role="alert">{error}</div>}
-        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving||!nutrition}>{saving?'Adding meal…':'Add to Meal Library'}</button></footer>
+        <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="is-primary" disabled={saving||!nutrition||!form.name.trim()||!ingredientLines().length||form.prepMinutes===''||form.cookMinutes===''||!Number(form.yieldQuantity)||!form.yieldUnit.trim()}>{saving?'Adding meal…':'Add to Meal Library'}</button></footer>
       </form>
     </section>
   </div>
