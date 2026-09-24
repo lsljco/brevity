@@ -34,6 +34,10 @@
 .meal-add-form footer button.is-primary { border-color:rgba(197,164,109,.45); background:rgba(197,164,109,.14); color:var(--gold); }
 .meal-add-form footer button:disabled { cursor:not-allowed; opacity:.45; }
 .meal-recipe-import { display:grid; gap:12px; padding:15px; border:1px solid rgba(197,164,109,.3); border-radius:13px; background:rgba(197,164,109,.055); }
+.meal-image-macros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.meal-image-macros>strong{grid-column:1/-1;color:var(--gold-light)}
+.meal-image-macros input{width:100%}
+@media(max-width:620px){.meal-image-macros{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .meal-recipe-import > div:first-child { display:grid; gap:4px; }
 .meal-recipe-import strong { color:var(--soft-white); font-size:13px; }
 .meal-recipe-import > div:first-child > span { color:var(--muted); font-size:10px; line-height:1.45; }

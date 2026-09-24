@@ -99,6 +99,39 @@ test('Today displays every recorded Pillar 7 prayer request', async ({ page }) =
   await expect(ministry).toContainText('Household prayer request 14')
 })
 
+test('Today can browse tomorrow and the next seven days without changing a plan', async ({ page }) => {
+  const tomorrow=new Date(`${today()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1)
+  const tomorrowKey=tomorrow.toISOString().slice(0,10)
+  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({events:[{id:'tomorrow-visit',uid:'tomorrow-visit',source:'icloud',title:'Tomorrow appointment',date:tomorrowKey,time:'2:30 PM',owner:'Family'}],connected:true,syncedAt:new Date().toISOString()})}))
+  await page.reload()
+  await page.getByRole('button',{name:'View Next 7 Days'}).click()
+  const picker=page.getByRole('combobox',{name:'Choose a day'})
+  await expect(picker.locator('option')).toHaveCount(8)
+  await expect(page.getByRole('heading',{name:'Next 7 Days'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Appointments & meetings/})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Household chores/})).toBeVisible()
+  await expect(page.locator('.upcoming-schedule-grid')).toContainText('Tomorrow appointment')
+  await expect(page.locator('.upcoming-schedule-grid')).toContainText('2:30 PM')
+  const last=await picker.locator('option').last().getAttribute('value')
+  await picker.selectOption(last)
+  await expect(page.locator('.upcoming-schedule>h2')).toContainText(new Date(`${last}T12:00:00`).toLocaleDateString('en-US',{month:'long',day:'numeric'}))
+  await page.getByRole('button',{name:'Back to Today'}).click()
+  await expect(page.getByRole('heading',{name:'Today',exact:true})).toBeVisible()
+})
+
+test('Top Outcomes retains spaces while typing before Alignment review', async ({ page }) => {
+  await page.getByRole('button',{name:/Today’s Alignment/}).click()
+  await page.getByRole('button',{name:/Next Pillar/}).click()
+  await page.getByRole('button',{name:/Next Pillar/}).click()
+  await page.getByRole('button',{name:/Next Pillar/}).click()
+  const field=page.getByRole('textbox',{name:/Today.s Top 3 Outcomes/})
+  await field.fill('LJ - Follow up with stormwater contractors\nReview household schedule')
+  await expect(field).toHaveValue('LJ - Follow up with stormwater contractors\nReview household schedule')
+  await field.press('End')
+  await field.press('Space')
+  await expect(field).toHaveValue('LJ - Follow up with stormwater contractors\nReview household schedule ')
+})
+
 test('deprecated My Planner workspace is not present in navigation', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') {
     await page.getByRole('button', { name:'Menu' }).click()
