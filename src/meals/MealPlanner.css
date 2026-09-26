@@ -45,6 +45,12 @@
 .meal-library-search input { width: 100%; min-height: 46px; border: 0; outline: 0; background: transparent; color: var(--white); font: inherit; }
 .meal-library-search input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .meal-library-search > span, .meal-library-no-results { color: var(--muted); font-size: 13px; }
+.meal-library-search > .meal-library-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; border: 0; background: transparent; }
+.meal-library-filters button { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 14px; border: 1px solid var(--glass-border); border-radius: 999px; background: var(--glass); color: var(--soft-white); font: inherit; cursor: pointer; }
+.meal-library-filters button[aria-pressed="true"] { border-color: var(--gold); background: rgba(197,164,109,.16); color: var(--gold-light); }
+.meal-library-filters button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.meal-library-filters button span { color: var(--muted); font-size: 12px; }
+.meal-library-filters button[aria-pressed="true"] span { color: var(--gold-light); }
 .meal-month-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 22px; color: var(--soft-white); }
 .meal-month-controls label { font-weight: 700; }
 .meal-month-controls input { padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 10px; background: var(--glass); color: var(--white); color-scheme: dark; font: inherit; }
