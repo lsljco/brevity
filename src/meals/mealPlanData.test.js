@@ -82,7 +82,9 @@ test('meal day resolves library records and validates same-category substitution
   assert.equal(day.version, 1)
   assert.equal(resolveMealDay(day).resolvedMeals.breakfast.mealType, 'breakfast')
   assert.deepEqual(validateMealSubstitution({ date: day.date, mealType: 'dinner', mealId: 'dinner-01' }), [])
-  assert.ok(validateMealSubstitution({ date: day.date, mealType: 'dinner', mealId: 'breakfast-01' }).length)
+  assert.deepEqual(validateMealSubstitution({ date: day.date, mealType: 'dinner', mealId: 'breakfast-01' }), [])
+  assert.deepEqual(validateMealSubstitution({ date: day.date, mealType: 'breakfast', mealId: 'custom-lunch-example' }), [])
+  assert.ok(validateMealSubstitution({ date: day.date, mealType: 'dinner', mealId: 'not-in-library' }).length)
 })
 
 test('household date uses the configured time zone instead of server UTC', () => {

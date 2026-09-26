@@ -80,14 +80,16 @@ function MealChoice({ meal, onChoose, selected, current }) {
   return <button type="button" className={`meal-choice${selected ? ' is-selected' : ''}`} onClick={onChoose}>
     <MealImage meal={meal} alt="" />
     <span className="meal-choice-mark"><i className={`ti ${selected ? 'ti-circle-check-filled' : 'ti-circle'}`} /></span>
-    <span><strong>{meal.name}</strong><small>{meal.description}</small><Macros meal={meal} /></span>
+    <span><strong>{meal.name}</strong><small>{LABELS[meal.mealType]} · {meal.description}</small><Macros meal={meal} /></span>
     <em>{current ? 'Current' : selected ? 'Selected' : mealTimingLabel(meal)}</em>
   </button>
 }
 
 function ReplaceDialog({ selection, library, saving, error, onClose, onChoose, onReview }) {
   const [query, setQuery] = useState('')
-  const candidates = useMemo(() => searchMeals(library, query).filter(meal => meal.mealType === selection.mealType), [library, query, selection.mealType])
+  const [typeFilter, setTypeFilter] = useState('all')
+  const matchingMeals = useMemo(() => searchMeals(library, query), [library, query])
+  const candidates = useMemo(() => typeFilter === 'all' ? matchingMeals : matchingMeals.filter(meal => meal.mealType === typeFilter), [matchingMeals, typeFilter])
   const currentMeal=library.find(meal=>meal.id===selection.day.meals[selection.mealType])
   const selectedMeal=library.find(meal=>meal.id===selection.mealId)
   useEffect(() => {
@@ -98,9 +100,10 @@ function ReplaceDialog({ selection, library, saving, error, onClose, onChoose, o
 
   return <div className="meal-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose() }}>
     <section className="meal-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-dialog-title">
-      <header><div><span>Meal library · {candidates.length} options</span><h2 id="meal-dialog-title">Replace {LABELS[selection.mealType]}</h2><p>{formatDay(selection.day.date)}</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
-      <label className="meal-search"><i className="ti ti-search" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${LABELS[selection.mealType].toLowerCase()} options`} /></label>
-      <div className="meal-choice-list">{candidates.map(meal => <MealChoice key={meal.id} meal={meal} current={meal.id === selection.day.meals[selection.mealType]} selected={meal.id === selection.mealId} onChoose={() => onChoose(meal.id)} />)}</div>
+      <header><div><span>Meal library · {candidates.length} options</span><h2 id="meal-dialog-title">Replace {LABELS[selection.mealType]}</h2><p>{formatDay(selection.day.date)} · Choose from any meal category</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
+      <label className="meal-search"><i className="ti ti-search" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Search all meals or ingredients" /></label>
+      <div className="meal-replace-filters" role="group" aria-label="Filter replacement meals by type">{[['all','All meals'],...MEAL_TYPES.map(type=>[type,LABELS[type]])].map(([type,label])=><button type="button" key={type} aria-pressed={typeFilter===type} onClick={()=>setTypeFilter(type)}>{label} <span>{type==='all'?matchingMeals.length:matchingMeals.filter(meal=>meal.mealType===type).length}</span></button>)}</div>
+      <div className="meal-choice-list">{candidates.length ? candidates.map(meal => <MealChoice key={meal.id} meal={meal} current={meal.id === selection.day.meals[selection.mealType]} selected={meal.id === selection.mealId} onChoose={() => onChoose(meal.id)} />) : <p className="meal-replace-empty">No meals match this search and category.</p>}</div>
       <footer className="meal-dialog-review">
         <div><span>Selection</span><strong>{currentMeal?.name||'Current meal'} <i className="ti ti-arrow-right" /> {selectedMeal?.name||'Choose a replacement'}</strong><small>Review opens Action Mode. Nothing changes until you confirm there, and the completed change can be undone from Audit History.</small>{error&&<small className="meal-dialog-error" role="alert">{error}</small>}</div>
         <div><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="button" className="is-primary" onClick={onReview} disabled={saving||!selectedMeal||selectedMeal.id===currentMeal?.id}>{saving?'Opening review…':'Review change'}</button></div>

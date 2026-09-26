@@ -254,13 +254,30 @@ test('forecast adjustments update only an exact model or scenario record',()=>{
   assert.equal(resourceForOperation({type:'forecast.update',domain:'finance'}),'shared:brevity_finance_scenarios_v1')
 })
 
-test('meal substitutions require a dated, same-category library choice',()=>{
+test('meal substitutions require a dated library choice but allow cross-category slots',()=>{
   const breakfast=MEAL_LIBRARY.find(meal=>meal.mealType==='breakfast')
   const dinner=MEAL_LIBRARY.find(meal=>meal.mealType==='dinner')
   const base={type:'meal.substitute',description:'Replace dinner',targetId:'current-dinner',targetDate:'2026-09-07'}
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,payload:{mealType:'dinner',mealId:dinner.id}}]},{member:'Larry',role:'admin'}))
-  assert.throws(()=>normalizeActionProposal({operations:[{...base,payload:{mealType:'dinner',mealId:breakfast.id}}]},{member:'Larry',role:'admin'}),/not a dinner option/)
+  assert.doesNotThrow(()=>normalizeActionProposal({operations:[{...base,payload:{mealType:'dinner',mealId:breakfast.id}}]},{member:'Larry',role:'admin'}))
   assert.throws(()=>normalizeActionProposal({operations:[{...base,targetDate:'',payload:{mealType:'dinner',mealId:dinner.id}}]},{member:'Larry',role:'admin'}),/exact occurrence date/)
+})
+
+test('a reviewed breakfast slot can use a lunch meal and undo restores its original meal',async()=>{
+  const date='2026-09-07',instant=new Date('2026-09-07T12:00:00Z')
+  const actionStore=versionedBlobStore(),mealStore=versionedBlobStore()
+  const repository=createAssistantActionRepository({store:actionStore,householdId:'house',now:()=>instant})
+  const mealRepository=createMealPlanRepository({store:mealStore,householdId:'lslj-family',now:()=>instant})
+  const day=await mealRepository.ensureDay(date)
+  const lunch=MEAL_LIBRARY.find(meal=>meal.mealType==='lunch')
+  const proposal=await prepareMealProposal({input:{date,mealType:'breakfast',mealId:lunch.id,expectedVersion:day.version},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),repository,mealRepository,now:instant,id:'cross-category-proposal'})
+  const resources=createProductionActionResources({sharedStore:mealStore,planStore:mealStore,mealStore,now:()=>instant})
+  const completed=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources,event:{},leaseMs:0,now:()=>instant})
+  const updated=await mealRepository.getDay(date)
+  assert.equal(updated.meals.breakfast,lunch.id)
+  assert.equal(updated.meals.lunch,day.meals.lunch)
+  await undoActionWithJournal({repository,auditId:completed.audit.id,session:{member:'Larry',role:'admin'},resources,event:{},leaseMs:0,now:()=>instant})
+  assert.equal((await mealRepository.getDay(date)).meals.breakfast,day.meals.breakfast)
 })
 
 test('reviewed meal replacement recovers a lost response, audits once, and safely undoes',async()=>{
@@ -304,7 +321,8 @@ test('Action Mode prepares a custom meal replacement from the authoritative hous
   const mealRepository=createMealPlanRepository({store:mealStore,householdId:'lslj-family',now:()=>instant,createId:()=> 'salmon'})
   const day=await mealRepository.ensureDay(date)
   const custom=await mealRepository.createMeal({actor:'Larry',meal:{mealType:'dinner',name:'Salmon, Rice, and Broccoli',ingredients:['salmon','rice','broccoli'],prepMinutes:10,cookMinutes:20,macros:{calories:600,proteinGrams:45,carbohydrateGrams:55,fatGrams:20}}})
-  const proposal=await prepareMealProposal({input:{date,mealType:'dinner',mealId:custom.id,expectedVersion:day.version},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),repository,mealRepository,now:instant,id:'custom-meal-proposal'})
+  const proposal=await prepareMealProposal({input:{date,mealType:'breakfast',mealId:custom.id,expectedVersion:day.version},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),repository,mealRepository,now:instant,id:'custom-meal-proposal'})
+  assert.equal(proposal.operations[0].payload.mealType,'breakfast')
   assert.equal(proposal.operations[0].payload.mealId,custom.id)
   assert.match(proposal.operations[0].description,/Salmon, Rice, and Broccoli/)
   assert.doesNotThrow(()=>normalizeActionProposal({operations:[proposal.operations[0]]},{member:'Larry',role:'admin'}))

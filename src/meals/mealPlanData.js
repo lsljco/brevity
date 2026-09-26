@@ -4,10 +4,7 @@ export const MEAL_PLAN_SCHEMA_VERSION = 1
 export const DEFAULT_MEAL_TIME_ZONE = 'America/New_York'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const customMealType = mealId => {
-  const match = /^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.exec(String(mealId || ''))
-  return match?.[1] || ''
-}
+const isCustomMealId = mealId => /^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.test(String(mealId || ''))
 const libraryIndex = library => new Map((Array.isArray(library) ? library : MEAL_LIBRARY).map(meal => [meal.id, meal]))
 
 export function validMealDate(value) {
@@ -84,12 +81,9 @@ export function validateMealSubstitution({ date, mealType, mealId }, library) {
   const meal = libraryIndex(library).get(mealId)
   if (!meal) {
     // Action Mode validates built-in meals without loading the meal store. Custom
-    // IDs carry their meal type so a reviewed custom selection can still pass
-    // that synchronous guard; plan reads resolve the ID against the household
-    // library before displaying it.
-    if (suppliedLibrary || customMealType(mealId) !== mealType) errors.push('Choose a meal from the household meal library.')
-  } else if (meal.mealType !== mealType) {
-    errors.push(`The selected meal is not a ${mealType} option.`)
+    // Custom IDs can be used in any slot. Proposal preparation verifies that
+    // the meal exists in the authoritative household library before review.
+    if (suppliedLibrary || !isCustomMealId(mealId)) errors.push('Choose a meal from the household meal library.')
   }
   return errors
 }

@@ -102,7 +102,7 @@ export async function prepareMealProposal({input,session,permissions,repository,
   const expectedVersion=Number(input?.expectedVersion)
   const { library } = await mealRepository.getLibrary()
   const replacement=library.find(meal=>meal.id===mealId)
-  if(!replacement||replacement.mealType!==mealType)throw Object.assign(new Error(`Choose a ${mealType} meal from the household meal library.`),{code:'INVALID_ACTION'})
+  if(!replacement)throw Object.assign(new Error('Choose a meal from the household meal library.'),{code:'INVALID_ACTION'})
   let proposal
   try{
     proposal=normalizeActionProposal({
