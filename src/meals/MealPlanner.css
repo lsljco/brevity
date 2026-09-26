@@ -81,6 +81,12 @@
 .meal-dialog > header button { width: 36px; height: 36px; border: 1px solid var(--glass-border); border-radius: 10px; background: transparent; color: var(--soft-white); cursor: pointer; }
 .meal-search { display: flex; gap: 9px; align-items: center; margin: 16px 20px; padding: 11px 13px; border: 1px solid var(--glass-border); border-radius: 11px; background: rgba(255,255,255,.035); color: var(--muted); }
 .meal-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--white); font: inherit; }
+.meal-replace-filters { display:flex; flex-wrap:wrap; gap:8px; margin:0 20px 16px; }
+.meal-replace-filters button { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border:1px solid var(--glass-border); border-radius:999px; background:var(--glass); color:var(--soft-white); font:inherit; cursor:pointer; }
+.meal-replace-filters button[aria-pressed="true"] { border-color:var(--gold); background:rgba(197,164,109,.16); color:var(--gold-light); }
+.meal-replace-filters button:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.meal-replace-filters button span { color:var(--muted); font-size:11px; }
+.meal-replace-empty { color:var(--muted); font-size:13px; }
 .meal-choice-list { overflow: auto; padding: 0 20px 20px; }
 .meal-choice { display: grid; grid-template-columns: 92px 25px 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 10px; border: 0; border-bottom: 1px solid var(--glass-border); background: transparent; color: var(--soft-white); text-align: left; cursor: pointer; }
 .meal-choice > img { width: 92px; height: 68px; border-radius: 9px; object-fit: cover; background: rgba(255,255,255,.03); }
