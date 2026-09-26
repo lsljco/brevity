@@ -7,6 +7,7 @@ import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
 import { calculateMealNutrition, importMealsFromImage, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
+import BulkMealImport from './BulkMealImport.jsx'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
 
@@ -180,7 +181,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
     }catch(error){setImportError(error.message||'Could not import that recipe.');setImportState('error')}
   }
   const chooseImageMeal=meal=>{
-    setForm(current=>({...current,name:meal.name,description:'',ingredients:meal.ingredients.join('\n'),instructions:'',prepMinutes:'',cookMinutes:'',totalMinutes:'',yieldQuantity:'1',yieldUnit:'plate',sourceUrl:'',sourceName:'Uploaded meal graphic'}))
+    setForm(current=>({...current,mealType:meal.mealType || current.mealType,name:meal.name,description:'',ingredients:meal.ingredients.join('\n'),instructions:'',prepMinutes:'',cookMinutes:'',totalMinutes:'',yieldQuantity:'1',yieldUnit:'plate',sourceUrl:'',sourceName:'Uploaded meal graphic'}))
     setImageWarnings(meal.warnings)
     const values=Object.values(meal.macros)
     setImageNutrition(values.every(value=>value!==null))
@@ -289,13 +290,13 @@ function PlanView({ days, onSelect, onOpenMeal, monthly = false }) {
   </div>
 }
 
-function LibraryView({ library, onAdd, onOpenMeal }) {
+function LibraryView({ library, onAdd, onOpenMeal, onBulkImport }) {
   const [query, setQuery] = useState('')
   const filteredMeals = useMemo(() => searchMeals(library, query), [library, query])
   const searching = Boolean(query.trim())
   const shownTypes = searching ? MEAL_TYPES.filter(mealType => filteredMeals.some(meal => meal.mealType === mealType)) : MEAL_TYPES
   return <div className="meal-library">
-    <div className="meal-library-search"><label htmlFor="meal-library-query">Search Meal Library</label><div><i className="ti ti-search" aria-hidden="true" /><input id="meal-library-query" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search meals or ingredients, e.g. steak and eggs" /></div><span role="status">{searching ? `${filteredMeals.length} ${filteredMeals.length === 1 ? 'meal' : 'meals'} found` : `${library.length} meals available`}</span></div>
+    <div className="meal-library-search"><label htmlFor="meal-library-query">Search Meal Library</label><div><i className="ti ti-search" aria-hidden="true" /><input id="meal-library-query" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search meals or ingredients, e.g. steak and eggs" /></div><span role="status">{searching ? `${filteredMeals.length} ${filteredMeals.length === 1 ? 'meal' : 'meals'} found` : `${library.length} meals available`}</span><button type="button" onClick={onBulkImport}>Bulk import from images</button></div>
     {searching && !filteredMeals.length && <p className="meal-library-no-results">No meals match “{query.trim()}”. Try another meal name or ingredient.</p>}
     {shownTypes.map(mealType => {
     const meals = filteredMeals.filter(meal => meal.mealType === mealType)
@@ -311,6 +312,7 @@ export default function MealPlanner() {
   const monthPlan = useRollingMealPlan({enabled:view === 'month', ...monthRange, reloadOnRefreshEvents:true})
   const [selection, setSelection] = useState(null)
   const [addingMealType, setAddingMealType] = useState('')
+  const [bulkImportOpen,setBulkImportOpen] = useState(false)
   const [detailMeal, setDetailMeal] = useState(null)
   const [message, setMessage] = useState('')
   const [replacementError, setReplacementError] = useState('')
@@ -375,10 +377,11 @@ export default function MealPlanner() {
     {view === 'month' && monthPlan.state === 'loading' && <div className="meal-planner-state" role="status">Loading the selected month…</div>}
     {view === 'month' && monthPlan.error && <div className="meal-planner-state meal-planner-state--error" role="alert"><strong>Month plan needs attention</strong><span>{monthPlan.error}</span><button type="button" onClick={() => monthPlan.reload().catch(() => undefined)}>Retry</button></div>}
     {view === 'month' && monthPlan.data && <p className="meal-month-summary">{monthPlan.data.days.length} days · {monthPlan.data.days.length * MEAL_TYPES.length} planned meals</p>}
-    {view === 'library' && data && <LibraryView library={data.library} onAdd={setAddingMealType} onOpenMeal={setDetailMeal} />}
+    {view === 'library' && data && <LibraryView library={data.library} onAdd={setAddingMealType} onOpenMeal={setDetailMeal} onBulkImport={()=>setBulkImportOpen(true)} />}
     {(view === 'plan' ? data : view === 'month' ? monthPlan.data : null) && <PlanView days={visiblePlan.data.days} monthly={view === 'month'} onOpenMeal={setDetailMeal} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} />}
     {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} onImageGenerated={imageGenerated} />}
     {selection && <ReplaceDialog selection={selection} library={visiblePlan.data?.library || data?.library || []} saving={visiblePlan.state === 'saving'} error={replacementError} onClose={() => { setReplacementError(''); setSelection(null) }} onChoose={chooseReplacement} onReview={reviewReplacement} />}
     {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} error={addMealError} onClose={()=>{setAddMealError('');setAddingMealType('')}} onSave={saveMeal} />}
+    {bulkImportOpen && <BulkMealImport library={data?.library || []} onClose={()=>setBulkImportOpen(false)} onSaved={async meals=>{const refreshed=await reload({supersede:true}).then(()=>true).catch(()=>false);setBulkImportOpen(false);setMessage(`${meals.length} meals added to the household Meal Library. ${refreshed?'Open any meal to add a photo.':'Refresh Brevity to see them; the library update succeeded.'}`)}} />}
   </main>
 }

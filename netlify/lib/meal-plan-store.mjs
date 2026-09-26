@@ -64,6 +64,7 @@ function normalizeMealInput(meal, actor, now, createId) {
     prepMinutes: Math.round(prepMinutes),
     cookMinutes: Math.round(cookMinutes),
     totalMinutes: Math.round(suppliedTotalMinutes == null ? prepMinutes + cookMinutes : suppliedTotalMinutes),
+    timingRecorded: meal?.timingRecorded !== false,
     ingredients: (Array.isArray(meal?.ingredients) ? meal.ingredients : String(meal?.ingredients || '').split(/\r?\n/)).map(value => String(value || '').trim()).filter(Boolean),
     instructions: (Array.isArray(meal?.instructions) ? meal.instructions : String(meal?.instructions || '').split(/\r?\n/)).map(value => String(value || '').trim()).filter(Boolean).slice(0, 30),
     image: String(meal?.image || '').trim(),
@@ -216,6 +217,38 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
+  const createMeals = async ({ meals, actor = 'Household member' }) => {
+    if (!Array.isArray(meals) || !meals.length || meals.length > 50) {
+      const error = new Error('Choose 1 to 50 meals for a bulk import.')
+      error.code = 'VALIDATION_ERROR'
+      throw error
+    }
+    const createdMeals = meals.map(meal => normalizeMealInput({ ...meal, image:'' }, actor, now, createId))
+    const keys = createdMeals.map(meal => `${meal.mealType}:${meal.name.trim().toLowerCase()}`)
+    if (new Set(keys).size !== keys.length) {
+      const error = new Error('The batch contains duplicate meal names in the same meal type. Review the duplicates before saving.')
+      error.code = 'VALIDATION_ERROR'
+      throw error
+    }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { entry, customMeals } = await getLibrary()
+      const existing = new Set([...MEAL_LIBRARY, ...customMeals].map(meal => `${meal.mealType}:${meal.name.trim().toLowerCase()}`))
+      const duplicate = createdMeals.find((meal, index) => existing.has(keys[index]))
+      if (duplicate) {
+        const error = new Error(`${duplicate.name} is already in the ${duplicate.mealType} library.`)
+        error.code = 'VALIDATION_ERROR'
+        throw error
+      }
+      const payload = { version:Number(entry.data?.version || 0) + 1, meals:[...customMeals, ...createdMeals], updatedAt:now().toISOString(), updatedBy:actor }
+      const options = entry.metadata ? (entry.data ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }) : {}
+      const written = await store.setJSON(customLibraryKey, payload, options)
+      if (written?.modified !== false) return createdMeals
+    }
+    const error = new Error('The meal library changed on another device. Refresh and review the batch before trying again.')
+    error.code = 'VERSION_CONFLICT'
+    throw error
+  }
+
   const substitute = async ({ date, mealType, mealId, expectedVersion, actor = 'Household member' }) => {
     const { library } = await getLibrary()
     const errors = validateMealSubstitution({ date, mealType, mealId }, library)
@@ -231,7 +264,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
-  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, setMealImage, substitute }
+  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, createMeals, setMealImage, substitute }
 }
 
 export async function productionMealPlanRepository(options = {}) {

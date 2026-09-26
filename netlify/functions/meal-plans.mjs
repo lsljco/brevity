@@ -33,6 +33,10 @@ export const handler = async event => {
 
     if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}')
+      if (body.action === 'bulk-create') {
+        const meals = await repository.createMeals({ meals:body.meals, actor:session.member || 'Household member' })
+        return response(201, { meals })
+      }
       const meal = await repository.createMeal({
         meal:{ ...body, image:'' },
         actor:session.member || 'Household member',
