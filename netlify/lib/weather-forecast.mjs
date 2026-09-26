@@ -71,11 +71,11 @@ export async function fetchWeatherForecast(targetDate, {fetchImpl = fetch, locat
   const date = isoDate(targetDate)
   if (!date) throw new Error('A valid forecast date is required.')
   const today = localDateKey(now, location.timezone)
-  const maxDate = new Date(`${today}T12:00:00Z`); maxDate.setUTCDate(maxDate.getUTCDate() + 6)
-  if (date < today || date > maxDate.toISOString().slice(0,10)) throw new Error('Weather is available for today and the next six days.')
+  const maxDate = new Date(`${today}T12:00:00Z`); maxDate.setUTCDate(maxDate.getUTCDate() + 7)
+  if (date < today || date > maxDate.toISOString().slice(0,10)) throw new Error('Weather is available for today and the next seven days.')
   const params = new URLSearchParams({
     latitude:String(location.latitude),longitude:String(location.longitude),timezone:location.timezone,
-    temperature_unit:'fahrenheit',wind_speed_unit:'mph',precipitation_unit:'inch',start_date:date,end_date:date,
+    temperature_unit:'fahrenheit',wind_speed_unit:'mph',precipitation_unit:'inch',forecast_days:'8',start_date:date,end_date:date,
     current:'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m',
     hourly:'temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m',
     daily:'temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',

@@ -25,8 +25,7 @@ const plan = (date = today()) => ({
   assignments:[], decisions:[], dayparts:[], recap:{ wins:[], carryovers:[], lessons:[], tomorrowPrep:[], completedAt:'' }, version:1,
 })
 
-const mealPlanResponse = () => {
-  const startDate = today()
+const mealPlanResponse = (startDate = today()) => {
   const meals = [
     { id:'breakfast-eggs', mealType:'breakfast', name:'Eggs and Toast', prepMinutes:10, macros:{ calories:350, proteinGrams:22, carbohydrateGrams:30, fatGrams:14 } },
     { id:'lunch-chicken', mealType:'lunch', name:'Chicken and Vegetables', prepMinutes:15, macros:{ calories:480, proteinGrams:48, carbohydrateGrams:32, fatGrams:18 } },
@@ -56,7 +55,7 @@ async function mockBackend(page) {
     }
     else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan(url.searchParams.get('date') || today()) }
     else if (path.endsWith('/icloud-calendar')) body = { events:[{ id:'doctor-appointment', uid:'doctor-appointment', source:'icloud', title:'Doctor appointment', date:today(), time:'2:30 PM', owner:'Family' }], connected:true, syncedAt:new Date().toISOString() }
-    else if (path.endsWith('/meal-plans')) body = mealPlanResponse()
+    else if (path.endsWith('/meal-plans')) body = mealPlanResponse(url.searchParams.get('startDate') || today())
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-transactions')) body = { transactions:[], errors:[] }
     else if (path.endsWith('/health-alerts')) body = { alerts:[] }
@@ -107,14 +106,20 @@ test('Today can browse tomorrow and the next seven days without changing a plan'
   await page.getByRole('button',{name:'View Next 7 Days'}).click()
   const picker=page.getByRole('combobox',{name:'Choose a day'})
   await expect(picker.locator('option')).toHaveCount(8)
-  await expect(page.getByRole('heading',{name:'Next 7 Days'})).toBeVisible()
-  await expect(page.getByRole('heading',{name:/Appointments & meetings/})).toBeVisible()
-  await expect(page.getByRole('heading',{name:/Household chores/})).toBeVisible()
-  await expect(page.locator('.upcoming-schedule-grid')).toContainText('Tomorrow appointment')
-  await expect(page.locator('.upcoming-schedule-grid')).toContainText('2:30 PM')
+  await expect(page.locator('.upcoming-schedule .today-dashboard')).toBeVisible()
+  await expect(page.locator('.upcoming-schedule .weather-header')).toBeVisible()
+  for (const pillar of ['spiritual','health','fitness','household','education','finance','ministry']) {
+    await expect(page.locator(`.upcoming-schedule [data-pillar="${pillar}"]`)).toBeVisible()
+  }
+  await expect(page.getByRole('heading',{name:'Appointments & Meetings'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Scheduled Chores'})).toBeVisible()
+  await expect(page.locator('.upcoming-schedule .today-calendar-agenda')).toContainText('Tomorrow appointment')
+  await expect(page.locator('.upcoming-schedule .today-calendar-agenda')).toContainText('2:30 PM')
+  await expect(page.locator('.upcoming-schedule .today-meals')).toContainText('Eggs and Toast')
+  await expect(page.locator('.upcoming-schedule')).not.toContainText('Set Today’s Focus')
   const last=await picker.locator('option').last().getAttribute('value')
   await picker.selectOption(last)
-  await expect(page.locator('.upcoming-schedule>h2')).toContainText(new Date(`${last}T12:00:00`).toLocaleDateString('en-US',{month:'long',day:'numeric'}))
+  await expect(page.locator('.upcoming-schedule .today-hero h1')).toContainText(new Date(`${last}T12:00:00`).toLocaleDateString('en-US',{month:'long',day:'numeric'}))
   await page.getByRole('button',{name:'Back to Today'}).click()
   await expect(page.getByRole('heading',{name:'Today',exact:true})).toBeVisible()
 })
@@ -317,4 +322,24 @@ test('expanded mobile refresh details stay above Ask Brevity and mobile navigati
 
   const reservedPadding = await page.locator('.app-main').evaluate(element => parseFloat(getComputedStyle(element).paddingBottom))
   expect(reservedPadding).toBeGreaterThanOrEqual(refreshBox.height)
+})
+
+test('Today Finance displays stored cash and scheduled obligations without claiming payment', async ({ page }) => {
+  const date=today()
+  const tomorrow=new Date(`${date}T12:00:00`); tomorrow.setDate(tomorrow.getDate()+1)
+  const dueDate=[tomorrow.getFullYear(),String(tomorrow.getMonth()+1).padStart(2,'0'),String(tomorrow.getDate()).padStart(2,'0')].join('-')
+  const financeData={accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:1250}],transactions:[{id:'bill',name:'Mortgage',amount:900,type:'expense',freq:'once',start:dueDate,acct:'cash'}]}
+  await page.route('**/.netlify/functions/household-state*', route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records:{lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(financeData),version:1,updatedAt:new Date().toISOString()}}})}))
+  await page.reload()
+  const finance=page.locator('.today-finance-brief')
+  await expect(finance).toContainText('Daily Finance Brief')
+  await expect(finance).toContainText('$1,250')
+  await expect(finance).toContainText('Latest stored balance')
+  await expect(finance).toContainText('Mortgage')
+  await expect(finance).toContainText('Scheduled · unconfirmed')
+  await expect(finance).toContainText('Operating Balance · $1,000 watch')
+  await expect(finance).toContainText('Projected below $1,000 on 6 of the next seven days')
+  await expect(finance.locator('.today-operating-watch')).toContainText('$350')
+  await expect(finance).not.toContainText('Posted · linked')
+  await expect(finance).toContainText('No finance decision recorded today.')
 })
