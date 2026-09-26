@@ -224,7 +224,9 @@ test('Today last three pillar cards expose recorded detail instead of generic he
   const ministry=page.locator('[data-pillar="ministry"]')
   await expect(education).toContainText('Education plan not defined')
   await expect(education).toContainText('20 min reading · 10 min math')
-  await expect(finance).toContainText('No financial output, decision rule, bill, or purchase is recorded for today.')
+  await expect(finance).toContainText('Daily Finance Brief')
+  await expect(finance).toContainText('No finance decision recorded today.')
+  await expect(finance).toContainText('Operating Balance · $1,000 watch')
   await expect(ministry).toContainText('No ministry focus, meeting, fellowship follow-up, or prayer need is recorded for today.')
   await expect(finance).not.toContainText('Financial Stewardship')
 })
@@ -327,6 +329,48 @@ test('Meal Library reads distinct meals and printed macros from an uploaded imag
   await dialog.getByLabel('Prep time (minutes)').fill('10')
   await dialog.getByLabel('Cook time (minutes)').fill('30')
   await expect(dialog.locator('footer button.is-primary')).toBeEnabled()
+})
+
+test('Meal Library bulk import reviews several images and saves selected meals in one request',async({page})=>{
+  let reads=0, saved=null
+  await page.route('**/.netlify/functions/meal-image-import',route=>{
+    reads+=1
+    const meals=reads===1?[
+      {name:'Turkey scramble',mealType:'breakfast',ingredients:['Turkey','Egg whites'],serving:'1 plate',macros:{calories:305,proteinGrams:54,carbohydrateGrams:34,fatGrams:12},warnings:[]},
+      {name:'Salmon broccoli',mealType:'lunch',ingredients:['Salmon','Broccoli'],serving:'1 plate',macros:{calories:492,proteinGrams:53,carbohydrateGrams:11,fatGrams:28},warnings:[]},
+    ]:[
+      {name:'Turkey scramble',mealType:'breakfast',ingredients:['Turkey','Egg whites'],serving:'1 plate',macros:{calories:305,proteinGrams:54,carbohydrateGrams:34,fatGrams:12},warnings:[]},
+      {name:'Beef brisket',mealType:'dinner',ingredients:['Beef','Green beans'],serving:'1 plate',macros:{calories:490,proteinGrams:61,carbohydrateGrams:null,fatGrams:23},warnings:['Carbs illegible']},
+    ]
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({meals,warnings:[]})})
+  })
+  await page.route('**/.netlify/functions/meal-plans',route=>{
+    if(route.request().method()==='POST'){
+      saved=route.request().postDataJSON()
+      return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({meals:saved.meals.map((meal,index)=>({...meal,id:`new-${index}`}))})})
+    }
+    return route.continue()
+  })
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'Meal Library'}).click()
+  await page.getByRole('button',{name:'Bulk import from images'}).click()
+  const dialog=page.getByRole('dialog',{name:'Bulk import meals'})
+  const image=await page.screenshot()
+  await dialog.getByLabel('Choose up to 10 meal images').setInputFiles([{name:'menu-a.png',mimeType:'image/png',buffer:image},{name:'menu-b.png',mimeType:'image/png',buffer:image}])
+  await expect(dialog.locator('.meal-bulk-row')).toHaveCount(4)
+  await expect(dialog).toContainText('4 drafts found · 2 selected')
+  await expect(dialog.getByText('Duplicate name for this meal type.')).toBeVisible()
+  const brisket=dialog.locator('.meal-bulk-row').nth(3)
+  await expect(brisket.getByLabel('Meal name')).toHaveValue('Beef brisket')
+  await brisket.getByRole('checkbox',{name:'Add this meal'}).check()
+  await expect(dialog.getByRole('button',{name:'Add 3 meals to library'})).toBeDisabled()
+  await brisket.getByLabel('Carbs (g)').fill('10')
+  await dialog.getByRole('button',{name:'Add 3 meals to library'}).click()
+  await expect(dialog).not.toBeVisible()
+  expect(saved.action).toBe('bulk-create')
+  expect(saved.meals.map(meal=>meal.name)).toEqual(['Turkey scramble','Salmon broccoli','Beef brisket'])
+  expect(saved.meals[2].macros.carbohydrateGrams).toBe(10)
+  expect(saved.meals.every(meal=>meal.timingRecorded===false)).toBe(true)
 })
 
 test('Review change opens Action Mode for a custom meal replacement',async({page})=>{

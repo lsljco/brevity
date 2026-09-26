@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { normalizeWeatherPayload } from '../../netlify/lib/weather-forecast.mjs'
+import { fetchWeatherForecast, normalizeWeatherPayload } from '../../netlify/lib/weather-forecast.mjs'
 import { fetchDailyWeather } from './weatherApi.js'
 
 const fixture={
@@ -20,6 +20,16 @@ test('weather forecast preserves current conditions and four dayparts',()=>{
   assert.deepEqual(result.periods.map(item=>item.label),['Morning','Midday','Afternoon','Evening'])
   assert.equal(result.periods[2].condition,'Light rain')
   assert.deepEqual(result.day,{high:82,low:66,precipitationProbability:35,sunrise:'2026-09-13T07:18',sunset:'2026-09-13T19:43'})
+})
+
+test('forecast accepts the seventh future day and requests an eight-day provider horizon',async()=>{
+  let requested
+  const date='2026-09-20'
+  const payload={...fixture,hourly:{...fixture.hourly,time:fixture.hourly.time.map(value=>value.replace('2026-09-13',date))},daily:{...fixture.daily,time:[date]}}
+  const result=await fetchWeatherForecast(date,{now:new Date('2026-09-13T14:00:00Z'),fetchImpl:async url=>{requested=new URL(url);return {ok:true,json:async()=>payload}}})
+  assert.equal(result.targetDate,date)
+  assert.equal(requested.searchParams.get('forecast_days'),'8')
+  await assert.rejects(()=>fetchWeatherForecast('2026-09-21',{now:new Date('2026-09-13T14:00:00Z')}),/next seven days/)
 })
 
 test('weather header appears on Today and both daily alignment dates',()=>{

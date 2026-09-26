@@ -64,6 +64,22 @@ test('custom meals persist in the shared household library and count by meal typ
   assert.equal(storedMeal.totalMinutes, 75)
 })
 
+test('bulk import writes all reviewed meals together and rejects duplicates without partial changes', async () => {
+  const store=memoryStore()
+  let id=0
+  const repository=createMealPlanRepository({store,createId:()=>String(++id)})
+  const meal=(mealType,name)=>({mealType,name,ingredients:['Protein','Vegetable'],prepMinutes:0,cookMinutes:0,timingRecorded:false,macros:{calories:500,proteinGrams:50,carbohydrateGrams:10,fatGrams:20}})
+  const created=await repository.createMeals({actor:'Larry',meals:[meal('breakfast','Steak and spinach'),meal('lunch','Salmon and broccoli')]})
+  assert.equal(created.length,2)
+  assert.equal(created[0].timingRecorded,false)
+  assert.equal((await repository.getLibrary()).customMeals.length,2)
+  const stored=store.records.get('lslj-family/library/custom')
+  await assert.rejects(repository.createMeals({meals:[meal('dinner','New dish'),meal('lunch','Salmon and broccoli')]}),/already in/)
+  assert.deepEqual(store.records.get('lslj-family/library/custom'),stored)
+  await assert.rejects(repository.createMeals({meals:[meal('dinner','Same dish'),meal('dinner','same dish')]}),/duplicate/)
+  assert.deepEqual(store.records.get('lslj-family/library/custom'),stored)
+})
+
 test('custom meal creation generates its image once before the shared record is committed', async () => {
   const store=memoryStore()
   const repository=createMealPlanRepository({store,createId:()=> 'generated-image-id'})

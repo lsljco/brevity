@@ -33,6 +33,10 @@ export function createMealLibraryItem(meal) {
   })
 }
 
+export function createMealLibraryBatch(meals) {
+  return request(ENDPOINT, { timeoutMs:45000, method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({action:'bulk-create',meals}) })
+}
+
 export function regenerateMealImage(mealId) {
   const jobId=globalThis.crypto?.randomUUID?.()||`meal-image-${Date.now()}-${Math.random().toString(36).slice(2)}`
   return request('/.netlify/functions/meal-image-generate-background', {

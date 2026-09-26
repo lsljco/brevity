@@ -1,0 +1,21 @@
+.today-finance-brief{display:grid;gap:18px}
+.today-finance-brief .today-section-heading button{border:1px solid rgba(197,164,109,.4);background:rgba(197,164,109,.12);color:var(--gold-light);border-radius:10px;padding:10px 16px;cursor:pointer}
+.today-finance-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.today-finance-metrics article,.today-finance-details>div{border:1px solid rgba(197,164,109,.22);border-radius:14px;padding:16px;background:rgba(197,164,109,.05);display:grid;gap:7px}
+.today-finance-metrics span,.today-finance-metrics small,.today-finance-details small,.today-finance-note{color:var(--muted)}
+.today-finance-metrics strong{font-size:20px}
+.today-finance-details{display:grid;grid-template-columns:1.5fr 1fr;gap:12px}
+.today-finance-details h3{font:500 23px var(--font-serif);margin:0;color:var(--gold-light)}
+.today-finance-details p{margin:0}
+.today-finance-details ul,.today-finance-alerts ul{margin:0;padding-left:20px}
+.today-finance-details li{display:flex;justify-content:space-between;gap:12px;margin:8px 0}
+.today-finance-details li em{font-size:11px;color:var(--muted);font-style:normal}
+.today-finance-alerts{border-left:3px solid var(--gold);padding:10px 16px;background:rgba(197,164,109,.07)}
+.today-finance-alerts li{margin-top:5px}
+.today-finance-note{font-size:12px;margin:0}
+.today-operating-watch{border:1px solid rgba(197,164,109,.3);border-radius:14px;padding:16px;background:rgba(197,164,109,.07)}
+.today-operating-watch.is-below-floor{border-left:4px solid #d58b65;background:rgba(213,139,101,.12)}
+.today-operating-watch h3{font:500 23px var(--font-serif);margin:0 0 8px;color:var(--gold-light)}
+.today-operating-watch p{margin:0 0 8px}.today-operating-watch small{color:var(--muted)}
+.today-operating-watch ul{list-style:none;margin:8px 0;padding:0;display:grid;gap:5px}.today-operating-watch li{display:flex;justify-content:space-between;gap:12px}
+@media(max-width:700px){.today-finance-metrics,.today-finance-details{grid-template-columns:1fr}.today-finance-details li{flex-direction:column;gap:2px}}

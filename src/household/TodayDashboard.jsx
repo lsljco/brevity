@@ -7,7 +7,8 @@ import { DECISION_STATUS, DECISION_STATUS_OPTIONS, HOUSEHOLD_MEMBERS, normalizeD
 import { buildTodayReadModel } from './operatingModel.js'
 import { sermonDevotionForDate, sermonDevotionImageUrl } from './sermonDevotion.js'
 import DailyCommandSchedule from './DailyCommandSchedule.jsx'
-import { educationBrief, financeBrief, ministryBrief } from './todayPillarBriefs.js'
+import { educationBrief, ministryBrief } from './todayPillarBriefs.js'
+import TodayFinanceBrief from './TodayFinanceBrief.jsx'
 import WeatherHeader from './WeatherHeader.jsx'
 import { workoutForDate } from '../fitness/fitnessWorkoutPlan.js'
 
@@ -43,24 +44,24 @@ function AttentionPanel({ items, onOpenCalendar }) {
   </section>
 }
 
-function TodayCalendarAgenda({ commitments, nextCommitment, health, onOpenCalendar }) {
+function TodayCalendarAgenda({ commitments, nextCommitment, health, onOpenCalendar, browsingDate }) {
   const healthState = health?.state || 'loading'
   const healthLabel = healthState === 'ready' ? 'Verified' : healthState === 'loading' ? 'Checking' : 'Needs attention'
   return <section className="today-section today-calendar-agenda" aria-labelledby="today-calendar-title">
-    <div className="today-section-heading"><div><span>Calendar · {commitments.length} {commitments.length === 1 ? 'item' : 'items'}</span><h2 id="today-calendar-title">Today’s Appointments &amp; Meetings</h2></div><button type="button" className="today-calendar-open" onClick={onOpenCalendar}>Open Family Calendar <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
+    <div className="today-section-heading"><div><span>Calendar · {commitments.length} {commitments.length === 1 ? 'item' : 'items'}</span><h2 id="today-calendar-title">{browsingDate ? 'Appointments & Meetings' : 'Today’s Appointments & Meetings'}</h2></div><button type="button" className="today-calendar-open" onClick={onOpenCalendar}>Open Family Calendar <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
     <div className={`today-calendar-health today-calendar-health--${healthState}`}><i className={`ti ${healthState === 'ready' ? 'ti-cloud-check' : 'ti-cloud-exclamation'}`} /><span><strong>{healthLabel}</strong> · {health?.message || 'Checking the Apple Family Calendar.'}</span></div>
-    {commitments.length ? <div className="today-calendar-list">{commitments.map(item => <article className={`today-calendar-item${item.id === nextCommitment?.id ? ' today-calendar-item--next' : ''}`} key={item.id}>
+    {commitments.length ? <div className="today-calendar-list">{commitments.map(item => <article className={`today-calendar-item${!browsingDate && item.id === nextCommitment?.id ? ' today-calendar-item--next' : ''}`} key={item.id}>
       <time>{formatStart(item.startsAt)}</time>
       <div><strong>{item.title}</strong><span>{item.owner} · {item.source.system === 'apple-calendar' ? 'Apple Family Calendar' : 'Brevity'}</span></div>
-      {item.id === nextCommitment?.id ? <em>Next</em> : item.priority === 'high' || item.priority === 'critical' ? <em>Priority</em> : null}
+      {!browsingDate && item.id === nextCommitment?.id ? <em>Next</em> : item.priority === 'high' || item.priority === 'critical' ? <em>Priority</em> : null}
     </article>)}</div> : <div className="today-calendar-empty"><i className={`ti ${health?.usable ? 'ti-calendar-check' : 'ti-calendar-off'}`} aria-hidden="true" /><div><strong>{health?.usable ? 'No commitments are visible for today' : 'Today’s calendar is not verified'}</strong><span>{health?.usable ? 'Open Family Calendar if you expected an appointment.' : 'Restore or refresh the calendar connection before relying on this schedule.'}</span></div></div>}
   </section>
 }
 
-function TodayHouseholdChores({ chores = [], onOpenPillar }) {
+function TodayHouseholdChores({ chores = [], onOpenPillar, browsingDate }) {
   const complete = status => status === 'Approved' || status === 'Complete'
   return <section className="today-section today-household-chores" aria-labelledby="today-chores-title">
-    <div className="today-section-heading"><div><span>Household Operations · {chores.length} due</span><h2 id="today-chores-title">Today’s Chores</h2></div><button type="button" className="today-calendar-open" onClick={() => onOpenPillar?.('household')}>Open Household Operations <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
+    <div className="today-section-heading"><div><span>Household Operations · {chores.length} due</span><h2 id="today-chores-title">{browsingDate ? 'Scheduled Chores' : 'Today’s Chores'}</h2></div><button type="button" className="today-calendar-open" onClick={() => onOpenPillar?.('household')}>Open Household Operations <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
     {chores.length ? <div className="today-chore-list">{chores.map(chore => <article className={`today-chore-item${complete(chore.status) ? ' today-chore-item--complete' : ''}`} key={chore.occurrenceId}>
       <i className={`ti ${complete(chore.status) ? 'ti-circle-check' : chore.status === 'Exception' || chore.status === 'Returned' ? 'ti-alert-triangle' : chore.status === 'In progress' ? 'ti-progress' : 'ti-circle'}`} aria-hidden="true" />
       <div><strong>{chore.title}</strong><span>{chore.timing || 'Flexible'} · {chore.zone || 'Whole House'}</span><small>{chore.owners?.join(', ') || 'Family'}</small></div>
@@ -71,19 +72,19 @@ function TodayHouseholdChores({ chores = [], onOpenPillar }) {
 
 const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' }
 
-function TodayMeals({ meals, state = 'loading', error = '', onOpenMealPlan }) {
+function TodayMeals({ meals, state = 'loading', error = '', onOpenMealPlan, browsingDate }) {
   const entries = Object.entries(MEAL_LABELS).map(([mealType, label]) => ({ mealType, label, meal: meals?.[mealType] })).filter(item => item.meal)
   if (!entries.length) {
     const loading=state==='loading'
     const title=loading?'Loading today’s meals':error?'Today’s meal plan is unavailable':'No meals are planned for today'
     const detail=loading?'Brevity is checking the authoritative rolling meal plan.':error?'Open Meal Plan to retry or review the connection.':'Open Meal Plan to review the rolling plan; Brevity will not invent missing meals.'
     return <section className="today-section today-meals today-meals--empty" aria-labelledby="today-meals-title" aria-live="polite" data-pillar="health">
-      <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">Today’s Meals</h2></div><button type="button" className="today-meals-open" onClick={onOpenMealPlan}>Open Meal Plan <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
+      <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">{browsingDate ? 'Planned Meals' : 'Today’s Meals'}</h2></div><button type="button" className="today-meals-open" onClick={onOpenMealPlan}>Open Meal Plan <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
       <div className="today-meals-empty"><i className={`ti ${loading?'ti-loader-2':'ti-tools-kitchen-2'}`} aria-hidden="true"/><div><strong>{title}</strong><span>{detail}</span></div></div>
     </section>
   }
   return <section className="today-section today-meals" aria-labelledby="today-meals-title" data-pillar="health">
-    <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">Today’s Meals</h2></div><button type="button" className="today-meals-open" onClick={onOpenMealPlan}>Open Meal Plan <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
+    <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">{browsingDate ? 'Planned Meals' : 'Today’s Meals'}</h2></div><button type="button" className="today-meals-open" onClick={onOpenMealPlan}>Open Meal Plan <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
     <div className="today-meal-grid">{entries.map(({ mealType, label, meal }) => <article className="today-meal-card" key={mealType}>
       <img src={meal.image} alt={`${label}: ${meal.name}`} loading={mealType === 'breakfast' ? 'eager' : 'lazy'} />
       <div className="today-meal-card-copy"><span>{label}</span><strong>{meal.name}</strong><small>{meal.prepMinutes} min</small><div className="today-meal-macros" aria-label={`${label} nutrition`}><em><b>{Number(meal.macros?.calories || 0).toLocaleString()}</b> cal</em><em><b>{meal.macros?.proteinGrams || 0}g</b> protein</em><em><b>{meal.macros?.carbohydrateGrams || 0}g</b> carbs</em><em><b>{meal.macros?.fatGrams || 0}g</b> fat</em></div></div>
@@ -197,7 +198,7 @@ function TodayFitnessWorkout({ date, currentMember, fitness, onOpenPillar }) {
   </section>
 }
 
-export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'loading', mealPlanError = '', readOnly = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onViewSchedule, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle' }) {
+export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'loading', mealPlanError = '', readOnly = false, canViewFinance = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onViewSchedule, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle', browsingDate = false }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
   const readModel = useMemo(() => buildTodayReadModel({ plan: dailyPlan, calendarAppointments, calendarHealth, currentMember }), [calendarAppointments, calendarHealth, currentMember, dailyPlan])
   const [showDecisions, setShowDecisions] = useState(false)
@@ -232,36 +233,35 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
   const fitness=dailyPlan.fitness||{},education=dailyPlan.education||{},finance=dailyPlan.finance||{},ministry=dailyPlan.ministry||{}
   const educationCard=educationBrief(education)
-  const financeCard=financeBrief(finance)
   const ministryCard=ministryBrief(ministry)
 
   return <div className="today-dashboard">
     <header className="today-hero">
-      <div><p className="today-kicker">Household Command Center</p><h1>Today</h1><p>{formatDate(dailyPlan.date)}</p></div>
-      <div className="today-hero-actions">
+      <div><p className="today-kicker">Household Command Center</p><h1>{browsingDate ? formatDate(dailyPlan.date) : 'Today'}</h1>{!browsingDate && <p>{formatDate(dailyPlan.date)}</p>}</div>
+      {!browsingDate && <div className="today-hero-actions">
         <button className="today-alignment-button" type="button" onClick={onViewSchedule}><i className="ti ti-calendar-week" /> View Next 7 Days</button>
         <button className="today-alignment-button" onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'} title={!canGeneratePlan ? 'Generated whole-plan drafts require household-administrator review.' : readOnly ? 'Plans & decisions permission is required to generate the daily plan.' : undefined}><i className="ti ti-sparkles" /> {generationState === 'generating' ? 'Generating…' : generationState === 'draft-ready' ? 'Review Scheduled Draft' : generationState === 'reviewing' ? 'Review Draft Again' : generated ? 'Generate Updated Draft' : 'Generate Daily Plan Draft'}</button>
         <button className="today-alignment-button" onClick={onStartTodayAlignment} disabled={todayAlignmentUnavailable} title={`Alignment for ${formatDate(dailyPlan.date)}`}><i className="ti ti-adjustments-horizontal" /> {readOnly ? 'View Today’s Alignment' : todayAlignmentCompleted ? 'Adjust Today’s Alignment' : 'Start Today’s Alignment'}</button>
         <button className="today-alignment-button" onClick={onStartAlignment} disabled={alignmentLoading} title={alignmentDate ? `Alignment for ${formatDate(alignmentDate)}` : undefined}><i className="ti ti-target-arrow" /> {alignmentLoading ? 'Loading Tomorrow…' : readOnly ? 'View Tomorrow’s Alignment' : alignmentCompleted ? 'Review Tomorrow’s Alignment' : 'Start Tomorrow’s Alignment'}</button>
         <button className="today-alignment-button today-alignment-button--secondary" onClick={onStartRecap}><i className="ti ti-clipboard-check" /> {readOnly ? 'View Recap' : closed ? 'Review Recap' : 'Close Today'}</button>
-      </div>
+      </div>}
     </header>
 
     <WeatherHeader date={dailyPlan.date} />
 
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} />
 
-    <TodayMeals meals={meals} state={mealPlanState} error={mealPlanError} onOpenMealPlan={onOpenMealPlan} />
+    <TodayMeals meals={meals} state={mealPlanState} error={mealPlanError} onOpenMealPlan={onOpenMealPlan} browsingDate={browsingDate} />
 
     <TodayFitnessWorkout date={dailyPlan.date} currentMember={currentMember} fitness={fitness} onOpenPillar={onOpenPillar} />
 
     <section className="today-pillar-stack" data-pillar="household">
       <div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Household Operations</h2></div>
       <AttentionPanel items={readModel.attentionItems} onOpenCalendar={onOpenCalendar} />
-      <section className="today-focus-card"><div><span>Today's Focus</span><h2>{readModel.focus.headline}</h2>{readModel.focus.detail && <p>{readModel.focus.detail}</p>}{readModel.governingPrinciple && <p>{readModel.governingPrinciple}</p>}{!readOnly && <button type="button" className="today-focus-edit" onClick={() => { setFocusDraft(dailyPlan.household?.keyFocus || ''); setFocusState('idle'); setFocusError(''); setEditingFocus(true) }}><i className="ti ti-pencil" /> Set Today’s Focus</button>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!readModel.counts.decisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{readModel.counts.decisions}</strong><span>{readModel.counts.decisions ? readModel.counts.decisions === 1 ? 'decision needs attention' : 'decisions need attention' : 'no decisions need attention'}</span><i className={`ti ${readModel.counts.decisions ? 'ti-chevron-right' : 'ti-circle-check'}`} aria-hidden="true" /></button></section>
-      <TodayHouseholdChores chores={householdChores} onOpenPillar={onOpenPillar} />
-      <TodayCalendarAgenda commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} />
-      <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>Today’s Top 3</h2></div><small>Outcomes that make today successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
+      <section className="today-focus-card"><div><span>{browsingDate ? 'Daily Focus' : "Today's Focus"}</span><h2>{browsingDate && !dailyPlan.household?.keyFocus ? 'No focus has been set for this day.' : readModel.focus.headline}</h2>{(!browsingDate || dailyPlan.household?.keyFocus) && readModel.focus.detail && <p>{readModel.focus.detail}</p>}{readModel.governingPrinciple && <p>{readModel.governingPrinciple}</p>}{!readOnly && <button type="button" className="today-focus-edit" onClick={() => { setFocusDraft(dailyPlan.household?.keyFocus || ''); setFocusState('idle'); setFocusError(''); setEditingFocus(true) }}><i className="ti ti-pencil" /> Set Today’s Focus</button>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!readModel.counts.decisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{readModel.counts.decisions}</strong><span>{readModel.counts.decisions ? readModel.counts.decisions === 1 ? 'decision needs attention' : 'decisions need attention' : 'no decisions need attention'}</span><i className={`ti ${readModel.counts.decisions ? 'ti-chevron-right' : 'ti-circle-check'}`} aria-hidden="true" /></button></section>
+      <TodayHouseholdChores chores={householdChores} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
+      <TodayCalendarAgenda commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
+      <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>{browsingDate ? 'Top 3 Outcomes' : 'Today’s Top 3'}</h2></div><small>Outcomes that make this day successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
       <section className="today-section today-actions"><div className="today-section-heading"><div><span>Personal View</span><h2>{currentMember}'s Actions</h2></div><small>Assignment edits open Action Mode review before changing the shared plan.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <AssignmentEditor key={item.id} assignment={item} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => onReviewAssignment?.(item.id, updated, version)} />)}</div> : <div className="today-empty">{readModel.memberOutcomes.length ? `${currentMember} owns ${readModel.memberOutcomes.length} outcome${readModel.memberOutcomes.length===1?'':'s'} in Today’s Top 3, with no separate unresolved assignment.` : `No unresolved assignments or Top 3 outcomes currently involve ${currentMember}.`}</div>}</section>
     </section>
 
@@ -271,7 +271,7 @@ export default function TodayDashboard({ plan, meals = {}, mealPlanState = 'load
 
     <PillarBrief number={5} pillar="education" title={educationCard.title} detail={educationCard.detail} meta={educationCard.meta} onOpenPillar={onOpenPillar} />
 
-    <PillarBrief number={6} pillar="finance" title={financeCard.title} detail={financeCard.detail} meta={financeCard.meta} onOpenPillar={onOpenPillar} />
+    <TodayFinanceBrief date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar} />
 
     <PillarBrief number={7} pillar="ministry" title={ministryCard.title} detail={ministryCard.detail} meta={ministryCard.meta} prayerNeeds={ministryCard.prayerNeeds} onOpenPillar={onOpenPillar} />
 

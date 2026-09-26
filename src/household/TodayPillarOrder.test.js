@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 test('Today renders its primary content in the canonical seven-pillar order',async()=>{
   const source=await readFile(new URL('./TodayDashboard.jsx',import.meta.url),'utf8')
   const rendered=source.slice(source.lastIndexOf('return <div className="today-dashboard">'))
-  const markers=['<TodayDevotionHero','<TodayMeals','<TodayFitnessWorkout','data-pillar="household"','pillar="education"','pillar="finance"','pillar="ministry"']
+  const markers=['<TodayDevotionHero','<TodayMeals','<TodayFitnessWorkout','data-pillar="household"','pillar="education"','<TodayFinanceBrief','pillar="ministry"']
   const positions=markers.map(marker=>rendered.indexOf(marker))
   positions.forEach((position,index)=>assert.ok(position>=0,`missing ${markers[index]}`))
   for(let index=1;index<positions.length;index+=1)assert.ok(positions[index]>positions[index-1],`${markers[index]} should follow ${markers[index-1]}`)
@@ -28,10 +28,10 @@ test('Today Pillar 3 renders every exercise image from the shared dated member w
 test('Today Pillar 4 names calendar commitments and synchronized Household Operations chores explicitly',async()=>{
   const dashboard=await readFile(new URL('./TodayDashboard.jsx',import.meta.url),'utf8')
   const today=await readFile(new URL('./HouseholdToday.jsx',import.meta.url),'utf8')
-  assert.match(dashboard,/Today’s Appointments &amp; Meetings/)
+  assert.match(dashboard,/browsingDate \? 'Appointments & Meetings' : 'Today’s Appointments & Meetings'/)
   assert.match(dashboard,/commitments\.map/)
   assert.doesNotMatch(dashboard,/commitments\.slice\(0, 4\)/)
-  assert.match(dashboard,/Today’s Chores/)
+  assert.match(dashboard,/browsingDate \? 'Scheduled Chores' : 'Today’s Chores'/)
   assert.match(dashboard,/Open Household Operations/)
   assert.match(today,/buildHouseholdMaintenanceWeek\(date, maintenance\)/)
   assert.match(today,/SHARED_STATE_EVENT/)

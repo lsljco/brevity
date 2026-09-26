@@ -14,6 +14,8 @@ test('image import keeps three distinct plates and null for an unreadable macro'
       const request=JSON.parse(options.body)
       assert.equal(request.store,false)
       assert.equal(request.input[0].content[1].type,'input_image')
+      assert.match(request.input[0].content[0].text,/up to 30 separate meals/)
+      assert.match(request.instructions,/optional carb variant/)
       return {ok:true,json:async()=>({output:[{content:[{type:'output_text',text:JSON.stringify({meals:[
         {name:'Strip steak',ingredients:['Steak','Green beans'],serving:'plate',calories:460,proteinGrams:54,carbohydrateGrams:21,fatGrams:20,warnings:[]},
         {name:'Brisket',ingredients:['Brisket','Potatoes'],serving:'plate',calories:520,proteinGrams:52,carbohydrateGrams:37,fatGrams:18,warnings:[]},
@@ -23,5 +25,6 @@ test('image import keeps three distinct plates and null for an unreadable macro'
     assert.equal(result.meals.length,3)
     assert.equal(result.meals[0].macros.proteinGrams,54)
     assert.equal(result.meals[2].macros.carbohydrateGrams,null)
+    assert.equal(result.meals[0].mealType,'lunch')
   }finally{if(previous===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=previous}
 })
