@@ -1,0 +1,80 @@
+import { useEffect, useMemo, useState } from 'react'
+import './SermonWorkspace.css'
+
+const endpoint='/.netlify/functions/ministry-sermon-workspace'
+const assetTypes=[
+  ['photography','Photography','ti-camera','Shot list, reference links, and selected images'],
+  ['slides','Slides & Visuals','ti-presentation','Presentation plan and visual brief'],
+  ['quotes','Mic Drops','ti-quote','Suggested or verified quotations'],
+  ['hooks','Facebook Hooks','ti-bolt','Opening lines for social posts'],
+  ['facebook','Facebook Post','ti-brand-facebook','Caption and publishing details'],
+  ['reels','Reels','ti-video','Clips, scripts, and timestamps'],
+  ['stories','Stories','ti-photo','Story sequence and captions'],
+  ['podcast','Podcast','ti-microphone','Episode notes and audio link'],
+  ['twin','AI Twin','ti-user-circle','Approved script and production brief'],
+  ['ai-video','AI Videos','ti-movie','Storyboard and production links'],
+]
+const tabs=['Message','Builder Review','Notes','Visuals','Social','Recording','Published']
+const newId=()=>globalThis.crypto?.randomUUID?.() || `id_${Date.now()}_${Math.random().toString(36).slice(2)}`
+const blank={schemaVersion:1,revision:0,series:[],sermons:[]}
+const freshSermon=(seriesId,member)=>({id:newId(),seriesId,title:'Untitled Sermon',date:new Date().toISOString().slice(0,10),serviceType:'Sunday',status:'Draft',version:1,bigIdea:'',scripture:'',outline:'',sourceNotes:'',builderReview:'',approvedNotes:'',recordingUrl:'',transcript:'',publishedUrl:'',assets:[],createdBy:member,updatedAt:new Date().toISOString()})
+const assetTab=type=>['photography','slides'].includes(type)?'Visuals':['quotes','hooks','facebook','reels','stories'].includes(type)?'Social':type==='podcast'?'Recording':'Published'
+
+export default function SermonWorkspace({currentMember}) {
+  const [workspace,setWorkspace]=useState(blank)
+  const [selectedId,setSelectedId]=useState(null)
+  const [tab,setTab]=useState('Message')
+  const [assetId,setAssetId]=useState(null)
+  const [state,setState]=useState('loading')
+  const [message,setMessage]=useState('')
+  const [dirty,setDirty]=useState(false)
+  const [showSeries,setShowSeries]=useState(false)
+  const [seriesTitle,setSeriesTitle]=useState('')
+  const [newSermonSeries,setNewSermonSeries]=useState('')
+
+  const load=async()=>{
+    setState('loading');setMessage('')
+    try { const response=await fetch(endpoint,{credentials:'include'});const data=await response.json();if(!response.ok)throw Error(data.error||'Could not load sermons.');setWorkspace(data);setSelectedId(id=>data.sermons.some(s=>s.id===id)?id:data.sermons[0]?.id||null);setDirty(false);setState('ready') }
+    catch(error){setState('error');setMessage(error.message)}
+  }
+  useEffect(()=>{load()},[])
+  useEffect(()=>{if(!dirty)return;const warn=event=>{event.preventDefault();event.returnValue=''};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn)},[dirty])
+  const sermon=workspace.sermons.find(item=>item.id===selectedId)
+  const series=workspace.series.find(item=>item.id===sermon?.seriesId)
+  const asset=sermon?.assets.find(item=>item.id===assetId)
+  const sorted=useMemo(()=>[...workspace.sermons].sort((a,b)=>(b.date||'').localeCompare(a.date||'')),[workspace.sermons])
+  const change=updater=>{setWorkspace(current=>updater(current));setDirty(true);setMessage('')}
+  const editSermon=patch=>change(current=>({...current,sermons:current.sermons.map(item=>item.id===selectedId?{...item,...patch,updatedAt:new Date().toISOString()}:item)}))
+  const editAsset=patch=>change(current=>({...current,sermons:current.sermons.map(item=>item.id===selectedId?{...item,assets:item.assets.map(a=>a.id===assetId?{...a,...patch}:a)}:item)}))
+  const addSeries=()=>{const title=seriesTitle.trim();if(!title)return;const id=newId();change(current=>({...current,series:[...current.series,{id,title,description:'',createdAt:new Date().toISOString()}]}));setNewSermonSeries(id);setSeriesTitle('');setShowSeries(false)}
+  const addSermon=()=>{const item=freshSermon(newSermonSeries,currentMember);change(current=>({...current,sermons:[item,...current.sermons]}));setSelectedId(item.id);setAssetId(null);setTab('Message')}
+  const addAsset=type=>{const id=newId();const item={id,type,title:assetTypes.find(a=>a[0]===type)?.[1]||type,content:'',status:'Draft',source:'Approved notes',sourceVersion:sermon.version||1,updatedAt:new Date().toISOString()};editSermon({assets:[...sermon.assets,item]});setAssetId(id);setTab(assetTab(type))}
+  const save=async()=>{
+    setState('saving');setMessage('')
+    try {const response=await fetch(endpoint,{method:'PUT',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({baseRevision:workspace.revision,series:workspace.series,sermons:workspace.sermons})});const data=await response.json();if(!response.ok)throw Error(data.error||'Could not save.');setWorkspace(data);setDirty(false);setState('ready');setMessage('Saved for the ministry team.')}
+    catch(error){setState('error');setMessage(error.message)}
+  }
+  const checklist=['notes','slides','photography','facebook','reels','podcast'].map(type=>{
+    const matching=type==='notes'?null:sermon?.assets.find(a=>a.type===type)
+    return {type,label:type==='notes'?'Notes':assetTypes.find(a=>a[0]===type)?.[1],status:type==='notes'?(sermon?.approvedNotes?'Complete':'Pending'):(matching?.status||'Pending')}
+  })
+  const completed=checklist.filter(item=>['Approved','Published','Complete'].includes(item.status)).length
+  const field=(label,key,rows=0,placeholder='')=><label className="sw-field"><span>{label}</span>{rows?<textarea rows={rows} value={sermon[key]||''} placeholder={placeholder} onChange={event=>editSermon({[key]:event.target.value})}/>:<input value={sermon[key]||''} placeholder={placeholder} onChange={event=>editSermon({[key]:event.target.value})}/>}</label>
+
+  return <div className="sw-shell">
+    <header className="sw-top"><div><p className="sw-kicker">MINISTRY &amp; FELLOWSHIP / SERMON WORKSPACE</p><h1>Sermon Workspace</h1><p>One place for the message and everything produced from it.</p></div><div className="sw-top-actions"><button type="button" className="sw-quiet" onClick={load} disabled={dirty||state==='saving'}>Refresh</button><button type="button" className="sw-primary" onClick={save} disabled={!dirty||state==='saving'}>{state==='saving'?'Saving…':dirty?'Save changes':'Saved'}</button></div></header>
+    {message&&<p className={`sw-message ${state==='error'?'sw-error':''}`} role="status">{message}{state==='error'&&dirty&&<span> Your edits remain on this screen. Copy them before refreshing if another member has saved changes.</span>}</p>}
+    {dirty&&<p className="sw-unsaved" role="status">Unsaved changes · Save before leaving this page.</p>}
+    <div className="sw-layout"><aside className="sw-list"><div className="sw-list-header"><h2>Sermons</h2><button type="button" onClick={addSermon} disabled={state==='loading'}>+ New</button></div><label className="sw-field"><span>Series for new sermon</span><select value={newSermonSeries} onChange={e=>setNewSermonSeries(e.target.value)}><option value="">Standalone sermon</option>{workspace.series.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select></label><button type="button" className="sw-text-button" onClick={()=>setShowSeries(!showSeries)}>+ Create series</button>{showSeries&&<div className="sw-inline"><input aria-label="Series title" value={seriesTitle} onChange={e=>setSeriesTitle(e.target.value)} placeholder="Series title"/><button type="button" onClick={addSeries}>Add</button></div>}{sorted.map(item=><button type="button" key={item.id} className={`sw-sermon-link ${selectedId===item.id?'active':''}`} onClick={()=>{setSelectedId(item.id);setTab('Message');setAssetId(null)}}><small>{workspace.series.find(s=>s.id===item.seriesId)?.title||'Standalone'} · {item.date||'No date'}</small><strong>{item.title}</strong><span>{item.status} · v{item.version||1}</span></button>)}{state==='loading'&&<p className="sw-muted">Loading sermons…</p>}{state==='ready'&&!sorted.length&&<p className="sw-muted">Create a series or your first sermon to begin.</p>}</aside>
+    <main className="sw-main">{sermon?<><div className="sw-sermon-heading"><div><p className="sw-kicker">{series?.title||'STANDALONE SERMON'}</p><h2>{sermon.title}</h2><p>{sermon.serviceType} · {sermon.date||'Date not set'} · <span className="sw-gold">{sermon.status} v{sermon.version||1}</span></p></div><label className="sw-status">Status<select value={sermon.status} onChange={e=>editSermon({status:e.target.value})}>{['Draft','In review','Approved','Preached','Published'].map(s=><option key={s}>{s}</option>)}</select></label></div>
+      <nav className="sw-tabs" aria-label="Sermon production stages">{tabs.map((item,index)=><button type="button" key={item} className={tab===item?'active':''} onClick={()=>{setTab(item);setAssetId(null)}}><b>{index+1}</b>{item}</button>)}</nav>
+      {asset?<section className="sw-panel"><button type="button" className="sw-text-button" onClick={()=>setAssetId(null)}>← Back to {tab}</button><div className="sw-row"><h3>{asset.title}</h3><select aria-label="Asset status" value={asset.status} onChange={e=>editAsset({status:e.target.value})}>{['Draft','In review','Approved','Published'].map(s=><option key={s}>{s}</option>)}</select></div><label className="sw-field"><span>Title</span><input value={asset.title} onChange={e=>editAsset({title:e.target.value})}/></label><label className="sw-field"><span>Source</span><select value={asset.source} onChange={e=>editAsset({source:e.target.value})}><option>Approved notes</option><option>Preached transcript</option><option>Original material</option></select></label><p className="sw-muted">Created from {asset.source.toLowerCase()} · sermon version {asset.sourceVersion}. Review attribution and accuracy before publishing.</p><label className="sw-field"><span>Draft, brief, links, or production notes</span><textarea rows="12" value={asset.content} onChange={e=>editAsset({content:e.target.value,updatedAt:new Date().toISOString()})} placeholder="Add the content and production details here…"/></label></section>:<>
+      {tab==='Message'&&<><div className="sw-columns"><section className="sw-panel"><h3>The message</h3><div className="sw-grid">{field('Sermon title','title')}{field('Scripture','scripture')}{field('Service type','serviceType')}<label className="sw-field"><span>Date</span><input type="date" value={sermon.date||''} onChange={e=>editSermon({date:e.target.value})}/></label></div>{field('Big idea','bigIdea',3,'The single governing truth of this message')}{field('Outline','outline',8,'Main movements and supporting passages')}{field('Ideas and source material','sourceNotes',6,'Paste ideas from Lorenzo’s conversations or other source material; preserve what he actually wrote.')}</section><aside className="sw-panel"><div className="sw-row"><h3>Production checklist</h3><small>{completed} of 6 complete</small></div>{checklist.map(item=><div className="sw-check" key={item.type}><i className={`ti ${['Approved','Published','Complete'].includes(item.status)?'ti-circle-check':'ti-circle'}`}/><span>{item.label}</span><em>{item.status}</em></div>)}<p className="sw-muted">Assets are linked to this sermon and carry their source version.</p></aside></div><section className="sw-panel"><h3>Content studio</h3><div className="sw-asset-grid">{assetTypes.filter(([type])=>['photography','slides','quotes','facebook','reels','podcast'].includes(type)).map(([type,label,icon])=>{const items=sermon.assets.filter(a=>a.type===type);return <article className="sw-asset-card" key={type}><i className={`ti ${icon}`}/><h4>{label}</h4><small>{items.length} item{items.length===1?'':'s'}</small><div>{items.map(a=><button type="button" key={a.id} className="sw-asset-link" onClick={()=>{setTab(assetTab(type));setAssetId(a.id)}}>{a.title}<span>{a.status}</span></button>)}</div><button type="button" className="sw-card-action" onClick={()=>addAsset(type)}>+ Add {label}</button></article>})}</div></section></>}
+      {tab==='Builder Review'&&<section className="sw-panel"><h3>Builder Review</h3><p className="sw-muted">Record suggestions and Lorenzo’s decisions here. The existing Apostolic Sermon Builder remains available as a separate tool in the Ministry menu.</p>{field('Review and decisions','builderReview',12,'Paste Builder feedback, then record what Lorenzo accepted, revised, or declined.')}{sermon.status==='Approved'&&<p className="sw-note">Approved version {sermon.version}. Revise the message and increase the version before treating new assets as approved.</p>}<button type="button" className="sw-secondary" onClick={()=>editSermon({version:(Number(sermon.version)||1)+1,status:'Draft'})}>Start next version</button></section>}
+      {tab==='Notes'&&<section className="sw-panel"><h3>Approved sermon notes</h3><p className="sw-muted">This is the reviewed manuscript or preaching outline that should govern pre-service assets.</p>{field('Notes','approvedNotes',20,'Paste or write Lorenzo’s approved notes here.')}</section>}
+      {['Visuals','Social','Published'].includes(tab)&&<section className="sw-panel"><div className="sw-row"><div><h3>{tab==='Visuals'?'Visual studio':tab==='Social'?'Social content':'Published and AI media'}</h3><p className="sw-muted">Select an asset to write its brief, draft, link, and review status.</p></div></div>{tab==='Published'&&field('Published sermon link','publishedUrl',0,'https://…')}<div className="sw-asset-grid">{assetTypes.filter(item=>assetTab(item[0])===tab).map(([type,label,icon,description])=>{const items=sermon.assets.filter(a=>a.type===type);return <article className="sw-asset-card" key={type}><i className={`ti ${icon}`}/><h4>{label}</h4><p>{description}</p><small>{items.length} item{items.length===1?'':'s'}</small><div>{items.map(a=><button type="button" key={a.id} className="sw-asset-link" onClick={()=>setAssetId(a.id)}>{a.title} <span>{a.status}</span></button>)}</div><button type="button" className="sw-card-action" onClick={()=>addAsset(type)}>+ Add {label}</button></article>})}</div></section>}
+      {tab==='Recording'&&<section className="sw-panel"><h3>After the service</h3><p className="sw-muted">Keep what Lorenzo actually preached alongside the prepared notes. Check quotes and clips against this transcript.</p>{field('Recording link','recordingUrl',0,'https://…')}{field('Preached transcript','transcript',16,'Paste the service transcript with speaker labels and timestamps where available.')}{sermon.assets.filter(a=>a.type==='podcast').map(a=><button type="button" className="sw-asset-link" key={a.id} onClick={()=>setAssetId(a.id)}>{a.title} · {a.status}</button>)}<button type="button" className="sw-secondary" onClick={()=>addAsset('podcast')}>+ Add podcast asset</button></section>}
+      <div className="sw-footer">Source of truth: this sermon record · {sermon.assets.length} connected assets · Last edited {sermon.updatedAt?new Date(sermon.updatedAt).toLocaleString():'now'}</div></>}
+    </>:<section className="sw-empty"><i className="ti ti-book-2"/><h2>Build a connected sermon library</h2><p>Create a sermon to organize the message, production assets, and preached recording in one place.</p><button type="button" className="sw-primary" onClick={addSermon}>Create first sermon</button></section>}</main></div>
+  </div>
+}
