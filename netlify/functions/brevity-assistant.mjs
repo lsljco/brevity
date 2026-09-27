@@ -6,6 +6,7 @@ import {
 import { normalizeActionProposal } from '../lib/assistant-action-contract.mjs'
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import { captureExpectedVersions, createProductionActionResources } from '../lib/assistant-action-executor.mjs'
+import { answerTodayMealProtein } from '../lib/assistant-meal-protein.mjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
@@ -65,6 +66,8 @@ export const handler = async event => {
   if (!messages.length || messages.at(-1).role !== 'user') return json(400, { error: 'A question is required.' })
 
   const canonicalServerContext = await loadProductionAuthoritativeAssistantContext({ member: session.member })
+  const mealAnswer = answerTodayMealProtein(messages.at(-1).content, canonicalServerContext)
+  if (mealAnswer) return json(200, { message:mealAnswer, proposal:null, generatedAt:new Date().toISOString(), member:session.member, page:String(body.page?.pageLabel||body.page?.activeView||'Brevity').slice(0,120), contextSources:canonicalServerContext.sources })
   const appleCalendar=await loadAppleCalendar(event)
   if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300).map(item=>Object.fromEntries(['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'].filter(field=>item?.[field]!==undefined).map(field=>[field,item[field]]))),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
   const browserSnapshot=cleanBrowserContext(body.context)
