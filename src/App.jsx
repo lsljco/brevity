@@ -21,6 +21,7 @@ const HouseholdMaintenance = lazy(() => import('./household/HouseholdMaintenance
 const HouseholdPerformanceIntelligence = lazy(() => import('./household/HouseholdPerformanceIntelligence.jsx'))
 const OperatingPracticesWorkspace = lazy(() => import('./household/OperatingPractices.jsx'))
 const PracticeContextBar = lazy(() => import('./household/OperatingPractices.jsx').then(module => ({default:module.PracticeContextBar})))
+const SermonWorkspace = lazy(() => import('./ministry/SermonWorkspace.jsx'))
 
 const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
@@ -51,6 +52,7 @@ const PILLARS = [
     { id:'reporting', label:'Reporting', icon:'ti-report-analytics' },
   ]},
   { id:'ministry', label:'Ministry & Fellowship', icon:'ti-users', layer:5, description:'Impartation of the prior six pillars and discipleship of others.', items:[
+    { id:'sermon-workspace', label:'Sermon Workspace', icon:'ti-layout-dashboard' },
     { id:'apostolic-sermon-builder', label:'Sermon Builder', icon:'ti-book-2' },
   ]},
 ]
@@ -309,6 +311,7 @@ export default function App() {
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-managed source records"/></Suspense>
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
+    if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace currentMember={currentMember}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><div className="finance-access-shell">{auth.role!=='admin'&&<section className="finance-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Financial records are read-only for {currentMember}</strong><span>{canEditPlanning?'Your planning access still allows reviewed edits to Finance Meeting narrative, saved notes, transcripts, and ordinary commitments. ':''}Financial corrections, forecasts, budgets, transactions, financial-effect details, and bank administration require the household administrator; bank connection changes are disabled for every member in this release.</span></div></section>}<FinancePlanner view={activeView} setView={navigateFromFinance} currentMember={currentMember} readOnly={auth.role!=='admin'} meetingPlanningReadOnly={!canEditPlanning}/></div></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)
