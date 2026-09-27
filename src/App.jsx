@@ -80,16 +80,16 @@ function navigationLabel(pillarId, viewId) {
   return pillar?.items.find(item => item.id === viewId)?.label || pillar?.label || 'Previous screen'
 }
 
-function ExternalSiteView({ title, description, url, icon, embed, currentMember }) {
+function ExternalSiteView({ title, description, url, icon, embed, currentMember, onOpenWorkspace }) {
   const frameRef=useRef(null)
   const targetOrigin=useMemo(()=>{try{return new URL(url,window.location.href).origin}catch{return''}},[url])
   const sendMember=()=>{if(embed&&currentMember&&targetOrigin)frameRef.current?.contentWindow?.postMessage({type:'brevity-authenticated-member',member:currentMember},targetOrigin)}
   useEffect(()=>{
     if(!embed||!currentMember||!targetOrigin)return
-    const receive=event=>{if(event.origin===targetOrigin&&event.data?.type==='live-intentional-ready')sendMember()}
+    const receive=event=>{if(event.origin!==targetOrigin||event.source!==frameRef.current?.contentWindow)return;if(event.data?.type==='live-intentional-ready')sendMember();if(url==='/apostolic-builder/'&&event.data?.type==='brevity-open-sermon-workspace')onOpenWorkspace?.()}
     window.addEventListener('message',receive)
     return()=>window.removeEventListener('message',receive)
-  },[embed,currentMember,targetOrigin])
+  },[embed,currentMember,targetOrigin,url,onOpenWorkspace])
   return <section className="external-site-view" aria-label={title}><header className="external-site-toolbar"><div><p className="external-site-eyebrow">Connected application</p><h1>{title}</h1><p className="external-site-description">{description}</p></div><a className="external-site-open" href={url} target="_blank" rel="noreferrer">Open full screen <i className="ti ti-external-link" aria-hidden="true" /></a></header>{embed?<iframe ref={frameRef} onLoad={sendMember} className="external-site-frame" src={url} title={title} loading="eager" referrerPolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" />:<div className="external-site-fallback"><div className="external-site-fallback-icon"><i className={`ti ${icon}`} aria-hidden="true" /></div><h2>{title} is connected</h2><p>{title} currently blocks secure in-app display. Open it below while its hosting security setting is updated.</p><a className="external-site-launch" href={url} target="_blank" rel="noreferrer">Launch {title} <i className="ti ti-arrow-up-right" aria-hidden="true" /></a></div>}</section>
 }
 
@@ -311,8 +311,8 @@ export default function App() {
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-managed source records"/></Suspense>
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
-    if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace currentMember={currentMember}/></Suspense>
-    if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember}/>
+    if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace currentMember={currentMember} role={auth.role}/></Suspense>
+    if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember} onOpenWorkspace={()=>navigateTo('ministry','sermon-workspace')}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><div className="finance-access-shell">{auth.role!=='admin'&&<section className="finance-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Financial records are read-only for {currentMember}</strong><span>{canEditPlanning?'Your planning access still allows reviewed edits to Finance Meeting narrative, saved notes, transcripts, and ordinary commitments. ':''}Financial corrections, forecasts, budgets, transactions, financial-effect details, and bank administration require the household administrator; bank connection changes are disabled for every member in this release.</span></div></section>}<FinancePlanner view={activeView} setView={navigateFromFinance} currentMember={currentMember} readOnly={auth.role!=='admin'} meetingPlanningReadOnly={!canEditPlanning}/></div></Suspense>
     const pillar=PILLARS.find(p=>p.id===activePillar)
     return pillar?<Suspense fallback={<div className="app-view-loading">Loading {pillar.label} analysis…</div>}><PillarAnalysis pillar={pillar} currentMember={currentMember}/></Suspense>:null
