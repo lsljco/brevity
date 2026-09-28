@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import pptxgen from 'pptxgenjs'
+const loadPptx=async()=> (await import('../../node_modules/pptxgenjs/dist/pptxgen.cjs.js')).default
 
 export const householdId=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
 export const workspaceKey=`${householdId}/ministry/sermon-workspace/v1`
@@ -30,7 +30,7 @@ export function applyPackage(workspace,sermonId,status,member,now=new Date()){
  return {...workspace,revision:workspace.revision+1,sermons:workspace.sermons.map((item,i)=>i===index?updated:item),updatedAt:stamp,updatedBy:member}
 }
 export async function buildWorkspaceDeck(sermon,slides){
- const pptx=new pptxgen();pptx.layout='LAYOUT_WIDE';pptx.author='Church Triumphant';pptx.title=sermon.title;pptx.subject='Draft sermon teaching slides';pptx.theme={headFontFace:'Book Antiqua',bodyFontFace:'Book Antiqua',lang:'en-US'}
+ const pptxgen=await loadPptx();const pptx=new pptxgen();pptx.layout='LAYOUT_WIDE';pptx.author='Church Triumphant';pptx.title=sermon.title;pptx.subject='Draft sermon teaching slides';pptx.theme={headFontFace:'Book Antiqua',bodyFontFace:'Book Antiqua',lang:'en-US'}
  const specs=[{title:sermon.title,body:sermon.bigIdea||sermon.scripture||'Church Triumphant',scripture:sermon.scripture},...slides]
  specs.forEach((spec,index)=>{const slide=pptx.addSlide();slide.background={color:'080808'};slide.addShape(pptx.ShapeType.line,{x:.65,y:.82,w:11.9,h:0,line:{color:'C5A46D',width:1.4}});slide.addText(index?'CHURCH TRIUMPHANT · SERMON NOTES':'CHURCH TRIUMPHANT',{x:.72,y:.42,w:9,h:.25,fontFace:'Book Antiqua',fontSize:11,color:'C5A46D',charSpacing:2,margin:0});slide.addText(spec.title,{x:.72,y:1.45,w:11.8,h:1.5,fontFace:'Book Antiqua',fontSize:index?34:39,color:'F6F3EC',bold:true,breakLine:false,margin:0,fit:'shrink'});slide.addText(spec.body,{x:.78,y:3.42,w:11.6,h:2.4,fontFace:'Book Antiqua',fontSize:index?23:21,color:'E4DDCF',margin:0,fit:'shrink',valign:'top'});if(spec.scripture)slide.addText(spec.scripture,{x:.78,y:6.46,w:10,h:.36,fontFace:'Book Antiqua',fontSize:15,color:'C5A46D',margin:0});slide.addText(String(index+1).padStart(2,'0'),{x:11.8,y:6.76,w:.5,h:.25,fontFace:'Book Antiqua',fontSize:10,color:'C5A46D',margin:0})})
  return Buffer.from(await pptx.write({outputType:'nodebuffer'}))

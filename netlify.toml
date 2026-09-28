@@ -41,4 +41,4 @@
   included_files = ["netlify/assets/sermon-characters/**"]
 
 [functions."sermon-workspace-package-background"]
-  external_node_modules = ["pptxgenjs"]
+  included_files = ["node_modules/jszip/**", "node_modules/pako/**", "node_modules/setimmediate/**", "node_modules/lie/**"]
