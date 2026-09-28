@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { askBrevityAssistant, createElevenLabsSpeech, executeAssistantProposal, getActionMode, getElevenLabsVoices, saveActionPermissions, undoAssistantAction } from './assistantApi.js'
 import { assistantStarters } from './assistantStarters.js'
-import { ACTION_REVIEW_EVENT, publishActionCompleted } from './actionEvents.js'
+import { ACTION_REVIEW_EVENT, ASSISTANT_REQUEST_EVENT, publishActionCompleted } from './actionEvents.js'
 import './BrevityAssistant.css'
 
 const DOMAIN_LABELS = { planning:'Plans & decisions', calendar:'Family Calendar', projects:'Projects', finance:'Finance administration' }
@@ -15,7 +15,7 @@ const actionFieldValue=value=>{
   if(value&&typeof value==='object')return Object.entries(value).filter(([,fieldValue])=>Array.isArray(fieldValue)?fieldValue.length:fieldValue!==''&&fieldValue!=null).map(([field,fieldValue])=>`${actionFieldLabel(field)}: ${actionFieldValue(fieldValue)}`).join(' · ')
   return typeof value==='boolean'?(value?'Yes':'No'):String(value)
 }
-function ActionFields({ operation }) { const nutrition=['nutrition.meal.log','nutrition.meal.update'].includes(operation.type)?(()=>{try{return JSON.parse(operation.payload?.estimateJson||'{}')}catch{return{}}})():null;const macros=nutrition?.perServingMacros;const fields=[...(operation.targetDate?[['date',operation.targetDate]]:[]),...(operation.targetId?[['affectedRecord',operation.targetId]]:[]),...Object.entries(operation.payload||{}).filter(([field,value])=>!['date','candidateJson','estimateJson'].includes(field)&&value!==''&&value!=null),...(nutrition?[['nutrition basis',nutrition.nutritionBasis||'Estimated; source not recorded'],['ingredients',(nutrition.ingredients||[]).map(item=>item.amountDescription||item.input)],['calculated nutrition',macros?`${macros.calories} calories · ${macros.proteinGrams} g protein · ${macros.carbohydrateGrams} g carbs · ${macros.fatGrams} g fat`:'Unavailable'],...(nutrition.warnings?.length?[['estimate warnings',nutrition.warnings]]:[])]:[])];return fields.length?<dl className="brevity-action-fields">{fields.map(([field,value])=><div key={field}><dt>{actionFieldLabel(field)}</dt><dd>{actionFieldValue(value)}</dd></div>)}</dl>:null }
+function ActionFields({ operation }) { const nutrition=['nutrition.meal.log','nutrition.meal.update'].includes(operation.type)?(()=>{try{return JSON.parse(operation.payload?.estimateJson||'{}')}catch{return{}}})():null;const macros=nutrition?.perServingMacros;const fields=[...(operation.targetDate?[['date',operation.targetDate]]:[]),...(operation.targetId?[['affectedRecord',operation.targetId]]:[]),...Object.entries(operation.payload||{}).filter(([field,value])=>!['date','candidateJson','estimateJson'].includes(field)&&value!==''&&value!=null),...(nutrition?[['ingredients',(nutrition.ingredients||[]).map(item=>item.amountDescription||item.input)],['calculated nutrition',macros?`${macros.calories} calories · ${macros.proteinGrams} g protein · ${macros.carbohydrateGrams} g carbs · ${macros.fatGrams} g fat`:'Unavailable'],...(nutrition.warnings?.length?[['estimate warnings',nutrition.warnings]]:[])]:[])];return fields.length?<dl className="brevity-action-fields">{fields.map(([field,value])=><div key={field}><dt>{actionFieldLabel(field)}</dt><dd>{actionFieldValue(value)}</dd></div>)}</dl>:null }
 function ProposalCard({ proposal, onReview }) { return <section className="brevity-action-proposal"><header><span>Action Mode proposal</span><em>{proposal.risk==='strong-confirmation'?'Strong confirmation':'Confirmation required'}</em></header><strong>{proposal.summary}</strong><ol>{proposal.operations.map(operation=><li key={operation.id}><span>{operation.description}</span><small>{DOMAIN_LABELS[operation.domain]||operation.domain}</small></li>)}</ol><button type="button" onClick={()=>onReview(proposal)}>Review changes</button></section> }
 
 function ActionReview({ proposal, busy, onCancel, onApply }) {
@@ -43,6 +43,12 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   useEffect(()=>{if(open){setTimeout(()=>inputRef.current?.focus(),80);endRef.current?.scrollIntoView({block:'end'})}},[open,messages])
   useEffect(()=>{if(!open)return;getElevenLabsVoices().then(available=>{setVoices(available);const selected=available.some(voice=>voice.voice_id===voiceId)?voiceId:available[0]?.voice_id||'';if(selected){setVoiceId(selected);localStorage.setItem('brevity_el_voice_v1',selected)}}).catch(()=>{})},[open])
   useEffect(()=>{const receive=event=>{const proposal=event.detail?.proposal;if(!proposal?.id)return;setError('');setActionCenter(null);setReview(proposal);setOpen(true)};window.addEventListener(ACTION_REVIEW_EVENT,receive);return()=>window.removeEventListener(ACTION_REVIEW_EVENT,receive)},[])
+  useEffect(()=>{const receive=event=>{
+    const message=event.detail?.message;if(typeof message!=='string'||!message.trim())return
+    setOpen(true);setActionCenter(null);setReview(null)
+    if(busyRef.current){setDraft(message);draftRef.current=message;return}
+    sendRef.current?.(message)
+  };window.addEventListener(ASSISTANT_REQUEST_EVENT,receive);return()=>window.removeEventListener(ASSISTANT_REQUEST_EVENT,receive)},[])
   useEffect(()=>()=>{voiceModeRef.current=false;clearTimeout(voiceTimerRef.current);recognitionRef.current?.abort();speechRequestRef.current?.abort();audioRef.current?.pause();if(audioUrlRef.current)URL.revokeObjectURL(audioUrlRef.current)},[])
   const send=async(text,spoken=false)=>{
     const content=String(text||draftRef.current).trim();if(!content||busyRef.current)return

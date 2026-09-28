@@ -1,4 +1,3 @@
-import {calculateLabelNutrition} from '../lib/label-nutrition.mjs'
 import householdAuth from './household-auth.js'
 import {calculateMealNutrition} from '../lib/meal-nutrition.mjs'
 
@@ -12,8 +11,7 @@ export const handler=async event=>{
   try{
     const session=await readSession(event)
     if(!session)return json(401,{error:'Sign in to calculate meal nutrition.'})
-    const body=JSON.parse(event.body||'{}')
-    return json(200,{nutrition:body.mode==='label'?calculateLabelNutrition(body):await calculateMealNutrition(body)})
+    return json(200,{nutrition:await calculateMealNutrition(JSON.parse(event.body||'{}'))})
   }catch(error){
     console.error('[meal-nutrition]',error)
     const status=Number(error.status)||(error.code==='VALIDATION_ERROR'||error instanceof SyntaxError?400:500)

@@ -40,9 +40,6 @@ Do not infer Phase 1 success from a passing build or a healthy endpoint. The acc
 - Correction calculations discard stale responses after food edits.
 - Signed-in preview verification remains required before production approval.
 
-### Package-label correction
+### Voice-first nutrition correction (supersedes manual label entry)
 
-- Saved meal correction can use an optional package-label editor. Enter exact product, label serving size, servings eaten and per-serving macros for every food. The server multiplies and totals without an AI request. Optional nutrients remain unknown when incomplete.
-- Preserve member-entered label values and portions with the saved ingredients and repeated meals. Action Mode shows the calculation basis; labels are not claimed independently verified.
-- Food edits invalidate calculated totals; the normal foods-and-portions estimation option remains available.
-- Tests cover portion multiplication, invalid/missing values, fractional servings, source persistence, correction and Undo. Signed-in mobile preview acceptance remains outstanding.
+Larry clarified that Brevity must own data entry: spoken consumption → targeted clarification → product/reference lookup → calculation → reviewed save. Removed the package-label form. The SDK now has web search for product references and a calculator clarification result that cannot create a savable estimate. Unanswered questions block subsequent estimate attempts in that turn. Correction starts a conversation and binds recalculated macros to an exact member-owned saved entry from the past seven days. Manual correction fields are removed; audit and Undo remain. Source URLs are retained only when present in supplied references. Live signed-in voice/device and model behavior remain acceptance checks, not proven by mocked tests.

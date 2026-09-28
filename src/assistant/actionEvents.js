@@ -11,3 +11,10 @@ export function publishActionCompleted(detail) {
   if(typeof window==='undefined')return
   window.dispatchEvent(new CustomEvent(ACTION_COMPLETED_EVENT,{detail}))
 }
+
+export const ASSISTANT_REQUEST_EVENT='brevity-assistant-requested'
+export function requestAssistantConversation(message){
+  if(typeof window==='undefined')return false
+  window.dispatchEvent(new CustomEvent(ASSISTANT_REQUEST_EVENT,{detail:{message}}))
+  return true
+}

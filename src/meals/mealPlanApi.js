@@ -127,5 +127,3 @@ export function executeMealSubstitution(proposalId) {
     body: JSON.stringify({ proposalId, confirmed: true }),
   })
 }
-
-export function calculatePackageLabels(labels){return request('/.netlify/functions/meal-nutrition',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'label',labels})})}

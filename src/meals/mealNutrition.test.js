@@ -140,3 +140,8 @@ test('generated images use a background job instead of a timeout-prone meal-plan
   assert.match(planner,/regenerateMealImage\(created\.id\)/)
   assert.match(planner,/generating its image in the background/)
 })
+
+
+test('unresolved product or quantity questions prevent nutrition totals from being returned',()=>{
+  assert.throws(()=>calculateNutritionResult({ingredients:['a sausage'],yieldQuantity:1,yieldUnit:'meal',conversational:true},{ingredients:[],warnings:[],clarificationQuestions:['Which brand and how many ounces?']}),error=>error.code==='NUTRITION_CLARIFICATION_REQUIRED'&&error.questions[0]==='Which brand and how many ounces?')
+})

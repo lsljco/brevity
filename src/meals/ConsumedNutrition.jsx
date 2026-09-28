@@ -1,24 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ACTION_COMPLETED_EVENT, requestActionReview } from '../assistant/actionEvents.js'
+import { useCallback, useEffect, useState } from 'react'
+import { ACTION_COMPLETED_EVENT, requestActionReview, requestAssistantConversation } from '../assistant/actionEvents.js'
 import { prepareDirectAction, prepareRepeatMeal } from '../assistant/assistantApi.js'
-import PackageLabelEditor from './PackageLabelEditor.jsx'
-import { calculateMealNutrition } from './mealPlanApi.js'
 
 const FIELDS=[['calories','Calories','cal'],['proteinGrams','Protein','g'],['carbohydrateGrams','Carbs','g'],['fatGrams','Fat','g']]
 const display=(value,unit)=>`${Number(value||0).toLocaleString()} ${unit}`
 
 function SavedMeal({entry,day,member,todayVersion,onError}){
-  const [editing,setEditing]=useState(false)
-  const [labelMode,setLabelMode]=useState(false)
   const [busy,setBusy]=useState(false)
-  const [reason,setReason]=useState('')
-  const [name,setName]=useState(entry.name)
-  const [foods,setFoods]=useState((entry.ingredients||[]).map(item=>item.input).join('\n'))
-  const [estimate,setEstimate]=useState(null)
-  const [calculating,setCalculating]=useState(false)
-  const [calculationError,setCalculationError]=useState('')
-  const calculationSequence=useRef(0)
-  useEffect(()=>()=>{calculationSequence.current+=1},[])
   const repeat=async()=>{
     onError('');setBusy(true)
     try{
@@ -26,35 +14,10 @@ function SavedMeal({entry,day,member,todayVersion,onError}){
       if(!result?.proposal?.id||!requestActionReview(result.proposal))throw new Error('Action Mode could not open this meal review.')
     }catch(cause){onError(cause.message||'Could not prepare this meal.')}finally{setBusy(false)}
   }
-  const lines=()=>foods.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)
-  const recalculate=async()=>{
-    const sequence=++calculationSequence.current
-    setCalculationError('');setEstimate(null);setCalculating(true)
-    try{
-      if(!lines().length)throw new Error('Enter each food and its amount on a separate line.')
-      const result=await calculateMealNutrition(lines(),1,'meal')
-      if(sequence===calculationSequence.current)setEstimate(result.nutrition)
-    }catch(cause){if(sequence===calculationSequence.current)setCalculationError(cause.message||'Could not calculate nutrition.')}finally{if(sequence===calculationSequence.current)setCalculating(false)}
-  }
-  const prepare=async type=>{
-    onError('');setBusy(true)
-    try{
-      if(!reason.trim())throw new Error('Explain why this meal needs correction.')
-      const payload={entryId:entry.id,reason:reason.trim()}
-      if(type==='nutrition.meal.update'){
-        if(!name.trim()||!estimate)throw new Error('Calculate the updated foods and portions before reviewing the correction.')
-        Object.assign(payload,{name:name.trim(),estimateJson:JSON.stringify(estimate)},estimate.perServingMacros)
-      }
-      const result=await prepareDirectAction({summary:`${type==='nutrition.meal.remove'?'Remove':'Correct'} ${entry.name} from ${day.date}`,expectedVersion:day.version,operation:{type,targetId:member,targetDate:day.date,description:`${type==='nutrition.meal.remove'?'Remove':'Correct'} saved meal ${entry.name}: ${reason.trim()}`,payload}})
-      if(!result?.proposal?.id||!requestActionReview(result.proposal))throw new Error('Action Mode could not open this meal review.')
-      setEditing(false)
-    }catch(cause){onError(cause.message||'Could not prepare this correction.')}finally{setBusy(false)}
-  }
   return <li><strong>{entry.name}</strong> · {display(entry.macros?.calories,'cal')} · {display(entry.macros?.proteinGrams,'g')} protein <small>Estimated · saved by {entry.loggedBy}{entry.correctedBy?` · corrected by ${entry.correctedBy}`:''}</small>
-    {entry.ingredients?.length>0&&<details><summary>View estimated foods and portions</summary><ul>{entry.ingredients.map((item,index)=><li key={index}>{item.amountDescription || item.input} · {display(item.macros?.calories,'cal')} · {display(item.macros?.proteinGrams,'g')} protein<small>Estimate basis: {item.basis||'Not recorded'}{item.source==='member-label'?' · Entered by member':` · Model confidence: ${item.confidence||'not recorded'}`}</small></li>)}</ul><p>{entry.nutritionBasis||'Estimated nutrition; no verified package label is attached.'} Model confidence is not label verification.</p>{entry.warnings?.length>0&&<p>{entry.warnings.join(' ')}</p>}</details>}
+    {entry.ingredients?.length>0&&<details><summary>View estimated foods and portions</summary><ul>{entry.ingredients.map((item,index)=><li key={index}>{item.amountDescription||item.input} · {display(item.macros?.calories,'cal')} · {display(item.macros?.proteinGrams,'g')} protein<small>Estimate basis: {item.basis||'Not recorded'} · Model confidence: {item.confidence||'not recorded'}</small>{item.sourceUrl&&/^https:\/\//.test(item.sourceUrl)&&<a href={item.sourceUrl} target="_blank" rel="noreferrer">Nutrition source</a>}</li>)}</ul>{entry.warnings?.length>0&&<p>{entry.warnings.join(' ')}</p>}</details>}
     <button type="button" disabled={busy} onClick={repeat}>Repeat meal today — review</button>
-    <button type="button" onClick={()=>setEditing(value=>!value)}>{editing?'Cancel correction':'Correct meal'}</button>
-    {editing&&<div className="consumed-meal-correction"><label>Meal name<input value={name} onChange={event=>setName(event.target.value)} maxLength={300}/></label><label><input type="checkbox" checked={labelMode} onChange={event=>{calculationSequence.current+=1;setCalculating(false);setCalculationError('');setEstimate(null);setLabelMode(event.target.checked)}}/> Use package label values</label>{labelMode?<PackageLabelEditor ingredients={entry.ingredients} disabled={busy} onCalculated={setEstimate} onInvalidate={()=>setEstimate(null)}/>:<><label>Foods and amounts (one per line)<textarea value={foods} onChange={event=>{calculationSequence.current+=1;setCalculating(false);setFoods(event.target.value);setEstimate(null);setCalculationError('')}} placeholder="6 oz Eckrich smoked sausage&#10;1 Premier Protein shake&#10;2 slices Nature’s Own Honey Wheat bread"/></label><button type="button" disabled={calculating||busy||!lines().length} onClick={recalculate}>{calculating?'Calculating…':'Calculate macros from foods'}</button>{calculationError&&<p role="alert">{calculationError}</p>}</>}{estimate&&<div className="consumed-calculated-macros" role="status"><strong>Calculated meal</strong><p>{FIELDS.map(([key,label,unit])=>`${label}: ${display(estimate.perServingMacros[key],unit)}`).join(' · ')}</p><details><summary>Ingredient breakdown</summary><ul>{estimate.ingredients.map((item,index)=><li key={index}>{item.input} · {display(item.macros.calories,'cal')} · {display(item.macros.proteinGrams,'g')} protein</li>)}</ul></details>{estimate.warnings?.map((warning,index)=><p key={index}>{warning}</p>)}</div>}<label>Reason for correction<textarea value={reason} onChange={event=>setReason(event.target.value)} maxLength={300} placeholder="For example, the label lists different values or this meal was logged in error."/></label><div><button type="button" disabled={busy||calculating||!estimate} onClick={()=>prepare('nutrition.meal.update')}>Review correction</button><button type="button" disabled={busy} onClick={()=>prepare('nutrition.meal.remove')}>Review removal</button></div></div>}
+    <button type="button" onClick={()=>requestAssistantConversation(`Help me correct my saved meal ${JSON.stringify(entry.name)} from ${day.date}, entry ${entry.id}. Ask me what foods or portions changed, then calculate the updated meal for review.`)}>Correct with Brevity</button>
   </li>
 }
 
