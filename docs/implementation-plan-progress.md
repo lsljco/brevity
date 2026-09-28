@@ -7,7 +7,7 @@ Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This 
 | Plan area | Current implementation | Remaining acceptance work |
 | --- | --- | --- |
 | Foundation | Git, Netlify preview and production, household login, server-side action resources, audit and Undo, seven-pillar context reads | Document complete data inventory, backup and rollback drills, observability baseline and staging data isolation |
-| Household Agent | Central Assistant uses Agents SDK, authenticated pillar reads, structured proposals, Action Mode, permissions | Representative 25–50 prompt evaluation set, error recovery, durable member context, broader approved tools |
+| Household Agent | Central Assistant uses Agents SDK, authenticated pillar reads, structured proposals, Action Mode, permissions | Run and review the implemented 30-case evaluation set; validate error recovery; durable member context and broader approved tools |
 | Nutrition Copilot | Conversational meal estimation and reviewed logging; saved meal corrections; own-member targets; dated daily/weekly totals | Family #1 accuracy pilot; full label and brand provenance; fiber, sugar and trustworthy micronutrients; recurring foods; photo and restaurant entry; completion and correction metrics |
 | Cross-pillar tools | Agent reads all seven pillars; existing reviewed planning, calendar, project and finance actions | Incremental workout, task, education, spiritual and ministry tools; weekly cross-pillar briefing; permission and failure evaluations |
 | Architect Agent | No dedicated improvement workflow | Privacy-conscious instrumentation, issue/proposal schema, concept approval, staging prototype flow, evaluations and release reporting |
@@ -59,3 +59,7 @@ Larry clarified that Brevity must own data entry: spoken consumption → targete
 - Added run diagnostics: correlation ID, elapsed time, outcome, function-tool counts and number of unavailable sources. These diagnostic events omit conversation content, identities, arguments and raw provider errors.
 - Added 30 synthetic conversation scenarios spanning general assistance, all seven pillars, nutrition follow-ups, record discovery, permission boundaries and source failures. `node scripts/evaluate-household-agent.mjs` lists them without model calls. `--live --id CASE_ID` runs one; `--live --all --out /absolute/report.json` explicitly runs the set. Requires a configured API key and incurs provider usage. The runner never calls household persistence or action execution.
 - Automatic evaluation checks cover response structure, tool usage and allowed action types; human review is required for correctness and usefulness. A listed scenario is not a passed live evaluation.
+
+### Signed-in API validation
+
+Live preview requests now use the deployed OpenAI configuration through the authenticated app; a local API key is not required for this path. See `validation/2026-09-28-live-assistant.md` for observed failures, corrections and acceptance status. Production release still requires live acceptance rather than local-test results alone.

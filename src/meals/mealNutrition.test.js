@@ -152,7 +152,7 @@ test('conversational packaged foods cannot bypass identity and reference checks 
  const result=()=>({ingredients:[row],clarificationQuestions:[]})
  assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_CLARIFICATION_REQUIRED'&&/brand/.test(e.message))
  row.productIdentityConfirmed=true
- assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_CLARIFICATION_REQUIRED'&&/approximate/.test(e.message))
+ assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_REFERENCE_REQUIRED'&&e.foods[0]==='4 oz smoked sausage')
  request.allowGenericEstimate=true
  assert.equal(calculateNutritionResult(request,result()).perServingMacros.calories,380)
  row.quantityConfirmed=false

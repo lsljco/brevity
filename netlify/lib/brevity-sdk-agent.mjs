@@ -25,6 +25,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
       let estimate
       try{estimate=await calculate({ingredients,yieldQuantity,yieldUnit,conversational:true,allowGenericEstimate,productReferences})}
       catch(error){
+        if(error?.code==='NUTRITION_REFERENCE_REQUIRED')return JSON.stringify({estimateId:null,logged:false,referenceRequired:error.foods,notice:'Use web_search to retrieve the manufacturer nutrition reference yourself, then retry with the real URL and per-serving label details. Do not ask the member for a URL, label or macro values. If research cannot resolve the exact product, ask whether an approximate estimate is acceptable and wait for consent.'})
         if(['NUTRITION_CLARIFICATION_REQUIRED','NUTRITION_REVIEW_REQUIRED'].includes(error?.code)){
           clarifications.splice(0,clarifications.length,...(error.questions?.length?error.questions:['Which exact product variant and portion did you have? I need to check the serving calculation before saving.']))
           return JSON.stringify({questions:clarifications,logged:false,estimateId:null,notice:'Ask the first clarification question and wait. No manual macro entry or label transcription. Do not propose saving yet.'})

@@ -70,8 +70,8 @@ const outputText = payload => payload?.output_text || (payload?.output || []).fl
 export function calculateNutritionResult(request, modelResult = {}) {
   const normalized=normalizeNutritionRequest(request)
   const questions=(modelResult.clarificationQuestions||[]).filter(value=>typeof value==='string'&&value.trim()).slice(0,5)
-  if(questions.length)throw Object.assign(new Error(questions[0]),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions,status:422})
   const rows=Array.isArray(modelResult.ingredients)?modelResult.ingredients:[]
+  if(rows.length!==normalized.ingredients.length&&questions.length)throw Object.assign(new Error(questions[0]),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions,status:422})
   if(rows.length!==normalized.ingredients.length)throw new Error('Nutrition analysis did not return one result for every ingredient.')
   const ingredients=rows.map((row,index)=>{
     if(normalized.conversational){
@@ -79,7 +79,7 @@ export function calculateNutritionResult(request, modelResult = {}) {
       let question=''
       if(row.quantityConfirmed!==true)question=`How much ${normalized.ingredients[index]} did you have, and in what units?`
       else if(row.foodKind==='packaged'&&row.productIdentityConfirmed!==true&&!normalized.allowGenericEstimate)question=`Which brand and exact product did you have for ${normalized.ingredients[index]}?`
-      else if(row.foodKind==='packaged'&&!matchedReference&&!normalized.allowGenericEstimate)question=`I could not verify the exact product reference for ${normalized.ingredients[index]}. Would you like a clearly marked approximate estimate?`
+      else if(row.foodKind==='packaged'&&!matchedReference&&!normalized.allowGenericEstimate)throw Object.assign(new Error('Brevity must retrieve this packaged product reference before calculating.'),{code:'NUTRITION_REFERENCE_REQUIRED',foods:[normalized.ingredients[index]],status:422})
       else if(!['packaged','standard-food'].includes(row.foodKind))question=`What exact food or product did you have for ${normalized.ingredients[index]}?`
       if(question)throw Object.assign(new Error(question),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions:[question],status:422})
     }
@@ -94,6 +94,7 @@ export function calculateNutritionResult(request, modelResult = {}) {
     macros:Object.fromEntries(macroFields.map(field=>[field,round(row[field])])),
     nutrients:Object.fromEntries(optionalNutrients.map(field=>[field,typeof row[field]==='number'&&Number.isFinite(row[field])&&row[field]>=0?round(row[field]):null])),
   })})
+  if(questions.length)throw Object.assign(new Error(questions[0]),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions,status:422})
   const batchMacros=Object.fromEntries(macroFields.map(field=>[field,round(ingredients.reduce((sum,row)=>sum+row.macros[field],0))]))
   const perServingMacros=Object.fromEntries(macroFields.map(field=>[field,round(batchMacros[field]/normalized.yieldQuantity)]))
   const batchNutrients=Object.fromEntries(optionalNutrients.map(field=>[field,ingredients.every(row=>row.nutrients[field]!==null)?round(ingredients.reduce((sum,row)=>sum+row.nutrients[field],0)):null]))

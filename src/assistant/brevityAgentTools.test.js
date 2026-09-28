@@ -115,3 +115,21 @@ test('request rules stay in agent instructions while conversation roles reach th
  }}
  await runBrevitySdkAgent({prompt:messages,requestInstructions:'Authenticated member: Larry.',model:'test',schema,canonical,browser:{},runner,logger:()=>{}})
 })
+
+test('missing product evidence returns to the agent for research without making the user a label processor',async()=>{
+ let calls=0
+ const calculate=async()=>{if(++calls===1)throw Object.assign(new Error('Reference missing'),{code:'NUTRITION_REFERENCE_REQUIRED',foods:['4 oz Eckrich Original sausage']});return {perServingMacros:{calories:380}}}
+ const input=JSON.stringify({ingredients:['4 oz Eckrich Original sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]})
+ const runner={run:async agent=>{
+  const result=JSON.parse(await agent.tools[1].invoke({},input))
+  assert.deepEqual(result.referenceRequired,['4 oz Eckrich Original sausage'])
+  assert.equal(result.estimateId,null)
+  assert.match(result.notice,/Use web_search/)
+  const researched=JSON.parse(await agent.tools[1].invoke({},input))
+  assert.ok(researched.estimateId)
+  return {finalOutput:{message:'Ready for review',proposal:null}}
+ }}
+ const result=await runBrevitySdkAgent({prompt:'Calculate my sausage',model:'test',schema,canonical,browser:{},calculate,runner,logger:()=>{}})
+ assert.equal(result.output.message,'Ready for review')
+ assert.equal(result.estimates.size,1)
+})
