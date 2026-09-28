@@ -1,3 +1,4 @@
+import {resolvedRecipes} from './recipe-library-actions.mjs'
 import { randomUUID } from 'node:crypto'
 import {
   createRollingMealDay,
@@ -124,7 +125,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       : store.get(imageOverridesKey, { type:'json' }).then(data => ({ data, etag:'', metadata:false }))])
     const customMeals = Array.isArray(entry.data?.meals) ? entry.data.meals : []
     const imageOverrides = imageEntry.data?.images && typeof imageEntry.data.images === 'object' ? imageEntry.data.images : {}
-    const library = [...MEAL_LIBRARY, ...customMeals].map(meal => imageOverrides[meal.id] ? { ...meal, image:imageOverrides[meal.id], imageGenerated:true } : meal)
+    const library = resolvedRecipes(entry.data||{}).map(meal => imageOverrides[meal.id] ? { ...meal, image:imageOverrides[meal.id], imageGenerated:true } : meal)
     return { entry, imageEntry, customMeals, library }
   }
 
@@ -203,6 +204,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
         imageGenerated = true
       }
       const payload = {
+        ...entry.data,
         version: Number(entry.data?.version || 0) + 1,
         meals: [...customMeals, createdMeal],
         updatedAt: now().toISOString(),
@@ -239,7 +241,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
         error.code = 'VALIDATION_ERROR'
         throw error
       }
-      const payload = { version:Number(entry.data?.version || 0) + 1, meals:[...customMeals, ...createdMeals], updatedAt:now().toISOString(), updatedBy:actor }
+      const payload = { ...entry.data, version:Number(entry.data?.version || 0) + 1, meals:[...customMeals, ...createdMeals], updatedAt:now().toISOString(), updatedBy:actor }
       const options = entry.metadata ? (entry.data ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }) : {}
       const written = await store.setJSON(customLibraryKey, payload, options)
       if (written?.modified !== false) return createdMeals

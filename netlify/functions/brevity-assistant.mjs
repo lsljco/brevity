@@ -1,3 +1,5 @@
+import {productionMealPlanRepository} from '../lib/meal-plan-store.mjs'
+import {bindRecipeOperation} from '../lib/recipe-library-actions.mjs'
 import {bindNutritionOperation} from '../lib/nutrition-conversation.mjs'
 import householdAuth from './household-auth.js'
 import {
@@ -32,7 +34,7 @@ async function loadAppleCalendar(event){
   return response.json().catch(()=>null)
 }
 
-const assistantResponseSchema={type:'object',additionalProperties:false,required:['message','proposal'],properties:{message:{type:'string'},proposal:{anyOf:[{type:'null'},{type:'object',additionalProperties:false,required:['summary','operations'],properties:{summary:{type:'string'},operations:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['type','description','targetId','targetDate','payloadJson','allowedScopes','defaultScope'],properties:{type:{type:'string',enum:['nutrition.meal.log','nutrition.meal.update','nutrition.meal.remove','decision.create','decision.update','assignment.create','assignment.update','project.create','project.update','project.delete','calendar.create','calendar.update','calendar.delete','transaction.categorize','transaction.rule.create','transaction.rule.delete','budget.update','forecast.update','recurring.create','recurring.update','recurring.delete']},description:{type:'string'},targetId:{type:'string'},targetDate:{type:'string'},payloadJson:{type:'string'},allowedScopes:{type:'array',items:{type:'string',enum:['this-item','this-and-future']}},defaultScope:{type:'string',enum:['this-item','this-and-future']}}}}}}]}}}
+const assistantResponseSchema={type:'object',additionalProperties:false,required:['message','proposal'],properties:{message:{type:'string'},proposal:{anyOf:[{type:'null'},{type:'object',additionalProperties:false,required:['summary','operations'],properties:{summary:{type:'string'},operations:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['type','description','targetId','targetDate','payloadJson','allowedScopes','defaultScope'],properties:{type:{type:'string',enum:['meal.recipe.update','nutrition.meal.log','nutrition.meal.update','nutrition.meal.remove','decision.create','decision.update','assignment.create','assignment.update','project.create','project.update','project.delete','calendar.create','calendar.update','calendar.delete','transaction.categorize','transaction.rule.create','transaction.rule.delete','budget.update','forecast.update','recurring.create','recurring.update','recurring.delete']},description:{type:'string'},targetId:{type:'string'},targetDate:{type:'string'},payloadJson:{type:'string'},allowedScopes:{type:'array',items:{type:'string',enum:['this-item','this-and-future']}},defaultScope:{type:'string',enum:['this-item','this-and-future']}}}}}}]}}}
 
 function cleanMessages(messages) {
   if (!Array.isArray(messages)) return []
@@ -68,6 +70,11 @@ export const processAssistantRequest = async event => {
   if (!messages.length || messages.at(-1).role !== 'user') return json(400, { error: 'A question is required.' })
 
   const canonicalServerContext = await loadProductionAuthoritativeAssistantContext({ member: session.member })
+  try{
+    const recipeRepository=await productionMealPlanRepository(),recipeLibrary=await recipeRepository.getLibrary()
+    canonicalServerContext.recipeLibraryVersion=Number(recipeLibrary.entry.data?.version||0)
+    canonicalServerContext.mealLibrary=recipeLibrary.library.map(({image,...meal})=>meal)
+  }catch(error){console.error('[assistant-recipe-library]',error);canonicalServerContext.mealLibrary=[];canonicalServerContext.mealLibraryUnavailable=true}
   const nutritionResource=`nutrition:${session.member}:${canonicalServerContext.householdDate}`
   const nutritionRecord=await createProductionActionResources().read(nutritionResource)
   canonicalServerContext.dailyNutrition=dailyNutrition(nutritionRecord.value,session.member,canonicalServerContext.householdDate)
@@ -127,8 +134,8 @@ Respond to the last household-member message. Prefer concise headings and bullet
   let proposal=null
   if(structured.proposal){
     try{
-      structured.proposal.operations=(structured.proposal.operations||[]).map(operation=>bindNutritionOperation(operation,{member:session.member,date:canonicalServerContext.householdDate,recentNutrition:canonicalServerContext.recentNutrition,estimates}))
-      proposal=normalizeActionProposal(structured.proposal,{member:session.member,role:session.role});proposal=await captureExpectedVersions(proposal,createProductionActionResources());if(proposal.operations.some(operation=>operation.type.startsWith('calendar.'))){if(!appleCalendar?.events)throw new Error('Family Calendar could not be verified. Refresh it and ask again.');proposal={...proposal,expectedCalendarVersion:calendarVersion(appleCalendar.events)}}await productionAssistantActionRepository().saveProposal(proposal)}
+      structured.proposal.operations=(structured.proposal.operations||[]).map(operation=>bindRecipeOperation(bindNutritionOperation(operation,{member:session.member,date:canonicalServerContext.householdDate,recentNutrition:canonicalServerContext.recentNutrition,estimates}),{library:canonicalServerContext.mealLibrary,estimates}))
+      proposal=normalizeActionProposal(structured.proposal,{member:session.member,role:session.role});proposal=await captureExpectedVersions(proposal,createProductionActionResources());if(proposal.operations.some(operation=>operation.type==='meal.recipe.update'))proposal.expectedVersions['meal-library:recipes']=canonicalServerContext.recipeLibraryVersion;if(proposal.operations.some(operation=>operation.type.startsWith('calendar.'))){if(!appleCalendar?.events)throw new Error('Family Calendar could not be verified. Refresh it and ask again.');proposal={...proposal,expectedCalendarVersion:calendarVersion(appleCalendar.events)}}await productionAssistantActionRepository().saveProposal(proposal)}
     catch(error){return json(422,{error:error.message||'The proposed action could not be validated.'})}
   }
   return json(200, {

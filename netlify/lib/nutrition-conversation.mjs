@@ -9,6 +9,6 @@ export function bindNutritionOperation(operation,{member,date,recentNutrition=[]
   const ownsEntry=recentNutrition.some(day=>day.date===operation.targetDate&&day.entries.some(entry=>entry.id===data.entryId&&entry.member===member))
   const estimate=estimates.get(data.estimateId)
   const allowed=removal?['entryId','reason']:correction?['name','entryId','reason','estimateId']:['name','estimateId']
-  if(operation.targetId!==member||(correction?!ownsEntry:operation.targetDate!==date)||(!removal&&(!estimate||!data.name))||(correction&&(!data.entryId||!data.reason))||Object.keys(data).some(key=>!allowed.includes(key)))throw new Error('The meal could not be verified for this member and date. Ask Brevity to check your saved meal again.')
+  if(operation.targetId!==member||(correction?!ownsEntry:operation.targetDate!==date)||(!removal&&(!estimate||!data.name||(estimate.yieldQuantity!=null&&estimate.yieldQuantity!==1)))||(correction&&(!data.entryId||!data.reason))||Object.keys(data).some(key=>!allowed.includes(key)))throw new Error('The meal could not be verified for this member and date. Ask Brevity to check your saved meal again.')
   return {...operation,payloadJson:JSON.stringify(removal?{entryId:data.entryId,reason:data.reason}:{name:data.name,estimateJson:JSON.stringify(estimate),...(correction?{entryId:data.entryId,reason:data.reason,...estimate.perServingMacros}:{})})}
 }

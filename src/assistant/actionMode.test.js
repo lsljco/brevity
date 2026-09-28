@@ -1,3 +1,4 @@
+import {resolvedRecipes,searchMealRecords,bindRecipeOperation} from '../../netlify/lib/recipe-library-actions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { actionRisk, defaultActionPermissions, normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../../netlify/lib/assistant-action-contract.mjs'
@@ -1155,4 +1156,43 @@ test('repeat meal uses own saved estimate, requires current versions, and suppor
   await assert.rejects(()=>prepareRepeatMealProposal(args),/saved meal changed/)
   await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
   assert.deepEqual((await resources.read(resource)).value.entries,[entry])
+})
+
+
+test('saved recipe name discovery and title correction preserve macros, refresh the library, and Undo',async()=>{
+  const store=versionedBlobStore(),actionStore=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store})
+  const repository=createAssistantActionRepository({store:actionStore}),mealRepository=createMealPlanRepository({store})
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+  const original={id:'custom-dinner-turkey',name:'Smoked Turkey Breast + Garlic Kale',mealType:'dinner',ingredients:['6 oz smoked turkey','1 cup garlic kale','1 roasted sweet potato'],macros:{calories:600,proteinGrams:45,carbohydrateGrams:50,fatGrams:15}}
+  await resources.write('meal-library:recipes',{meals:[original]},0,'Larry')
+  const library=(await mealRepository.getLibrary()).library
+  const found=searchMealRecords('Smoked Turkey Breast + Garlic Kale',{library})
+  assert.equal(found[0].id,original.id);assert.equal(found[0].kind,'recipe')
+  const operation=bindRecipeOperation({type:'meal.recipe.update',targetId:found[0].id,description:'Correct recipe title',payloadJson:JSON.stringify({name:'Smoked Turkey Breast + Garlic Kale + Roasted Sweet Potatoes'})},{library,estimates:new Map()})
+  const proposal=await captureExpectedVersions(normalizeActionProposal({summary:'Correct saved recipe title',operations:[operation]},session),resources)
+  await repository.saveProposal(proposal)
+  assert.equal(proposal.expectedVersions['meal-library:recipes'],1)
+  const execution={repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}}
+  const result=await executeActionWithJournal(execution)
+  await executeActionWithJournal(execution)
+  const saved=(await mealRepository.getLibrary()).library.find(meal=>meal.id===original.id)
+  assert.equal(saved.name,'Smoked Turkey Breast + Garlic Kale + Roasted Sweet Potatoes')
+  assert.deepEqual(saved.macros,original.macros);assert.deepEqual(saved.ingredients,original.ingredients)
+  assert.equal(permissionForOperation({operation:proposal.operations[0],member:'Nyla',role:'member',permissions:{planning:false},currentRecord:saved}).allowed,false)
+  await assert.rejects(()=>executeRecordOperations({proposal,session,permissions,resources}),/changed after your review/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.equal((await mealRepository.getLibrary()).library.find(meal=>meal.id===original.id).name,original.name)
+})
+
+test('built-in recipe updates retain batch calculations and survive creating a custom meal',async()=>{
+  const store=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store}),mealRepository=createMealPlanRepository({store})
+  const original=resolvedRecipes({})[0],estimate={ingredients:[{input:'12 eggs'}],yieldQuantity:6,yieldUnit:'servings',serving:'1 serving',batchMacros:{calories:840,proteinGrams:72,carbohydrateGrams:6,fatGrams:60},perServingMacros:{calories:140,proteinGrams:12,carbohydrateGrams:1,fatGrams:10},warnings:[]}
+  const op=bindRecipeOperation({type:'meal.recipe.update',targetId:original.id,payloadJson:JSON.stringify({name:'Updated breakfast',estimateId:'fresh'})},{library:resolvedRecipes({}),estimates:new Map([['fresh',estimate]])})
+  const normalized=normalizeActionProposal({operations:[{...op,description:'Update recipe ingredients'}]},{member:'Larry',role:'admin'}).operations[0]
+  const changed=applyRecordOperation({meals:[]},normalized,()=>'',{actor:'Larry',now:()=>new Date()})
+  await resources.write('meal-library:recipes',changed.after,0,'Larry')
+  await mealRepository.createMeal({meal:{name:'Separate test recipe',mealType:'breakfast',prepMinutes:1,cookMinutes:0,macros:estimate.perServingMacros,ingredients:['1 egg']},actor:'Larry'})
+  const saved=(await mealRepository.getLibrary()).library.find(meal=>meal.id===original.id)
+  assert.equal(saved.name,'Updated breakfast');assert.equal(saved.yieldQuantity,6);assert.deepEqual(saved.macros,estimate.perServingMacros)
+  assert.throws(()=>bindRecipeOperation({...op,targetId:'missing'},{library:resolvedRecipes({}),estimates:new Map()}),/Find the saved recipe/)
 })

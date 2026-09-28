@@ -61,6 +61,7 @@ export const ACTION_TYPES = {
   'debt.update': 'finance',
   'debt.delete': 'finance',
   'debt.transaction.apply': 'finance',
+  'meal.recipe.update':'planning',
   'meal.substitute': 'planning',
   'nutrition.meal.log': 'planning',
   'nutrition.meal.update': 'planning',
@@ -124,6 +125,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.update': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.delete': [],
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
+  'meal.recipe.update':['name','estimateJson'],
   'meal.substitute': ['mealType', 'mealId'],
   'nutrition.meal.log': ['name', 'estimateJson'],
   'nutrition.meal.update': ['entryId', 'name', 'calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams', 'estimateJson', 'reason'],
@@ -174,6 +176,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
+  if (operation.type === 'meal.recipe.update') return 'meal-library:recipes'
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
   if (operation.type === 'sermon.activate') return 'sermon:active'
   const householdKey=householdResourceKeyForAction(operation.type)
@@ -289,7 +292,7 @@ function normalizeActionPayload(type, input) {
       if (value.length > 800_000) throw new Error('The reviewed sermon candidate exceeds Brevity’s activation capacity.')
       try { normalized.candidateJson = JSON.stringify(JSON.parse(value)) }
       catch { throw new Error('The reviewed sermon candidate is not valid JSON.') }
-    } else if ((type === 'nutrition.meal.log' || type === 'nutrition.meal.update') && field === 'estimateJson') {
+    } else if ((type === 'nutrition.meal.log' || type === 'nutrition.meal.update' || type === 'meal.recipe.update') && field === 'estimateJson') {
       assertString(type, field, value)
       if(value.length>30000)throw new Error('The meal estimate is too large.')
       let estimate
@@ -437,7 +440,7 @@ export function normalizeActionOperation(input = {}) {
   const fixedRecurringScope = ['recurring.update', 'recurring.delete'].includes(type) && allowedScopes.length === 1
     ? defaultScope === 'this-and-future' ? 'This and future items' : 'This item only'
     : ''
-  const reviewedDescription = plannedTransferNotice ? `${baseDescription} · ${plannedTransferNotice}` : baseDescription
+  const reviewedDescription = type==='meal.recipe.update' ? `${baseDescription} · Updates the shared recipe and plans referencing it; saved consumed meals stay unchanged` : plannedTransferNotice ? `${baseDescription} · ${plannedTransferNotice}` : baseDescription
   const operation = {
     id: cleanId(input.id) || randomUUID(),
     type,
@@ -453,7 +456,7 @@ export function normalizeActionOperation(input = {}) {
     risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
-  if (((operation.domain === 'planning' && type !== 'sermon.activate' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
+  if (((operation.domain === 'planning' && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
   if (type === 'plan.overview.update' && operation.targetId !== 'overview') throw new Error('A daily-plan overview action requires the exact overview record.')
   if (type === 'plan.pillar.update' && (!DAILY_PLAN_PILLARS.includes(payload.pillar) || operation.targetId !== payload.pillar)) throw new Error('A daily-plan pillar action requires the exact pillar record.')
@@ -566,6 +569,7 @@ export function normalizeActionOperation(input = {}) {
     if (payload.transactionType && payload.transactionType !== 'transfer' && payload.transferAccountId) throw new Error('Only a forecast-only planned transfer can include a destination account.')
     if (payload.accountId && payload.transferAccountId && payload.accountId === payload.transferAccountId) throw new Error('A scheduled transfer requires different source and destination accounts.')
   }
+  if(type==='meal.recipe.update'&&(!operation.targetId||!payload.name))throw new Error('A recipe update requires its exact saved recipe and title.')
   if(type==='meal.substitute'){
     if(!MEAL_TYPES.includes(payload.mealType))throw new Error('Choose breakfast, lunch or dinner for the meal substitution.')
     const meal=MEALS_BY_ID.get(payload.mealId)
@@ -626,6 +630,7 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type==='meal.recipe.update')return currentRecord&&(role==='admin'||permissions?.planning)?{allowed:true}:{allowed:false,reason:'Recipe changes require an existing recipe and household planning access.'}
   if(operation.type==='nutrition.meal.log' && operation.targetId!==member)return {allowed:false,reason:'Members can log only their own meals.'}
   if(['nutrition.meal.update','nutrition.meal.remove'].includes(operation.type))return operation.targetId===member && currentRecord?.member===member && currentRecord?.date===operation.targetDate ? {allowed:true} : {allowed:false,reason:'Members can correct only their own saved meals.'}
   if(operation.type==='nutrition.targets.update' && operation.targetId!==member)return {allowed:false,reason:'Members can change only their own nutrition targets.'}

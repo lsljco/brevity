@@ -43,3 +43,11 @@ Do not infer Phase 1 success from a passing build or a healthy endpoint. The acc
 ### Voice-first nutrition correction (supersedes manual label entry)
 
 Larry clarified that Brevity must own data entry: spoken consumption → targeted clarification → product/reference lookup → calculation → reviewed save. Removed the package-label form. The SDK now has web search for product references and a calculator clarification result that cannot create a savable estimate. Unanswered questions block subsequent estimate attempts in that turn. Correction starts a conversation and binds recalculated macros to an exact member-owned saved entry from the past seven days. Manual correction fields are removed; audit and Undo remain. Source URLs are retained only when present in supplied references. Live signed-in voice/device and model behavior remain acceptance checks, not proven by mocked tests.
+
+### General questions and saved recipe discovery
+
+- The agent is instructed to answer open-ended questions, reason, draft and research regardless of the supported write-action list. It must state actual execution limits rather than invent capabilities.
+- Search tool distinguishes recipes, planned meals and recent consumption; complete canonical recipe library is loaded server-side. Members should not be asked to retrieve database IDs or paste already saved records.
+- Added reviewed recipe title/ingredient updates for custom and built-in recipes. Shared library changes propagate to plans referencing the recipe; consumed logs are unchanged. Title-only edits preserve macros; ingredient changes use calculated batch yield.
+- Library writes use the existing versioned custom-library record, conditional writes, journals, audit and Undo. Creating/importing meals preserves built-in recipe overrides. UI refresh listens for recipe changes.
+- Screenshot reproduction is covered using a matching test recipe; real household record discovery and live conversational behavior still require signed-in preview validation.
