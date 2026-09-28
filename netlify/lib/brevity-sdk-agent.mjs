@@ -1,13 +1,13 @@
 import {HOUSEHOLD_AGENT_GUIDANCE} from './household-agent-guidance.mjs'
 import {searchMealRecords} from './recipe-library-actions.mjs'
 import {NUTRITION_CONVERSATION_RULES} from './nutrition-conversation.mjs'
-import { Agent, Runner, tool, webSearchTool } from '@openai/agents'
+import { Agent, Runner, tool, webSearchTool, user, assistant } from '@openai/agents'
 import { z } from 'zod'
 import { pillarRecords } from './brevity-agent-tools.mjs'
 import { calculateMealNutrition } from './meal-nutrition.mjs'
 import { randomUUID } from 'node:crypto'
 
-export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=calculateMealNutrition,estimates=new Map(),clarifications=[],onTool=()=>{},requestInstructions=''} ) {
+export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=calculateMealNutrition,estimates=new Map(),clarifications=[],onTool=()=>{},requestInstructions=''}) {
   const getPillarRecords=tool({
     name:'get_pillar_records',
     description:'Read authenticated Brevity records for one of the seven pillars before making record-specific claims or proposals.',
@@ -53,7 +53,8 @@ export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,
   let outcome='failed',errorCategory=null
   try{
     const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,estimates,clarifications,onTool:recordTool,requestInstructions})
-    const result=await runner.run(agent,prompt,{maxTurns:8})
+    const input=Array.isArray(prompt)?prompt.map(message=>typeof message.content==='string'&&(message.role==='user'||message.role==='assistant')?(message.role==='user'?user(message.content):assistant(message.content)):message):prompt
+    const result=await runner.run(agent,input,{maxTurns:8})
     if(result.interruptions?.length)throw Error('Brevity requires a separate Action Mode review for this request.')
     const output=clarifications.length?{message:clarifications[0],proposal:null}:result.finalOutput
     outcome=clarifications.length?'clarification':output?.proposal?'proposal':'answered'

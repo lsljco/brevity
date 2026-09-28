@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import {getInputItems} from '../../node_modules/@openai/agents-openai/dist/openaiResponsesConverter.mjs'
 import { createBrevitySdkAgent, runBrevitySdkAgent } from '../../netlify/lib/brevity-sdk-agent.mjs'
 
 const canonical={householdDate:'2026-09-28',sources:[{id:'rolling-meals',state:'available'}],rollingMealPlan:{days:[{date:'2026-09-28',meals:{breakfast:{name:'Eggs'}}}]},actionRecords:{finance:{recurringRecords:[{id:'rent'}]}}}
@@ -106,7 +107,9 @@ test('request rules stay in agent instructions while conversation roles reach th
  const messages=[{role:'user',content:'Today I ate sausage.'},{role:'assistant',content:'Which brand?'},{role:'user',content:'Eckrich Original, four ounces.'}]
  const runner={run:async(agent,input)=>{
    assert.ok(agent.instructions.includes('Authenticated member: Larry.'))
-   assert.deepEqual(input,messages)
+   const converted=getInputItems(input)
+   assert.deepEqual(converted.map(item=>({role:item.role,content:item.content[0].text})),messages)
+   assert.equal(converted[1].content[0].type,'output_text')
    assert.ok(!agent.instructions.includes('Eckrich Original, four ounces.'))
    return {finalOutput:{message:'Was anything added?',proposal:null}}
  }}

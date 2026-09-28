@@ -145,3 +145,25 @@ test('generated images use a background job instead of a timeout-prone meal-plan
 test('unresolved product or quantity questions prevent nutrition totals from being returned',()=>{
   assert.throws(()=>calculateNutritionResult({ingredients:['a sausage'],yieldQuantity:1,yieldUnit:'meal',conversational:true},{ingredients:[],warnings:[],clarificationQuestions:['Which brand and how many ounces?']}),error=>error.code==='NUTRITION_CLARIFICATION_REQUIRED'&&error.questions[0]==='Which brand and how many ounces?')
 })
+
+test('conversational packaged foods cannot bypass identity and reference checks with an empty question array',()=>{
+ const request={ingredients:['4 oz smoked sausage'],yieldQuantity:1,yieldUnit:'meal',conversational:true,allowGenericEstimate:false,productReferences:[]}
+ const row={foodKind:'packaged',productIdentityConfirmed:false,quantityConfirmed:true,calories:380,proteinGrams:12,carbohydrateGrams:4,fatGrams:34}
+ const result=()=>({ingredients:[row],clarificationQuestions:[]})
+ assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_CLARIFICATION_REQUIRED'&&/brand/.test(e.message))
+ row.productIdentityConfirmed=true
+ assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_CLARIFICATION_REQUIRED'&&/approximate/.test(e.message))
+ request.allowGenericEstimate=true
+ assert.equal(calculateNutritionResult(request,result()).perServingMacros.calories,380)
+ row.quantityConfirmed=false
+ assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_CLARIFICATION_REQUIRED')
+})
+
+test('plain whole foods need no brand while referenced packaged food can calculate',()=>{
+ const request={ingredients:['2 eggs'],yieldQuantity:1,yieldUnit:'meal',conversational:true,productReferences:[]}
+ const row={foodKind:'standard-food',quantityConfirmed:true,productIdentityConfirmed:false,calories:140,proteinGrams:12,carbohydrateGrams:0,fatGrams:10}
+ assert.equal(calculateNutritionResult(request,{ingredients:[row]}).perServingMacros.calories,140)
+ request.ingredients=['2 oz branded sausage'];request.productReferences=[{url:'https://example.com/sausage',details:'Test reference'}]
+ Object.assign(row,{foodKind:'packaged',productIdentityConfirmed:true,sourceUrl:'https://example.com/sausage'})
+ assert.equal(calculateNutritionResult(request,{ingredients:[row]}).ingredients[0].sourceUrl,'https://example.com/sausage')
+})
