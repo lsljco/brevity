@@ -1,7 +1,7 @@
 import {HOUSEHOLD_AGENT_GUIDANCE} from './household-agent-guidance.mjs'
 import {searchMealRecords} from './recipe-library-actions.mjs'
 import {NUTRITION_CONVERSATION_RULES} from './nutrition-conversation.mjs'
-import { Agent, Runner, tool, webSearchTool, user, assistant } from '@openai/agents'
+import { Agent, Runner, tool, webSearchTool, user, assistant, system } from '@openai/agents'
 import { z } from 'zod'
 import { pillarRecords } from './brevity-agent-tools.mjs'
 import { calculateMealNutrition } from './meal-nutrition.mjs'
@@ -35,7 +35,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
       clarifications.length=0
       const estimateId=randomUUID()
       estimates.set(estimateId,estimate)
-      return JSON.stringify({estimateId,estimate,logged:false,notice:'Brevity has not recorded this meal as eaten. Offer an Action Mode proposal to log it.'})
+      return JSON.stringify({estimateId,estimate,logged:false,notice:'Brevity has not recorded this meal as eaten. Offer an Action Mode proposal to log it. A missing ingredient sourceUrl means exact product-label evidence was unavailable; clearly disclose approximate values and never claim all labels were verified.'})
     },
   })
   return new Agent({
@@ -55,7 +55,10 @@ export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,
   try{
     const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,estimates,clarifications,onTool:recordTool,requestInstructions})
     const input=Array.isArray(prompt)?prompt.map(message=>typeof message.content==='string'&&(message.role==='user'||message.role==='assistant')?(message.role==='user'?user(message.content):assistant(message.content)):message):prompt
-    const result=await runner.run(agent,input,{maxTurns:8})
+    let result=await runner.run(agent,input,{maxTurns:8})
+    if(!clarifications.length&&estimates.size&&!result.finalOutput?.proposal&&Array.isArray(result.history)){
+      result=await runner.run(agent,[...result.history,system('Before finalizing, check the original member request. You successfully calculated nutrition and have valid estimate IDs: '+JSON.stringify([...estimates.keys()])+'. If the member requested a meal log, correction or review, return the actual Action Mode proposal now using the correct estimate ID and original intent. Preparing review is not saving; do not ask permission to prepare a review already requested. If the member asked only for information, answer without a proposal. Never say a review is prepared or ready when proposal is null. Do not recalculate unchanged food or ask for macros, labels or record IDs.')],{maxTurns:4})
+    }
     if(result.interruptions?.length)throw Error('Brevity requires a separate Action Mode review for this request.')
     const output=clarifications.length?{message:clarifications[0],proposal:null}:result.finalOutput
     outcome=clarifications.length?'clarification':output?.proposal?'proposal':'answered'

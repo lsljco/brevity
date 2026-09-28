@@ -133,3 +133,22 @@ test('missing product evidence returns to the agent for research without making 
  assert.equal(result.output.message,'Ready for review')
  assert.equal(result.estimates.size,1)
 })
+
+
+test('completed estimate with an omitted review gets one bounded proposal repair using existing tool history',async()=>{
+ let calls=0
+ const runner={run:async(agent,input,options)=>{
+  if(++calls===1){
+   await agent.tools[1].invoke({},JSON.stringify({ingredients:['2 eggs'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]}))
+   return {history:[{role:'user',content:'Prepare my meal review.'}],finalOutput:{message:'Review prepared',proposal:null}}
+  }
+  assert.equal(options.maxTurns,4)
+  assert.equal(input.at(-1).role,'system')
+  assert.match(input.at(-1).content,/Preparing review is not saving/)
+  return {finalOutput:{message:'Ready to review; not saved',proposal:{summary:'Review meal',operations:[]}}}
+ }}
+ const result=await runBrevitySdkAgent({prompt:'Prepare my meal review.',model:'test',schema,canonical,browser:{},calculate:async()=>({perServingMacros:{calories:140}}),runner,logger:()=>{}})
+ assert.equal(calls,2)
+ assert.ok(result.output.proposal)
+ assert.equal(result.estimates.size,1)
+})

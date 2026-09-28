@@ -36,3 +36,13 @@ The clarified 4 oz sausage/two-slice meal reached an actual Action Mode review w
 ## Portion arithmetic finding
 
 Changing the draft to 6 oz sausage plus one 11-fl-oz, 30-g-protein shake and two slices of toast returned 82 g protein: the single shake had effectively been doubled. Added structured consumed amount/unit and label serving amount/unit/macros. The server now converts compatible mass/volume units and multiplies per-label macros itself, overriding model whole-portion totals. Regression covers a model-returned 60 g protein for one shake being corrected to the label's 30 g, plus 6 oz sausage scaled from a 2 oz label. Incompatible serving units fail closed.
+
+## Server-arithmetic live retest
+
+Candidate `b8f8a54` returned 870 calories and 54 g protein for the three-food meal, counting the shake once (30 g) and sausage as three label servings (18 g). Correlation `a8b6d816-efbe-4ed8-b564-972f3cfa096c`; calculator called once; no runtime error. The model omitted the requested proposal despite saying a review was prepared. Added one bounded repair pass using the existing SDK history and calculated estimate IDs; no recalculation or save is performed by that pass.
+
+This numerical result is not certified exact-label accuracy. Independent manufacturer-page inspection showed the Eckrich Original Skinless Rope page lists 15 g fat and 5 g carbs per 2 oz, differing from the agent's cited 17 g fat and 2 g carbs. Product reference matching and evidence quality therefore remain a release gate even when serving arithmetic is correct. Manufacturer source: https://eckrich.sfdbrands.com/en-us/products/smoked-sausage-rope/original-skinless-rope/ (checked September 28, 2026).
+
+## Evidence retrieval correction
+
+The nutrition server now discards agent-authored product-reference summaries and retrieves the public URLs itself using the existing DNS-pinned, private-network-blocking, size-bounded recipe fetcher. Homepages and unreadable/incomplete nutrition pages cannot count as evidence. The calculator receives fetched page text, and missing evidence returns to agent research or explicit approximation consent. Approximate items retain no exact-label source claim and carry a server-generated uncertainty warning. This prevents invented source summaries from authorizing the earlier incorrect label values.
