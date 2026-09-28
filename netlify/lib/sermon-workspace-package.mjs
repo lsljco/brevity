@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto'
-import { createRequire } from 'node:module'
-const require=createRequire(import.meta.url)
-const pptxgen=require('pptxgenjs')
+import pptxgen from 'pptxgenjs/dist/pptxgen.cjs.js'
 
 export const householdId=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
 export const workspaceKey=`${householdId}/ministry/sermon-workspace/v1`
