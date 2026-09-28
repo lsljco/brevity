@@ -158,8 +158,8 @@ export const handler=async event=>{
     const body=JSON.parse(event.body||'{}')
     if(!cleanMessages(body.messages).length)return json(400,{error:'A question is required.'})
     const id=randomUUID(),store=jobs()
-    await store.setJSON(jobKey(id),{member:session.member,state:'queued',createdAt:new Date().toISOString()})
-    const response=await fetch(backgroundUrl(event),{method:'POST',headers:{'content-type':'application/json',cookie:event.headers?.cookie||event.headers?.Cookie||''},body:JSON.stringify({id,body})})
+    await store.setJSON(jobKey(id),{member:session.member,state:'queued',createdAt:new Date().toISOString(),body})
+    const response=await fetch(backgroundUrl(event),{method:'POST',headers:{'content-type':'application/json',cookie:event.headers?.cookie||event.headers?.Cookie||''},body:JSON.stringify({id})})
     if(!response.ok&&response.status!==202)throw Error(`Background dispatch returned ${response.status}`)
     return json(202,{state:'queued',jobId:id})
   }catch(error){console.error('[brevity-assistant-dispatch]',error);return json(502,{error:'Brevity Assistant could not start. Please retry.'})}
