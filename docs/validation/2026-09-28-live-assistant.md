@@ -21,3 +21,14 @@ Candidate `12a94bd`: 1,095 local tests pass; build passes. Live retest pending. 
 
 - `12a94bd` correctly withheld a meal proposal pending clarification (correlation `24607d58-fb25-4d4c-bba1-f85a101cfebb`). Its clarification misattributed a product page to the user; wording and source-ownership instructions were corrected in `0ecb01b`.
 - The branded follow-up no longer hit the SDK converter error, but asked the member to provide a URL/label. Missing-reference handling is now an internal `NUTRITION_REFERENCE_REQUIRED` result: the agent must research and retry, or obtain consent for an explicitly approximate estimate when its research cannot resolve the source. It must not request label transcription.
+
+## Confirmed live improvements
+
+- Open-ended correlation/causation question produced a substantive answer with an everyday example, without a capability menu.
+- Saved recipe lookup returned the exact title and ingredient list for Smoked Turkey Breast + Garlic Kale without asking for an ID or pasted record. No recipe change was made.
+- On `90f1bed`, the original ambiguous sausage/toast request asked about the sausage brand/variant and preparation weight. It did not return guessed macros or a proposal.
+- Latest full regression run: 1,096 tests passed; production build passed. Branded calculation/review retest is pending.
+
+## Review-level provenance finding
+
+The clarified 4 oz sausage/two-slice meal reached an actual Action Mode review with 520 calories and 16 g protein. Inspection of its warnings revealed brand home pages and typical values had been treated as sufficient product evidence. This is not an exact-label accuracy pass. Added server rejection of homepage URLs and a required reference-quality classification; approximate packaged-food references require explicit estimate consent. No proposal was applied.

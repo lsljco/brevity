@@ -164,6 +164,15 @@ test('plain whole foods need no brand while referenced packaged food can calcula
  const row={foodKind:'standard-food',quantityConfirmed:true,productIdentityConfirmed:false,calories:140,proteinGrams:12,carbohydrateGrams:0,fatGrams:10}
  assert.equal(calculateNutritionResult(request,{ingredients:[row]}).perServingMacros.calories,140)
  request.ingredients=['2 oz branded sausage'];request.productReferences=[{url:'https://example.com/sausage',details:'Test reference'}]
- Object.assign(row,{foodKind:'packaged',productIdentityConfirmed:true,sourceUrl:'https://example.com/sausage'})
+ Object.assign(row,{foodKind:'packaged',productIdentityConfirmed:true,referenceQuality:'exact-product-label',sourceUrl:'https://example.com/sausage'})
  assert.equal(calculateNutritionResult(request,{ingredients:[row]}).ingredients[0].sourceUrl,'https://example.com/sausage')
+})
+
+
+test('a brand home page or approximate reference cannot authorize label-based packaged nutrition',()=>{
+ const request={ingredients:['4 oz Example Original sausage'],yieldQuantity:1,yieldUnit:'meal',conversational:true,productReferences:[{url:'https://example.com/',details:'Brand home page'}]}
+ const row={foodKind:'packaged',productIdentityConfirmed:true,quantityConfirmed:true,referenceQuality:'exact-product-label',sourceUrl:'https://example.com/'}
+ assert.throws(()=>calculateNutritionResult(request,{ingredients:[row]}),e=>e.code==='NUTRITION_REFERENCE_REQUIRED')
+ row.sourceUrl='https://example.com/sausage';request.productReferences[0].url=row.sourceUrl;row.referenceQuality='approximate'
+ assert.throws(()=>calculateNutritionResult(request,{ingredients:[row]}),e=>e.code==='NUTRITION_REFERENCE_REQUIRED')
 })
