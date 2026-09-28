@@ -39,3 +39,10 @@ Do not infer Phase 1 success from a passing build or a healthy endpoint. The acc
 - Ingredient details expose recorded estimate basis and model confidence, explicitly distinguished from label verification.
 - Correction calculations discard stale responses after food edits.
 - Signed-in preview verification remains required before production approval.
+
+### Package-label correction
+
+- Saved meal correction can use an optional package-label editor. Enter exact product, label serving size, servings eaten and per-serving macros for every food. The server multiplies and totals without an AI request. Optional nutrients remain unknown when incomplete.
+- Preserve member-entered label values and portions with the saved ingredients and repeated meals. Action Mode shows the calculation basis; labels are not claimed independently verified.
+- Food edits invalidate calculated totals; the normal foods-and-portions estimation option remains available.
+- Tests cover portion multiplication, invalid/missing values, fractional servings, source persistence, correction and Undo. Signed-in mobile preview acceptance remains outstanding.

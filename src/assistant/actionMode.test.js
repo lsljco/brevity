@@ -1,3 +1,4 @@
+import {calculateLabelNutrition} from '../../netlify/lib/label-nutrition.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { actionRisk, defaultActionPermissions, normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../../netlify/lib/assistant-action-contract.mjs'
@@ -1155,4 +1156,24 @@ test('repeat meal uses own saved estimate, requires current versions, and suppor
   await assert.rejects(()=>prepareRepeatMealProposal(args),/saved meal changed/)
   await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
   assert.deepEqual((await resources.read(resource)).value.entries,[entry])
+})
+
+
+test('label correction preserves entered serving provenance through saving, repeating and Undo',async()=>{
+  const date='2026-09-28',store=versionedBlobStore(),actionStore=versionedBlobStore(),now=new Date('2026-09-28T10:00:00Z')
+  const resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store,now:()=>now}),repository=createAssistantActionRepository({store:actionStore})
+  const session={member:'Larry',role:'member'},permissions=defaultActionPermissions('member'),resource=`nutrition:Larry:${date}`
+  const original={id:'label-meal',member:'Larry',date,name:'Breakfast',ingredients:[{input:'6 oz sausage'}],macros:{calories:1300,proteinGrams:99,carbohydrateGrams:2,fatGrams:60}}
+  await resources.write(resource,{member:'Larry',date,entries:[original]},0,'Larry')
+  const estimate=calculateLabelNutrition({labels:[{name:'Package sausage',servingSize:'2 oz',servings:3,calories:190,proteinGrams:6,carbohydrateGrams:2,fatGrams:17}]})
+  const proposal=await prepareDirectProposal({input:{summary:'Correct using package label',expectedVersion:1,operation:{type:'nutrition.meal.update',targetId:'Larry',targetDate:date,description:'Correct portions using label',payload:{entryId:original.id,name:original.name,reason:'Package label checked',estimateJson:JSON.stringify(estimate),...estimate.perServingMacros}}},session,permissions,resources,repository})
+  const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+  const saved=(await resources.read(resource)).value.entries[0]
+  assert.equal(saved.macros.proteinGrams,18)
+  assert.deepEqual(saved.ingredients[0].label,estimate.ingredients[0].label)
+  assert.equal(saved.ingredients[0].source,'member-label')
+  const repeat=await prepareRepeatMealProposal({input:{sourceDate:date,entryId:original.id,sourceVersion:2,expectedVersion:2},session,permissions,repository,resources,now})
+  assert.deepEqual(JSON.parse(repeat.operations[0].payload.estimateJson).ingredients,estimate.ingredients)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.deepEqual((await resources.read(resource)).value.entries,[original])
 })

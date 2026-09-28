@@ -185,3 +185,6 @@
 .consumed-meal-correction textarea{min-height:4rem}
 .consumed-meal-correction button{margin-right:.6rem}
 [data-theme="light"] .consumed-nutrition-fields input,[data-theme="light"] .consumed-meal-correction input,[data-theme="light"] .consumed-meal-correction textarea{color-scheme:light}
+
+.consumed-label-food{min-width:0;margin:.8rem 0;padding:.8rem;border:1px solid var(--glass-border);border-radius:.6rem}
+.consumed-meal-correction input[type="checkbox"]{width:auto;margin-right:.4rem}
