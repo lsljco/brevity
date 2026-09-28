@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-const loadPptx=async()=> (await import('../../node_modules/pptxgenjs/dist/pptxgen.cjs.js')).default
+const loadPptx=async()=> (await import('../../node_modules/pptxgenjs/dist/pptxgen.bundle.js')).default
 
 export const householdId=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
 export const workspaceKey=`${householdId}/ministry/sermon-workspace/v1`
