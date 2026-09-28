@@ -16,7 +16,7 @@ export async function handler(event){
       day.setUTCDate(day.getUTCDate()-index)
       const key=day.toISOString().slice(0,10)
       const record=await resources.read(`nutrition:${session.member}:${key}`)
-      return dailyNutrition(record.value,session.member,key)
+      return {...dailyNutrition(record.value,session.member,key),version:record.version}
     }))
     const target=await resources.read(`nutrition-targets:${session.member}`)
     const targets=Object.fromEntries(NUTRIENTS.filter(key=>Number.isFinite(target.value?.[key])).map(key=>[key,target.value[key]]))

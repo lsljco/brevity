@@ -166,12 +166,22 @@
   .meal-detail-image-buttons label,.meal-detail-image-buttons button { text-align:center; }
 }
 .consumed-nutrition{display:grid;gap:1.25rem;margin-top:1.25rem}
-.consumed-nutrition-panel{padding:1.25rem;border:1px solid var(--border,#d8d3c8);border-radius:1rem;background:var(--surface,#fff)}
+.consumed-nutrition-panel{padding:1.25rem;border:1px solid var(--glass-border);border-radius:1rem;background:var(--glass-bg);color:var(--soft-white)}
 .consumed-nutrition-panel h2{margin:0 0 .5rem}
-.consumed-nutrition-panel article{border-top:1px solid #ddd;padding:.8rem 0}
+.consumed-nutrition-panel article{border-top:1px solid var(--glass-border);padding:.8rem 0}
 .consumed-nutrition-panel article h3{margin:0 0 .4rem;font-size:1rem}
 .consumed-nutrition-panel li{margin:.4rem 0}
-.consumed-nutrition-panel li small{display:block}
+.consumed-nutrition-panel li small{display:block;color:var(--muted)}
+.consumed-nutrition-panel li details{margin:.4rem 0 .6rem;font-size:.9rem}
+.consumed-nutrition-panel li summary{cursor:pointer;color:var(--gold-light)}
+.consumed-nutrition-panel li details ul{padding-left:1.25rem}
 .consumed-nutrition-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:1rem;margin:1rem 0}
 .consumed-nutrition-fields label{display:grid;gap:.35rem}
-.consumed-nutrition-fields input{width:100%;padding:.6rem;border:1px solid #aaa;border-radius:.4rem}
+.consumed-nutrition-fields input{width:100%;padding:.6rem;border:1px solid var(--glass-border);border-radius:.4rem;background:var(--glass-bg);color:var(--white);color-scheme:dark}
+.consumed-meal-correction{display:grid;gap:.8rem;margin:.8rem 0;padding:1rem;border:1px solid var(--glass-border);border-radius:.6rem}
+.consumed-meal-correction label{display:grid;gap:.35rem}
+.consumed-meal-correction input,.consumed-meal-correction textarea{width:100%;padding:.6rem;border:1px solid var(--glass-border);border-radius:.4rem;background:var(--glass-bg);color:var(--white);color-scheme:dark}
+.consumed-meal-correction textarea::placeholder{color:var(--muted)}
+.consumed-meal-correction textarea{min-height:4rem}
+.consumed-meal-correction button{margin-right:.6rem}
+[data-theme="light"] .consumed-nutrition-fields input,[data-theme="light"] .consumed-meal-correction input,[data-theme="light"] .consumed-meal-correction textarea{color-scheme:light}

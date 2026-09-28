@@ -16,7 +16,12 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
     description:'Estimate nutrition from measured foods. Returns an estimateId for a reviewed nutrition.meal.log proposal; the estimate itself does not log consumption or change daily totals.',
     parameters:z.object({ingredients:z.array(z.string().min(1).max(240)).min(1).max(30)}),
     async execute({ingredients}) {
-      const estimate=await calculate({ingredients,yieldQuantity:1,yieldUnit:'meal'})
+      let estimate
+      try{estimate=await calculate({ingredients,yieldQuantity:1,yieldUnit:'meal'})}
+      catch(error){
+        if(error?.code==='NUTRITION_REVIEW_REQUIRED')return JSON.stringify({error:error.message,logged:false,estimateId:null,notice:'Ask for the exact package label or a clearer serving amount. Do not propose logging this estimate.'})
+        throw error
+      }
       const estimateId=randomUUID()
       estimates.set(estimateId,estimate)
       return JSON.stringify({estimateId,estimate,logged:false,notice:'Brevity has not recorded this meal as eaten. Offer an Action Mode proposal to log it.'})
