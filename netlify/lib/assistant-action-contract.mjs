@@ -62,6 +62,7 @@ export const ACTION_TYPES = {
   'debt.delete': 'finance',
   'debt.transaction.apply': 'finance',
   'meal.substitute': 'planning',
+  'nutrition.meal.log': 'planning',
 }
 export const FORBIDDEN_ACTION_PATTERN = /payment|purchase|transfer|withdraw|deposit|connect|disconnect|password|credential|bank\.account/i
 export const SCOPES = ['this-item', 'this-and-future']
@@ -121,6 +122,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.delete': [],
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
   'meal.substitute': ['mealType', 'mealId'],
+  'nutrition.meal.log': ['name', 'estimateJson'],
 }
 const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
@@ -163,6 +165,7 @@ const STRONG_TYPES = new Set(['debt.delete', 'project.delete', 'calendar.delete'
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
   if (operation.type === 'sermon.activate') return 'sermon:active'
   const householdKey=householdResourceKeyForAction(operation.type)
@@ -278,6 +281,14 @@ function normalizeActionPayload(type, input) {
       if (value.length > 800_000) throw new Error('The reviewed sermon candidate exceeds Brevity’s activation capacity.')
       try { normalized.candidateJson = JSON.stringify(JSON.parse(value)) }
       catch { throw new Error('The reviewed sermon candidate is not valid JSON.') }
+    } else if (type === 'nutrition.meal.log' && field === 'estimateJson') {
+      assertString(type, field, value)
+      if(value.length>30000)throw new Error('The meal estimate is too large.')
+      let estimate
+      try{estimate=JSON.parse(value)}catch{throw new Error('The meal estimate is invalid JSON.')}
+      const macros=estimate?.perServingMacros
+      if(!Array.isArray(estimate?.ingredients)||!estimate.ingredients.length||estimate.ingredients.length>30||!macros||['calories','proteinGrams','carbohydrateGrams','fatGrams'].every(key=>macros[key]===undefined)||['calories','proteinGrams','carbohydrateGrams','fatGrams'].some(key=>typeof macros[key]!=='number'||!Number.isFinite(macros[key])||macros[key]<0))throw new Error('The meal estimate requires measured ingredients and valid macros.')
+      normalized.estimateJson=JSON.stringify(estimate)
     } else if (type === 'sermon.activate' && (field === 'draftId' || field === 'sourceHash')) {
       assertString(type, field, value)
       normalized[field] = clean(value, field === 'sourceHash' ? 64 : 160)
@@ -543,6 +554,9 @@ export function normalizeActionOperation(input = {}) {
     const customId=/^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.test(String(payload.mealId||''))
     if(!meal&&!customId)throw new Error('Choose a meal from the household meal library.')
   }
+  if(type==='nutrition.meal.log'){
+    if(!HOUSEHOLD_MEMBERS.includes(operation.targetId)||!payload.name||!payload.estimateJson)throw new Error('Logging a meal requires a household member, name, and verified nutrition estimate.')
+  }
   if (type === 'forecast.update') {
     const modelFields = ['planningExpense', 'expenseMode']
     const scenarioFields = ['title', 'description']
@@ -585,6 +599,7 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type==='nutrition.meal.log' && operation.targetId!==member)return {allowed:false,reason:'Members can log only their own meals.'}
   if (operation.type?.startsWith('household.')) {
     // Assigned chore owners and named verifiers may perform the narrow task
     // lifecycle even when they cannot administer the broader household plan.

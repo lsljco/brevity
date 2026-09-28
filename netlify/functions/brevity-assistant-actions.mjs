@@ -6,12 +6,20 @@ import { assertExactExpectedVersions, commitPreparedRecordOperations, createProd
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { productionSermonSourceRepository } from '../lib/sermon-source-repository.mjs'
 import { MEALS_BY_ID } from '../../src/meals/mealLibrary.js'
+import { dailyNutrition } from '../lib/nutrition-ledger.mjs'
 
 const { readSession } = householdAuth
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 const parseBody=event=>{try{return JSON.parse(event.body||'{}')}catch{return null}}
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const actionId=(prefix,id)=>{const raw=String(id||''),clean=raw.replace(/[^a-zA-Z0-9_-]/g,'-').slice(0,100);return`${prefix}-${clean}-${fingerprint(raw).slice(0,16)}`}
+const executedNutrition=async(operations,session,resources)=>{
+  const log=operations?.find(operation=>operation.type==='nutrition.meal.log'&&operation.targetId===session.member)
+  if(!log)return null
+  const record=await resources.read(resourceForOperation(log))
+  const {date,totals}=dailyNutrition(record.value,session.member,log.targetDate)
+  return{date,totals}
+}
 export const publicAssistantAudit=audit=>({
   id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,
   action:audit.action,status:audit.status,occurredAt:audit.occurredAt,
@@ -612,7 +620,7 @@ export const handler=async event=>{
         if(!audit)throw new Error('The completed Action Mode proposal is missing its immutable audit record.')
         const journalEntry=await repository.getJournalEntry(actionId('execute',proposal.id))
         if(journalEntry.journal&&journalEntry.journal.state!=='completed')await completeExecutionJournal({repository,journalId:journalEntry.journal.id,completedAt:proposal.executedAt||audit.occurredAt})
-        return json(200,{ok:true,audit:publicAssistantAudit(audit),reloadRequired:true,recovered:true})
+        return json(200,{ok:true,audit:publicAssistantAudit(audit),nutrition:await executedNutrition(audit.operations,session,resources),reloadRequired:true,recovered:true})
       }
       if(!['pending','executing'].includes(proposal.state))return json(409,{error:'This proposal cannot be applied again. Ask Brevity to prepare a new one.'})
       let operations,executingMember
@@ -645,7 +653,7 @@ export const handler=async event=>{
           if(latest?.state!=='executed'||latest.auditId!==result.audit.id)throw Object.assign(new Error('The proposal state changed while Action Mode was finalizing it.'),{code:'JOURNAL_CONFLICT'})
         }
         await completeExecutionJournal({repository,journalId:result.journal.id,completedAt:result.audit.occurredAt})
-        return json(200,{ok:true,audit:publicAssistantAudit(result.audit),reloadRequired:true})
+        return json(200,{ok:true,audit:publicAssistantAudit(result.audit),nutrition:await executedNutrition(operations,session,resources),reloadRequired:true})
       }catch(error){
         const journal=(await repository.getJournalEntry(actionId('execute',proposal.id))).journal
         if(!journal){

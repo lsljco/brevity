@@ -8,6 +8,7 @@ import { assertExecutableProposalVersions, calendarVersion, commitPreparedCalend
 import { createMealPlanRepository } from '../../netlify/lib/meal-plan-store.mjs'
 import { MEAL_LIBRARY } from '../meals/mealLibrary.js'
 import { hashValue } from '../household/sharedState.js'
+import { dailyNutrition } from '../../netlify/lib/nutrition-ledger.mjs'
 
 function versionedBlobStore() {
   const values=new Map()
@@ -252,6 +253,28 @@ test('forecast adjustments update only an exact model or scenario record',()=>{
   assert.throws(()=>applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeAction:'create',incomeId:'salary',description:'Duplicate'}}),/already exists/)
   assert.throws(()=>applyRecordOperation(model,{type:'forecast.update',targetId:'current',payload:{incomeAction:'delete',incomeId:'missing'}}),/no longer exists/)
   assert.equal(resourceForOperation({type:'forecast.update',domain:'finance'}),'shared:brevity_finance_scenarios_v1')
+})
+
+test('a reviewed consumed meal is saved for the signed-in member and changes saved daily totals only after confirmation',async()=>{
+  const date='2026-09-28',store=versionedBlobStore(),actionStore=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store,now:()=>new Date('2026-09-28T10:00:00Z')})
+  const repository=createAssistantActionRepository({store:actionStore})
+  const estimate={ingredients:[{input:'3 eggs',amountDescription:'3 eggs'}],perServingMacros:{calories:210,proteinGrams:18,carbohydrateGrams:1.2,fatGrams:15},warnings:[],nutritionBasis:'Estimate'}
+  const proposal=await captureExpectedVersions(normalizeActionProposal({summary:'Log breakfast',operations:[{type:'nutrition.meal.log',description:'Log three eggs',targetId:'Larry',targetDate:date,payload:{name:'Breakfast',estimateJson:JSON.stringify(estimate)}}]},{member:'Larry',role:'admin'}),resources)
+  const resource=`nutrition:Larry:${date}`
+  assert.equal(proposal.expectedVersions[resource],0)
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.proteinGrams,0)
+  await repository.saveProposal(proposal)
+  const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources,event:{}})
+  assert.ok(result.audit)
+  const saved=dailyNutrition((await resources.read(resource)).value,'Larry',date)
+  assert.equal(saved.totals.proteinGrams,18)
+  assert.equal(saved.entries[0].member,'Larry')
+  assert.equal(dailyNutrition(saved,'Lorenzo',date).totals.proteinGrams,0)
+  const forged={...proposal.operations[0],targetId:'Lorenzo'}
+  assert.equal(permissionForOperation({operation:forged,member:'Larry',role:'admin',permissions:defaultActionPermissions('admin')}).allowed,false)
+  await assert.rejects(()=>executeRecordOperations({proposal:{...proposal,operations:[forged],expectedVersions:{[`nutrition:Lorenzo:${date}`]:0}},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources}),/own meals/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session:{member:'Larry',role:'admin'},resources,event:{},leaseMs:0})
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.proteinGrams,0)
 })
 
 test('meal substitutions require a dated library choice but allow cross-category slots',()=>{

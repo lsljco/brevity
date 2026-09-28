@@ -23,6 +23,7 @@ test('SDK nutrition tool estimates but does not save consumption',async()=>{
   const result=JSON.parse(await agent.tools[1].invoke({},'{"ingredients":["3 eggs","1 apple"]}'))
   assert.deepEqual(calls[0],{ingredients:['3 eggs','1 apple'],yieldQuantity:1,yieldUnit:'meal'})
   assert.equal(result.logged,false)
+  assert.match(result.estimateId,/^[a-f0-9-]{36}$/)
   assert.equal(result.estimate.perServingMacros.proteinGrams,18)
   assert.match(result.notice,/not recorded/)
 })
@@ -34,5 +35,7 @@ test('SDK runner is bounded and returns structured output to Action Mode',async(
     assert.equal(options.maxTurns,5)
     return {finalOutput:{message:'Read Finance',proposal:null},interruptions:[]}
   }}
-  assert.deepEqual(await runBrevitySdkAgent({prompt:'Read Finance',model:'test',schema,canonical,browser:{},runner}),{message:'Read Finance',proposal:null})
+  const result=await runBrevitySdkAgent({prompt:'Read Finance',model:'test',schema,canonical,browser:{},runner})
+  assert.deepEqual(result.output,{message:'Read Finance',proposal:null})
+  assert.equal(result.estimates.size,0)
 })

@@ -6,13 +6,15 @@ Brevity stores household records. The agent may read them through authenticated,
 
 ## Phase 1: one agent
 
-The existing Assistant UI remains the entry point. The OpenAI Agents SDK runner invokes authenticated Brevity function tools, and the current Action Mode handles reviewed writes with member permissions, version checks, audit history, and Undo. The first tools are `get_pillar_records` and `estimate_meal_nutrition`. The latter returns an estimate and explicitly says it has **not** recorded a consumed meal.
+The existing Assistant UI remains the entry point. The OpenAI Agents SDK runner invokes authenticated Brevity function tools, and the current Action Mode handles reviewed writes with member permissions, version checks, audit history, and Undo. The first tools are `get_pillar_records` and `estimate_meal_nutrition`. The latter returns an estimate and explicitly says it has **not** recorded a consumed meal. The agent can then propose `nutrition.meal.log` using the estimate ID. The server binds that ID to the nutrition result from the same request, checks the authenticated member and household date, and presents the resulting entry for Action Mode confirmation.
 
 The seven pillar names are spiritual, health, fitness, household, education, finance, and ministry. Tool implementations own authorization and data validation; descriptions and prompts are never a permission boundary. Browser-only snapshots remain labeled as device-specific and cannot override canonical server records.
 
-## Next vertical slice: consumed meals
+## Consumed meals
 
-Create a separate, member-scoped meal consumption ledger rather than marking a planned meal as eaten. Each entry needs an immutable ID, member, local date/time, foods and portions, nutrition basis, per-food estimates and uncertainty, creator, revision, and correction history. A `get_daily_nutrition` read should total consumed entries and compare them with an explicitly saved target. A `log_meal` write should present the estimate and portions for review, then commit with idempotency and version checks. Corrections and Undo must update totals. Brand labels or measured ingredients should take precedence over general estimates. Never infer sodium or a protein target from absent data.
+A separate, member-scoped, dated consumption ledger holds confirmed meals. Each entry has an ID, member, household date, ingredients and portions, the estimate and uncertainty, and the logging actor and timestamp. The health pillar read returns confirmed daily totals. Action Mode applies version checks, an immutable audit, retry recovery, and Undo; the Assistant displays the refreshed totals after confirmation. Planned meals and unconfirmed estimates are excluded.
+
+Next: add an explicit member nutrition target, meal corrections, a clear daily food log in Health, and a measured sodium source. Brand labels or measured ingredients should take precedence over general estimates. Do not infer sodium or a protein target from absent data. The initial log records today's meal only; historical date selection needs a separate reviewed flow.
 
 After this is reliable, add one reviewed write at a time for workout logging, household tasks, sermon notes, tutoring progress, and finance records. Existing Action Mode supports several planning, calendar, project, and finance actions already. Payment and account changes remain outside agent tools. Add proactive triggers only after record freshness, ownership, notification preferences, and duplicate suppression are tested.
 
