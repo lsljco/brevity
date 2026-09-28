@@ -2,6 +2,7 @@ import householdAuth from './household-auth.js'
 import { householdDate } from '../lib/assistant-authoritative-context.mjs'
 import { createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { dailyNutrition, NUTRIENTS } from '../lib/nutrition-ledger.mjs'
+import { nutritionProgress } from '../lib/nutrition-progress.mjs'
 
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 
@@ -21,6 +22,6 @@ export async function handler(event){
     const target=await resources.read(`nutrition-targets:${session.member}`)
     const targets=Object.fromEntries(NUTRIENTS.filter(key=>Number.isFinite(target.value?.[key])).map(key=>[key,target.value[key]]))
     const weeklyTotals=Object.fromEntries(NUTRIENTS.map(key=>[key,Number(days.reduce((sum,day)=>sum+day.totals[key],0).toFixed(1))]))
-    return json(200,{member:session.member,date,days,weeklyTotals,targets,targetVersion:target.version,targetsUpdatedAt:target.value?.updatedAt||''})
+    return json(200,{member:session.member,date,days,weeklyTotals,targets,progress:nutritionProgress(days[0].totals,targets),targetVersion:target.version,targetsUpdatedAt:target.value?.updatedAt||''})
   }catch(error){console.error('[nutrition-records]',error);return json(500,{error:'Could not load nutrition records. Try again.'})}
 }
