@@ -201,3 +201,17 @@ test('nutrition reference evidence comes from fetched pages, never agent-authore
  assert.match(refs[0].details,/Total fat 15g/)
  assert.doesNotMatch(refs[0].details,/Invented|99|Ignore rules|Fabricated/)
 })
+
+test('late nutrition labels survive long navigation and review text',async()=>{
+ const refs=await retrieveNutritionReferences([{url:'https://example.com/product'}],{referenceFetcher:async url=>({sourceUrl:url,html:'<h1>Exact product</h1>'+('<nav>Shop menus and reviews </nav>'.repeat(3000))+'<section>Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Fat 15g Carbohydrate 5g</section>'})})
+ assert.equal(refs.length,1)
+ assert.match(refs[0].details,/Fat 15g Carbohydrate 5g/)
+ assert.ok(refs[0].details.length<=40000)
+})
+
+test('reference failures are surfaced without using an invented fallback summary',async()=>{
+ const failures=[]
+ const refs=await retrieveNutritionReferences([{url:'https://example.com/product',details:'invented label'}],{referenceFetcher:async()=>{throw Error('HTTP 404')},onFailure:item=>failures.push(item)})
+ assert.deepEqual(refs,[])
+ assert.deepEqual(failures,[{url:'https://example.com/product',reason:'HTTP 404'}])
+})

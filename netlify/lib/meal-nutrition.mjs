@@ -124,15 +124,24 @@ export function calculateNutritionResult(request, modelResult = {}) {
   }
 }
 
-export async function retrieveNutritionReferences(references,{referenceFetcher=fetchRecipeHtml}={}){
+export function extractNutritionEvidence(html){
+  const structured=[...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map(match=>match[1]).join(' ')
+  const visible=html.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim()
+  // Product pages often put navigation/reviews ahead of the label, and JSON-LD
+  // at the end. Preserve label neighborhoods before applying the input budget.
+  const sections=[...visible.matchAll(/nutrition\s*facts|serving\s*size|amount\s*per\s*serving/gi)].slice(0,8).map(match=>visible.slice(Math.max(0,match.index-500),match.index+4500))
+  const text=[visible.slice(0,2000),...sections,structured.slice(0,10000)].join(' ').slice(0,40000)
+  if(!/protein/i.test(text)||!/calories|energy/i.test(text)||!/fat/i.test(text)||!/carbohydrate/i.test(text))throw Error('No readable complete nutrition label on this page')
+  return text
+}
+
+export async function retrieveNutritionReferences(references,{referenceFetcher=fetchRecipeHtml,onFailure=()=>{}}={}){
   const urls=[...new Set(references.map(item=>item.url))].filter(value=>{try{return new URL(value).pathname.replace(/\//g,'').length>0}catch{return false}}).slice(0,4)
   const results=await Promise.allSettled(urls.map(async url=>{
-    const {html,sourceUrl}=await referenceFetcher(url,{timeoutMs:6000})
-    const structured=[...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map(match=>match[1]).join(' ')
-    const visible=html.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim()
-    const text=(visible+' '+structured).slice(0,24000)
-    if(!/protein/i.test(text)||!/calories|energy/i.test(text)||!/fat/i.test(text)||!/carbohydrate/i.test(text))throw Error('No readable complete nutrition label on this page')
-    return {url:sourceUrl,details:text}
+    try{
+      const {html,sourceUrl}=await referenceFetcher(url,{timeoutMs:6000})
+      return {url:sourceUrl,details:extractNutritionEvidence(html)}
+    }catch(error){onFailure({url,reason:error.message});throw error}
   }))
   return results.filter(item=>item.status==='fulfilled').map(item=>item.value)
 }
@@ -140,7 +149,8 @@ export async function retrieveNutritionReferences(references,{referenceFetcher=f
 export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, timeoutMs=40000,referenceFetcher=fetchRecipeHtml} = {}) {
   const request=normalizeNutritionRequest(body)
   if(!process.env.OPENAI_API_KEY)throw Object.assign(new Error('Brevity nutrition calculation is not configured.'),{status:503})
-  if(request.conversational)request.productReferences=await retrieveNutritionReferences(request.productReferences,{referenceFetcher})
+  const referenceFailures=[]
+  if(request.conversational)request.productReferences=await retrieveNutritionReferences(request.productReferences,{referenceFetcher,onFailure:failure=>referenceFailures.push(failure)})
   const controller=new AbortController()
   const timeout=setTimeout(()=>controller.abort(),timeoutMs)
   let response
@@ -164,5 +174,8 @@ export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, ti
   if(!response.ok)throw Object.assign(new Error(payload.error?.message||'Nutrition calculation failed.'),{status:response.status})
   let parsed
   try{parsed=JSON.parse(outputText(payload))}catch{throw Object.assign(new Error('Brevity returned an invalid nutrition calculation.'),{status:502})}
-  return calculateNutritionResult(request,parsed)
+  try{return calculateNutritionResult(request,parsed)}catch(error){
+    if(error.code==='NUTRITION_REFERENCE_REQUIRED')error.referenceFailures=referenceFailures
+    throw error
+  }
 }
