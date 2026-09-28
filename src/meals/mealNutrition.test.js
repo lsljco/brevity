@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { calculateMealNutrition, calculateNutritionResult, normalizeNutritionRequest } from '../../netlify/lib/meal-nutrition.mjs'
+import { dailyNutrition } from '../../netlify/lib/nutrition-ledger.mjs'
 
 const ingredients=[
   {input:'ignored',resolvedName:'Pearl Milling Company Original Pancake Mix',amountDescription:'2 cups dry mix',calories:1200,proteinGrams:24,carbohydrateGrams:252,fatGrams:6,basis:'Package-label equivalent',confidence:'medium'},
@@ -16,6 +17,23 @@ test('nutrition calculation totals the entire recipe and divides by the declared
   assert.equal(result.serving,'1 pancake')
   assert.equal(result.ingredients[0].input,'2 cups pancake mix')
   assert.match(result.nutritionBasis,/measured ingredient list/i)
+})
+
+test('optional label nutrients remain unknown unless every ingredient supplies a value',()=>{
+  const request={ingredients:['1 labeled shake','2 slices toast'],yieldQuantity:1,yieldUnit:'meal'}
+  const rows=[
+    {...ingredients[0],fiberGrams:3,sugarGrams:1,sodiumMilligrams:250},
+    {...ingredients[1],fiberGrams:null,sugarGrams:null,sodiumMilligrams:null},
+  ]
+  const estimate=calculateNutritionResult(request,{ingredients:rows,warnings:[]})
+  assert.deepEqual(estimate.perServingNutrients,{fiberGrams:null,sugarGrams:null,sodiumMilligrams:null})
+  rows[1]={...rows[1],fiberGrams:2,sugarGrams:4,sodiumMilligrams:180}
+  const complete=calculateNutritionResult(request,{ingredients:rows,warnings:[]})
+  assert.deepEqual(complete.perServingNutrients,{fiberGrams:5,sugarGrams:5,sodiumMilligrams:430})
+  const record={member:'Larry',date:'2026-09-28',entries:[{member:'Larry',date:'2026-09-28',macros:complete.perServingMacros,nutrients:complete.perServingNutrients}]}
+  assert.equal(dailyNutrition(record,'Larry','2026-09-28').optionalTotals.sodiumMilligrams,430)
+  record.entries.push({member:'Larry',date:'2026-09-28',macros:estimate.perServingMacros,nutrients:estimate.perServingNutrients})
+  assert.equal(dailyNutrition(record,'Larry','2026-09-28').optionalTotals.sodiumMilligrams,null)
 })
 
 test('nutrition requests require measured ingredients and a usable batch yield', () => {

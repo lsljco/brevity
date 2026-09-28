@@ -1,6 +1,7 @@
 const MODEL = process.env.OPENAI_NUTRITION_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini'
 
 const macroFields = ['calories','proteinGrams','carbohydrateGrams','fatGrams']
+const optionalNutrients=['fiberGrams','sugarGrams','sodiumMilligrams']
 const numeric = value => {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
@@ -33,11 +34,12 @@ export const nutritionSchema = {
   properties:{
     ingredients:{type:'array',minItems:1,maxItems:30,items:{
       type:'object',additionalProperties:false,
-      required:['input','resolvedName','amountDescription','calories','proteinGrams','carbohydrateGrams','fatGrams','basis','confidence'],
+      required:['input','resolvedName','amountDescription','calories','proteinGrams','carbohydrateGrams','fatGrams','fiberGrams','sugarGrams','sodiumMilligrams','basis','confidence'],
       properties:{
         input:{type:'string'},resolvedName:{type:'string'},amountDescription:{type:'string'},
         calories:{type:'number',minimum:0},proteinGrams:{type:'number',minimum:0},
         carbohydrateGrams:{type:'number',minimum:0},fatGrams:{type:'number',minimum:0},
+        fiberGrams:{type:['number','null'],minimum:0},sugarGrams:{type:['number','null'],minimum:0},sodiumMilligrams:{type:['number','null'],minimum:0},
         basis:{type:'string'},confidence:{type:'string',enum:['high','medium','low']},
       },
     }},
@@ -75,9 +77,12 @@ export function calculateNutritionResult(request, modelResult = {}) {
     basis:String(row.basis||'Standard nutrition reference estimate').trim(),
     confidence:['high','medium','low'].includes(row.confidence)?row.confidence:'low',
     macros:Object.fromEntries(macroFields.map(field=>[field,round(row[field])])),
+    nutrients:Object.fromEntries(optionalNutrients.map(field=>[field,typeof row[field]==='number'&&Number.isFinite(row[field])&&row[field]>=0?round(row[field]):null])),
   })})
   const batchMacros=Object.fromEntries(macroFields.map(field=>[field,round(ingredients.reduce((sum,row)=>sum+row.macros[field],0))]))
   const perServingMacros=Object.fromEntries(macroFields.map(field=>[field,round(batchMacros[field]/normalized.yieldQuantity)]))
+  const batchNutrients=Object.fromEntries(optionalNutrients.map(field=>[field,ingredients.every(row=>row.nutrients[field]!==null)?round(ingredients.reduce((sum,row)=>sum+row.nutrients[field],0)):null]))
+  const perServingNutrients=Object.fromEntries(optionalNutrients.map(field=>[field,batchNutrients[field]===null?null:round(batchNutrients[field]/normalized.yieldQuantity)]))
   const unit=normalized.yieldQuantity===1?normalized.yieldUnit:normalized.yieldUnit.replace(/s$/i,'')
   return {
     ...normalized,
@@ -85,6 +90,8 @@ export function calculateNutritionResult(request, modelResult = {}) {
     ingredients,
     batchMacros,
     perServingMacros,
+    batchNutrients,
+    perServingNutrients,
     warnings:(Array.isArray(modelResult.warnings)?modelResult.warnings:[]).map(value=>String(value||'').trim()).filter(Boolean),
     nutritionBasis:'Calculated by Brevity from the measured ingredient list; branded products and preparation can vary, so compare uncertain items with the package label.',
   }
@@ -103,7 +110,7 @@ export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, ti
       signal:controller.signal,
       body:JSON.stringify({
         model:MODEL,store:false,
-        instructions:'Act as a careful recipe nutrition calculator. For each ingredient line, estimate nutrition for the entire stated amount—not one serving. Honor brand and product names when supplied and explain the label or standard-food basis briefly. For packaged food, first identify the label serving size, multiply all four macros by the stated number of servings, then report the result. As anchors: Eckrich Original Skinless Smoked Sausage is 190 calories and 6g protein per 2 oz; Premier Protein Classic shake is 160 calories and 30g protein per bottle; Nature’s Own Honey Wheat is 70 calories per slice. These anchors are only for those variants; disclose any uncertainty about the exact product. Water contributes zero macros. Never omit an ingredient, never invent an extra ingredient, and mark ambiguity or uncertain brand variants in warnings. Values are estimates, not medical advice.',
+        instructions:'Act as a careful recipe nutrition calculator. For each ingredient line, estimate nutrition for the entire stated amount—not one serving. Honor brand and product names when supplied and explain the label or standard-food basis briefly. For packaged food, first identify the label serving size, multiply all four macros by the stated number of servings, then report the result. As anchors: Eckrich Original Skinless Smoked Sausage is 190 calories and 6g protein per 2 oz; Premier Protein Classic shake is 160 calories and 30g protein per bottle; Nature’s Own Honey Wheat is 70 calories per slice. These anchors are only for those variants; disclose any uncertainty about the exact product. Fiber, sugar, and sodium must be null when the exact product label or reliable standard reference is unavailable; never invent precision. Water contributes zero macros. Never omit an ingredient, never invent an extra ingredient, and mark ambiguity or uncertain brand variants in warnings. Values are estimates, not medical advice.',
         input:JSON.stringify(request),
         text:{format:{type:'json_schema',name:'brevity_meal_nutrition',strict:true,schema:nutritionSchema}},
       }),

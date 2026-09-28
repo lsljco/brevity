@@ -296,6 +296,7 @@ function normalizeActionPayload(type, input) {
       try{estimate=JSON.parse(value)}catch{throw new Error('The meal estimate is invalid JSON.')}
       const macros=estimate?.perServingMacros
       if(!Array.isArray(estimate?.ingredients)||!estimate.ingredients.length||estimate.ingredients.length>30||!macros||['calories','proteinGrams','carbohydrateGrams','fatGrams'].every(key=>macros[key]===undefined)||['calories','proteinGrams','carbohydrateGrams','fatGrams'].some(key=>typeof macros[key]!=='number'||!Number.isFinite(macros[key])||macros[key]<0))throw new Error('The meal estimate requires measured ingredients and valid macros.')
+      if(estimate.perServingNutrients&&['fiberGrams','sugarGrams','sodiumMilligrams'].some(key=>estimate.perServingNutrients[key]!=null&&(typeof estimate.perServingNutrients[key]!=='number'||!Number.isFinite(estimate.perServingNutrients[key])||estimate.perServingNutrients[key]<0)))throw new Error('Optional nutrients must be non-negative values or unknown.')
       normalized.estimateJson=JSON.stringify(estimate)
     } else if (type === 'sermon.activate' && (field === 'draftId' || field === 'sourceHash')) {
       assertString(type, field, value)

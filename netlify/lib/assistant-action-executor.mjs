@@ -85,14 +85,14 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     if(operation.type==='nutrition.meal.remove')afterEntries.splice(index,1)
     else {
       const estimate=payload.estimateJson?JSON.parse(payload.estimateJson):null
-      afterEntries[index]={...afterEntries[index],name:payload.name,macros:Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].map(key=>[key,payload[key]])),...(estimate?{ingredients:clone(estimate.ingredients),warnings:clone(estimate.warnings||[])}:{}),nutritionBasis:estimate?.nutritionBasis||`Member corrected: ${payload.reason}`,correctedAt:nowIso(context.now||(()=>new Date())),correctedBy:context.actor||operation.targetId,correctionReason:payload.reason}
+      afterEntries[index]={...afterEntries[index],name:payload.name,macros:Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].map(key=>[key,payload[key]])),...(estimate?{ingredients:clone(estimate.ingredients),nutrients:clone(estimate.perServingNutrients||null),warnings:clone(estimate.warnings||[])}:{}),nutritionBasis:estimate?.nutritionBasis||`Member corrected: ${payload.reason}`,correctedAt:nowIso(context.now||(()=>new Date())),correctedBy:context.actor||operation.targetId,correctionReason:payload.reason}
     }
     return{before,after:{...value,entries:afterEntries}}
   }
   if(operation.type==='nutrition.targets.update')return{before,after:{...(value||{}),member:operation.targetId,...clone(payload)}}
   if(operation.type==='nutrition.meal.log'){
     const estimate=JSON.parse(payload.estimateJson)
-    const item={id:createId(),name:payload.name,member:operation.targetId,date:operation.targetDate,ingredients:clone(estimate.ingredients),macros:clone(estimate.perServingMacros),warnings:clone(estimate.warnings||[]),nutritionBasis:estimate.nutritionBasis||'',loggedAt:nowIso(context.now||(()=>new Date())),loggedBy:context.actor||operation.targetId}
+    const item={id:createId(),name:payload.name,member:operation.targetId,date:operation.targetDate,ingredients:clone(estimate.ingredients),macros:clone(estimate.perServingMacros),nutrients:clone(estimate.perServingNutrients||null),warnings:clone(estimate.warnings||[]),nutritionBasis:estimate.nutritionBasis||'',loggedAt:nowIso(context.now||(()=>new Date())),loggedBy:context.actor||operation.targetId}
     return{before,after:{...(value||{}),member:operation.targetId,date:operation.targetDate,entries:[...(value?.entries||[]),item]},createdId:item.id}
   }
   if (operation.type.startsWith('household.')) return applyHouseholdRecordOperation(value,operation,{...context,createId})
