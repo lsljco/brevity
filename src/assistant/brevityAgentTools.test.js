@@ -89,3 +89,15 @@ test('recipe calculations preserve batch yield through the agent tool',async()=>
  const output=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['12 eggs'],yieldQuantity:6,yieldUnit:'servings',allowGenericEstimate:false,productReferences:[]})))
  assert.equal(output.estimate.yieldQuantity,6)
 })
+
+
+test('agent diagnostics log only run metadata, never conversation or provider error text',async()=>{
+ const logs=[]
+ const runner={run:async()=>{throw Object.assign(new Error('SECRET transcript and token'),{status:429})}}
+ await assert.rejects(()=>runBrevitySdkAgent({prompt:'PRIVATE meal detail',model:'test',schema,canonical,browser:{},runner,logger:(...parts)=>logs.push(parts)}))
+ const serialized=JSON.stringify(logs)
+ assert.doesNotMatch(serialized,/SECRET|PRIVATE|transcript|token/)
+ const metadata=JSON.parse(logs[0][1])
+ assert.equal(metadata.outcome,'failed');assert.equal(metadata.errorCategory,'rate_limit')
+ assert.equal(typeof metadata.durationMs,'number')
+})

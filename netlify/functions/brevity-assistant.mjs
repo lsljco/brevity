@@ -1,3 +1,4 @@
+import {loadAssistantSupplementalContext,assertActionSourcesAvailable} from '../lib/assistant-supplemental-context.mjs'
 import {productionMealPlanRepository} from '../lib/meal-plan-store.mjs'
 import {bindRecipeOperation} from '../lib/recipe-library-actions.mjs'
 import {bindNutritionOperation} from '../lib/nutrition-conversation.mjs'
@@ -11,8 +12,6 @@ import { productionAssistantActionRepository } from '../lib/assistant-action-rep
 import { captureExpectedVersions, createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { mealProteinFocus } from '../lib/assistant-meal-protein.mjs'
 import { runBrevitySdkAgent } from '../lib/brevity-sdk-agent.mjs'
-import { dailyNutrition } from '../lib/nutrition-ledger.mjs'
-import { nutritionProgress, suggestPlannedMeals } from '../lib/nutrition-progress.mjs'
 import { getStore } from '@netlify/blobs'
 import { randomUUID } from 'node:crypto'
 
@@ -29,12 +28,12 @@ const calendarVersion=events=>JSON.stringify((events||[]).map(item=>[item.id||''
 async function loadAppleCalendar(event){
   const host=event.headers?.host||event.headers?.Host
   if(!host)return null
-  const response=await fetch(`https://${host}/.netlify/functions/icloud-calendar`,{headers:{cookie:event.headers?.cookie||event.headers?.Cookie||''}})
+  const response=await fetch(`https://${host}/.netlify/functions/icloud-calendar`,{signal:AbortSignal.timeout(5500),headers:{cookie:event.headers?.cookie||event.headers?.Cookie||''}})
   if(!response.ok)return null
   return response.json().catch(()=>null)
 }
 
-const assistantResponseSchema={type:'object',additionalProperties:false,required:['message','proposal'],properties:{message:{type:'string'},proposal:{anyOf:[{type:'null'},{type:'object',additionalProperties:false,required:['summary','operations'],properties:{summary:{type:'string'},operations:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['type','description','targetId','targetDate','payloadJson','allowedScopes','defaultScope'],properties:{type:{type:'string',enum:['meal.recipe.update','nutrition.meal.log','nutrition.meal.update','nutrition.meal.remove','decision.create','decision.update','assignment.create','assignment.update','project.create','project.update','project.delete','calendar.create','calendar.update','calendar.delete','transaction.categorize','transaction.rule.create','transaction.rule.delete','budget.update','forecast.update','recurring.create','recurring.update','recurring.delete']},description:{type:'string'},targetId:{type:'string'},targetDate:{type:'string'},payloadJson:{type:'string'},allowedScopes:{type:'array',items:{type:'string',enum:['this-item','this-and-future']}},defaultScope:{type:'string',enum:['this-item','this-and-future']}}}}}}]}}}
+import {assistantResponseSchema} from '../lib/brevity-response-schema.mjs'
 
 function cleanMessages(messages) {
   if (!Array.isArray(messages)) return []
@@ -70,26 +69,10 @@ export const processAssistantRequest = async event => {
   if (!messages.length || messages.at(-1).role !== 'user') return json(400, { error: 'A question is required.' })
 
   const canonicalServerContext = await loadProductionAuthoritativeAssistantContext({ member: session.member })
-  try{
-    const recipeRepository=await productionMealPlanRepository(),recipeLibrary=await recipeRepository.getLibrary()
-    canonicalServerContext.recipeLibraryVersion=Number(recipeLibrary.entry.data?.version||0)
-    canonicalServerContext.mealLibrary=recipeLibrary.library.map(({image,...meal})=>meal)
-  }catch(error){console.error('[assistant-recipe-library]',error);canonicalServerContext.mealLibrary=[];canonicalServerContext.mealLibraryUnavailable=true}
-  const nutritionResource=`nutrition:${session.member}:${canonicalServerContext.householdDate}`
-  const nutritionRecord=await createProductionActionResources().read(nutritionResource)
-  canonicalServerContext.dailyNutrition=dailyNutrition(nutritionRecord.value,session.member,canonicalServerContext.householdDate)
-  canonicalServerContext.recentNutrition=await Promise.all(Array.from({length:7},async(_,offset)=>{
-    const day=new Date(`${canonicalServerContext.householdDate}T12:00:00Z`);day.setUTCDate(day.getUTCDate()-offset)
-    const date=day.toISOString().slice(0,10)
-    const record=offset===0?nutritionRecord:await createProductionActionResources().read(`nutrition:${session.member}:${date}`)
-    return dailyNutrition(record.value,session.member,date)
-  }))
-  const nutritionTargets=await createProductionActionResources().read(`nutrition-targets:${session.member}`)
-  canonicalServerContext.nutritionTargets=Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].filter(key=>Number.isFinite(nutritionTargets.value?.[key])).map(key=>[key,nutritionTargets.value[key]]))
-  canonicalServerContext.nutritionProgress=nutritionProgress(canonicalServerContext.dailyNutrition.totals,canonicalServerContext.nutritionTargets)
-  canonicalServerContext.plannedMealOptions=suggestPlannedMeals(canonicalServerContext.nutritionProgress,canonicalServerContext.rollingMealPlan,canonicalServerContext.householdDate)
-  const mealFocus = mealProteinFocus(messages, canonicalServerContext)
-  const appleCalendar=await loadAppleCalendar(event)
+  const supplemental=await loadAssistantSupplementalContext({canonical:canonicalServerContext,member:session.member,resources:createProductionActionResources(),loadLibrary:async()=>{const repository=await productionMealPlanRepository();return repository.getLibrary()},loadCalendar:()=>loadAppleCalendar(event)})
+  const {calendar:appleCalendar,...sourceContext}=supplemental
+  Object.assign(canonicalServerContext,sourceContext)
+  const mealFocus=mealProteinFocus(messages,canonicalServerContext)
   if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300).map(item=>Object.fromEntries(['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'].filter(field=>item?.[field]!==undefined).map(field=>[field,item[field]]))),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
   const browserSnapshot=cleanBrowserContext(body.context)
   if(canonicalServerContext.actionRecords){
@@ -97,7 +80,7 @@ export const processAssistantRequest = async event => {
     delete browserSnapshot.projects
     if(browserSnapshot.calendars){delete browserSnapshot.calendars.brevityEvents;if(canonicalServerContext.appleFamilyCalendar)delete browserSnapshot.calendars.appleFamilyCalendar}
   }
-  let context = {householdDate:canonicalServerContext.householdDate,signedInMember:session.member,sources:canonicalServerContext.sources,dailyNutrition:canonicalServerContext.dailyNutrition,recentNutrition:canonicalServerContext.recentNutrition,nutritionTargets:canonicalServerContext.nutritionTargets,nutritionProgress:canonicalServerContext.nutritionProgress,plannedMealOptions:canonicalServerContext.plannedMealOptions,mealProteinFocus:mealFocus,notice:'Read pillar-specific records with get_pillar_records. Planned meals do not prove consumption.'}
+  let context = {householdDate:canonicalServerContext.householdDate,signedInMember:session.member,sources:canonicalServerContext.sources,supplementalSources:canonicalServerContext.supplementalSources,unavailableNutritionDates:canonicalServerContext.unavailableNutritionDates,dailyNutrition:canonicalServerContext.dailyNutrition,recentNutrition:canonicalServerContext.recentNutrition,nutritionTargets:canonicalServerContext.nutritionTargets,nutritionProgress:canonicalServerContext.nutritionProgress,plannedMealOptions:canonicalServerContext.plannedMealOptions,mealProteinFocus:mealFocus,notice:'Read pillar-specific records with get_pillar_records. Planned meals do not prove consumption.'}
   let contextText = JSON.stringify(context)
   if (contextText.length > MAX_CONTEXT_LENGTH) return json(413, { error: 'Brevity has too much saved data for this request. Try asking about a specific date or record.' })
 
@@ -122,7 +105,7 @@ ${transcript}
 Respond to the last household-member message. Prefer concise headings and bullets when they improve clarity. Return only the structured response.`
 
   let structured,estimates
-  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
+  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
   catch(error){
     console.error('[brevity-assistant-agent]',error)
     if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
@@ -134,6 +117,7 @@ Respond to the last household-member message. Prefer concise headings and bullet
   let proposal=null
   if(structured.proposal){
     try{
+      for(const operation of structured.proposal.operations||[])assertActionSourcesAvailable(operation,canonicalServerContext)
       structured.proposal.operations=(structured.proposal.operations||[]).map(operation=>bindRecipeOperation(bindNutritionOperation(operation,{member:session.member,date:canonicalServerContext.householdDate,recentNutrition:canonicalServerContext.recentNutrition,estimates}),{library:canonicalServerContext.mealLibrary,estimates}))
       proposal=normalizeActionProposal(structured.proposal,{member:session.member,role:session.role});proposal=await captureExpectedVersions(proposal,createProductionActionResources());if(proposal.operations.some(operation=>operation.type==='meal.recipe.update'))proposal.expectedVersions['meal-library:recipes']=canonicalServerContext.recipeLibraryVersion;if(proposal.operations.some(operation=>operation.type.startsWith('calendar.'))){if(!appleCalendar?.events)throw new Error('Family Calendar could not be verified. Refresh it and ask again.');proposal={...proposal,expectedCalendarVersion:calendarVersion(appleCalendar.events)}}await productionAssistantActionRepository().saveProposal(proposal)}
     catch(error){return json(422,{error:error.message||'The proposed action could not be validated.'})}

@@ -26,7 +26,7 @@ Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This 
 
 ## Subsequent gates
 
-1. **Nutrition accuracy and provenance:** package-label entry, explicit uncertainty, recurring foods, optional reliable nutrients and a maintained estimation evaluation set. Measure correction rate and time to log.
+1. **Nutrition accuracy and provenance:** agent-led product reference lookup, explicit uncertainty, recurring foods, optional reliable nutrients and a maintained estimation evaluation set. Measure correction rate and time to log.
 2. **Agent tools:** add one reviewed domain action at a time, with member authorization, idempotency, audit and Undo. Evaluate intent selection across pillars.
 3. **Improvement agent:** proposal and approval workflow backed by usage evidence. Prototypes stay on feature branches; production requires explicit Larry/Lorenzo authorization.
 4. **Household configuration and pilot expansion:** only after Family #1 validates adoption and sensitive member data boundaries.
@@ -51,3 +51,11 @@ Larry clarified that Brevity must own data entry: spoken consumption → targete
 - Added reviewed recipe title/ingredient updates for custom and built-in recipes. Shared library changes propagate to plans referencing the recipe; consumed logs are unchanged. Title-only edits preserve macros; ingredient changes use calculated batch yield.
 - Library writes use the existing versioned custom-library record, conditional writes, journals, audit and Undo. Creating/importing meals preserves built-in recipe overrides. UI refresh listens for recipe changes.
 - Screenshot reproduction is covered using a matching test recipe; real household record discovery and live conversational behavior still require signed-in preview validation.
+
+### Reliability, diagnostics and conversation evaluations
+
+- Recipe, calendar, target and seven dated nutrition reads run independently with bounded waits. Unavailable data remains unknown and cannot authorize changes to that source. Partial history includes explicit missing dates.
+- Background assistant requests forward the site host for Apple Calendar reads; previously the background call omitted it.
+- Added run diagnostics: correlation ID, elapsed time, outcome, function-tool counts and number of unavailable sources. These diagnostic events omit conversation content, identities, arguments and raw provider errors.
+- Added 30 synthetic conversation scenarios spanning general assistance, all seven pillars, nutrition follow-ups, record discovery, permission boundaries and source failures. `node scripts/evaluate-household-agent.mjs` lists them without model calls. `--live --id CASE_ID` runs one; `--live --all --out /absolute/report.json` explicitly runs the set. Requires a configured API key and incurs provider usage. The runner never calls household persistence or action execution.
+- Automatic evaluation checks cover response structure, tool usage and allowed action types; human review is required for correctness and usefulness. A listed scenario is not a passed live evaluation.

@@ -14,7 +14,7 @@ export default async request=>{
   if(status.state!=='queued')return json(202,{accepted:true})
   await store.setJSON(key,{member:status.member,state:'processing',createdAt:status.createdAt})
   try{
-    const result=await processAssistantRequest({httpMethod:'POST',headers:{cookie:request.headers.get('cookie')||''},body:JSON.stringify(status.body)})
+    const result=await processAssistantRequest({httpMethod:'POST',requestId:id,headers:{host:new URL(request.url).host,cookie:request.headers.get('cookie')||''},body:JSON.stringify(status.body)})
     await store.setJSON(key,{member:status.member,state:'ready',createdAt:status.createdAt,statusCode:result.statusCode,result:JSON.parse(result.body)})
   }catch(error){console.error('[brevity-assistant-background]',error);await store.setJSON(key,{member:status.member,state:'error',createdAt:status.createdAt,statusCode:502,result:{error:'Brevity Assistant could not complete this request. Please retry.'}})}
   return json(202,{accepted:true})
