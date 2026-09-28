@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.9",
+    "@openai/agents": "^0.18.0",
     "chart.js": "^4.4.1",
     "docx": "^9.5.1",
     "mammoth": "^1.12.2",
@@ -25,7 +26,8 @@
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
-    "react-plaid-link": "^3.5.1"
+    "react-plaid-link": "^3.5.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

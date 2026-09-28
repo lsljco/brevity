@@ -6,7 +6,7 @@ Brevity stores household records. The agent may read them through authenticated,
 
 ## Phase 1: one agent
 
-The existing Assistant UI remains the entry point. A server-side tool loop reads only the relevant pillar records, and the current Action Mode handles reviewed writes with member permissions, version checks, audit history, and Undo. The first tools are `get_pillar_records` and `estimate_meal_nutrition`. The latter returns an estimate and explicitly says it has **not** recorded a consumed meal.
+The existing Assistant UI remains the entry point. The OpenAI Agents SDK runner invokes authenticated Brevity function tools, and the current Action Mode handles reviewed writes with member permissions, version checks, audit history, and Undo. The first tools are `get_pillar_records` and `estimate_meal_nutrition`. The latter returns an estimate and explicitly says it has **not** recorded a consumed meal.
 
 The seven pillar names are spiritual, health, fitness, household, education, finance, and ministry. Tool implementations own authorization and data validation; descriptions and prompts are never a permission boundary. Browser-only snapshots remain labeled as device-specific and cannot override canonical server records.
 
@@ -18,7 +18,7 @@ After this is reliable, add one reviewed write at a time for workout logging, ho
 
 ## Runtime choice
 
-The initial slice uses the Responses function-call flow already used by the app, with a bounded loop and `store:false`. The Agents SDK is a good next runtime when tool count and long-running sessions justify its runner and session adapter. A durable Brevity-owned session should preserve the member's conversation and tool receipts; the database remains authoritative. Specialist handoffs are a later optimization, not a prerequisite for cross-pillar reasoning.
+The SDK runs in the Netlify function with a five-turn bound and `store:false`. Brevity retains its current per-member chat history in the UI; a durable Brevity-owned SDK session is a separate migration, with member isolation, revisions, and retention policy. The database remains authoritative. Specialist handoffs are a later optimization, not a prerequisite for cross-pillar reasoning. Tracing is disabled for the initial household deployment to avoid sending sensitive tool payloads to a separate trace store.
 
 ## Verification gates
 

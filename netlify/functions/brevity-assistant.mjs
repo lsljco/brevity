@@ -7,8 +7,7 @@ import { normalizeActionProposal } from '../lib/assistant-action-contract.mjs'
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import { captureExpectedVersions, createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { mealProteinFocus } from '../lib/assistant-meal-protein.mjs'
-import { runAgentTool } from '../lib/brevity-agent-tools.mjs'
-import { runBrevityAgent } from '../lib/run-brevity-agent.mjs'
+import { runBrevitySdkAgent } from '../lib/brevity-sdk-agent.mjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
@@ -26,10 +25,6 @@ async function loadAppleCalendar(event){
   const response=await fetch(`https://${host}/.netlify/functions/icloud-calendar`,{headers:{cookie:event.headers?.cookie||event.headers?.Cookie||''}})
   if(!response.ok)return null
   return response.json().catch(()=>null)
-}
-
-function outputText(response) {
-  return (response.output || []).flatMap(item => item.content || []).map(part => part.text || '').join('').trim()
 }
 
 const assistantResponseSchema={type:'object',additionalProperties:false,required:['message','proposal'],properties:{message:{type:'string'},proposal:{anyOf:[{type:'null'},{type:'object',additionalProperties:false,required:['summary','operations'],properties:{summary:{type:'string'},operations:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['type','description','targetId','targetDate','payloadJson','allowedScopes','defaultScope'],properties:{type:{type:'string',enum:['decision.create','decision.update','assignment.create','assignment.update','project.create','project.update','project.delete','calendar.create','calendar.update','calendar.delete','transaction.categorize','transaction.rule.create','transaction.rule.delete','budget.update','forecast.update','recurring.create','recurring.update','recurring.delete']},description:{type:'string'},targetId:{type:'string'},targetDate:{type:'string'},payloadJson:{type:'string'},allowedScopes:{type:'array',items:{type:'string',enum:['this-item','this-and-future']}},defaultScope:{type:'string',enum:['this-item','this-and-future']}}}}}}]}}}
@@ -101,22 +96,14 @@ ${transcript}
 
 Respond to the last household-member message. Prefer concise headings and bullets when they improve clarity. Return only the structured response.`
 
-  const run=await runBrevityAgent({prompt,model:MODEL,apiKey:process.env.OPENAI_API_KEY,schema:assistantResponseSchema,executeTool:call=>runAgentTool(call,{canonical:canonicalServerContext,browser:browserSnapshot})})
-  if(run.limitReached)return json(502,{error:'Brevity reached its tool-call limit. Try a narrower request.'})
-  const {response,payload}=run
-  if (!response.ok) {
-    const message = payload.error?.message || 'OpenAI request failed.'
-    const code = payload.error?.code || payload.error?.type || ''
-    if (response.status === 429 && /quota|billing|insufficient/i.test(`${message} ${code}`)) {
-      return json(429, { error: 'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.' })
-    }
-    return json(response.status, { error: message })
-  }
-
-  const output = outputText(payload)
-  if (!output) return json(502, { error: 'Brevity Assistant returned an empty response.' })
   let structured
-  try{structured=JSON.parse(output)}catch{return json(502,{error:'Brevity Assistant returned an invalid structured response.'})}
+  try{structured=await runBrevitySdkAgent({prompt,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot})}
+  catch(error){
+    console.error('[brevity-assistant-agent]',error)
+    if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
+    return json(502,{error:'Brevity Assistant could not complete this request. Try a narrower question.'})
+  }
+  if(!structured||typeof structured!=='object')return json(502,{error:'Brevity Assistant returned an invalid structured response.'})
   const message=String(structured.message||'').trim()
   if(!message)return json(502,{error:'Brevity Assistant returned an empty response.'})
   let proposal=null

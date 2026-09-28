@@ -1,44 +1,38 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { agentTools, runAgentTool } from '../../netlify/lib/brevity-agent-tools.mjs'
-import { runBrevityAgent } from '../../netlify/lib/run-brevity-agent.mjs'
+import { createBrevitySdkAgent, runBrevitySdkAgent } from '../../netlify/lib/brevity-sdk-agent.mjs'
 
 const canonical={householdDate:'2026-09-28',sources:[{id:'rolling-meals',state:'available'}],rollingMealPlan:{days:[{date:'2026-09-28',meals:{breakfast:{name:'Eggs'}}}]},actionRecords:{finance:{recurringRecords:[{id:'rent'}]}}}
+const schema={type:'object',additionalProperties:false,required:['message','proposal'],properties:{message:{type:'string'},proposal:{type:'null'}}}
 
-test('the agent reads pillar records without treating planned meals as consumption',async()=>{
-  assert.equal(agentTools.length,2)
-  const result=await runAgentTool({name:'get_pillar_records',arguments:'{"pillar":"health"}'},{canonical,browser:{}})
-  assert.equal(result.plannedMeals.days[0].meals.breakfast.name,'Eggs')
-  assert.equal(result.consumedMeals,undefined)
-  const finance=await runAgentTool({name:'get_pillar_records',arguments:'{"pillar":"finance"}'},{canonical,browser:{finance:{transactionSummary:{count:3}}}})
+test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
+  const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition'])
+  assert.equal(agent.modelSettings.store,false)
+  const health=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"health"}'))
+  assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
+  assert.equal(health.consumedMeals,undefined)
+  const finance=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"finance"}'))
   assert.equal(finance.finance.recurringRecords[0].id,'rent')
   assert.equal(finance.browserFinance.transactionSummary.count,3)
 })
 
-test('meal estimate tool returns calculation with an explicit unlogged state',async()=>{
+test('SDK nutrition tool estimates but does not save consumption',async()=>{
   const calls=[]
-  const result=await runAgentTool({name:'estimate_meal_nutrition',arguments:'{"ingredients":["3 eggs","1 apple"]}'},{canonical,browser:{},calculate:async input=>{calls.push(input);return {perServingMacros:{proteinGrams:18}}}})
+  const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},calculate:async input=>{calls.push(input);return {perServingMacros:{proteinGrams:18}}}})
+  const result=JSON.parse(await agent.tools[1].invoke({},'{"ingredients":["3 eggs","1 apple"]}'))
   assert.deepEqual(calls[0],{ingredients:['3 eggs','1 apple'],yieldQuantity:1,yieldUnit:'meal'})
   assert.equal(result.logged,false)
   assert.equal(result.estimate.perServingMacros.proteinGrams,18)
   assert.match(result.notice,/not recorded/)
 })
 
-test('agent passes tool receipts back to the model and bounds repeated calls',async()=>{
-  const requests=[]
-  const fetcher=async(_url,options)=>{
-    const request=JSON.parse(options.body);requests.push(request)
-    return {ok:true,json:async()=>requests.length===1
-      ?{output:[{type:'function_call',call_id:'call_1',name:'get_pillar_records',arguments:'{"pillar":"finance"}'}]}
-      :{output:[{type:'message',content:[{type:'output_text',text:'{"message":"Read Finance","proposal":null}'}]}]}}
-  }
-  const result=await runBrevityAgent({prompt:'Finance',model:'test',apiKey:'test',schema:{},fetcher,executeTool:()=>({balance:42})})
-  assert.equal(requests.length,2)
-  assert.equal(requests[0].store,false)
-  assert.equal(requests[1].input.at(-1).call_id,'call_1')
-  assert.deepEqual(JSON.parse(requests[1].input.at(-1).output),{balance:42})
-  assert.equal(result.payload.output[0].type,'message')
-
-  const repeated=await runBrevityAgent({prompt:'Loop',model:'test',apiKey:'test',schema:{},maxSteps:2,fetcher:async()=>({ok:true,json:async()=>({output:[{type:'function_call',call_id:'same',name:'get_pillar_records',arguments:'{}'}]})}),executeTool:()=>({})})
-  assert.equal(repeated.limitReached,true)
+test('SDK runner is bounded and returns structured output to Action Mode',async()=>{
+  const runner={run:async(agent,prompt,options)=>{
+    assert.equal(agent.name,'Brevity')
+    assert.equal(prompt,'Read Finance')
+    assert.equal(options.maxTurns,5)
+    return {finalOutput:{message:'Read Finance',proposal:null},interruptions:[]}
+  }}
+  assert.deepEqual(await runBrevitySdkAgent({prompt:'Read Finance',model:'test',schema,canonical,browser:{},runner}),{message:'Read Finance',proposal:null})
 })
