@@ -40,3 +40,5 @@
 [functions."fitness-image-generate"]
   included_files = ["netlify/assets/sermon-characters/**"]
 
+[functions."sermon-workspace-package-background"]
+  included_files = ["node_modules/jszip/**", "node_modules/pako/**", "node_modules/setimmediate/**", "node_modules/lie/**"]
