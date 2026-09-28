@@ -126,7 +126,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
   'meal.substitute': ['mealType', 'mealId'],
   'nutrition.meal.log': ['name', 'estimateJson'],
-  'nutrition.meal.update': ['entryId', 'name', 'calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams', 'reason'],
+  'nutrition.meal.update': ['entryId', 'name', 'calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams', 'estimateJson', 'reason'],
   'nutrition.meal.remove': ['entryId', 'reason'],
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
@@ -289,7 +289,7 @@ function normalizeActionPayload(type, input) {
       if (value.length > 800_000) throw new Error('The reviewed sermon candidate exceeds Brevity’s activation capacity.')
       try { normalized.candidateJson = JSON.stringify(JSON.parse(value)) }
       catch { throw new Error('The reviewed sermon candidate is not valid JSON.') }
-    } else if (type === 'nutrition.meal.log' && field === 'estimateJson') {
+    } else if ((type === 'nutrition.meal.log' || type === 'nutrition.meal.update') && field === 'estimateJson') {
       assertString(type, field, value)
       if(value.length>30000)throw new Error('The meal estimate is too large.')
       let estimate
@@ -577,6 +577,10 @@ export function normalizeActionOperation(input = {}) {
   if(type==='nutrition.meal.update' || type==='nutrition.meal.remove'){
     if(!HOUSEHOLD_MEMBERS.includes(operation.targetId)||!payload.entryId||!payload.reason)throw new Error('A meal correction requires the member, exact entry, and reason.')
     if(type==='nutrition.meal.update'&&(!payload.name||['calories','proteinGrams','carbohydrateGrams','fatGrams'].some(key=>payload[key]===undefined)))throw new Error('A meal correction requires a name and all four nutrition values.')
+    if(type==='nutrition.meal.update'&&payload.estimateJson){
+      const calculated=JSON.parse(payload.estimateJson).perServingMacros
+      if(['calories','proteinGrams','carbohydrateGrams','fatGrams'].some(key=>payload[key]!==calculated[key]))throw new Error('The corrected macros must match the calculated ingredients.')
+    }
   }
   if(type==='nutrition.targets.update' && !HOUSEHOLD_MEMBERS.includes(operation.targetId)) throw new Error('Choose a household member for nutrition targets.')
   if (type === 'forecast.update') {
