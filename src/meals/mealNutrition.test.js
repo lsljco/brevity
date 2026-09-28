@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { calculateMealNutrition, calculateNutritionResult, normalizeNutritionRequest } from '../../netlify/lib/meal-nutrition.mjs'
+import { calculateMealNutrition, calculateNutritionResult, normalizeNutritionRequest, scalePackagedPortion } from '../../netlify/lib/meal-nutrition.mjs'
 import { dailyNutrition } from '../../netlify/lib/nutrition-ledger.mjs'
 
 const ingredients=[
@@ -148,7 +148,7 @@ test('unresolved product or quantity questions prevent nutrition totals from bei
 
 test('conversational packaged foods cannot bypass identity and reference checks with an empty question array',()=>{
  const request={ingredients:['4 oz smoked sausage'],yieldQuantity:1,yieldUnit:'meal',conversational:true,allowGenericEstimate:false,productReferences:[]}
- const row={foodKind:'packaged',productIdentityConfirmed:false,quantityConfirmed:true,calories:380,proteinGrams:12,carbohydrateGrams:4,fatGrams:34}
+ const row={packagedPortion:{consumedAmount:4,consumedUnit:'oz',labelServingAmount:2,labelServingUnit:'oz',labelMacros:{calories:190,proteinGrams:6,carbohydrateGrams:2,fatGrams:17}},foodKind:'packaged',productIdentityConfirmed:false,quantityConfirmed:true,calories:380,proteinGrams:12,carbohydrateGrams:4,fatGrams:34}
  const result=()=>({ingredients:[row],clarificationQuestions:[]})
  assert.throws(()=>calculateNutritionResult(request,result()),e=>e.code==='NUTRITION_CLARIFICATION_REQUIRED'&&/brand/.test(e.message))
  row.productIdentityConfirmed=true
@@ -164,7 +164,7 @@ test('plain whole foods need no brand while referenced packaged food can calcula
  const row={foodKind:'standard-food',quantityConfirmed:true,productIdentityConfirmed:false,calories:140,proteinGrams:12,carbohydrateGrams:0,fatGrams:10}
  assert.equal(calculateNutritionResult(request,{ingredients:[row]}).perServingMacros.calories,140)
  request.ingredients=['2 oz branded sausage'];request.productReferences=[{url:'https://example.com/sausage',details:'Test reference'}]
- Object.assign(row,{foodKind:'packaged',productIdentityConfirmed:true,referenceQuality:'exact-product-label',sourceUrl:'https://example.com/sausage'})
+ Object.assign(row,{packagedPortion:{consumedAmount:2,consumedUnit:'oz',labelServingAmount:2,labelServingUnit:'oz',labelMacros:{calories:190,proteinGrams:6,carbohydrateGrams:2,fatGrams:17}},foodKind:'packaged',productIdentityConfirmed:true,referenceQuality:'exact-product-label',sourceUrl:'https://example.com/sausage'})
  assert.equal(calculateNutritionResult(request,{ingredients:[row]}).ingredients[0].sourceUrl,'https://example.com/sausage')
 })
 
@@ -175,4 +175,18 @@ test('a brand home page or approximate reference cannot authorize label-based pa
  assert.throws(()=>calculateNutritionResult(request,{ingredients:[row]}),e=>e.code==='NUTRITION_REFERENCE_REQUIRED')
  row.sourceUrl='https://example.com/sausage';request.productReferences[0].url=row.sourceUrl;row.referenceQuality='approximate'
  assert.throws(()=>calculateNutritionResult(request,{ingredients:[row]}),e=>e.code==='NUTRITION_REFERENCE_REQUIRED')
+})
+
+
+test('packaged serving arithmetic uses one shake and scales sausage weight independently',()=>{
+ const shake={consumedAmount:1,consumedUnit:'bottle',labelServingAmount:1,labelServingUnit:'bottle',labelMacros:{calories:160,proteinGrams:30,carbohydrateGrams:4,fatGrams:3}}
+ const sausage={consumedAmount:6,consumedUnit:'oz',labelServingAmount:2,labelServingUnit:'oz',labelMacros:{calories:190,proteinGrams:6,carbohydrateGrams:2,fatGrams:17}}
+ assert.equal(scalePackagedPortion(shake).proteinGrams,30)
+ assert.equal(scalePackagedPortion(sausage).proteinGrams,18)
+ assert.equal(scalePackagedPortion({...sausage,labelServingAmount:56.69904625,labelServingUnit:'g'}).proteinGrams,18)
+ assert.throws(()=>scalePackagedPortion({...shake,labelServingUnit:'oz'}),e=>e.code==='NUTRITION_REVIEW_REQUIRED')
+ const request={ingredients:['1 Premier Protein Vanilla shake'],yieldQuantity:1,yieldUnit:'meal',conversational:true,allowGenericEstimate:true}
+ const estimate=calculateNutritionResult(request,{ingredients:[{foodKind:'packaged',quantityConfirmed:true,productIdentityConfirmed:true,packagedPortion:shake,calories:320,proteinGrams:60,carbohydrateGrams:8,fatGrams:6}]})
+ assert.equal(estimate.perServingMacros.proteinGrams,30)
+ assert.equal(estimate.perServingMacros.calories,160)
 })
