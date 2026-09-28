@@ -4,7 +4,7 @@ import { actionRisk, defaultActionPermissions, normalizeActionProposal, normaliz
 import { applyRecordOperation, captureExpectedVersions, createProductionActionResources, executeRecordOperations, resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 import { createEmptyDailyPlan } from '../household/dailyPlan.js'
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
-import { assertExecutableProposalVersions, calendarVersion, commitPreparedCalendarOperations, createPermissionActionResources, executeActionWithJournal, prepareCalendarProposal, prepareDirectProposal, prepareMealProposal, publicAssistantAudit, reviewedExecutionSession, savePermissionsWithJournal, unchangedSinceAction, undoActionWithJournal, undoAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
+import { assertExecutableProposalVersions, calendarVersion, commitPreparedCalendarOperations, createPermissionActionResources, executeActionWithJournal, prepareCalendarProposal, prepareDirectProposal, prepareMealProposal, prepareRepeatMealProposal, publicAssistantAudit, reviewedExecutionSession, savePermissionsWithJournal, unchangedSinceAction, undoActionWithJournal, undoAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
 import { createMealPlanRepository } from '../../netlify/lib/meal-plan-store.mjs'
 import { MEAL_LIBRARY } from '../meals/mealLibrary.js'
 import { hashValue } from '../household/sharedState.js'
@@ -1127,4 +1127,32 @@ test('Undo recovery finishes only pending changes after a partially completed le
   assert.equal(writes.get('shared:two'),1)
   assert.equal(state.get('shared:one').value.value,'one-before')
   assert.equal(state.get('shared:two').value.value,'two-before')
+})
+
+
+test('repeat meal uses own saved estimate, requires current versions, and supports audit, retry and Undo',async()=>{
+  const date='2026-09-28',store=versionedBlobStore(),actionStore=versionedBlobStore(),now=new Date('2026-09-28T10:00:00Z')
+  const resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store,now:()=>now})
+  const repository=createAssistantActionRepository({store:actionStore}),session={member:'Larry',role:'member'},permissions=defaultActionPermissions('member')
+  const resource=`nutrition:Larry:${date}`,entry={id:'meal-1',member:'Larry',date,name:'Toast',ingredients:[{input:'2 slices toast'}],macros:{calories:200,proteinGrams:5,carbohydrateGrams:30,fatGrams:4}}
+  await resources.write(resource,{member:'Larry',date,entries:[entry]},0,'Larry')
+  const input={sourceDate:date,entryId:entry.id,sourceVersion:1,expectedVersion:1,estimateJson:'forged',targetId:'Lorenzo'}
+  const args={input,session,permissions,repository,resources,now}
+  const proposal=await prepareRepeatMealProposal(args)
+  assert.equal(proposal.operations[0].targetId,'Larry')
+  assert.equal(JSON.parse(proposal.operations[0].payload.estimateJson).perServingMacros.calories,200)
+  assert.equal((await resources.read(resource)).value.entries.length,1)
+  await assert.rejects(()=>prepareRepeatMealProposal({...args,input:{...input,sourceVersion:0}}),/saved meal changed/)
+  await assert.rejects(()=>prepareRepeatMealProposal({...args,input:{...input,expectedVersion:0}}),/Today’s meals changed/)
+  await assert.rejects(()=>prepareRepeatMealProposal({...args,input:{...input,entryId:'other-member-meal'}}),/own saved meals/)
+  await assert.rejects(()=>prepareRepeatMealProposal({...args,session:{member:'Lorenzo',role:'admin'},input:{...input,sourceVersion:0}}),/own saved meals/)
+  const execution={repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}}
+  const result=await executeActionWithJournal(execution)
+  await executeActionWithJournal(execution)
+  assert.equal((await resources.read(resource)).value.entries.length,2)
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.calories,400)
+  assert.ok(result.audit.id)
+  await assert.rejects(()=>prepareRepeatMealProposal(args),/saved meal changed/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.deepEqual((await resources.read(resource)).value.entries,[entry])
 })

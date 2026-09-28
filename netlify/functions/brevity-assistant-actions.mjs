@@ -6,6 +6,7 @@ import { assertExactExpectedVersions, commitPreparedRecordOperations, createProd
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { productionSermonSourceRepository } from '../lib/sermon-source-repository.mjs'
 import { MEALS_BY_ID } from '../../src/meals/mealLibrary.js'
+import { householdDate } from '../lib/assistant-authoritative-context.mjs'
 import { dailyNutrition } from '../lib/nutrition-ledger.mjs'
 
 const { readSession } = householdAuth
@@ -163,6 +164,26 @@ export async function prepareSermonProposal({input,session,permissions,repositor
   const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:active.value})
   if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
   proposal={...proposal,expectedVersions:{'sermon:active':expectedVersion}}
+  await prepareRecordOperations({proposal,session,permissions,resources,now:()=>now})
+  await repository.saveProposal(proposal)
+  return proposal
+}
+
+export async function prepareRepeatMealProposal({input,session,permissions,repository,resources,now=new Date(),id}) {
+  const sourceDate=String(input?.sourceDate||''),entryId=String(input?.entryId||'')
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(sourceDate)||!entryId)throw Object.assign(new Error('Choose a saved meal to repeat.'),{code:'INVALID_ACTION'})
+  const source=await resources.read(`nutrition:${session.member}:${sourceDate}`)
+  if(!Number.isInteger(input.sourceVersion)||source.version!==input.sourceVersion)throw Object.assign(new Error('This saved meal changed. Refresh before repeating it.'),{code:'VERSION_CONFLICT'})
+  const entry=dailyNutrition(source.value,session.member,sourceDate).entries.find(item=>item.id===entryId)
+  if(!entry)throw Object.assign(new Error('Choose one of your own saved meals.'),{code:'FORBIDDEN'})
+  const date=householdDate(now),resource=`nutrition:${session.member}:${date}`
+  const target=await resources.read(resource)
+  if(!Number.isInteger(input.expectedVersion)||target.version!==input.expectedVersion)throw Object.assign(new Error('Today’s meals changed. Refresh before repeating this meal.'),{code:'VERSION_CONFLICT'})
+  const estimate={ingredients:entry.ingredients,perServingMacros:entry.macros,perServingNutrients:entry.nutrients||undefined,nutritionBasis:entry.nutritionBasis,warnings:[...(entry.warnings||[]),`Copied estimate from ${sourceDate}; confirm the same foods and portions were eaten again today.`]}
+  let proposal
+  try{proposal=normalizeActionProposal({summary:`Repeat ${entry.name} today`,operations:[{type:'nutrition.meal.log',targetId:session.member,targetDate:date,description:`Save another serving of ${entry.name} with the same foods and portions`,payload:{name:entry.name,estimateJson:JSON.stringify(estimate)}}]},{member:session.member,role:session.role,now,id})}
+  catch(error){throw Object.assign(error,{code:'INVALID_ACTION'})}
+  proposal={...proposal,expectedVersions:{[resource]:target.version}}
   await prepareRecordOperations({proposal,session,permissions,resources,now:()=>now})
   await repository.saveProposal(proposal)
   return proposal
@@ -608,6 +629,11 @@ export const handler=async event=>{
     if(action==='prepare-sermon'){
       const matrix=await repository.getPermissions()
       const proposal=await prepareSermonProposal({input:body,session,permissions:matrix[session.member],repository,resources,sourceRepository:productionSermonSourceRepository()})
+      return json(200,{proposal})
+    }
+    if(action==='prepare-repeat-meal'){
+      const matrix=await repository.getPermissions()
+      const proposal=await prepareRepeatMealProposal({input:body,session,permissions:matrix[session.member],repository,resources})
       return json(200,{proposal})
     }
     if(action==='prepare-direct'){

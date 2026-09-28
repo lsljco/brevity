@@ -32,3 +32,10 @@ Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This 
 4. **Household configuration and pilot expansion:** only after Family #1 validates adoption and sensitive member data boundaries.
 
 Do not infer Phase 1 success from a passing build or a healthy endpoint. The acceptance criterion is a signed-in member completing a natural-language request, approved action, persisted record and useful follow-up with less work than manual entry.
+
+### Recurring meals and estimate transparency
+
+- Added Repeat meal today from saved history, using server-loaded member-owned foods and totals. Review and confirmation are required; source and destination versions are checked. Existing audit, retry protection, and Undo are retained.
+- Ingredient details expose recorded estimate basis and model confidence, explicitly distinguished from label verification.
+- Correction calculations discard stale responses after food edits.
+- Signed-in preview verification remains required before production approval.
