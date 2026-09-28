@@ -7,7 +7,8 @@ import { normalizeActionProposal } from '../lib/assistant-action-contract.mjs'
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import { captureExpectedVersions, createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { mealProteinFocus } from '../lib/assistant-meal-protein.mjs'
-import { agentTools, runAgentTool } from '../lib/brevity-agent-tools.mjs'
+import { runAgentTool } from '../lib/brevity-agent-tools.mjs'
+import { runBrevityAgent } from '../lib/run-brevity-agent.mjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
@@ -100,26 +101,9 @@ ${transcript}
 
 Respond to the last household-member message. Prefer concise headings and bullets when they improve clarity. Return only the structured response.`
 
-  const input=[{role:'user',content:prompt}]
-  let payload,response
-  for(let step=0;step<4;step++){
-    response=await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'content-type':'application/json'},
-      body:JSON.stringify({model:MODEL,store:false,input,tools:agentTools,parallel_tool_calls:false,max_output_tokens:3500,text:{format:{type:'json_schema',name:'brevity_action_response',strict:true,schema:assistantResponseSchema}}}),
-    })
-    payload=await response.json().catch(()=>({}))
-    if(!response.ok)break
-    const calls=(payload.output||[]).filter(item=>item.type==='function_call')
-    if(!calls.length)break
-    if(step===3)return json(502,{error:'Brevity reached its tool-call limit. Try a narrower request.'})
-    input.push(...payload.output)
-    for(const call of calls){
-      let result
-      try{result=await runAgentTool(call,{canonical:canonicalServerContext,browser:browserSnapshot})}
-      catch(error){result={error:error.message||'This Brevity tool is temporarily unavailable.'}}
-      input.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result).slice(0,MAX_CONTEXT_LENGTH)})
-    }
-  }
+  const run=await runBrevityAgent({prompt,model:MODEL,apiKey:process.env.OPENAI_API_KEY,schema:assistantResponseSchema,executeTool:call=>runAgentTool(call,{canonical:canonicalServerContext,browser:browserSnapshot})})
+  if(run.limitReached)return json(502,{error:'Brevity reached its tool-call limit. Try a narrower request.'})
+  const {response,payload}=run
   if (!response.ok) {
     const message = payload.error?.message || 'OpenAI request failed.'
     const code = payload.error?.code || payload.error?.type || ''
