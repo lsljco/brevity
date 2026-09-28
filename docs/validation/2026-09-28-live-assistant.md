@@ -46,3 +46,13 @@ This numerical result is not certified exact-label accuracy. Independent manufac
 ## Evidence retrieval correction
 
 The nutrition server now discards agent-authored product-reference summaries and retrieves the public URLs itself using the existing DNS-pinned, private-network-blocking, size-bounded recipe fetcher. Homepages and unreadable/incomplete nutrition pages cannot count as evidence. The calculator receives fetched page text, and missing evidence returns to agent research or explicit approximation consent. Approximate items retain no exact-label source claim and carry a server-generated uncertainty warning. This prevents invented source summaries from authorizing the earlier incorrect label values.
+
+## Final observed state — candidate 5096e74
+
+- Explicit consent to approximation produced a real Action Mode proposal and its review dialog: 870 calories, 54 g protein, 36 g carbs and 56 g fat. The shake counted once. Approximation was prominently disclosed; this is a workflow/arithmetic check, not exact-label accuracy certification.
+- The first conditional approximation consent was unnecessarily requested again; reducing repeated clarification remains a conversation-quality follow-up.
+- No test meal or recipe change was applied. No PR merge or production release occurred.
+- 1,100 regression tests pass; build passes. Preview deployment succeeded.
+- Remaining acceptance: exact-product evidence coverage and macro accuracy across variants; physical-device voice; approved save, persisted record, correction and Undo; the full synthetic 30-case model evaluation set.
+
+![Live review, not applied](preview-230-live-review.jpg)
