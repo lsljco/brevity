@@ -40,5 +40,3 @@
 [functions."fitness-image-generate"]
   included_files = ["netlify/assets/sermon-characters/**"]
 
-[functions."sermon-workspace-package-background"]
-  external_node_modules = ["pptxgenjs"]
