@@ -101,3 +101,14 @@ test('agent diagnostics log only run metadata, never conversation or provider er
  assert.equal(metadata.outcome,'failed');assert.equal(metadata.errorCategory,'rate_limit')
  assert.equal(typeof metadata.durationMs,'number')
 })
+
+test('request rules stay in agent instructions while conversation roles reach the runner intact',async()=>{
+ const messages=[{role:'user',content:'Today I ate sausage.'},{role:'assistant',content:'Which brand?'},{role:'user',content:'Eckrich Original, four ounces.'}]
+ const runner={run:async(agent,input)=>{
+   assert.ok(agent.instructions.includes('Authenticated member: Larry.'))
+   assert.deepEqual(input,messages)
+   assert.ok(!agent.instructions.includes('Eckrich Original, four ounces.'))
+   return {finalOutput:{message:'Was anything added?',proposal:null}}
+ }}
+ await runBrevitySdkAgent({prompt:messages,requestInstructions:'Authenticated member: Larry.',model:'test',schema,canonical,browser:{},runner,logger:()=>{}})
+})

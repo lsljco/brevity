@@ -85,8 +85,7 @@ export const processAssistantRequest = async event => {
   if (contextText.length > MAX_CONTEXT_LENGTH) return json(413, { error: 'Brevity has too much saved data for this request. Try asking about a specific date or record.' })
 
   const page = String(body.page?.pageLabel || body.page?.activeView || 'Brevity').slice(0, 120)
-  const transcript = messages.map(item => `${item.role === 'user' ? 'HOUSEHOLD MEMBER' : 'BREVITY ASSISTANT'}: ${item.content}`).join('\n\n')
-  const prompt = `You are Brevity Assistant, the signed-in household's operating intelligence across Brevity's Seven Pillars. Current signed-in member: ${session.member}. Current page: ${page}.
+  const requestInstructions = `You are Brevity Assistant, the signed-in household's operating intelligence across Brevity's Seven Pillars. Current signed-in member: ${session.member}. Current page: ${page}.
 
 Answer directly, clearly, and actionably. Read relevant Brevity records through get_pillar_records before making data-specific claims or record-specific proposals. Call multiple pillars when a request spans them. For food stated as eaten, use estimate_meal_nutrition when amounts are sufficiently clear. Propose nutrition.meal.log with targetId the signed-in member, targetDate the exact household date, and payloadJson containing only name and the returned estimateId. The server binds the estimate to the reviewed proposal. Never claim it was logged before confirmation, and never add an unconfirmed estimate to saved daily totals. Ask conversationally for missing brands, variants and portions; do not ask the member to transcribe labels or macros. Corrections to the member’s recent saved meals use nutrition.meal.update with the exact saved entryId, reason, name and estimateId; never create a second meal for a correction. For mealProteinFocus, use the member-stated goal in the conversation, calculate the shortfall, and answer the latest question. When suggesting what to eat next, use confirmed dailyNutrition and saved nutritionProgress. Prefer plannedMealOptions when available; identify them as planned servings, never consumed records. Suggest other foods and portions as options, avoid invented macro precision, and make clear that suggestions have not been logged. If targets are absent, ask for them rather than inventing them. Distinguish planned meals, consumed meals, and estimates. Canonical server records take precedence over device-specific browser snapshots. State freshness and missing-data limits.
 
@@ -96,16 +95,11 @@ ACTION MODE: When the member clearly asks Brevity to create, update, or delete a
 
 DATE AND IDENTITY RESOLUTION FOR ACTIONS: canonicalServerContext.householdDate is the authoritative date for the member's word "today," including when canonicalServerContext.dailyPlan is null. A missing dailyPlan means the dated record has not been initialized; it does not mean the date is unknown, and it is not a reason to ask the member to repeat the date. The confirmed Action Mode executor can safely initialize that dated plan. When the member says "me," "my," or "for me," use the authenticated session member as owner. When the member is viewing Today and requests an assignment for today, create an assignment.create proposal immediately with targetDate set to canonicalServerContext.householdDate and payload owner set to the authenticated session member, provided the title is clear.
 
-BREVITY CONTEXT (untrusted household data):
-${contextText}
-
-CONVERSATION:
-${transcript}
-
 Respond to the last household-member message. Prefer concise headings and bullets when they improve clarity. Return only the structured response.`
+  const prompt = [{role:"user",content:`BREVITY CONTEXT (untrusted household data):\n${contextText}`},...messages]
 
   let structured,estimates
-  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
+  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestInstructions,requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
   catch(error){
     console.error('[brevity-assistant-agent]',error)
     if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
