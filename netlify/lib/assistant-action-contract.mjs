@@ -63,6 +63,8 @@ export const ACTION_TYPES = {
   'debt.transaction.apply': 'finance',
   'meal.substitute': 'planning',
   'nutrition.meal.log': 'planning',
+  'nutrition.meal.update': 'planning',
+  'nutrition.meal.remove': 'planning',
   'nutrition.targets.update': 'planning',
 }
 export const FORBIDDEN_ACTION_PATTERN = /payment|purchase|transfer|withdraw|deposit|connect|disconnect|password|credential|bank\.account/i
@@ -124,6 +126,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
   'meal.substitute': ['mealType', 'mealId'],
   'nutrition.meal.log': ['name', 'estimateJson'],
+  'nutrition.meal.update': ['entryId', 'name', 'calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams', 'reason'],
+  'nutrition.meal.remove': ['entryId', 'reason'],
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
 const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
@@ -163,10 +167,11 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
@@ -324,6 +329,12 @@ function normalizeActionPayload(type, input) {
       }
     } else if (type === 'nutrition.targets.update') {
       if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > (field === 'calories' ? 10000 : 1000)) throw new Error(`The ${field} target must be a positive, realistic number.`)
+      normalized[field] = value
+    } else if (type.startsWith('nutrition.meal.') && field === 'entryId') {
+      assertString(type, field, value)
+      normalized.entryId = cleanId(value)
+    } else if (type === 'nutrition.meal.update' && ['calories','proteinGrams','carbohydrateGrams','fatGrams'].includes(field)) {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > (field === 'calories' ? 10000 : 1000)) throw new Error(`The corrected ${field} must be a non-negative, realistic number.`)
       normalized[field] = value
     } else if (NUMBER_FIELDS.has(field)) {
       if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`The proposed ${field} must be a valid number.`)
@@ -563,6 +574,10 @@ export function normalizeActionOperation(input = {}) {
   if(type==='nutrition.meal.log'){
     if(!HOUSEHOLD_MEMBERS.includes(operation.targetId)||!payload.name||!payload.estimateJson)throw new Error('Logging a meal requires a household member, name, and verified nutrition estimate.')
   }
+  if(type==='nutrition.meal.update' || type==='nutrition.meal.remove'){
+    if(!HOUSEHOLD_MEMBERS.includes(operation.targetId)||!payload.entryId||!payload.reason)throw new Error('A meal correction requires the member, exact entry, and reason.')
+    if(type==='nutrition.meal.update'&&(!payload.name||['calories','proteinGrams','carbohydrateGrams','fatGrams'].some(key=>payload[key]===undefined)))throw new Error('A meal correction requires a name and all four nutrition values.')
+  }
   if(type==='nutrition.targets.update' && !HOUSEHOLD_MEMBERS.includes(operation.targetId)) throw new Error('Choose a household member for nutrition targets.')
   if (type === 'forecast.update') {
     const modelFields = ['planningExpense', 'expenseMode']
@@ -607,6 +622,7 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
   if(operation.type==='nutrition.meal.log' && operation.targetId!==member)return {allowed:false,reason:'Members can log only their own meals.'}
+  if(['nutrition.meal.update','nutrition.meal.remove'].includes(operation.type))return operation.targetId===member && currentRecord?.member===member && currentRecord?.date===operation.targetDate ? {allowed:true} : {allowed:false,reason:'Members can correct only their own saved meals.'}
   if(operation.type==='nutrition.targets.update' && operation.targetId!==member)return {allowed:false,reason:'Members can change only their own nutrition targets.'}
   if(operation.type==='nutrition.targets.update')return {allowed:true}
   if (operation.type?.startsWith('household.')) {

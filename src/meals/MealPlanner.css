@@ -175,3 +175,8 @@
 .consumed-nutrition-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:1rem;margin:1rem 0}
 .consumed-nutrition-fields label{display:grid;gap:.35rem}
 .consumed-nutrition-fields input{width:100%;padding:.6rem;border:1px solid #aaa;border-radius:.4rem}
+.consumed-meal-correction{display:grid;gap:.8rem;margin:.8rem 0;padding:1rem;border:1px solid #ddd;border-radius:.6rem}
+.consumed-meal-correction label{display:grid;gap:.35rem}
+.consumed-meal-correction input,.consumed-meal-correction textarea{width:100%;padding:.6rem;border:1px solid #aaa;border-radius:.4rem}
+.consumed-meal-correction textarea{min-height:4rem}
+.consumed-meal-correction button{margin-right:.6rem}

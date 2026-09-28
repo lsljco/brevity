@@ -294,6 +294,31 @@ test('daily nutrition targets require own-member review, version checks, and sup
   assert.throws(()=>normalizeActionProposal({operations:[{...input.operation,payload:{proteinGrams:-3}}]},{member:'Larry'}),/positive, realistic/)
 })
 
+test('a member can correct or remove only an exact saved meal through Action Mode and Undo',async()=>{
+  const date='2026-09-28',store=versionedBlobStore(),actionStore=versionedBlobStore()
+  const resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store,now:()=>new Date('2026-09-28T10:00:00Z')})
+  const repository=createAssistantActionRepository({store:actionStore}),session={member:'Larry',role:'member'},permissions=defaultActionPermissions('member')
+  const resource=`nutrition:Larry:${date}`
+  await resources.write(resource,{member:'Larry',date,entries:[{id:'meal-1',member:'Larry',date,name:'Toast',macros:{calories:200,proteinGrams:5,carbohydrateGrams:30,fatGrams:4}}]},0,'Larry')
+  const correction={type:'nutrition.meal.update',targetId:'Larry',targetDate:date,description:'Correct Toast',payload:{entryId:'meal-1',name:'Toast with butter',calories:280,proteinGrams:5,carbohydrateGrams:30,fatGrams:12,reason:'Butter was omitted'}}
+  const proposal=await prepareDirectProposal({input:{summary:'Correct Toast',operation:correction,expectedVersion:1},session,permissions,repository,resources})
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.calories,200)
+  const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.calories,280)
+  assert.equal((await resources.read(resource)).value.entries[0].correctionReason,'Butter was omitted')
+  await assert.rejects(()=>prepareDirectProposal({input:{summary:'Stale correction',operation:correction,expectedVersion:1},session,permissions,repository,resources}),/changed after your review/)
+  await assert.rejects(()=>prepareDirectProposal({input:{summary:'Wrong member',operation:{...correction,targetId:'Lorenzo'},expectedVersion:0},session,permissions,repository,resources}),/own saved meals/)
+  await assert.rejects(()=>prepareDirectProposal({input:{summary:'Wrong entry',operation:{...correction,payload:{...correction.payload,entryId:'unknown'}},expectedVersion:2},session,permissions,repository,resources}),/own saved meals/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.calories,200)
+  const removal=await prepareDirectProposal({input:{summary:'Remove mistaken meal',operation:{type:'nutrition.meal.remove',targetId:'Larry',targetDate:date,description:'Remove Toast',payload:{entryId:'meal-1',reason:'Logged in error'}},expectedVersion:3},session,permissions,repository,resources})
+  assert.equal(removal.risk,'strong-confirmation')
+  const removed=await executeActionWithJournal({repository,proposal:removal,operations:removal.operations,session,permissions,resources,event:{}})
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.calories,0)
+  await undoActionWithJournal({repository,auditId:removed.audit.id,session,resources,event:{},leaseMs:0})
+  assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.calories,200)
+})
+
 test('meal substitutions require a dated library choice but allow cross-category slots',()=>{
   const breakfast=MEAL_LIBRARY.find(meal=>meal.mealType==='breakfast')
   const dinner=MEAL_LIBRARY.find(meal=>meal.mealType==='dinner')

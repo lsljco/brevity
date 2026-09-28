@@ -30,6 +30,7 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
@@ -51,6 +52,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return (value?.entries||[]).find(entry=>entry.id===operation.payload?.entryId)||null
   if (operation.type.startsWith('household.')) return householdRecordForOperation(value,operation)
   if (operation.type === 'sermon.activate') return value || null
   if (operation.type === 'decision.update') return (value?.decisions || []).find(item => item.id === operation.targetId)
@@ -76,6 +78,14 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
   const payload = operation.payload || {}
+  if(operation.type==='nutrition.meal.update' || operation.type==='nutrition.meal.remove'){
+    const entries=value?.entries||[],index=entries.findIndex(entry=>entry.id===payload.entryId&&entry.member===operation.targetId&&entry.date===operation.targetDate)
+    if(index<0)throw new Error('That saved meal is no longer available. Refresh and review the latest record.')
+    const afterEntries=clone(entries)
+    if(operation.type==='nutrition.meal.remove')afterEntries.splice(index,1)
+    else afterEntries[index]={...afterEntries[index],name:payload.name,macros:Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].map(key=>[key,payload[key]])),nutritionBasis:`Member corrected: ${payload.reason}`,warnings:[...(afterEntries[index].warnings||[]),'Nutrition values were corrected by a household member.'],correctedAt:nowIso(context.now||(()=>new Date())),correctedBy:context.actor||operation.targetId,correctionReason:payload.reason}
+    return{before,after:{...value,entries:afterEntries}}
+  }
   if(operation.type==='nutrition.targets.update')return{before,after:{...(value||{}),member:operation.targetId,...clone(payload)}}
   if(operation.type==='nutrition.meal.log'){
     const estimate=JSON.parse(payload.estimateJson)
