@@ -9,6 +9,8 @@ import { captureExpectedVersions, createProductionActionResources } from '../lib
 import { mealProteinFocus } from '../lib/assistant-meal-protein.mjs'
 import { runBrevitySdkAgent } from '../lib/brevity-sdk-agent.mjs'
 import { dailyNutrition } from '../lib/nutrition-ledger.mjs'
+import { getStore } from '@netlify/blobs'
+import { randomUUID } from 'node:crypto'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
@@ -49,7 +51,7 @@ function cleanBrowserContext(input) {
   }
 }
 
-export const handler = async event => {
+export const processAssistantRequest = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' })
   if (!process.env.OPENAI_API_KEY) return json(503, { error: 'Brevity Assistant is not configured yet.' })
 
@@ -132,4 +134,33 @@ Respond to the last household-member message. Prefer concise headings and bullet
     page,
     contextSources: canonicalServerContext.sources,
   })
+}
+
+const jobs=()=>getStore({name:'brevity-assistant-jobs',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
+const jobKey=id=>`job-${id}`
+const backgroundUrl=event=>`${String(event.headers?.['x-forwarded-proto']||'https').split(',')[0]}://${String(event.headers?.['x-forwarded-host']||event.headers?.host||'brevityoflife.netlify.app').split(',')[0]}/.netlify/functions/brevity-assistant-background`
+export const handler=async event=>{
+  try{
+    const session=await readSession(event).catch(()=>null)
+    if(!session)return json(401,{error:'Sign in to use Brevity Assistant.'})
+    if(event.httpMethod==='GET'){
+      const id=event.queryStringParameters?.jobId
+      if(!/^[0-9a-f-]{36}$/.test(id||''))return json(400,{error:'Invalid assistant job.'})
+      const status=await jobs().get(jobKey(id),{type:'json'})
+      if(!status||status.member!==session.member)return json(404,{error:'Assistant job not found.'})
+      if(status.state==='queued'||status.state==='processing'){
+        if(Date.now()-Date.parse(status.createdAt)>12*60*1000)return json(504,{error:'Brevity Assistant took too long. Please retry.'})
+        return json(202,{state:status.state,jobId:id})
+      }
+      return json(status.statusCode||502,status.result||{error:'Brevity Assistant could not complete this request.'})
+    }
+    if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
+    const body=JSON.parse(event.body||'{}')
+    if(!cleanMessages(body.messages).length)return json(400,{error:'A question is required.'})
+    const id=randomUUID(),store=jobs()
+    await store.setJSON(jobKey(id),{member:session.member,state:'queued',createdAt:new Date().toISOString()})
+    const response=await fetch(backgroundUrl(event),{method:'POST',headers:{'content-type':'application/json',cookie:event.headers?.cookie||event.headers?.Cookie||''},body:JSON.stringify({id,body})})
+    if(!response.ok&&response.status!==202)throw Error(`Background dispatch returned ${response.status}`)
+    return json(202,{state:'queued',jobId:id})
+  }catch(error){console.error('[brevity-assistant-dispatch]',error);return json(502,{error:'Brevity Assistant could not start. Please retry.'})}
 }
