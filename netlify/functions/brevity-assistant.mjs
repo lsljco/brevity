@@ -69,6 +69,8 @@ export const processAssistantRequest = async event => {
   const nutritionResource=`nutrition:${session.member}:${canonicalServerContext.householdDate}`
   const nutritionRecord=await createProductionActionResources().read(nutritionResource)
   canonicalServerContext.dailyNutrition=dailyNutrition(nutritionRecord.value,session.member,canonicalServerContext.householdDate)
+  const nutritionTargets=await createProductionActionResources().read(`nutrition-targets:${session.member}`)
+  canonicalServerContext.nutritionTargets=Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].filter(key=>Number.isFinite(nutritionTargets.value?.[key])).map(key=>[key,nutritionTargets.value[key]]))
   const mealFocus = mealProteinFocus(messages, canonicalServerContext)
   const appleCalendar=await loadAppleCalendar(event)
   if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300).map(item=>Object.fromEntries(['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'].filter(field=>item?.[field]!==undefined).map(field=>[field,item[field]]))),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
@@ -78,7 +80,7 @@ export const processAssistantRequest = async event => {
     delete browserSnapshot.projects
     if(browserSnapshot.calendars){delete browserSnapshot.calendars.brevityEvents;if(canonicalServerContext.appleFamilyCalendar)delete browserSnapshot.calendars.appleFamilyCalendar}
   }
-  let context = {householdDate:canonicalServerContext.householdDate,signedInMember:session.member,sources:canonicalServerContext.sources,dailyNutrition:canonicalServerContext.dailyNutrition,mealProteinFocus:mealFocus,notice:'Read pillar-specific records with get_pillar_records. Planned meals do not prove consumption.'}
+  let context = {householdDate:canonicalServerContext.householdDate,signedInMember:session.member,sources:canonicalServerContext.sources,dailyNutrition:canonicalServerContext.dailyNutrition,nutritionTargets:canonicalServerContext.nutritionTargets,mealProteinFocus:mealFocus,notice:'Read pillar-specific records with get_pillar_records. Planned meals do not prove consumption.'}
   let contextText = JSON.stringify(context)
   if (contextText.length > MAX_CONTEXT_LENGTH) return json(413, { error: 'Brevity has too much saved data for this request. Try asking about a specific date or record.' })
 

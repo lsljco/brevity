@@ -8,6 +8,7 @@ import { summarizeMealPlan } from './mealPlanInsights.js'
 import { calculateMealNutrition, importMealsFromImage, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import BulkMealImport from './BulkMealImport.jsx'
+import ConsumedNutrition from './ConsumedNutrition.jsx'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
 
@@ -309,7 +310,7 @@ function LibraryView({ library, onAdd, onOpenMeal, onBulkImport }) {
   })}</div>
 }
 
-export default function MealPlanner() {
+export default function MealPlanner({currentMember}) {
   const { data, state, error, reload, addMeal, prepareReplacement } = useRollingMealPlan({reloadOnRefreshEvents:true})
   const [view, setView] = useState('plan')
   const [selectedMonth, setSelectedMonth] = useState(() => getHouseholdDateKey().slice(0, 7))
@@ -373,7 +374,8 @@ export default function MealPlanner() {
 
   return <main className="meal-planner">
     <header className="meal-planner-hero"><div><p>Health &amp; Nutrition</p><h1>{view === 'month' ? 'Monthly Meal Plan' : 'Rolling 7-Day Meal Plan'}</h1><span>Three meals a day, always planned. Lunch and dinner stay simple: protein plus vegetables.</span></div><div className="meal-plan-stat"><strong>{data?.librarySummary?.total ?? 117}</strong><span>household meals</span></div></header>
-    <div className="meal-planner-controls"><nav aria-label="Meal planner views"><button type="button" className={view === 'plan' ? 'is-active' : ''} onClick={() => setView('plan')}><i className="ti ti-calendar-week" /> 7-Day Plan</button><button type="button" className={view === 'month' ? 'is-active' : ''} onClick={() => setView('month')}><i className="ti ti-calendar-month" /> Month Plan</button><button type="button" className={view === 'library' ? 'is-active' : ''} onClick={() => setView('library')}><i className="ti ti-tools-kitchen-2" /> Meal Library</button></nav><p><i className="ti ti-refresh" /> The seven-day window rolls forward daily; replacements remain attached to their date.</p></div>
+    <div className="meal-planner-controls"><nav aria-label="Meal planner views"><button type="button" className={view === 'plan' ? 'is-active' : ''} onClick={() => setView('plan')}><i className="ti ti-calendar-week" /> 7-Day Plan</button><button type="button" className={view === 'month' ? 'is-active' : ''} onClick={() => setView('month')}><i className="ti ti-calendar-month" /> Month Plan</button><button type="button" className={view === 'library' ? 'is-active' : ''} onClick={() => setView('library')}><i className="ti ti-tools-kitchen-2" /> Meal Library</button><button type="button" className={view === 'consumed' ? 'is-active' : ''} onClick={() => setView('consumed')}>Consumed</button></nav><p><i className="ti ti-refresh" /> The seven-day window rolls forward daily; replacements remain attached to their date.</p></div>
+    {view === 'consumed' && <ConsumedNutrition currentMember={currentMember} />}
     {view === 'month' && <div className="meal-month-controls"><label htmlFor="meal-month-selector">Select month</label><input id="meal-month-selector" type="month" value={selectedMonth} onChange={event => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setSelectedMonth(event.target.value) }} /><span>{new Date(`${monthRange.startDate}T12:00:00`).toLocaleDateString('en-US',{month:'long',year:'numeric'})} · {monthRange.count} days</span></div>}
     {message && <div className="meal-planner-message" role="status">{message}</div>}
     {data && view === 'plan' && planInsight && <section className="meal-plan-insight" aria-label="Meal plan insight"><div><span>Today’s plan insight</span><strong>{planInsight.mealCount} meals are planned for {formatDay(planInsight.selectedDate)}.</strong><p>The totals below aggregate breakfast, lunch, and dinner for this day. Preparation uses each meal’s total time, or prep time when no separate cook time exists.</p></div><dl><div><dt>Total planned time</dt><dd>{formatPrepMinutes(planInsight.totalPrepMinutes)}</dd></div><div><dt>Total calories</dt><dd>{planInsight.totalCalories.toLocaleString()} cal</dd></div><div><dt>Total protein</dt><dd>{planInsight.totalProteinGrams}g</dd></div><div><dt>Total carbs</dt><dd>{planInsight.totalCarbohydrateGrams}g</dd></div><div><dt>Total fat</dt><dd>{planInsight.totalFatGrams}g</dd></div><div><dt>Longest preparation</dt><dd>{planInsight.longestPrep.name} · {planInsight.longestPrep.prepMinutes} min</dd></div></dl><small>These are estimates for the three meals shown for this day, not evidence that a meal was prepared or eaten.</small></section>}

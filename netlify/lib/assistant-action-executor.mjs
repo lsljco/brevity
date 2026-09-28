@@ -30,6 +30,7 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
   if (operation.type === 'sermon.activate') return 'sermon:active'
@@ -75,6 +76,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
   const payload = operation.payload || {}
+  if(operation.type==='nutrition.targets.update')return{before,after:{...(value||{}),member:operation.targetId,...clone(payload)}}
   if(operation.type==='nutrition.meal.log'){
     const estimate=JSON.parse(payload.estimateJson)
     const item={id:createId(),name:payload.name,member:operation.targetId,date:operation.targetDate,ingredients:clone(estimate.ingredients),macros:clone(estimate.perServingMacros),warnings:clone(estimate.warnings||[]),nutritionBasis:estimate.nutritionBasis||'',loggedAt:nowIso(context.now||(()=>new Date())),loggedBy:context.actor||operation.targetId}
@@ -446,9 +448,14 @@ export function createProductionActionResources({ now = () => new Date(), shared
   const planKey = date => `${HOUSEHOLD_ID}/daily-plans/${date}`
   const mealKey = date => `${HOUSEHOLD_ID}/days/${date}`
   const nutritionKey = (member,date) => `${HOUSEHOLD_ID}/nutrition/${member}/${date}`
+  const nutritionTargetsKey = member => `${HOUSEHOLD_ID}/nutrition/${member}/targets`
   const activeSermonKey = `${HOUSEHOLD_ID}/spiritual/active-sermon`
   return {
     async read(resource) {
+      if(resource.startsWith('nutrition-targets:')){
+        const member=resource.slice('nutrition-targets:'.length),entry=await readStoreEntry(mealStorage(),nutritionTargetsKey(member)),value=entry?.data
+        return{value:value||{member},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
+      }
       if(resource.startsWith('nutrition:')){
         const [,member,date]=resource.split(':'),entry=await readStoreEntry(mealStorage(),nutritionKey(member,date)),value=entry?.data
         return{value:value||{member,date,entries:[]},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
@@ -471,6 +478,12 @@ export function createProductionActionResources({ now = () => new Date(), shared
     },
     async write(resource, value, expectedVersion, actor, mutationId = '') {
       const occurredAt=nowIso(now)
+      if(resource.startsWith('nutrition-targets:')){
+        const member=resource.slice('nutrition-targets:'.length),storageKey=nutritionTargetsKey(member),store=mealStorage(),entry=await readStoreEntry(store,storageKey),current=entry?.data,version=Number(current?.version||0)
+        if(version!==expectedVersion)throw Object.assign(new Error('Nutrition targets changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
+        const record={...value,member,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''}
+        await conditionalStoreJson(store,storageKey,record,entry);return{version:record.version,value:record}
+      }
       if(resource.startsWith('nutrition:')){
         const [,member,date]=resource.split(':'),storageKey=nutritionKey(member,date),store=mealStorage(),entry=await readStoreEntry(store,storageKey),current=entry?.data,version=Number(current?.version||0)
         if(version!==expectedVersion)throw Object.assign(new Error('The nutrition log changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
@@ -515,7 +528,7 @@ const withoutManagedMetadata = value => {
   delete result.lastActionId
   return result
 }
-export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
+export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
 export const resourceLastWriter=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
 export const resourceLastActionId=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
 

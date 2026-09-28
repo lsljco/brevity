@@ -277,6 +277,23 @@ test('a reviewed consumed meal is saved for the signed-in member and changes sav
   assert.equal(dailyNutrition((await resources.read(resource)).value,'Larry',date).totals.proteinGrams,0)
 })
 
+test('daily nutrition targets require own-member review, version checks, and support Undo',async()=>{
+  const store=versionedBlobStore(),actionStore=versionedBlobStore()
+  const resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store})
+  const repository=createAssistantActionRepository({store:actionStore})
+  const session={member:'Larry',role:'member'},permissions=defaultActionPermissions('member')
+  const input={summary:'Set nutrition targets',expectedVersion:0,operation:{type:'nutrition.targets.update',targetId:'Larry',targetDate:'2026-09-28',description:'Set protein target',payload:{proteinGrams:140}}}
+  const proposal=await prepareDirectProposal({input,session,permissions,repository,resources})
+  assert.equal((await resources.read('nutrition-targets:Larry')).value.proteinGrams,undefined)
+  const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+  assert.equal((await resources.read('nutrition-targets:Larry')).value.proteinGrams,140)
+  await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),/changed after your review/)
+  await assert.rejects(()=>prepareDirectProposal({input:{...input,expectedVersion:0,operation:{...input.operation,targetId:'Lorenzo'}},session,permissions,repository,resources}),/own nutrition targets/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.equal((await resources.read('nutrition-targets:Larry')).value.proteinGrams,undefined)
+  assert.throws(()=>normalizeActionProposal({operations:[{...input.operation,payload:{proteinGrams:-3}}]},{member:'Larry'}),/positive, realistic/)
+})
+
 test('meal substitutions require a dated library choice but allow cross-category slots',()=>{
   const breakfast=MEAL_LIBRARY.find(meal=>meal.mealType==='breakfast')
   const dinner=MEAL_LIBRARY.find(meal=>meal.mealType==='dinner')
