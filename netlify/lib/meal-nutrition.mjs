@@ -7,6 +7,25 @@ const numeric = value => {
 }
 const round = (value, places = 1) => Number(numeric(value).toFixed(places))
 
+// Manufacturer serving labels provide a useful upper bound when the exact variant
+// is missing. Reject large model errors; let the member check the package label.
+const brandedServingChecks = [
+  {matches:/(?=.*\beckrich\b)(?=.*\bsmoked sausage\b)/i,amount:/\b(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b/i,caloriesPerUnit:200/2,proteinPerUnit:7/2},
+  {matches:/(?=.*\bpremier protein\b)(?=.*\bshake\b)/i,amount:/\b(\d+(?:\.\d+)?)\s*(?:shakes?|bottles?|cartons?)\b/i,caloriesPerUnit:200,proteinPerUnit:42},
+  {matches:/(?=.*\bnature.s own\b)(?=.*\bhoney wheat\b)/i,amount:/\b(\d+(?:\.\d+)?)\s*(?:slices?|pieces?)(?:\s+of)?\b/i,caloriesPerUnit:70,proteinPerUnit:4},
+]
+
+function checkBrandedServings(input, row) {
+  for(const reference of brandedServingChecks){
+    if(!reference.matches.test(input))continue
+    const quantity=Number(input.match(reference.amount)?.[1])
+    if(!Number.isFinite(quantity)||quantity<=0)continue
+    if(row.calories>quantity*reference.caloriesPerUnit*1.35 || row.proteinGrams>quantity*reference.proteinPerUnit*1.35){
+      throw Object.assign(new Error(`The estimated nutrition for “${input}” is inconsistent with typical package servings. Check the exact product label and try again before saving.`),{code:'NUTRITION_REVIEW_REQUIRED',status:422})
+    }
+  }
+}
+
 export const nutritionSchema = {
   type:'object',
   additionalProperties:false,
@@ -47,14 +66,16 @@ export function calculateNutritionResult(request, modelResult = {}) {
   const normalized=normalizeNutritionRequest(request)
   const rows=Array.isArray(modelResult.ingredients)?modelResult.ingredients:[]
   if(rows.length!==normalized.ingredients.length)throw new Error('Nutrition analysis did not return one result for every ingredient.')
-  const ingredients=rows.map((row,index)=>({
+  const ingredients=rows.map((row,index)=>{
+    checkBrandedServings(normalized.ingredients[index],row)
+    return ({
     input:normalized.ingredients[index],
     resolvedName:String(row.resolvedName||normalized.ingredients[index]).trim(),
     amountDescription:String(row.amountDescription||normalized.ingredients[index]).trim(),
     basis:String(row.basis||'Standard nutrition reference estimate').trim(),
     confidence:['high','medium','low'].includes(row.confidence)?row.confidence:'low',
     macros:Object.fromEntries(macroFields.map(field=>[field,round(row[field])])),
-  }))
+  })})
   const batchMacros=Object.fromEntries(macroFields.map(field=>[field,round(ingredients.reduce((sum,row)=>sum+row.macros[field],0))]))
   const perServingMacros=Object.fromEntries(macroFields.map(field=>[field,round(batchMacros[field]/normalized.yieldQuantity)]))
   const unit=normalized.yieldQuantity===1?normalized.yieldUnit:normalized.yieldUnit.replace(/s$/i,'')
@@ -82,7 +103,7 @@ export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, ti
       signal:controller.signal,
       body:JSON.stringify({
         model:MODEL,store:false,
-        instructions:'Act as a careful recipe nutrition calculator. For each ingredient line, estimate nutrition for the entire stated amount—not one serving. Honor brand and product names when supplied and explain the label or standard-food basis briefly. Water contributes zero macros. Never omit an ingredient, never invent an extra ingredient, and mark ambiguity or uncertain brand variants in warnings. Values are estimates, not medical advice.',
+        instructions:'Act as a careful recipe nutrition calculator. For each ingredient line, estimate nutrition for the entire stated amount—not one serving. Honor brand and product names when supplied and explain the label or standard-food basis briefly. For packaged food, first identify the label serving size, multiply all four macros by the stated number of servings, then report the result. As anchors: Eckrich Original Skinless Smoked Sausage is 190 calories and 6g protein per 2 oz; Premier Protein Classic shake is 160 calories and 30g protein per bottle; Nature’s Own Honey Wheat is 70 calories per slice. These anchors are only for those variants; disclose any uncertainty about the exact product. Water contributes zero macros. Never omit an ingredient, never invent an extra ingredient, and mark ambiguity or uncertain brand variants in warnings. Values are estimates, not medical advice.',
         input:JSON.stringify(request),
         text:{format:{type:'json_schema',name:'brevity_meal_nutrition',strict:true,schema:nutritionSchema}},
       }),

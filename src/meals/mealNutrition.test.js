@@ -24,6 +24,16 @@ test('nutrition requests require measured ingredients and a usable batch yield',
   assert.throws(()=>normalizeNutritionRequest({ingredients:['mix'],yieldQuantity:12,yieldUnit:''}),/yield unit/i)
 })
 
+test('rejects a branded serving estimate far above the package reference before it can be logged',()=>{
+  const request={ingredients:['6oz Eckrich smoked sausage','1 Premier Protein shake','2 pieces of honey wheat Nature’s Own toast'],yieldQuantity:1,yieldUnit:'meal'}
+  const rows=[
+    {...ingredients[0],calories:950,proteinGrams:55},
+    {...ingredients[1],calories:160,proteinGrams:30},
+    {...ingredients[2],calories:277,proteinGrams:14},
+  ]
+  assert.throws(()=>calculateNutritionResult(request,{ingredients:rows,warnings:[]}),error=>error.code==='NUTRITION_REVIEW_REQUIRED'&&/package servings/i.test(error.message))
+})
+
 test('nutrition model receives a strict ingredient-level contract and arithmetic stays in Brevity', async () => {
   const priorKey=process.env.OPENAI_API_KEY
   process.env.OPENAI_API_KEY='test-key'
