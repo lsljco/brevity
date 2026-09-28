@@ -24,8 +24,8 @@ export default function ConsumedNutrition({currentMember}){
     try{
       const payload=Object.fromEntries(FIELDS.filter(([key])=>form[key]!==''&&form[key]!=null).map(([key])=>[key,Number(form[key])]))
       if(!Object.keys(payload).length)throw new Error('Enter at least one daily target.')
-      const proposal=await prepareDirectAction({summary:`Update ${record.member}’s daily nutrition targets`,expectedVersion:record.targetVersion,operation:{type:'nutrition.targets.update',targetId:record.member,targetDate:record.date,description:`Set daily nutrition targets for ${record.member}`,payload}})
-      if(!requestActionReview(proposal))throw new Error('Action Mode could not open the target review.')
+      const result=await prepareDirectAction({summary:`Update ${record.member}’s daily nutrition targets`,expectedVersion:record.targetVersion,operation:{type:'nutrition.targets.update',targetId:record.member,targetDate:record.date,description:`Set daily nutrition targets for ${record.member}`,payload}})
+      if(!result?.proposal?.id||!requestActionReview(result.proposal))throw new Error('Action Mode could not open the target review.')
     }catch(cause){setError(cause.message||'Could not prepare nutrition targets.')}finally{setBusy(false)}
   }
   if(!record)return <section className="meal-plan-insight" aria-label="Consumed nutrition">{error?<p role="alert">{error} <button onClick={()=>load().catch(cause=>setError(cause.message))}>Retry</button></p>:<p role="status">Loading your nutrition record…</p>}</section>
