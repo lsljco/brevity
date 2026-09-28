@@ -11,7 +11,7 @@ export function mealProteinFocus(messages, context) {
   const latest = String(users.at(-1)?.content || '')
   if (!proteinQuestion(latest) && !(users.some(item => proteinQuestion(item.content)) && followup(latest))) return null
   const statedProteinGoalGrams = [...users].reverse().map(item => statedGoal(item.content)).find(value => value != null) ?? null
-  const savedProteinGoalGrams = context.dailyPlan?.health?.proteinGoalGrams ?? context.dailyPlan?.nutrition?.proteinGoalGrams ?? null
+  const savedProteinGoalGrams = context.nutritionTargets?.proteinGrams ?? context.dailyPlan?.health?.proteinGoalGrams ?? context.dailyPlan?.nutrition?.proteinGoalGrams ?? null
   const goalGrams = statedProteinGoalGrams ?? savedProteinGoalGrams
   const date = context.householdDate
   const source = context.sources?.find(item => item.id === 'rolling-meals')
@@ -26,7 +26,7 @@ export function mealProteinFocus(messages, context) {
     topic:'today-meal-protein',date,mealSourceState:source?.state || 'missing',mealSourceAsOf:source?.asOf || null,
     meals:source?.state === 'available' ? meals : [],complete,
     recordedTotalGrams:source?.state === 'available' ? recordedTotalGrams : null,
-    goalGrams,goalSource:statedProteinGoalGrams != null ? 'member-stated in conversation' : savedProteinGoalGrams != null ? 'saved daily plan' : 'not recorded',
+    goalGrams,goalSource:statedProteinGoalGrams != null ? 'member-stated in conversation' : context.nutritionTargets?.proteinGrams != null ? 'saved nutrition target' : savedProteinGoalGrams != null ? 'saved daily plan' : 'not recorded',
     differenceGrams:complete && Number(goalGrams) > 0 ? Number(goalGrams) - recordedTotalGrams : null,
     nutritionNotice:'Saved meal macros are estimates per serving. Do not assume an extra portion or food was eaten or added to the plan.'
   }
