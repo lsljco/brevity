@@ -4,7 +4,8 @@ import { buildCanonicalFinanceModel } from '../finance/financeDomain.js'
 import { migrateFinanceData } from '../finance/financeData.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { transactionOccurrencesForRange } from '../finance/monthlyCashFlow.js'
-import { parseISODate, toISO } from '../finance/projection.js'
+import { parseISODate, toISO, txOccursOnDate } from '../finance/projection.js'
+import { readLatestBalanceRefreshStatus } from '../finance/financeRefresh.js'
 import { reconcileFinanceDay } from '../finance/reconciliation.js'
 import { isTransferTransaction, transactionDirection } from '../finance/reportingData.js'
 import { applyTransactionRules } from '../finance/transactionRules.js'
@@ -213,7 +214,44 @@ function compactUnresolvedReconciliationRow(row) {
   }, ['state', 'label', 'amount', 'expectedIds', 'actualIds', 'date'])
 }
 
-function buildFinanceAnalysisSummary({ accounts = [], scheduled = [], actuals = [], budget = {}, asOfDate, actualSource = {} } = {}) {
+export function operatingBalanceForecast(accounts, scheduled, asOfDate, todayDate = getHouseholdDateKey()) {
+  // Stored account balance is a starting snapshot, never an independently
+  // verified live bank balance. Historical dates cannot use today's anchor.
+  if (asOfDate !== todayDate) return null
+  const account = accounts.find(item => /\boperating\s+account\b/i.test(String(item?.name || '')))
+    || accounts.find(item => item?.id === 'a1')
+  if (!account || account.balance === '' || account.balance == null || !Number.isFinite(Number(account.balance))) return null
+  const start = parseISODate(asOfDate)
+  if (!start) return null
+  let balance = Number(account.balance)
+  let firstNegative = null
+  let lowest = { date:asOfDate, balance:Math.round(balance * 100) / 100 }
+  for (let offset = 1; offset <= 30; offset++) {
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + offset)
+    const key = toISO(date)
+    const due = scheduled.filter(item => txOccursOnDate(item, date))
+    for (const item of due) {
+      const amount = Number(item.amount)
+      if (!Number.isFinite(amount) || amount < 0) continue
+      if (item.type === 'transfer') {
+        if (item.acct === account.id && item.transferTo !== account.id) balance -= amount
+        else if (item.transferTo === account.id && item.acct !== account.id) balance += amount
+      } else if (item.acct === account.id && item.type === 'income') balance += amount
+      else if (item.acct === account.id && item.type === 'expense') balance -= amount
+    }
+    balance = Math.round(balance * 100) / 100
+    if (balance < lowest.balance) lowest = { date:key, balance }
+    if (balance < 0 && !firstNegative) firstNegative = {
+      date:key,balance,
+      drivers:due.filter(item => item.acct === account.id && ['expense','transfer'].includes(item.type))
+        .sort((a,b) => Number(b.amount) - Number(a.amount)).slice(0,3)
+        .map(item => ({ name:transactionName(item),amount:Math.abs(Number(item.amount) || 0) })),
+    }
+  }
+  return { accountId:account.id,accountName:account.name || 'Operating Account',asOfDate,startingBalance:Number(account.balance),firstNegative,lowest,windowDays:30 }
+}
+
+function buildFinanceAnalysisSummary({ accounts = [], scheduled = [], actuals = [], budget = {}, asOfDate, actualSource = {}, balanceSource = {} } = {}) {
   const dateKey = normalizedAnalysisDate(asOfDate)
   const today = parseISODate(dateKey)
   const actualsThroughDate = actuals.filter(transaction => parseISODate(transaction?.date) && transaction.date <= dateKey)
@@ -266,6 +304,21 @@ function buildFinanceAnalysisSummary({ accounts = [], scheduled = [], actuals = 
   const ambiguousGroupCount = reconciliationNeedsReview.length - knownReviewRows.length
   const pendingExpenseAmount = pendingRows.filter(transaction => transactionDirection(transaction) === 'expense').reduce((total, transaction) => total + amountOf(transaction.amount), 0)
   const pendingInflowAmount = pendingRows.filter(transaction => transactionDirection(transaction) === 'income').reduce((total, transaction) => total + amountOf(transaction.amount), 0)
+  const unplanned = new Map()
+  if (coverage.reconciliation !== 'unavailable') {
+    const range = monthRangeForDate(dateKey)
+    const plannedRecords = reconciliationRecords(scheduled,'scheduled')
+    const bankRecords = reconciliationRecords(reconciliationActuals,'actual')
+    for (let day = parseISODate(range.from); day && toISO(day) <= dateKey; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {
+      const rows = reconcileFinanceDay({scheduled:plannedRecords,actuals:bankRecords,date:toISO(day)}).rows
+      rows.filter(row => row.state === 'unplanned-actual' && !row.actual?.pending && transactionDirection(row.actual) === 'expense' && !isTransferTransaction(row.actual)).forEach(row => {
+        const item=compactAnalysisTransaction({...row.actual,id:reconciliationSourceId(row.actual)||row.actual.id})
+        if (item) unplanned.set(item.id || `${item.name}:${item.date}:${item.amount}`,item)
+      })
+    }
+  }
+  const unplannedRows = [...unplanned.values()].sort((a,b) => b.amount - a.amount || String(a.name).localeCompare(String(b.name)))
+  const operatingForecast = operatingBalanceForecast(accounts,scheduled,dateKey)
 
   return {
     asOfDate:dateKey,
@@ -313,6 +366,8 @@ function buildFinanceAnalysisSummary({ accounts = [], scheduled = [], actuals = 
       grossAmount:pendingInflowAmount + pendingExpenseAmount,
       net:pendingInflowAmount - pendingExpenseAmount,
     },
+    ...(operatingForecast ? { operatingForecast:{...operatingForecast,balanceStatus:balanceSource.status || 'unknown',balanceCheckedAt:balanceSource.checkedAt || ''} } : {}),
+    unplannedSpending:{count:unplannedRows.length,total:Math.round(unplannedRows.reduce((sum,item)=>sum+item.amount,0)*100)/100,items:unplannedRows.slice(0,5)},
     ...(largestPosted ? { largestPostedExpense:compactAnalysisTransaction(largestPosted) } : {}),
     ...(largestScheduledExpenseLine ? { largestScheduledExpenseLine:compactScheduledExpenseLine(largestScheduledExpenseLine) } : {}),
     accountCount:accounts.length,
@@ -559,7 +614,7 @@ export function collectPillarContextFromStorage(pillar, storage, asOfDate = getH
     ))
     const scopedScheduled=scheduledMonthLines(scheduled,dateKey).map(line=>line.transaction)
     return {
-      analysisSummary:buildFinanceAnalysisSummary({ accounts, scheduled, actuals:correctedActuals, budget:budgets, asOfDate, actualSource }),
+      analysisSummary:buildFinanceAnalysisSummary({ accounts, scheduled, actuals:correctedActuals, budget:budgets, asOfDate, actualSource, balanceSource:readLatestBalanceRefreshStatus() }),
       accounts:canonicalRecords(accounts.map(compactAccount), 50),
       scheduledTransactions:canonicalRecords(scopedScheduled.map(compactTransaction), 250),
       actualTransactions:recentRecords(scopedActuals, 250),

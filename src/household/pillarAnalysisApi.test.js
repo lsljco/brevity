@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { clearPillarAnalyses, collectPillarContextFromStorage, generatePillarAnalysis, PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisContextSignature, pillarAnalysisStorageKey, readPillarAnalysis } from './pillarAnalysisApi.js'
+import { clearPillarAnalyses, collectPillarContextFromStorage, generatePillarAnalysis, operatingBalanceForecast, PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisContextSignature, pillarAnalysisStorageKey, readPillarAnalysis } from './pillarAnalysisApi.js'
 
 function storage(initial = {}) {
   const values = { ...initial }
@@ -67,6 +67,9 @@ test('finance analysis summary separates posted month-to-date activity, the sche
     income:5000, expenses:2500, net:2500, scheduledLineCount:3, occurrenceCount:6,
   })
   assert.deepEqual(context.analysisSummary.pending, { count:1, inflowAmount:0, expenseAmount:75, grossAmount:75, net:-75 })
+  assert.equal(context.analysisSummary.unplannedSpending.count,1)
+  assert.equal(context.analysisSummary.unplannedSpending.total,12)
+  assert.equal(context.analysisSummary.unplannedSpending.items[0].name,'Coffee')
   assert.equal(context.analysisSummary.asOfDate,'2026-09-08')
   assert.equal(context.analysisSummary.accountCount,2)
   assert.deepEqual(context.analysisSummary.largestPostedExpense, {
@@ -86,6 +89,21 @@ test('finance analysis summary separates posted month-to-date activity, the sche
   assert.deepEqual(context.analysisSummary.reconciliation.largestUnresolved, {
     state:'missing-actual', label:'Groceries', amount:125, expectedIds:['grocery'], actualIds:[], date:'2026-09-08',
   })
+})
+
+test('operating forecast catches the first daily shortfall, including outbound transfers, without mixing in savings',()=>{
+ const accounts=[{id:'a1',name:'Operating Account',balance:100},{id:'a2',name:'Savings',balance:10000}]
+ const scheduled=[
+  {name:'Rent',type:'expense',acct:'a1',amount:130,freq:'once',start:'2026-09-09'},
+  {name:'Savings transfer',type:'transfer',acct:'a1',transferTo:'a2',amount:20,freq:'once',start:'2026-09-09'},
+  {name:'Salary',type:'income',acct:'a1',amount:200,freq:'once',start:'2026-09-10'},
+ ]
+ const forecast=operatingBalanceForecast(accounts,scheduled,'2026-09-08','2026-09-08')
+ assert.equal(forecast.firstNegative.date,'2026-09-09')
+ assert.equal(forecast.firstNegative.balance,-50)
+ assert.equal(forecast.firstNegative.drivers[0].name,'Rent')
+ assert.equal(operatingBalanceForecast(accounts,scheduled,'2026-09-08','2026-09-10'),null)
+ assert.equal(operatingBalanceForecast([{id:'a1',name:'Operating Account'}],scheduled,'2026-09-08','2026-09-08'),null)
 })
 
 test('finance summary is calculated from all corrected records before raw prompt rows are bounded', () => {

@@ -955,3 +955,15 @@ test('new people, organizations, relative dates, and event mutations require exa
   supported.executiveSummary+=' Marcus will repair Replace leaking faucet tomorrow.'
   assert.equal(pillarAnalysisQualityIssues(supported,'household',sourced).includes('ungrounded-claim-clause'),false)
 })
+
+test('finance facts put a dated operating shortfall and named unplanned spending first',()=>{
+  const args={pillar:'finance',date:'2026-09-08',localContext:{analysisSummary:{
+    asOfDate:'2026-09-08',sourceCoverage:{transactionCache:'available',freshnessStatus:'fresh',reconciliation:'limited'},
+    operatingForecast:{startingBalance:100,firstNegative:{date:'2026-09-09',balance:-50,drivers:[{name:'Rent',amount:130}]},balanceStatus:'unknown'},
+    unplannedSpending:{count:1,total:42,items:[{name:'Coffee',amount:42,date:'2026-09-08'}]},
+  }}}
+  const facts=pillarAnalysisFactPack(args)
+  assert.deepEqual(facts.slice(0,2).map(fact=>fact.id),['finance-operating-negative','finance-unplanned-spending'])
+  assert.match(facts[0].headline,/\-\$50.*2026-09-09/)
+  assert.match(facts[1].detail,/Coffee.*\$42/)
+})

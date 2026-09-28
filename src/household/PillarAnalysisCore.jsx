@@ -149,6 +149,10 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
   const analysis=analysisSourceReady&&result?.pillar===pillar.id && result?.date===plan?.date && sameMember(result?.member,currentMember) && result?.contextSignature===contextSignature ? result.analysis : null
   const visibleError=errorScopeRef.current===currentScopeKey?error:''
   const decisions=analysis?.decisions || []
+  const financeSummary=pillar.id==='finance'&&analysisSourceReady?localContext.analysisSummary:null
+  const negativeDay=financeSummary?.operatingForecast?.firstNegative
+  const unplanned=financeSummary?.unplannedSpending
+  const dollars=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)
   return <div className="pillar-analysis-page">
     <header className="pillar-analysis-hero">
       <div className="pillar-analysis-icon"><i className={`ti ${pillar.icon}`} /></div>
@@ -160,6 +164,8 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     {!planError&&planRefreshError&&<div className="pillar-analysis-error" role="alert"><strong>Household plan could not be reverified.</strong> {planRefreshError} <button type="button" onClick={reloadPlan}>Retry daily plan</button></div>}
     {isHealth&&rollingMeals.state==='error'&&<div className="pillar-analysis-error" role="alert"><strong>Health analysis is paused.</strong> Today’s rolling meal plan could not be verified: {rollingMeals.error} <button type="button" onClick={()=>rollingMeals.reload({supersede:true})?.catch?.(()=>undefined)}>Retry meal plan</button></div>}
     {visibleError && <div className="pillar-analysis-error">{visibleError}</div>}
+    {negativeDay&&<section className="pillar-finance-alert pillar-finance-alert-critical" role="status"><strong>Operating Account shortfall projected for {negativeDay.date}</strong><p>The scheduled balance reaches {dollars(negativeDay.balance)} from a {dollars(financeSummary.operatingForecast.startingBalance)} starting balance. This is a forecast based on {financeSummary.operatingForecast.balanceStatus==='fresh'?'a recently verified bank balance':'a stored balance whose bank freshness is not verified'}; confirm deposits and payment dates in Finance.</p></section>}
+    {Number(unplanned?.count)>0&&<section className="pillar-finance-alert" role="status"><strong>Unplanned posted spending: {dollars(unplanned.total)}</strong><p>{unplanned.count} expense{unplanned.count===1?'':'s'} did not match the schedule in the covered month. {unplanned.items?.[0]?`Largest: ${unplanned.items[0].name} (${dollars(unplanned.items[0].amount)}). `:''}Review these in Finance Reconciliation before treating any as unauthorized.</p></section>}
     {isHealth&&rollingMeals.state==='loading'&&<div className="pillar-analysis-loading"><div className="pillar-analysis-pulse"/><h2>Loading today’s meal plan</h2><p>Health analysis will begin after Brevity verifies the rolling plan for {plan?.date}.</p></div>}
     {analysisSourceReady&&state==='loading' && !analysis && <div className="pillar-analysis-loading"><div className="pillar-analysis-pulse"/><h2>Analyzing {pillar.label}</h2><p>Applying the same Seven Pillars reasoning framework used by the household’s scheduled daily automation.</p></div>}
 
