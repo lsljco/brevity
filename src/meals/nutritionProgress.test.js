@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { nutritionProgress, suggestPlannedMeals } from '../../netlify/lib/nutrition-progress.mjs'
+import { nutritionProgress, suggestPlannedMeals, weeklyNutritionPilot } from '../../netlify/lib/nutrition-progress.mjs'
 
 test('remaining guidance uses only saved targets and confirmed totals',()=>{
   const result=nutritionProgress({calories:870,proteinGrams:54,carbohydrateGrams:50,fatGrams:45},{calories:2100,proteinGrams:150,carbohydrateGrams:200,fatGrams:70})
@@ -36,4 +36,15 @@ test('planned options fit the saved remainder and are never represented as consu
   assert.deepEqual(options.map(option=>option.name),['Fish plate','Chicken plate'])
   assert.match(options[0].notice,/not recorded as eaten/)
   assert.deepEqual(suggestPlannedMeals(progress,{days:[day]},'2026-09-27'),[])
+})
+
+test('pilot counts confirmed entries and flags identical foods without deleting them',()=>{
+  const first={id:'one',date:'2026-09-28',ingredients:[{input:'2 slices toast'}],macros:{calories:140,proteinGrams:6}}
+  const second={...first,id:'two',name:'Lunch',correctedAt:'2026-09-28T12:00:00Z'}
+  const result=weeklyNutritionPilot([{date:'2026-09-28',entries:[first,second]},{date:'2026-09-27',entries:[]}])
+  assert.equal(result.confirmedMeals,2)
+  assert.equal(result.daysWithMeals,1)
+  assert.equal(result.correctedMeals,1)
+  assert.deepEqual(result.possibleDuplicates,[{date:'2026-09-28',entryIds:['one','two']}])
+  assert.match(result.notice,/can represent separate meals/)
 })

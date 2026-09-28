@@ -41,3 +41,23 @@ export function suggestPlannedMeals(progress,mealWindow,date) {
     return Math.abs(gap-left.macros.proteinGrams)-Math.abs(gap-right.macros.proteinGrams)
   }).slice(0,3)
 }
+
+export function weeklyNutritionPilot(days=[]) {
+  const confirmed=days.flatMap(day=>(day.entries||[]).map(entry=>({...entry,day:day.date})))
+  const seen=new Map(),possibleDuplicates=[]
+  for(const entry of confirmed){
+    // Same foods, portions, totals, and date are a review signal, not proof of a duplicate.
+    const foods=(entry.ingredients||[]).map(item=>String(item.input||'').trim().toLowerCase()).filter(Boolean)
+    if(!foods.length)continue
+    const key=JSON.stringify([entry.day,foods,entry.macros])
+    if(seen.has(key))possibleDuplicates.push({date:entry.day,entryIds:[seen.get(key),entry.id]})
+    else seen.set(key,entry.id)
+  }
+  return {
+    daysWithMeals:days.filter(day=>(day.entries||[]).length>0).length,
+    confirmedMeals:confirmed.length,
+    correctedMeals:confirmed.filter(entry=>Boolean(entry.correctedAt)).length,
+    possibleDuplicates,
+    notice:'Matching saved foods and totals can represent separate meals. Review both entries before changing either one.',
+  }
+}

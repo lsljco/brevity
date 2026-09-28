@@ -18,6 +18,8 @@ Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This 
 - Calculate remaining and over-target values only from confirmed saved meals and member-owned daily targets.
 - Show missing targets instead of inventing goals.
 - Offer qualitative next-meal guidance without inventing precise nutrition for an unmeasured serving.
+- Rank fitting saved planned meals as options without counting them as consumed.
+- Count confirmed meals, days logged, and corrected entries over the last seven days; flag exact repeated foods and totals for human review.
 - Show revised ingredients and calculated totals in the correction Action Mode review.
 - Verify signed-in preview behavior, including an actual meal correction, before asking for production approval.
 
