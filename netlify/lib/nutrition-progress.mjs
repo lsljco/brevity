@@ -21,3 +21,23 @@ export function nutritionProgress(consumed={},targets={}) {
   if(Object.values(nutrients).every(value=>value.target===null))guidance.push('Set your personal daily targets to see remaining amounts and tailored guidance.')
   return {nutrients,guidance,notice:'Suggestions use confirmed saved meals and your own targets. They are planning guidance, not a record of food eaten.'}
 }
+
+export function suggestPlannedMeals(progress,mealWindow,date) {
+  const day=mealWindow?.days?.find(item=>item.date===date)
+  if(!day)return []
+  const remaining=progress?.nutrients||{}
+  const options=Object.entries(day.meals||{}).flatMap(([mealType,meal])=>{
+    const macros=meal?.macros
+    if(!meal?.name||!macros||!['calories','proteinGrams','carbohydrateGrams','fatGrams'].every(key=>Number.isFinite(Number(macros[key]))&&Number(macros[key])>=0))return []
+    const calories=Number(macros.calories),protein=Number(macros.proteinGrams)
+    if(remaining.calories?.target!=null&&calories>remaining.calories.remaining)return []
+    if(remaining.fatGrams?.target!=null&&Number(macros.fatGrams)>remaining.fatGrams.remaining)return []
+    if(remaining.carbohydrateGrams?.target!=null&&Number(macros.carbohydrateGrams)>remaining.carbohydrateGrams.remaining)return []
+    return [{mealType,name:meal.name,macros,notice:'Planned meal, not recorded as eaten. Values are estimates for the saved serving.'}]
+  })
+  return options.sort((left,right)=>{
+    const gap=remaining.proteinGrams?.remaining
+    if(gap==null)return left.macros.calories-right.macros.calories
+    return Math.abs(gap-left.macros.proteinGrams)-Math.abs(gap-right.macros.proteinGrams)
+  }).slice(0,3)
+}

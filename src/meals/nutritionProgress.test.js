@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { nutritionProgress } from '../../netlify/lib/nutrition-progress.mjs'
+import { nutritionProgress, suggestPlannedMeals } from '../../netlify/lib/nutrition-progress.mjs'
 
 test('remaining guidance uses only saved targets and confirmed totals',()=>{
   const result=nutritionProgress({calories:870,proteinGrams:54,carbohydrateGrams:50,fatGrams:45},{calories:2100,proteinGrams:150,carbohydrateGrams:200,fatGrams:70})
@@ -23,4 +23,17 @@ test('no target does not create a nutrition goal',()=>{
   assert.equal(result.nutrients.proteinGrams.target,null)
   assert.equal(result.nutrients.proteinGrams.remaining,null)
   assert.deepEqual(result.guidance,['Set your personal daily targets to see remaining amounts and tailored guidance.'])
+})
+
+test('planned options fit the saved remainder and are never represented as consumed',()=>{
+  const progress=nutritionProgress({calories:1000,proteinGrams:80,carbohydrateGrams:80,fatGrams:35},{calories:2000,proteinGrams:140,carbohydrateGrams:180,fatGrams:70})
+  const day={date:'2026-09-28',meals:{
+    breakfast:{name:'Large brunch',macros:{calories:1100,proteinGrams:55,carbohydrateGrams:90,fatGrams:35}},
+    lunch:{name:'Chicken plate',macros:{calories:450,proteinGrams:45,carbohydrateGrams:30,fatGrams:12}},
+    dinner:{name:'Fish plate',macros:{calories:650,proteinGrams:55,carbohydrateGrams:35,fatGrams:22}},
+  }}
+  const options=suggestPlannedMeals(progress,{days:[day]},'2026-09-28')
+  assert.deepEqual(options.map(option=>option.name),['Fish plate','Chicken plate'])
+  assert.match(options[0].notice,/not recorded as eaten/)
+  assert.deepEqual(suggestPlannedMeals(progress,{days:[day]},'2026-09-27'),[])
 })

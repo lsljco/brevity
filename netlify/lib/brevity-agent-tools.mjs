@@ -1,11 +1,14 @@
-import { nutritionProgress } from './nutrition-progress.mjs'
+import { nutritionProgress, suggestPlannedMeals } from './nutrition-progress.mjs'
 
 export function pillarRecords(pillar, canonical, browser) {
   const base={householdDate:canonical.householdDate,sources:canonical.sources}
   const records=canonical.actionRecords||{}
   switch(pillar){
     case 'spiritual':return {...base,activeSermon:canonical.activeSermon,dailyPlan:canonical.dailyPlan?.spiritual,analysis:browser.todayPillarAnalyses?.spiritual}
-    case 'health':return {...base,dailyPlan:canonical.dailyPlan?.health,plannedMeals:canonical.rollingMealPlan,consumedMeals:canonical.dailyNutrition,nutritionTargets:canonical.nutritionTargets,nutritionProgress:nutritionProgress(canonical.dailyNutrition?.totals,canonical.nutritionTargets),healthAlerts:browser.publicHealthAlerts,analysis:browser.todayPillarAnalyses?.health}
+    case 'health':{
+      const progress=nutritionProgress(canonical.dailyNutrition?.totals,canonical.nutritionTargets)
+      return {...base,dailyPlan:canonical.dailyPlan?.health,plannedMeals:canonical.rollingMealPlan,consumedMeals:canonical.dailyNutrition,nutritionTargets:canonical.nutritionTargets,nutritionProgress:progress,plannedMealOptions:suggestPlannedMeals(progress,canonical.rollingMealPlan,canonical.householdDate),healthAlerts:browser.publicHealthAlerts,analysis:browser.todayPillarAnalyses?.health}
+    }
     case 'fitness':return {...base,dailyPlan:canonical.dailyPlan?.fitness,analysis:browser.todayPillarAnalyses?.fitness}
     case 'household':return {...base,dailyPlan:canonical.dailyPlan?.household,projects:records.projects,analysis:browser.todayPillarAnalyses?.household}
     case 'education':return {...base,dailyPlan:canonical.dailyPlan?.education,analysis:browser.todayPillarAnalyses?.education}
