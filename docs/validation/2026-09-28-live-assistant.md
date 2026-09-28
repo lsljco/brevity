@@ -56,3 +56,12 @@ The nutrition server now discards agent-authored product-reference summaries and
 - Remaining acceptance: exact-product evidence coverage and macro accuracy across variants; physical-device voice; approved save, persisted record, correction and Undo; the full synthetic 30-case model evaluation set.
 
 ![Live review, not applied](preview-230-live-review.jpg)
+
+## Follow-up: evidence extraction and consent — candidate 6dc41c0
+
+- Preserves label neighborhoods and structured nutrition text before truncating long pages. Regression covers a label beyond 24 KB of navigation/reviews.
+- Failed reference URLs and reasons are returned to the agent so it can select a different source. Agent-authored summaries remain excluded.
+- Conditional approximation consent is retained for the current meal, not carried to unrelated meals.
+- Signed-in live request reached a proposal in one turn without repeated consent: correlation `9898fa39-0a0b-42cb-b1f6-ff567b9ebf52`, one calculator call, no runtime error, 32.5-second agent run. Returned 870 calories and 54 g protein as an estimate. Carbohydrate/fat values differed from earlier approximate runs; exact-label accuracy is still unproven and remains a release gate.
+- The actual review disclosed unavailable exact labels for Eckrich and Nature's Own. No test meal was saved.
+- Full suite: 1,102 passing; build passes. Review ingredient display now retains food names and brands from the measured input rather than displaying bare portion amounts.
