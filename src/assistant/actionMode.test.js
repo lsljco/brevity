@@ -1,3 +1,4 @@
+import {voiceReviewText,assertVoiceApproval} from './voiceActionReview.js'
 import {resolvedRecipes,searchMealRecords,bindRecipeOperation} from '../../netlify/lib/recipe-library-actions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -1214,9 +1215,32 @@ test('a reviewed household block persists, moves by exact ID, retries once and r
   const saved=(await resources.read()).value.blocks[0]
   assert.equal(saved.startTime,'18:00');assert.equal(saved.owner,'Larry')
   const move=await prepare({type:'household.schedule.block.update',targetId:saved.id,targetDate:date,payload:{startTime:'19:00',endTime:'19:15'}})
+  assert.match(voiceReviewText(move,'Larry'),/Existing item: Priorities/)
+  assert.match(voiceReviewText(move,'Larry'),/18:00.*19:00/)
+  assertVoiceApproval({proposal:move,member:'Larry',voiceApproval:{proposalId:move.id,phrase:'Apply this change',reviewedAt:Date.now()}})
+  move.confirmationMode='voice-confirmation'
   const moved=await run(move)
+  assert.equal(moved.audit.confirmationMode,'voice-confirmation')
   assert.equal((await resources.read()).value.blocks[0].startTime,'19:00')
   assert.equal((await repository.getAudit(moved.audit.id)).actor,'Larry')
   await undoActionWithJournal({repository,auditId:moved.audit.id,session,resources,event:{},leaseMs:0})
   assert.equal((await resources.read()).value.blocks[0].startTime,'18:00')
+})
+
+test('spoken task completion binds the stored task, persists, audits and undoes',async()=>{
+ const store=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store}),repository=createAssistantActionRepository({store,householdId:'voice-tasks'})
+ const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),date='2026-09-29'
+ const create=await captureExpectedVersions(normalizeActionProposal({operations:[{type:'assignment.create',targetDate:date,payload:{title:'School follow-up',owner:'Larry',status:'in-progress'}}]},session),resources)
+ const run=proposal=>executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+ await run(create)
+ const saved=(await resources.read(`plan:${date}`)).value.assignments.find(item=>item.title==='School follow-up')
+ const complete=await captureExpectedVersions(normalizeActionProposal({operations:[{type:'assignment.update',targetId:saved.id,targetDate:date,payload:{status:'complete'}}]},session),resources)
+ assert.match(voiceReviewText(complete,'Larry'),/School follow-up.*Status: in-progress.*Status: complete/)
+ assertVoiceApproval({proposal:complete,member:'Larry',voiceApproval:{proposalId:complete.id,phrase:'Apply this change',reviewedAt:Date.now()}})
+ complete.confirmationMode='voice-confirmation'
+ const result=await run(complete)
+ assert.equal((await resources.read(`plan:${date}`)).value.assignments.find(item=>item.id===saved.id).status,'complete')
+ assert.equal(result.audit.confirmationMode,'voice-confirmation')
+ await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+ assert.equal((await resources.read(`plan:${date}`)).value.assignments.find(item=>item.id===saved.id).status,'in-progress')
 })
