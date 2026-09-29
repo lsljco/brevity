@@ -1,3 +1,4 @@
+import {allowedReleaseOrigin} from '../lib/build-isolation.mjs'
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 import {randomUUID} from 'node:crypto'
@@ -22,7 +23,7 @@ export const handler=async event=>{
  const ids=body.persistenceOnly===true?[]:body.caseIds||evaluationCases.map(item=>item.id)
  if(!Array.isArray(ids)||(!ids.length&&body.persistenceOnly!==true)||ids.length>50||ids.some(id=>!evaluationCases.some(item=>item.id===id)))return json(400,{error:'Choose known evaluation cases.'})
  const host=event.headers?.host||'',origin=event.headers?.origin
- if(!/^deploy-preview-\d+--brevityoflife\.netlify\.app$/.test(host)||origin&&origin!==`https://${host}`)return json(403,{error:'Use this deploy preview directly.'})
+ if(!allowedReleaseOrigin(host,origin,releaseBuild))return json(403,{error:'Use this isolated deployment directly.'})
  const id=randomUUID(),job={id,owner:session.member,state:'queued',createdAt:new Date().toISOString(),build:releaseBuild,caseIds:[...new Set(ids)],syntheticData:true,productionWrites:false,results:[]}
  const store=releaseJobs(),leaseKey=`active:${session.member}`,previous=await store.getWithMetadata(leaseKey,{type:'json'})
  if(previous?.data?.id&&Date.now()-previous.data.startedAt<15*60*1000){

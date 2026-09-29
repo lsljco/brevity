@@ -64,3 +64,20 @@ test('complete isolated persistence harness remains executable with conditional 
  const report=await verifyReleasePersistence({store,runId:'11111111-1111-4111-8111-111111111111'})
  assert.equal(report.passed,true);assert.equal(Object.keys(report.checks).length,20)
 })
+
+
+test('separate staging main builds receive preview isolation and release origin is build-bound',async()=>{
+ const {releaseContext,allowedReleaseOrigin}=await import('../../netlify/lib/build-isolation.mjs')
+ const staging=releaseContext({CONTEXT:'production',URL:'https://brevity-architect-staging.netlify.app',DEPLOY_PRIME_URL:'https://main--brevity-architect-staging.netlify.app',COMMIT_REF:'abc'})
+ assert.equal(staging.preview,true);assert.equal(staging.reviewId,'staging')
+ assert.equal(allowedReleaseOrigin('main--brevity-architect-staging.netlify.app','https://main--brevity-architect-staging.netlify.app',staging),true)
+ for(const host of ['brevityoflife.netlify.app','evil.netlify.app','deploy-preview-241--brevity-architect-staging.netlify.app'])assert.equal(allowedReleaseOrigin(host,`https://${host}`,staging),false)
+ assert.equal(allowedReleaseOrigin('main--brevity-architect-staging.netlify.app','https://evil.example',staging),false)
+ const production=releaseContext({CONTEXT:'production',URL:'https://brevityoflife.netlify.app'})
+ assert.equal(production.preview,false);assert.equal(allowedReleaseOrigin('brevityoflife.netlify.app',undefined,production),false)
+ const preview=releaseContext({CONTEXT:'deploy-preview',REVIEW_ID:'241',URL:'https://brevity-architect-staging.netlify.app',DEPLOY_PRIME_URL:'https://deploy-preview-241--brevity-architect-staging.netlify.app'})
+ assert.equal(preview.reviewId,'241');assert.equal(allowedReleaseOrigin('deploy-preview-241--brevity-architect-staging.netlify.app',undefined,preview),true)
+ const oldPreview={preview:true,origin:'https://deploy-preview-233--brevityoflife.netlify.app'}
+ assert.equal(allowedReleaseOrigin('deploy-preview-233--brevityoflife.netlify.app',undefined,oldPreview),true)
+ assert.equal(releaseContext({URL:'https://brevity-architect-staging.netlify.app.evil.example'}).preview,false)
+})
