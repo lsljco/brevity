@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { askBrevityAssistant, createElevenLabsSpeech, executeAssistantProposal, getActionMode, getElevenLabsVoices, saveActionPermissions, undoAssistantAction } from './assistantApi.js'
 import { assistantStarters } from './assistantStarters.js'
 import { ACTION_REVIEW_EVENT, ASSISTANT_REQUEST_EVENT, publishActionCompleted } from './actionEvents.js'
+import {retireRecognition,finishRecognition} from './voiceRecognition.js'
 import './BrevityAssistant.css'
 
 const DOMAIN_LABELS = { planning:'Plans & decisions', calendar:'Family Calendar', projects:'Projects', finance:'Finance administration' }
@@ -37,7 +38,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   const starters=useMemo(()=>assistantStarters({activeView,activePillar}),[activeView,activePillar])
   const [open,setOpen]=useState(false),[draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[listening,setListening]=useState(false),[voiceMode,setVoiceMode]=useState(false),[voiceStatus,setVoiceStatus]=useState(''),[speakingMessage,setSpeakingMessage]=useState(null),[voices,setVoices]=useState([]),[voiceId,setVoiceId]=useState(()=>localStorage.getItem('brevity_el_voice_v1')||''),[review,setReview]=useState(null),[actionCenter,setActionCenter]=useState(null)
   const [messages,setMessages]=useState(()=>{try{return JSON.parse(localStorage.getItem(historyKey)||'[]')}catch{return[]}})
-  const endRef=useRef(null),inputRef=useRef(null),recognitionRef=useRef(null),audioRef=useRef(null),audioUrlRef=useRef(''),speechRequestRef=useRef(null),voiceModeRef=useRef(false),voiceTimerRef=useRef(null),voiceTranscriptRef=useRef(''),voiceFinalizingRef=useRef(false),voiceGenerationRef=useRef(0),sendRef=useRef(null),startListeningRef=useRef(null),busyRef=useRef(false),openRef=useRef(false),messagesRef=useRef(messages),draftRef=useRef(draft),voiceIdRef=useRef(voiceId)
+  const endRef=useRef(null),inputRef=useRef(null),recognitionRef=useRef(null),audioRef=useRef(null),audioUrlRef=useRef(''),speechRequestRef=useRef(null),voiceModeRef=useRef(false),voiceTimerRef=useRef(null),voiceFinishRef=useRef(null),voiceTranscriptRef=useRef(''),voiceFinalizingRef=useRef(false),voiceGenerationRef=useRef(0),sendRef=useRef(null),startListeningRef=useRef(null),busyRef=useRef(false),openRef=useRef(false),messagesRef=useRef(messages),draftRef=useRef(draft),voiceIdRef=useRef(voiceId)
   busyRef.current=busy;openRef.current=open;messagesRef.current=messages;draftRef.current=draft;voiceIdRef.current=voiceId
   useEffect(()=>{try{localStorage.setItem(historyKey,JSON.stringify(messages.slice(-30)))}catch{}},[historyKey,messages])
   useEffect(()=>{if(open){setTimeout(()=>inputRef.current?.focus(),80);endRef.current?.scrollIntoView({block:'end'})}},[open,messages])
@@ -49,18 +50,18 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
     if(busyRef.current){setDraft(message);draftRef.current=message;return}
     sendRef.current?.(message)
   };window.addEventListener(ASSISTANT_REQUEST_EVENT,receive);return()=>window.removeEventListener(ASSISTANT_REQUEST_EVENT,receive)},[])
-  useEffect(()=>()=>{voiceModeRef.current=false;clearTimeout(voiceTimerRef.current);recognitionRef.current?.abort();speechRequestRef.current?.abort();audioRef.current?.pause();if(audioUrlRef.current)URL.revokeObjectURL(audioUrlRef.current)},[])
+  useEffect(()=>()=>{voiceModeRef.current=false;clearTimeout(voiceTimerRef.current);voiceFinishRef.current?.();retireRecognition(recognitionRef);speechRequestRef.current?.abort();audioRef.current?.pause();if(audioUrlRef.current)URL.revokeObjectURL(audioUrlRef.current)},[])
   const send=async(text,spoken=false)=>{
     const content=String(text||draftRef.current).trim();if(!content||busyRef.current)return
-    clearTimeout(voiceTimerRef.current);recognitionRef.current?.abort();recognitionRef.current=null;voiceTranscriptRef.current='';voiceFinalizingRef.current=false
+    clearTimeout(voiceTimerRef.current);voiceFinishRef.current?.();voiceFinishRef.current=null;retireRecognition(recognitionRef);voiceTranscriptRef.current='';voiceFinalizingRef.current=false
     const next=[...messagesRef.current,{role:'user',content}];messagesRef.current=next;setMessages(next);setDraft('');draftRef.current='';busyRef.current=true;setBusy(true);setError('')
     if(voiceModeRef.current)setVoiceStatus('Thinking…')
     try{
       const result=await askBrevityAssistant({messages:next,member:currentMember,activeView,activePillar,pageLabel})
       messagesRef.current=[...next,{role:'assistant',content:result.message,proposal:result.proposal||null}];setMessages(messagesRef.current)
       if(voiceModeRef.current)await playResponse(result.message,messagesRef.current.length-1,true)
-    }catch(requestError){setError(requestError.message||'Brevity Assistant could not answer right now.');if(voiceModeRef.current)startListeningRef.current?.()}
-    finally{busyRef.current=false;setBusy(false)}
+    }catch(requestError){setError(requestError.message||'Brevity Assistant could not answer right now.')}
+    finally{busyRef.current=false;setBusy(false);if(voiceModeRef.current)startListeningRef.current?.()}
   }
   sendRef.current=send
   const openActionCenter=async()=>{setBusy(true);setError('');try{setActionCenter(await getActionMode())}catch(actionError){setError(actionError.message)}finally{setBusy(false)}}
@@ -75,7 +76,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   }
   const stopVoiceMode=()=>{
     voiceModeRef.current=false;setVoiceMode(false);setVoiceStatus('');clearTimeout(voiceTimerRef.current)
-    recognitionRef.current?.abort();recognitionRef.current=null;setListening(false);stopPlayback()
+    voiceFinishRef.current?.();voiceFinishRef.current=null;retireRecognition(recognitionRef);setListening(false);stopPlayback()
   }
   const submitVoiceTurn=()=>{
     if(!voiceModeRef.current||!voiceFinalizingRef.current)return
@@ -89,25 +90,28 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
     if(!SpeechRecognition){stopVoiceMode();setError('Voice input is not supported in this browser. Try Chrome, Edge, or Safari.');return}
     const recognition=new SpeechRecognition(),startingTranscript=voiceTranscriptRef.current;recognition.lang='en-US';recognition.interimResults=true;recognition.continuous=true
     recognitionRef.current=recognition;voiceFinalizingRef.current=false;setVoiceStatus('Listening…')
-    recognition.onstart=()=>setListening(true)
+    recognition.onstart=()=>{if(recognitionRef.current===recognition)setListening(true)}
     recognition.onresult=event=>{
+      if(recognitionRef.current!==recognition||voiceFinalizingRef.current)return
       let transcript='';for(let i=0;i<event.results.length;i+=1)transcript+=event.results[i][0].transcript
       voiceTranscriptRef.current=`${startingTranscript} ${transcript}`.trim();setDraft(voiceTranscriptRef.current)
       clearTimeout(voiceTimerRef.current)
       if(voiceTranscriptRef.current)voiceTimerRef.current=setTimeout(()=>{
         if(!voiceModeRef.current)return
         voiceFinalizingRef.current=true;setVoiceStatus('Sending…')
-        if(recognitionRef.current===recognition)recognition.stop();else submitVoiceTurn()
+        if(recognitionRef.current===recognition)voiceFinishRef.current=finishRecognition({recognition,ref:recognitionRef,onFinish:()=>{setListening(false);submitVoiceTurn()}});else submitVoiceTurn()
       },7000)
     }
     recognition.onend=()=>{
-      if(recognitionRef.current===recognition)recognitionRef.current=null
+      if(recognitionRef.current!==recognition)return
+      recognitionRef.current=null
       setListening(false)
       if(voiceFinalizingRef.current)submitVoiceTurn()
       else if(voiceModeRef.current && !busyRef.current)setTimeout(()=>startListeningRef.current?.(),voiceTranscriptRef.current?100:500)
       // Mobile browsers may end a recognition session early; keep listening until the silence timer expires.
     }
     recognition.onerror=event=>{
+      if(recognitionRef.current!==recognition)return
       if(event.error==='not-allowed'||event.error==='service-not-allowed'){
         stopVoiceMode();setError('Microphone access was denied. Allow microphone access in your browser and try again.')
       }else if(event.error!=='aborted'&&event.error!=='no-speech')setError('I could not hear that clearly. Please try speaking again.')
@@ -120,7 +124,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
     voiceModeRef.current=true;setVoiceMode(true);setError('');stopPlayback();voiceTranscriptRef.current='';setDraft('');startListening()
   }
   const playResponse=async(content,index,automatic=false)=>{
-    stopPlayback();clearTimeout(voiceTimerRef.current);recognitionRef.current?.abort();recognitionRef.current=null;setListening(false)
+    stopPlayback();clearTimeout(voiceTimerRef.current);voiceFinishRef.current?.();voiceFinishRef.current=null;retireRecognition(recognitionRef);setListening(false)
     const generation=voiceGenerationRef.current;setSpeakingMessage(index);if(voiceModeRef.current)setVoiceStatus('Preparing spoken response…');setError('')
     try{
       let selectedVoiceId=voiceIdRef.current
