@@ -1244,3 +1244,18 @@ test('spoken task completion binds the stored task, persists, audits and undoes'
  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
  assert.equal((await resources.read(`plan:${date}`)).value.assignments.find(item=>item.id===saved.id).status,'in-progress')
 })
+
+test('spoken own-member activity persists once, audits and undoes',async()=>{
+ const store=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store}),repository=createAssistantActionRepository({store,householdId:'voice-activity'})
+ const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),date='2026-09-29'
+ const proposal=await captureExpectedVersions(normalizeActionProposal({operations:[{type:'activity.record',targetId:'Larry',targetDate:date,payload:{kind:'workout',title:'Morning walk',durationMinutes:25,quantity:2,unit:'miles',status:'complete'}}]},session),resources)
+ assertVoiceApproval({proposal,member:'Larry',voiceApproval:{proposalId:proposal.id,phrase:'Apply this change',reviewedAt:Date.now()}})
+ proposal.confirmationMode='voice-confirmation'
+ const run=()=>executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+ const result=await run(),retry=await run(),saved=(await resources.read(`activity:Larry:${date}`)).value.entries
+ assert.equal(saved.length,1);assert.equal(saved[0].durationMinutes,25);assert.equal(saved[0].quantity,2);assert.equal(saved[0].member,'Larry')
+ assert.match(saved[0].basis,/not independently verified/);assert.equal(result.audit.confirmationMode,'voice-confirmation');assert.equal(result.audit.id,retry.audit.id)
+ assert.equal((await resources.read(`activity:Terica:${date}`)).value.entries.length,0)
+ await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+ assert.equal((await resources.read(`activity:Larry:${date}`)).value.entries.length,0)
+})
