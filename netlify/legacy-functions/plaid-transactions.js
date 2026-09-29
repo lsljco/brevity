@@ -1,5 +1,4 @@
 const crypto = require('crypto')
-const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens, getTransactionSyncState, setTransactionSyncState } = require('./storage')
 const { readSession } = require('../lib/household-auth.cjs')
 
@@ -11,13 +10,21 @@ const MAX_PENDING_TRANSACTIONS = 10_000
 const MAX_PENDING_REMOVALS = 10_000
 const MAX_PENDING_BYTES = 4_000_000
 
-const plaidClient = new PlaidApi(new Configuration({
+let nativePlaid = null, plaidClient = null
+exports.setNativePlaid = value => { nativePlaid = value; plaidClient = null }
+function getPlaidClient() {
+ if (plaidClient) return plaidClient
+ const {Configuration,PlaidApi,PlaidEnvironments} = nativePlaid || require('plaid')
+ plaidClient = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
   baseOptions: { headers: {
     'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
     'PLAID-SECRET': process.env.PLAID_SECRET,
   }},
 }))
+ return plaidClient
+}
+
 
 function plaidErrorCode(error) {
   return error?.response?.data?.error_code || error?.code || ''
@@ -279,7 +286,7 @@ exports.handler = async event => {
       const errors = []
       for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
         try {
-          const response = await plaidClient.itemGet({ access_token:accessToken })
+          const response = await getPlaidClient().itemGet({ access_token:accessToken })
           const lastSuccessfulUpdate = lastSuccessfulTransactionUpdate(response)
           statuses.push({ itemId, institution:institution || 'Connected institution', lastSuccessfulUpdate, complete:transactionRefreshCompleted(lastSuccessfulUpdate, requestedAt) })
         } catch (error) {
@@ -305,7 +312,7 @@ exports.handler = async event => {
     for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
       if (requestRefresh) {
         try {
-          await plaidClient.transactionsRefresh({ access_token:accessToken })
+          await getPlaidClient().transactionsRefresh({ access_token:accessToken })
           refresh.accepted += 1
         } catch (error) {
           const code = plaidErrorCode(error) || 'TRANSACTIONS_REFRESH_FAILED'
@@ -323,7 +330,7 @@ exports.handler = async event => {
       if (refreshOnly) continue
 
       try {
-        const { pendingDelta, receipt } = await syncAndStageItem({ client:plaidClient, accessToken, itemId, institution, event })
+        const { pendingDelta, receipt } = await syncAndStageItem({ client:getPlaidClient(), accessToken, itemId, institution, event })
         pendingDelta.transactions.forEach(transaction => changedTransactions.push(transaction))
         pendingDelta.removed.forEach(transactionId => removedTransactionIds.add(transactionId))
         delta.added += Number(pendingDelta.delta?.added || 0)
