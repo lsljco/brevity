@@ -31,3 +31,16 @@ test('updates read the saved identity, changed fields and explicit clearing',()=
  assert.doesNotThrow(()=>assertVoiceApproval({...input(),proposal:p}))
  for(const change of [{id:'wrong'},{title:''},{version:8},{resource:'wrong'}]){const q=structuredClone(p);Object.assign(q.operations[0].voiceTarget,change);assert.equal(voiceReviewText(q,'Larry',now),'')}
 })
+
+const activityProposal=(kind='workout')=>normalizeActionProposal({operations:[{type:'activity.record',targetId:'Larry',targetDate:'2026-09-29',payload:{kind,title:'Morning walk',durationMinutes:25,quantity:2,unit:'miles',notes:'Easy pace',status:'complete'}}]},{member:'Larry',role:'admin',now:new Date(now),id:'voice-review'})
+test('spoken activity review reads member, date, every reported value and evidence limitation',()=>{
+ const p=activityProposal(),text=voiceReviewText(p,'Larry',now)
+ for(const value of ['Member: Larry','2026-09-29','workout','Morning walk','25','2','miles','Easy pace','complete','not independently verified'])assert.ok(text.includes(value),value)
+ assert.doesNotThrow(()=>assertVoiceApproval({...input(),proposal:p}))
+ for(const kind of ['progress','maintenance','study-note','sermon-note','ministry-followup','sleep','hydration'])assert.ok(voiceReviewText(activityProposal(kind),'Larry',now))
+})
+test('activity voice review excludes other members, financial fields, hidden identity and unsupported kinds',()=>{
+ for(const patch of [{targetId:'Terica'},{payload:{...activityProposal().operations[0].payload,amount:10}},{payload:{...activityProposal().operations[0].payload,entryId:'hidden'}},{payload:{kind:'expense',title:'Test',amount:10,currency:'USD'}},{payload:{kind:'module-note',title:'Test',moduleId:'custom-test'}}]){
+  const p=activityProposal();Object.assign(p.operations[0],patch);assert.equal(voiceReviewText(p,'Larry',now),'')
+ }
+})

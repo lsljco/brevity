@@ -403,11 +403,12 @@ for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt wh
   expect(requests.length).toBe(2)
 })
 
-for(const outcome of ['approve','update','cancel','interim','interrupted'])test(`routine spoken review ${outcome} stays bound to the reviewed proposal`,async({page})=>{
+for(const outcome of ['approve','update','activity','cancel','interim','interrupted'])test(`routine spoken review ${outcome} stays bound to the reviewed proposal`,async({page})=>{
   let executions=0,saved=false
   const messages=[]
   const proposal={id:'voice-proposal',actor:'Larry',actorRole:'admin',state:'pending',risk:'confirmation',expiresAt:new Date(Date.now()+1800000).toISOString(),summary:'Create household priorities',operations:[{id:'voice-op',type:'household.schedule.block.create',domain:'planning',risk:'confirmation',description:'Create priorities work block',targetDate:today(),targetId:'Larry',payload:{title:'Voice approval verification',date:today(),owner:'Larry',startTime:'18:00',endTime:'18:15'},allowedScopes:['this-item'],defaultScope:'this-item'}]}
   if(outcome==='update'){proposal.expectedVersions={[`plan:${today()}`]:3};Object.assign(proposal.operations[0],{type:'assignment.update',targetId:'saved-task',payload:{status:'complete'},voiceTarget:{id:'saved-task',title:'School follow-up',owner:'Larry',status:'in-progress',resource:`plan:${today()}`,version:3}})}
+  if(outcome==='activity')Object.assign(proposal.operations[0],{type:'activity.record',payload:{kind:'workout',title:'Morning walk',durationMinutes:25,status:'complete'}})
   await page.route('**/.netlify/functions/brevity-conversation',route=>route.fulfill({json:{version:saved?1:0,messages}}))
   await page.route('**/.netlify/functions/brevity-assistant',route=>route.fulfill({json:{message:'Review prepared. Nothing saved.',proposal}}))
   await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{
@@ -445,7 +446,7 @@ for(const outcome of ['approve','update','cancel','interim','interrupted'])test(
   await expect(review.getByRole('status')).toContainText('Say “Apply this change”')
   await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(2)
   await page.evaluate(({outcome})=>{const result=[{transcript:outcome==='cancel'?'Cancel this change':'Apply this change'}];result.isFinal=outcome!=='interim';window.voiceTest.current.onresult({results:[result]})},{outcome})
-  if(outcome==='approve'||outcome==='update'){
+  if(outcome==='approve'||outcome==='update'||outcome==='activity'){
     await expect.poll(()=>executions,{timeout:10000}).toBe(1)
     await expect(review).toHaveCount(0)
     await expect(dialog.getByText('Completed: Voice approval verification.',{exact:true})).toBeVisible()
