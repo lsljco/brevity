@@ -11,11 +11,11 @@ import { pillarRecords,searchHouseholdRecords } from './brevity-agent-tools.mjs'
 import { calculateMealNutrition, retrieveNutritionReferences } from './meal-nutrition.mjs'
 import { randomUUID } from 'node:crypto'
 
-export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=calculateMealNutrition,estimates=new Map(),clarifications=[],onTool=()=>{},getUsageSummary,requestPrototype,requestInstructions='',referenceFetcher,findSources=findProductNutritionSources,validateOutput,preparedReviews=[]}) {
+export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=calculateMealNutrition,estimates=new Map(),clarifications=[],onTool=()=>{},getUsageSummary,requestPrototype,requestInstructions='',referenceFetcher,findSources=findProductNutritionSources,validateOutput,preparedReviews=[],reviewErrors=[]}) {
   // Scoped to this authenticated run: never reuse a household member's research
   // across requests, and never accept agent-authored details as cached evidence.
   const referenceCache=new Map()
-  const moduleConfiguration=tool({name:'get_module_configuration',description:'Read available household modules, current names, order and enabled state before proposing customization. Configuration affects navigation, not data permissions. Custom modules organize member notes; they do not automatically implement a new specialized application.',parameters:z.object({}),async execute(){onTool('get_module_configuration');return JSON.stringify({modules:canonical.moduleConfiguration||[],notice:'Administrator review required for changes.'})}})
+  const moduleConfiguration=tool({name:'get_module_configuration',description:'Read available household modules, current names, order and enabled state before proposing customization. Configuration affects navigation, not data permissions. Custom modules organize member notes; they do not automatically implement a new specialized application.',parameters:z.object({}),async execute(){onTool('get_module_configuration');return JSON.stringify({modules:canonical.moduleConfiguration||[],reviewContract:{action:'module.configuration.update',targetId:'household-modules',targetDate:'',payload:{modules:[{id:'custom-example',label:'Example',pillarId:'household'}]},allowedChangeFields:['id','label','enabled','order','pillarId','description'],notice:'Send only requested changes. kind is read-only catalog metadata. A request to create a named new custom module with a parent is complete; prepare the review without asking whether to rename an existing module.'},notice:'Administrator review required for changes.'})}})
   const prototypeRequest=requestPrototype?tool({name:'request_approved_prototype',description:'Request isolated code generation only for an existing implementation-planned improvement explicitly approved by Larry or Lorenzo. Never accepts arbitrary code or a new plan. Returns dispatch status, not completed implementation. No merge or production deploy.',parameters:z.object({proposalId:z.string().min(1).max(160)}),execute:async({proposalId})=>{onTool('request_approved_prototype');try{return JSON.stringify(await requestPrototype(proposalId))}catch(error){return JSON.stringify({requested:false,error:error.message})}}}):null
   const usageSummary=getUsageSummary?tool({name:'get_usage_summary',description:'Read privacy-conscious seven-day Brevity usage measurements for this member, or household measurements when authorized. Counts and latency only; no conversation or private record contents. Use actual metrics when proposing improvements; do not invent adoption or causal effects.',parameters:z.object({}),async execute(){onTool('get_usage_summary');return JSON.stringify(await getUsageSummary())}}):null
   const weeklyBriefing=tool({name:'get_weekly_household_briefing',description:'Read the last seven household dates: shared plans and tasks, own private meals and activities, authorized learning evidence, source gaps and recorded unfinished tasks. Distinguish planned, reported and verified outcomes. No writes.',parameters:z.object({}),async execute(){onTool('get_weekly_household_briefing');return JSON.stringify(weeklyHouseholdBriefing(canonical))}})
@@ -113,7 +113,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
     async execute(proposal){
       onTool('prepare_action_review')
       try{validateOutput?.({message:'Review candidate',proposal},{estimates})}
-      catch(error){return JSON.stringify({validForReview:false,error:String(error.message),saved:false,notice:'Correct these proposal fields using saved records and the supported contract. Do not ask the member for database IDs or macro entry.'})}
+      catch(error){reviewErrors.push(String(error.message).slice(0,500));return JSON.stringify({validForReview:false,error:String(error.message),saved:false,notice:'Correct these proposal fields using saved records and the supported contract. Do not ask the member for database IDs or macro entry.'})}
       preparedReviews.push(proposal)
       return JSON.stringify({validForReview:true,proposal,saved:false,notice:'Include this proposal in your final structured response. The member must review and confirm before Brevity applies it.'})
     },
@@ -140,17 +140,21 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
 }
 
 export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,calculate,findSources,getUsageSummary,requestPrototype,requestInstructions='',validateOutput,providerRecovery={},requestId=randomUUID(),logger=console.info,onTool=()=>{},runner=new Runner({tracingDisabled:true})}) {
-  const started=Date.now(),estimates=new Map(),clarifications=[],toolCalls={},preparedReviews=[]
+  const started=Date.now(),estimates=new Map(),clarifications=[],toolCalls={},preparedReviews=[],reviewErrors=[]
   const recordTool=name=>{toolCalls[name]=(toolCalls[name]||0)+1;onTool(name)}
   const safeRequestId=/^[a-f0-9-]{36}$/.test(requestId)?requestId:randomUUID()
   let outcome='failed',errorCategory=null
   try{
-    const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,findSources,getUsageSummary,requestPrototype,estimates,clarifications,onTool:recordTool,requestInstructions,validateOutput,preparedReviews})
+    const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,findSources,getUsageSummary,requestPrototype,estimates,clarifications,onTool:recordTool,requestInstructions,validateOutput,preparedReviews,reviewErrors})
     const input=Array.isArray(prompt)?prompt.map(message=>typeof message.content==='string'&&(message.role==='user'||message.role==='assistant')?(message.role==='user'?user(message.content):assistant(message.content)):message):prompt
     const run=(input,options)=>runWithProviderRecovery(()=>runner.run(agent,input,options),{...providerRecovery,onRetry:reason=>recordTool(`${reason}_retry`)})
     let result=await run(input,{maxTurns:12})
     if(!clarifications.length&&!preparedReviews.length&&estimates.size&&!result.finalOutput?.proposal&&Array.isArray(result.history)){
       result=await run([...result.history,system('Before finalizing, check the original member request. You successfully calculated nutrition and have valid estimate IDs: '+JSON.stringify([...estimates.keys()])+'. If the member requested a meal log, correction or review, return the actual Action Mode proposal now using the correct estimate ID and original intent. Preparing review is not saving; do not ask permission to prepare a review already requested. If the member asked only for information, answer without a proposal. Never say a review is prepared or ready when proposal is null. Do not recalculate unchanged food or ask for macros, labels or record IDs.')],{maxTurns:4})
+    }
+    if(!clarifications.length&&!preparedReviews.length&&reviewErrors.length&&!result.finalOutput?.proposal&&Array.isArray(result.history)){
+      recordTool('review_tool_contract_repair')
+      result=await run([...result.history,system(ACTION_REPAIR_GUIDANCE+' The review tool rejected your candidate. Correct the technical payload and call prepare_action_review again now before finalizing. Do not ask the member to resubmit or fix IDs or fields. Do not alter their intent, permission boundaries or invent missing facts. Validation failures: '+JSON.stringify(reviewErrors))],{maxTurns:4})
     }
     let output=result.finalOutput
     if(!clarifications.length&&preparedReviews.length&&!output?.proposal&&output)output={...output,proposal:preparedReviews.at(-1)}

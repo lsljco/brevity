@@ -5,7 +5,9 @@ export function normalizeModulePatch(payload){
  if(!payload||Object.keys(payload).some(key=>key!=='modules')||!Array.isArray(payload.modules)||!payload.modules.length||payload.modules.length>50)throw Error('Provide one to fifty module changes.')
  const known=new Map(moduleCatalog().map(row=>[row.id,row])),seen=new Set()
  return {modules:payload.modules.map(row=>{
-  if(!row||Object.keys(row).some(key=>!['id','label','enabled','order','pillarId','description'].includes(key))||typeof row.id!=='string'||seen.has(row.id))throw Error('Each module change requires a unique module ID.')
+  if(!row||typeof row.id!=='string'||seen.has(row.id))throw Error('Each module change requires a unique module ID.')
+  const unsupported=Object.keys(row).find(key=>!['id','label','enabled','order','pillarId','description'].includes(key))
+  if(unsupported)throw Error(`Unsupported module field: ${unsupported}. Send only id and changed label, enabled, order, pillarId or description fields; do not copy catalog metadata.`)
   seen.add(row.id)
   if(!known.has(row.id)&&!/^custom-[a-z0-9-]{1,60}$/.test(row.id))throw Error('Custom module IDs begin with custom- and use lowercase letters, numbers and hyphens.')
   if(row.enabled!==undefined&&typeof row.enabled!=='boolean')throw Error('Enabled must be true or false.')

@@ -22,6 +22,7 @@ export default async request=>{
    for await(const page of jobs.list({prefix:'job-',paginate:true}))for(const item of page.blobs){const record=await jobs.get(item.key,{type:'json'});if(record?.createdAt&&Date.parse(record.createdAt)<Date.now()-86400000)await jobs.delete(item.key)}
   }
   await receipts.setJSON(value.id,{state:'complete',job:value.job,completedAt:new Date().toISOString()})
+  console.info('[brevity-maintenance]',JSON.stringify({id:value.id,job:value.job,state:'complete'}))
  }catch(error){await receipts.setJSON(value.id,{state:'failed',job:value.job,failedAt:new Date().toISOString()});throw error}
  return new Response(null,{status:202})
 }

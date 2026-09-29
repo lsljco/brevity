@@ -291,3 +291,19 @@ test('consumed meal search preserves member ownership instead of returning an ow
  assert.equal(result.matches[0].member,'Larry')
  assert.match(result.notice,/never another member/)
 })
+
+test('a rejected review payload is repaired once without asking the member to process IDs',async()=>{
+ const {normalizeActionProposal}=await import('../../netlify/lib/assistant-action-contract.mjs')
+ let calls=0
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},prompt:[{role:'user',content:'Create Preview Notes under Household Management.'}],logger:()=>{},validateOutput:output=>normalizeActionProposal(output.proposal,{member:'Larry',role:'admin'}),runner:{run:async(agent,input,options)=>{
+  calls+=1
+  const row={id:'custom-preview-notes',label:'Preview Notes',pillarId:'household',...(calls===1?{kind:'module'}:{})}
+  const proposal={summary:'Create Preview Notes',operations:[{type:'module.configuration.update',description:'Create Preview Notes',targetId:'household-modules',targetDate:'',payloadJson:JSON.stringify({modules:[row]}),allowedScopes:['this-item'],defaultScope:'this-item'}]}
+  const review=JSON.parse(await agent.tools.find(tool=>tool.name==='prepare_action_review').invoke({},JSON.stringify(proposal)))
+  if(calls===1){assert.equal(review.validForReview,false);assert.match(review.error,/Unsupported module field: kind/)}
+  else{assert.equal(options.maxTurns,4);assert.equal(review.validForReview,true)}
+  return {finalOutput:{message:calls===1?'Could not prepare review.':'Prepared for review.',proposal:null},history:[]}
+ }}})
+ assert.equal(calls,2);assert.equal(result.output.proposal.operations[0].type,'module.configuration.update')
+ assert.equal(result.diagnostics.toolCalls.review_tool_contract_repair,1)
+})
