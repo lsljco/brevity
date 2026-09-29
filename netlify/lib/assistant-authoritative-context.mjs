@@ -142,7 +142,7 @@ export async function buildAuthoritativeAssistantContext({
   const mealDays = (mealWindow?.days || []).map(compactMealDay)
   const sharedRecords=sharedResult.status==='fulfilled'?sharedResult.value:{}
 
-  return sanitizeAuthoritativeContext({
+  const context = sanitizeAuthoritativeContext({
     generatedAt: now.toISOString(),
     householdDate: date,
     signedInMember: member,
@@ -169,6 +169,10 @@ export async function buildAuthoritativeAssistantContext({
     } : null,
     actionRecords:compactSharedRecords(sharedRecords),
   })
+  // Keep complete calendar records on the server; date-scoped tools select the
+  // relevant events before exposing them to the model. Array caps lose dates.
+  context.actionRecords.familyCalendarEvents=(parseSharedValue(sharedRecords?.family_calendar_events_v1)||[]).map(item=>sanitizeAuthoritativeContext(compactCalendarEvent(item)))
+  return context
 }
 
 export async function loadProductionAuthoritativeAssistantContext({ member, now = new Date() }) {
