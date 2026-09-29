@@ -95,7 +95,8 @@ export default function SermonWorkspace({currentMember,role}) {
       }
       if(cancelled)return
       setPostImages(statuses)
-      const next=posts.find(post=>statuses[post.id]?.state==='not-started')
+      const active=posts.filter(post=>['queued','generating'].includes(statuses[post.id]?.state)).length
+      const next=active<2?posts.find(post=>statuses[post.id]?.state==='not-started'):null
       if(next){const response=await fetch('/.netlify/functions/sermon-post-image',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({sermonId:selectedId,postId:next.id})});const result=await response.json();if(!cancelled)setPostImages(current=>({...current,[next.id]:response.ok?result:{state:'error',error:result.error||'Could not generate photography.'}}))}
     }catch(error){if(!cancelled)setPostImages({error:{state:'error',error:error.message}})}finally{busy=false}}
     setPostImages({});check();const timer=setInterval(check,6000);return()=>{cancelled=true;clearInterval(timer)}
