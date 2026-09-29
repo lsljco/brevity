@@ -63,3 +63,11 @@ Larry clarified that Brevity must own data entry: spoken consumption → targete
 ### Signed-in API validation
 
 Live preview requests now use the deployed OpenAI configuration through the authenticated app; a local API key is not required for this path. See `validation/2026-09-28-live-assistant.md` for observed failures, corrections and acceptance status. Production release still requires live acceptance rather than local-test results alone.
+
+### Product research before calculation
+
+Added an SDK product-page reader that returns actual retrieved label text and source failures. The calculator reuses its server-held evidence within the same request. The agent is instructed to research every packaged food, try a matching alternate source when needed, and distinguish package-volume variants. Baseline live evidence showed early research termination and an omitted review rather than an API exception. Exact-label accuracy remains an acceptance gate; see the live validation report.
+
+A subsequent live diagnostic successfully read the Eckrich manufacturer label when given its URL, isolating a source-discovery weakness. Added a bounded product-only SDK research task that finds candidate manufacturer/retailer URLs and verifies their readable evidence before returning to the household agent. It receives no household records and performs no writes. Full suite now has 1,106 passing tests; exact-label and variant behavior still require live acceptance.
+
+Latest signed-in full meal test on `dced88e` reached actual Action Mode review: 870 calories and 54 g protein, with source-backed item calculations and no manual macro work. Automatic discovery retry was exercised. The full suite has 1,109 passing tests and the build passes. This is one live review pass; bread formulation/source consistency, wider variant coverage, device voice, isolated persisted-save/Undo, and the 30-case live evaluation remain. No merge or household meal write was performed.
