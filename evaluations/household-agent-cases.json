@@ -698,9 +698,7 @@
         "content": "What communication preference do you have saved for me?"
       }
     ],
-    "requiredTools": [
-      "get_pillar_records"
-    ],
+    "requiredTools": [],
     "allowedProposalTypes": [],
     "review": [
       "Uses saved short spoken answers preference; does not invent other preferences."

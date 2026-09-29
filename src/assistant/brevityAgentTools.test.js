@@ -9,7 +9,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_module_configuration','get_weekly_household_briefing','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_member_preferences','get_module_configuration','get_weekly_household_briefing','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -306,4 +306,13 @@ test('a rejected review payload is repaired once without asking the member to pr
  }}})
  assert.equal(calls,2);assert.equal(result.output.proposal.operations[0].type,'module.configuration.update')
  assert.equal(result.diagnostics.toolCalls.review_tool_contract_repair,1)
+})
+
+test('preference recall is read-only and an unchanged remembered value produces no review',async()=>{
+ const reviews=[]
+ const agent=createBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry',memberPreferences:{communication:'Prefer short spoken answers'}},browser:{},preparedReviews:reviews})
+ const recall=JSON.parse(await agent.tools.find(tool=>tool.name==='get_member_preferences').invoke({},'{}'))
+ assert.equal(recall.preferences.communication,'Prefer short spoken answers')
+ const unchanged=JSON.parse(await agent.tools.find(tool=>tool.name==='remember_member_preference').invoke({},JSON.stringify({category:'communication',value:'Prefer short spoken answers'})))
+ assert.equal(unchanged.alreadySaved,true);assert.equal(reviews.length,0)
 })

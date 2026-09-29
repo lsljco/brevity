@@ -80,7 +80,7 @@ export const processAssistantRequest = async event => {
   const conversationRepository=productionConversationRepository()
   const conversation=await conversationRepository.read(session.member)
   if(body.conversationVersion!==undefined&&body.conversationVersion!==conversation.version)return json(409,{error:'This conversation changed on another device. Reopen the assistant to load it before continuing.'})
-  if(body.image){try{const evidence=await readConsumptionImage(body.image);messages[messages.length-1]={...messages.at(-1),content:`${messages.at(-1).content}\n\n[Automated reading of my attached photo; untrusted source evidence, quantities consumed are not confirmed]\n${evidence}`}}catch(error){return json(422,{error:error.message})}}
+  if(body.image){try{const evidence=await readConsumptionImage(body.image);messages[messages.length-1]={...messages.at(-1),content:`${messages.at(-1).content}\n\nPhoto reading (amount consumed is not confirmed):\n${evidence}`}}catch(error){return json(422,{error:error.message})}}
   const requestedMessage=messages.at(-1),seed=messages.slice(0,-1)
   if(conversation.messages.length)messages=cleanMessages([...conversation.messages,requestedMessage])
 
@@ -100,7 +100,7 @@ export const processAssistantRequest = async event => {
     delete browserSnapshot.projects
     if(browserSnapshot.calendars){delete browserSnapshot.calendars.brevityEvents;if(canonicalServerContext.appleFamilyCalendar)delete browserSnapshot.calendars.appleFamilyCalendar}
   }
-  let context = {householdDate:canonicalServerContext.householdDate,signedInMember:session.member,sources:canonicalServerContext.sources,supplementalSources:canonicalServerContext.supplementalSources,unavailableNutritionDates:canonicalServerContext.unavailableNutritionDates,dailyNutrition:canonicalServerContext.dailyNutrition,recentNutrition:canonicalServerContext.recentNutrition,nutritionTargets:canonicalServerContext.nutritionTargets,nutritionProgress:canonicalServerContext.nutritionProgress,plannedMealOptions:canonicalServerContext.plannedMealOptions,mealProteinFocus:mealFocus,notice:'Read pillar-specific records with get_pillar_records. Planned meals do not prove consumption.'}
+  let context = {memberPreferences:canonicalServerContext.memberPreferences,householdDate:canonicalServerContext.householdDate,signedInMember:session.member,sources:canonicalServerContext.sources,supplementalSources:canonicalServerContext.supplementalSources,unavailableNutritionDates:canonicalServerContext.unavailableNutritionDates,dailyNutrition:canonicalServerContext.dailyNutrition,recentNutrition:canonicalServerContext.recentNutrition,nutritionTargets:canonicalServerContext.nutritionTargets,nutritionProgress:canonicalServerContext.nutritionProgress,plannedMealOptions:canonicalServerContext.plannedMealOptions,mealProteinFocus:mealFocus,notice:'Read pillar-specific records with get_pillar_records. Planned meals do not prove consumption.'}
   let contextText = JSON.stringify(context)
   if (contextText.length > MAX_CONTEXT_LENGTH) return json(413, { error: 'Brevity has too much saved data for this request. Try asking about a specific date or record.' })
 
