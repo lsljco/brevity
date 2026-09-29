@@ -8,7 +8,7 @@ export function editablePlanContract(pillar){
  return fields
 }
 export function pillarRecords(pillar, canonical, browser) {
-  const base={editablePlanFields:editablePlanContract(pillar),householdDate:canonical.householdDate,sources:canonical.sources,supplementalSources:canonical.supplementalSources}
+  const base={memberPreferences:canonical.memberPreferences,editablePlanFields:editablePlanContract(pillar),householdDate:canonical.householdDate,sources:canonical.sources,supplementalSources:canonical.supplementalSources}
   const records=canonical.actionRecords||{}
   switch(pillar){
     case 'spiritual':return {...base,activeSermon:canonical.activeSermon,dailyPlan:canonical.dailyPlan?.spiritual,analysis:browser.todayPillarAnalyses?.spiritual}

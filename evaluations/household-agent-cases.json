@@ -668,5 +668,41 @@
       "Find the exact saved proposal, request concept-approved only, and require strong confirmation."
     ],
     "calculator": "clarify"
+  },
+  {
+    "id": "preference-remember",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Remember that I prefer brief spoken answers. Prepare the review."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "member.preference.set"
+    ],
+    "review": [
+      "Targets Larry only; communication category; concise answer preference; review not saved."
+    ]
+  },
+  {
+    "id": "preference-recall",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What communication preference do you have saved for me?"
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [],
+    "review": [
+      "Uses saved short spoken answers preference; does not invent other preferences."
+    ]
   }
 ]

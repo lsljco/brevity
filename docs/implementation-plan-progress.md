@@ -6,12 +6,12 @@ Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This 
 
 | Plan area | Current implementation | Remaining acceptance work |
 | --- | --- | --- |
-| Foundation | Git, Netlify preview and production, household login, server-side action resources, audit and Undo, seven-pillar context reads | Document complete data inventory, backup and rollback drills, observability baseline and staging data isolation |
-| Household Agent | Central Assistant uses Agents SDK, authenticated pillar reads, structured proposals, Action Mode, permissions | Run and review the implemented 30-case evaluation set; validate error recovery; durable member context and broader approved tools |
-| Nutrition Copilot | Conversational meal estimation and reviewed logging; saved meal corrections; own-member targets; dated daily/weekly totals | Family #1 accuracy pilot; full label and brand provenance; fiber, sugar and trustworthy micronutrients; recurring foods; photo and restaurant entry; completion and correction metrics |
-| Cross-pillar tools | Agent reads all seven pillars; existing reviewed planning, calendar, project and finance actions | Incremental workout, task, education, spiritual and ministry tools; weekly cross-pillar briefing; permission and failure evaluations |
-| Architect Agent | No dedicated improvement workflow | Privacy-conscious instrumentation, issue/proposal schema, concept approval, staging prototype flow, evaluations and release reporting |
-| Specialists and rollout | No specialist agents or external cohort | Introduce specialists only when evaluations justify them; module customization and voluntary onboarding require product approval and data isolation |
+| Foundation | Git/Netlify CI and previews; authenticated versioned actions, audit and Undo; dedicated release fixture store; correlation/timing diagnostics | Full backup/restore and rollback drills, operational baseline; preview application itself still uses existing household sources |
+| Household Agent | Agents SDK; open-ended responses; canonical reads; explicit review preparation and contract repair; bounded provider recovery; 39 maintained evaluation cases; reviewed durable member preferences | Latest preference release needs deployed verification; durable conversation sessions and retention controls remain separate work |
+| Nutrition Copilot | Voice conversation/recovery; brand/quantity clarification; product research and readable label evidence; calculated review/save/correction; own-member targets; remainder guidance, seven-day totals, repeated meals; optional reliable fiber/sugar/sodium | Wider label/formulation accuracy coverage and physical iPhone voice acceptance; photo/restaurant intake, additional reliable micronutrients, measured adoption/correction rate |
+| Cross-pillar tools | Reads across seven pillars; reviewed dated fitness, education, spiritual and ministry plan edits; assignments, decisions, projects, calendar and supported finance changes | Actual workout/tutoring/mastery records and complete seven-day cross-pillar history; broader domain workflows. Plan edits do not prove activity completion |
+| Architect workflow | Reviewed proposals, evidence/benefit/risk/metric schema; Larry/Lorenzo stage approval; exact prototype commit/preview evidence; audited approval and Undo | Automatic friction aggregation, prototype implementation pipeline and measured release/rollback automation; approval register alone does not deploy code |
+| Specialists and rollout | Product-only nutrition research specialist justified by live discovery failures | Module customization and voluntary cohort rollout; Family #1 adoption and tenant isolation must precede expansion |
 
 ## Next release candidate: nutrition remainder guidance
 
@@ -71,3 +71,13 @@ Added an SDK product-page reader that returns actual retrieved label text and so
 A subsequent live diagnostic successfully read the Eckrich manufacturer label when given its URL, isolating a source-discovery weakness. Added a bounded product-only SDK research task that finds candidate manufacturer/retailer URLs and verifies their readable evidence before returning to the household agent. It receives no household records and performs no writes. Full suite now has 1,106 passing tests; exact-label and variant behavior still require live acceptance.
 
 Latest signed-in full meal test on `dced88e` reached actual Action Mode review: 870 calories and 54 g protein, with source-backed item calculations and no manual macro work. Automatic discovery retry was exercised. The full suite has 1,109 passing tests and the build passes. This is one live review pass; bread formulation/source consistency, wider variant coverage, device voice, isolated persisted-save/Undo, and the 30-case live evaluation remain. No merge or household meal write was performed.
+
+### September 29 release audit
+
+- `93a1720`: 34/35 deployed reasoning/contract checks passed. The assignment case falsely claimed creation was unavailable. The explicit `prepare_action_review` SDK tool addresses that failure without bypassing confirmation.
+- `d5154a6`: both GitHub verification and browser regression passed. The 37-case deployed suite is in progress; its 13 isolated real-persistence checks passed, including improvement approval/Undo. Do not treat an in-progress suite as release acceptance.
+- New preference work: 1,125 local tests and production build pass; member preferences require explicit reviewed requests, own-member authorization and conditional storage. Remember/recall cases expand the set to 39. Deployed acceptance is still pending for these changes.
+- Live cases use synthetic calculator values. The earlier 870-calorie/54-g-protein three-food review is separate source-backed evidence, not validation of every food variant.
+- No current-turn enhancement was merged into production. Independent sermon PRs #231/#232 landed on main and must be preserved.
+
+These are implementation and verification facts, not a declaration that every phase of the original project plan is complete. Device voice, operational drills and real adoption cannot be certified from local tests or synthetic fixture passes.

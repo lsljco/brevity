@@ -49,5 +49,14 @@ export async function verifyReleasePersistence({store,runId}){
  const approved=await execute(approval);assert.equal((await makeResources().read(improvementResource)).value[0].stage,'concept-approved')
  await undoActionWithJournal({repository,auditId:approved.audit.id,session,resources,event:{}})
  assert.equal((await makeResources().read(improvementResource)).value[0].stage,'proposed');checks.improvementApprovalSaveAndUndo=true
+ const preference=await prepare('member.preference.set',{category:'communication',value:'Prefer short answers'})
+ const preferenceSaved=await execute(preference)
+ assert.equal((await makeResources().read('member-context:Larry')).value.preferences.communication,'Prefer short answers')
+ assert.deepEqual((await makeResources().read('member-context:Lorenzo')).value.preferences,{})
+ const forgedPreference={...preference,operations:preference.operations.map(operation=>({...operation,targetId:'Lorenzo'})),expectedVersions:{'member-context:Lorenzo':0}}
+ await assert.rejects(()=>executeRecordOperations({proposal:forgedPreference,session,permissions,resources}),/own preferences/)
+ await undoActionWithJournal({repository,auditId:preferenceSaved.audit.id,session,resources,event:{}})
+ assert.deepEqual((await makeResources().read('member-context:Larry')).value.preferences,{})
+ checks.memberPreferenceSaveIsolationAndUndo=true
  return{passed:true,checks,syntheticData:true,productionWrites:false,scope:'Real action executor and persistence; no browser confirmation interaction.'}
 }
