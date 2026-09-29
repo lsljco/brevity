@@ -17,7 +17,7 @@ const headers = {
 
 const response = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) })
 
-export const handler = async event => {
+const handler = async event => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' }
 
   try {
@@ -73,3 +73,5 @@ export const handler = async event => {
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

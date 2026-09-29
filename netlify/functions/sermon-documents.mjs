@@ -139,7 +139,7 @@ export async function buildSermonPdf(notes, source) {
   return Buffer.concat(chunks)
 }
 
-export const handler = async event => {
+const handler = async event => {
   try {
     const session=await readSession(event).catch(()=>null)
     if(!session)return json(401,{error:'Sign in to access the sermon repository.'})
@@ -167,3 +167,5 @@ export const handler = async event => {
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

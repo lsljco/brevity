@@ -9,7 +9,7 @@ const MAX_FILE_BYTES=4_500_000
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 const clean=text=>String(text||'').replace(/\r/g,'').replace(/[ \t]+\n/g,'\n').replace(/\n{4,}/g,'\n\n\n').trim()
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to import sermon notes.'})
@@ -35,3 +35,5 @@ export const handler=async event=>{
 export const config={path:'/.netlify/functions/sermon-notes-import'}
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

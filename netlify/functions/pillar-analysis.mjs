@@ -237,7 +237,7 @@ export const pillarAnalysisServerInternals={
   modelTotalTimeoutMs:MODEL_TOTAL_TIMEOUT_MS,
 };
 
-export const handler = async event => {
+const handler = async event => {
   const requestStartedAt=requestEpoch();
   if (event.httpMethod !== 'POST') return json(405, { error:'Method not allowed.' });
 
@@ -327,3 +327,5 @@ export const handler = async event => {
 };
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

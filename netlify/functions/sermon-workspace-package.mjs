@@ -38,6 +38,8 @@ export function createSermonWorkspacePackageHandler({authenticate=readSession,da
   return json(202,status)
  }catch(error){console.error('[sermon-workspace-package]',error);return json(500,{error:'Could not prepare sermon materials.'})}}
 }
-export const handler=createSermonWorkspacePackageHandler()
+const handler=createSermonWorkspacePackageHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -92,6 +92,8 @@ export function createMinistrySermonWorkspaceHandler({ authenticate=readSession,
   }
 }
 
-export const handler=createMinistrySermonWorkspaceHandler()
+const handler=createMinistrySermonWorkspaceHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

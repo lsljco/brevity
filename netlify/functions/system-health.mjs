@@ -16,6 +16,8 @@ export async function buildSystemHealth(event={}){
   const healthy=Object.values(checks).every(check=>check.state==='ready')
   return{healthy,checks,checkedAt:new Date().toISOString()}
 }
-export const handler=async event=>{if(event.httpMethod!=='GET')return json(405,{error:'Method not allowed.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to view Brevity system health.'});return json(200,await buildSystemHealth(event))}
+const handler=async event=>{if(event.httpMethod!=='GET')return json(405,{error:'Method not allowed.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to view Brevity system health.'});return json(200,await buildSystemHealth(event))}
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

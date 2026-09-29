@@ -11,7 +11,7 @@ const STORE_NAME='brevity-ai-tutor'
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event)
   if(!session)return json(401,{error:'Sign in required.'})
@@ -31,3 +31,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

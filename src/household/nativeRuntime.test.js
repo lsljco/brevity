@@ -1,3 +1,4 @@
+import {readFileSync,readdirSync} from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import stateEndpoint from '../../netlify/functions/household-state.mjs'
@@ -22,4 +23,11 @@ test('statically injected storage preserves scope and strong consistency',()=>{
     assert.equal(received.name,scopedStore.scopedName('household'))
     assert.equal(received.consistency,'strong')
   }finally{scopedStore.setNativeBlobs(null)}
+})
+
+test('function entry points cannot select the legacy named-handler runtime',()=>{
+ for(const file of readdirSync(new URL('../../netlify/functions/',import.meta.url)).filter(name=>name.endsWith('.mjs'))){
+  const source=readFileSync(new URL('../../netlify/functions/'+file,import.meta.url),'utf8')
+  assert.doesNotMatch(source,/export (?:const|async function|function) handler\b/,file)
+ }
 })

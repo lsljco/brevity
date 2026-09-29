@@ -8,7 +8,7 @@ import { nutritionProgress, weeklyNutritionPilot } from '../lib/nutrition-progre
 
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 
-export async function handler(event){
+async function handler(event){
   if(event.httpMethod!=='GET')return json(405,{error:'Method not allowed.'})
   const session=await householdAuth.readSession(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to view nutrition records.'})
@@ -29,3 +29,5 @@ export async function handler(event){
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -151,7 +151,7 @@ export const processAssistantRequest = async event => {
 const jobs=()=>getStore({name:'brevity-assistant-jobs',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 const jobKey=id=>`job-${id}`
 const backgroundUrl=event=>`${String(event.headers?.['x-forwarded-proto']||'https').split(',')[0]}://${String(event.headers?.['x-forwarded-host']||event.headers?.host||'brevityoflife.netlify.app').split(',')[0]}/.netlify/functions/brevity-assistant-background`
-export const handler=async event=>{
+const handler=async event=>{
   try{
     const session=await readSession(event).catch(()=>null)
     if(!session)return json(401,{error:'Sign in to use Brevity Assistant.'})
@@ -178,3 +178,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

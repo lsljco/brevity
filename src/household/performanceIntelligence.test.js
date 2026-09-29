@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { calculatePerformance,classifyActivity,DEFAULT_PILLARS,intelligenceSummary,matchingClassificationRule,normalizeIntelligenceConfig,normalizePerformanceActivities,projectPerformance,resolveIntelligencePeriod } from './performanceIntelligence.js'
 import { applyHouseholdRecordOperation,householdResourceKeyForAction } from './householdActionModel.js'
-import { handler as classifyHandler } from '../../netlify/functions/calendar-pillar-classify.mjs'
+import { lambdaHandler as classifyHandler } from '../../netlify/functions/calendar-pillar-classify.mjs'
 
 const members=['A','B']
 const config=overrides=>normalizeIntelligenceConfig({pillars:DEFAULT_PILLARS,targets:[],rules:[],overrides:{},privacy:{},...overrides},members)

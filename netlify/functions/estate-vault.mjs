@@ -66,6 +66,8 @@ export function createEstateVaultHandler({
   }
 }
 
-export const handler = createEstateVaultHandler()
+const handler = createEstateVaultHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

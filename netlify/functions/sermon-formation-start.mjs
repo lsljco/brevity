@@ -97,6 +97,8 @@ export function createSermonFormationStartHandler({
   }
 }
 
-export const handler = createSermonFormationStartHandler()
+const handler = createSermonFormationStartHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

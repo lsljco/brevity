@@ -5,7 +5,7 @@ import {analyzeMealImage} from '../lib/meal-image-import.mjs'
 
 const headers={'content-type':'application/json; charset=utf-8','cache-control':'private, no-store','access-control-allow-origin':'*','access-control-allow-headers':'content-type','access-control-allow-methods':'POST,OPTIONS'}
 const json=(statusCode,body)=>({statusCode,headers,body:JSON.stringify(body)})
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod==='OPTIONS')return{statusCode:204,headers,body:''}
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   try{
@@ -17,3 +17,5 @@ export const handler=async event=>{
 export const config={path:'/.netlify/functions/meal-image-import'}
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -9,7 +9,7 @@ const json = (statusCode, body) => ({statusCode,headers:{'content-type':'applica
 const outputText = response => (response.output || []).flatMap(item => item.content || []).map(part => part.text || '').join('').trim()
 const stripFence = value => String(value||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/i,'').trim()
 
-export const handler = async event => {
+const handler = async event => {
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   if(!process.env.OPENAI_API_KEY)return json(503,{error:'Brevity alignment intelligence is not configured yet.'})
   const session=await readSession(event).catch(()=>null)
@@ -48,3 +48,5 @@ ${transcript}`
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

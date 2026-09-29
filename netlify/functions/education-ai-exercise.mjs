@@ -35,7 +35,7 @@ const outputText=response=>Array.isArray(response?.output)?response.output.flatM
 const publicQuestion=q=>({id:q.id,type:q.type,prompt:q.prompt,choices:q.choices,skill:q.skill})
 export const educationAiExerciseInternals={schema,publicQuestion,PROMPT_VERSION,allowedMinutes,safeDate}
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event)
   if(!session)return json(401,{error:'Sign in required.'})
@@ -60,3 +60,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -103,6 +103,8 @@ export function createSermonDeviceRescueHandler({ authenticate = readSession, da
   }
 }
 
-export const handler = createSermonDeviceRescueHandler()
+const handler = createSermonDeviceRescueHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

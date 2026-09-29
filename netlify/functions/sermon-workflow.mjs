@@ -86,6 +86,8 @@ export function createSermonWorkflowHandler({
   }
 }
 
-export const handler = createSermonWorkflowHandler()
+const handler = createSermonWorkflowHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

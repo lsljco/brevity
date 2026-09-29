@@ -30,6 +30,8 @@ export function createSermonIdentitiesHandler({authenticate=readSession,storeFac
   return json(200,{member,uploaded:true})
  }catch(error){console.error('[sermon-identities]',error);return json(500,{error:'Could not save the identity reference.'})}}
 }
-export const handler=createSermonIdentitiesHandler()
+const handler=createSermonIdentitiesHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -3,7 +3,7 @@ import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import {createProductionActionResources} from '../lib/assistant-action-executor.mjs'
 import {householdDate} from '../lib/assistant-authoritative-context.mjs'
-export const handler=async event=>{
+const handler=async event=>{
  const reply=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
  const session=await householdAuth.readSession(event).catch(()=>null)
  if(!session)return reply(401,{error:'Sign in to view your activities.'})
@@ -14,3 +14,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

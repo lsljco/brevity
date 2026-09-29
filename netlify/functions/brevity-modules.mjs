@@ -3,7 +3,7 @@ import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import {createProductionActionResources} from '../lib/assistant-action-executor.mjs'
 import {MODULE_RESOURCE,resolveModules} from '../../src/modules/configuration.js'
-export const handler=async event=>{
+const handler=async event=>{
  const session=await householdAuth.readSession(event).catch(()=>null)
  const respond=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
  if(!session)return respond(401,{error:'Sign in to view household modules.'})
@@ -12,3 +12,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -13,7 +13,7 @@ const extensionFor=type=>type.includes('mp4')?'m4a':type.includes('ogg')?'ogg':t
 
 export const educationReadingGradeInternals={scoreReadingTranscript,audioType,extensionFor,MAX_AUDIO_BASE64,MAX_REFERENCE_CHARS}
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event)
   if(!session)return json(401,{error:'Sign in required.'})
@@ -50,3 +50,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

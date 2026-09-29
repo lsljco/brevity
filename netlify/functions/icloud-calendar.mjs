@@ -632,6 +632,8 @@ export const createICloudCalendarHandler = ({
   }
 };
 
-export const handler = createICloudCalendarHandler();
+const handler = createICloudCalendarHandler();
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

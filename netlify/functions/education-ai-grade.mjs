@@ -24,7 +24,7 @@ async function gradeDirections(record,studentSummary){
 
 export const educationAiGradeInternals={directionsSchema,shortSchema,normalize}
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event)
   if(!session)return json(401,{error:'Sign in required.'})
@@ -66,3 +66,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -20,6 +20,8 @@ export const createUsageHandler=({readSession=householdAuth.readSession,reposito
   return json(200,await repo.summary(members))
  }catch{return json(503,{error:'Usage measurements are temporarily unavailable.'})}
 }
-export const handler=createUsageHandler()
+const handler=createUsageHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

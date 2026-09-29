@@ -54,6 +54,8 @@ export function createEstateHandler({
 }
 }
 
-export const handler = createEstateHandler()
+const handler = createEstateHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

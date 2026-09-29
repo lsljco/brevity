@@ -34,6 +34,8 @@ export function createEstateMaintenanceHandler({ authenticate = readSession } = 
   }
 }
 
-export const handler = createEstateMaintenanceHandler()
+const handler = createEstateMaintenanceHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

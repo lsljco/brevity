@@ -5,7 +5,7 @@ const {readSession}=householdAuth
 const MODEL=process.env.BREVITY_AI_MODEL||'gpt-5.6'
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
 const text=response=>(response.output||[]).flatMap(item=>item.content||[]).map(item=>item.text||'').join('').trim()
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to classify household activity.'})
   if(!process.env.OPENAI_API_KEY)return json(503,{error:'Brevity intelligence is not configured.'})
@@ -21,3 +21,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

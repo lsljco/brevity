@@ -25,8 +25,10 @@ export async function analyzeSermonFormation(body={}) {
  const payload=await requestOpenAI({input:prompt,max_output_tokens:50000,text:{format:{type:'json_schema',name:'brevity_sermon_formation',strict:true,schema}}});let result;try{result=JSON.parse(outputText(payload))}catch{throw Object.assign(new Error('Brevity AI returned unreadable sermon formation data.'),{status:502})}const generatedAt=new Date().toISOString(),source={sermonDate,serviceType,title:suppliedTitle||result.sermonNotes?.documentTitle||'',targetDate,sourceKind,sourceSections:transcript.length>SINGLE_ANALYSIS_LIMIT?splitTranscript(transcript).length:1};return{generatedAt,model:MODEL,source,...result}
 }
 
-export const handler=async event=>{
+const handler=async event=>{
  if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to generate sermon notes and formation.'});return json(423,{error:'Direct sermon analysis is disabled. Start the reviewed sermon-source workflow so Brevity can retain a versioned draft without replacing the active sermon.'})
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

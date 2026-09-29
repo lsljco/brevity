@@ -47,6 +47,8 @@ export function createPostImageHandler({authenticate=readSession,repositoryFacto
   return json(202,status)
  }catch(error){console.error('[sermon-post-image]',error);return json(500,{error:'Could not prepare sermon photography.'})}}
 }
-export const handler=createPostImageHandler()
+const handler=createPostImageHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

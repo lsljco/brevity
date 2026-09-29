@@ -45,7 +45,7 @@ function normalizeResult(input = {}) {
   }
 }
 
-export const handler = async event => {
+const handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' })
   if (!process.env.OPENAI_API_KEY) return json(503, { error: 'Brevity meeting intelligence is not configured yet.' })
 
@@ -110,3 +110,5 @@ ${transcript}`
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

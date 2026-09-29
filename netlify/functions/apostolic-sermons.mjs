@@ -78,6 +78,8 @@ export function createApostolicSermonsHandler({ authenticate=readSession, dataSt
   }
 }
 
-export const handler = createApostolicSermonsHandler()
+const handler = createApostolicSermonsHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

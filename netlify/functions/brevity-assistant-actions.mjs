@@ -605,7 +605,7 @@ export async function undoActionWithJournal({repository,auditId,session,resource
   return{journal,audit:undoRecord}
 }
 
-export const handler=async event=>{
+const handler=async event=>{
   const session=await readSession(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to use Brevity Action Mode.'})
   const repository=productionAssistantActionRepository(),resources=createPermissionActionResources(repository,createProductionActionResources())
@@ -726,3 +726,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -15,6 +15,8 @@ export const createConversationHandler=({readSession=householdAuth.readSession,r
     return json(200,await repo[body.action](session.member,body.version))
   }catch(error){return json(error.status||400,{error:error.message})}
 }
-export const handler=createConversationHandler()
+const handler=createConversationHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

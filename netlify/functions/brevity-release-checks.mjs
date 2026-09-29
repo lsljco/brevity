@@ -9,7 +9,7 @@ import {releaseCheckAccess,releaseBuild} from '../lib/release-check-access.mjs'
 import {evaluationCases} from '../lib/household-agent-evaluation.mjs'
 export const releaseJobs=()=>getStore({name:'brevity-release-checks',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
-export const handler=async event=>{
+const handler=async event=>{
  const session=await householdAuth.readSession(event).catch(()=>null),denied=releaseCheckAccess(session)
  if(denied){const cookieHeader=event.headers?.cookie||event.headers?.Cookie||'';const hasCookie=cookieHeader.split(';').some(part=>part.trim().startsWith('brevity_household_session='));return json(denied.status,{error:denied.status===401?`${denied.error} ${hasCookie?'A session cookie was received but could not be verified.':'The request did not include a session cookie.'}`:denied.error})}
  if(event.httpMethod==='GET'){
@@ -41,3 +41,5 @@ export const handler=async event=>{
 }
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}

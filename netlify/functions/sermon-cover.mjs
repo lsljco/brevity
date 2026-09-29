@@ -52,6 +52,8 @@ export function createSermonCoverHandler({authenticate=readSession,repositoryFac
   return json(202,status)
  }catch(error){console.error('[sermon-cover]',error);return json(500,{error:'Could not prepare the sermon cover.'})}}
 }
-export const handler=createSermonCoverHandler()
+const handler=createSermonCoverHandler()
 
 export default withLambda(handler)
+
+export {handler as lambdaHandler}
