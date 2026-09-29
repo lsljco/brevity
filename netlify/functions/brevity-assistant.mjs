@@ -1,3 +1,4 @@
+import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {requestArchitectPrototype} from '../lib/architect-prototype.mjs'
 import {readConsumptionImage} from '../lib/consumption-image.mjs'
 import {productionUsageRepository} from '../lib/usage-metrics.mjs'
@@ -152,7 +153,7 @@ export const handler=async event=>{
     if(event.httpMethod==='GET'){
       const id=event.queryStringParameters?.jobId
       if(!/^[0-9a-f-]{36}$/.test(id||''))return json(400,{error:'Invalid assistant job.'})
-      const status=await jobs().get(jobKey(id),{type:'json'})
+      const status=await readBackgroundJob(jobs(),jobKey(id))
       if(!status||status.member!==session.member||Date.parse(status.createdAt)<Date.now()-86400000)return json(404,{error:'Assistant job not found.'})
       if(status.state==='queued'||status.state==='processing'){
         if(Date.now()-Date.parse(status.createdAt)>12*60*1000)return json(504,{error:'Brevity Assistant took too long. Please retry.'})

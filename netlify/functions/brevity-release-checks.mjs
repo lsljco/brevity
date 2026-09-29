@@ -1,3 +1,4 @@
+import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {getStore} from '../lib/scoped-store.cjs'
 import {randomUUID} from 'node:crypto'
 import householdAuth from './household-auth.js'
@@ -12,7 +13,7 @@ export const handler=async event=>{
   const id=event.queryStringParameters?.id
   if(!id)return json(200,{build:releaseBuild,cases:evaluationCases.map(({id,review})=>({id,review}))})
   if(!/^[a-f0-9-]{36}$/.test(id))return json(400,{error:'Invalid run.'})
-  const job=await releaseJobs().get(id,{type:'json'})
+  const job=await readBackgroundJob(releaseJobs(),id)
   if(!job||job.owner!==session.member)return json(404,{error:'Run not found.'})
   return json(200,job)
  }
@@ -25,7 +26,7 @@ export const handler=async event=>{
  const id=randomUUID(),job={id,owner:session.member,state:'queued',createdAt:new Date().toISOString(),build:releaseBuild,caseIds:[...new Set(ids)],syntheticData:true,productionWrites:false,results:[]}
  const store=releaseJobs(),leaseKey=`active:${session.member}`,previous=await store.getWithMetadata(leaseKey,{type:'json'})
  if(previous?.data?.id&&Date.now()-previous.data.startedAt<15*60*1000){
-  const active=await store.get(previous.data.id,{type:'json'})
+  const active=await readBackgroundJob(store,previous.data.id)
   if(active&&['queued','running'].includes(active.state))return json(409,{error:'A release check is already running.',id:active.id})
  }
  const lease=await store.setJSON(leaseKey,{id,startedAt:Date.now()},previous?.etag?{onlyIfMatch:previous.etag}:{onlyIfNew:true})
