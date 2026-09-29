@@ -316,3 +316,13 @@ test('preference recall is read-only and an unchanged remembered value produces 
  const unchanged=JSON.parse(await agent.tools.find(tool=>tool.name==='remember_member_preference').invoke({},JSON.stringify({category:'communication',value:'Prefer short spoken answers'})))
  assert.equal(unchanged.alreadySaved,true);assert.equal(reviews.length,0)
 })
+
+test('an incomplete offer gets one completion check while questions remain read-only',async()=>{
+ let calls=0
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},prompt:[{role:'user',content:'What preference did I save?'}],logger:()=>{},runner:{run:async(agent,input,options)=>{
+  calls+=1
+  if(calls===2){assert.equal(options.maxTurns,4);assert.match(JSON.stringify(input),/never manufacture a write/)}
+  return {finalOutput:{message:calls===1?'I can check.':'Your saved preference is short spoken answers.',proposal:null},history:[]}
+ }}})
+ assert.equal(calls,2);assert.equal(result.output.proposal,null);assert.equal(result.diagnostics.toolCalls.request_completion_check,1)
+})

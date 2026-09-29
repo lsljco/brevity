@@ -47,3 +47,7 @@ Model calls recover from bounded rate-limit/provider failures. Evaluation calls 
 ## Project-plan extensions
 
 The current package adds reviewed actual activity and education observations, weekly briefing, household module configuration, privacy-conscious usage measurements, food-photo extraction, separate preview stores, background recovery/retention and a guarded Architect prototype workflow. See project-plan-completion-ledger.md and architect-and-recovery-operations.md for exact scope, configuration dependencies and unverified release gates.
+
+## Assistant model selection
+
+The household Agents SDK runtime and its release evaluations use `BREVITY_AGENT_MODEL`, defaulting to `gpt-5.6-sol` with low reasoning effort and a bounded output budget. The older shared `BREVITY_AI_MODEL` setting continues to control other workflows; it no longer silently downgrades the household agent to a mini model. Changing the agent model requires rerunning the maintained live evaluation. This uses higher per-token pricing than the previously deployed `gpt-5.4-mini`; no billing limit or API access permission is changed.

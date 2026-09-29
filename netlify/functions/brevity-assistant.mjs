@@ -25,7 +25,7 @@ import { getStore } from '../lib/scoped-store.mjs'
 import { randomUUID } from 'node:crypto'
 
 const { readSession } = householdAuth
-const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
+const MODEL = process.env.BREVITY_AGENT_MODEL || 'gpt-5.6-sol'
 const MAX_CONTEXT_LENGTH = 250000
 const json = (statusCode, body) => ({
   statusCode,

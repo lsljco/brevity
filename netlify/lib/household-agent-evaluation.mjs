@@ -20,7 +20,7 @@ export function evaluationFixture(item){
  if(item.outage){canonical.dailyNutrition=null;canonical.recentNutrition=[];canonical.nutritionUnavailable=true;canonical.supplementalSources[`nutrition:${date}`]='unavailable'}
  return{member,date,canonical}
 }
-export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=process.env.BREVITY_AI_MODEL||'gpt-5.6'}={}){
+export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=process.env.BREVITY_AGENT_MODEL||'gpt-5.6-sol'}={}){
  const {member,date,canonical}=evaluationFixture(item),observed=[],calculationInputs=[],started=Date.now()
  try{
   const result=await run({model,schema:assistantResponseSchema,canonical,browser:{},logger:()=>{},onTool:name=>observed.push(name),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical,member,role:'admin',estimates}),requestInstructions:buildAssistantInstructions({member,page:item.pillar}),prompt:[{role:'user',content:`BREVITY CONTEXT (synthetic test data):\n${JSON.stringify({memberPreferences:canonical.memberPreferences,householdDate:date,signedInMember:member,sources:canonical.sources,supplementalSources:canonical.supplementalSources,notice:'Read relevant saved data with the pillar or meal search tools.'})}`},...item.messages],findSources:async()=>[],calculate:async request=>{
