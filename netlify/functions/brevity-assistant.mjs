@@ -1,3 +1,4 @@
+import {retryableProviderFailure} from '../lib/agent-provider-recovery.mjs'
 import {validateAgentProposal} from '../lib/agent-proposal-validation.mjs'
 import {buildAssistantInstructions} from '../lib/assistant-instructions.mjs'
 import {loadAssistantSupplementalContext,assertActionSourcesAvailable} from '../lib/assistant-supplemental-context.mjs'
@@ -93,9 +94,10 @@ export const processAssistantRequest = async event => {
   let structured,estimates
   try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestInstructions,validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical:canonicalServerContext,member:session.member,role:session.role,estimates}),requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
   catch(error){
-    console.error('[brevity-assistant-agent]',error)
+    console.error('[brevity-assistant-agent]',JSON.stringify({requestId:event.requestId,category:retryableProviderFailure(error)||'agent',status:Number(error?.status)||null}))
     if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
-    return json(502,{error:'Brevity Assistant could not complete this request. Try a narrower question.'})
+    if(retryableProviderFailure(error)==='rate_limit')return json(429,{error:'The AI service is temporarily busy. Your request was not saved. Please try again in a moment.'})
+    return json(502,{error:'Brevity Assistant could not complete this request. Please try again.'})
   }
   if(!structured||typeof structured!=='object')return json(502,{error:'Brevity Assistant returned an invalid structured response.'})
   const message=String(structured.message||'').trim()

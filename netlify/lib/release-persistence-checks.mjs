@@ -42,5 +42,12 @@ export async function verifyReleasePersistence({store,runId}){
   const restored=(await makeResources().read(`plan:${date}`)).value
   assert.deepEqual(restored?.[pillar],before?.[pillar]);checks[`${pillar}PlanSaveAndUndo`]=true
  }
+ const improvement=await captureExpectedVersions(normalizeActionProposal({summary:'Isolated improvement proposal',operations:[{type:'improvement.propose',payload:{title:'Fixture improvement',problem:'Synthetic friction',evidence:'Synthetic reported issue',solution:'Fixture remedy',benefit:'Reduced friction',risks:'Fixture regression',successMetric:'Fixture acceptance passes'}}]},session),resources)
+ await execute(improvement)
+ const improvementResource='shared:brevity_improvement_proposals_v1',idea=(await makeResources().read(improvementResource)).value[0]
+ const approval=await captureExpectedVersions(normalizeActionProposal({summary:'Isolated concept approval',operations:[{type:'improvement.transition',targetId:idea.id,payload:{stage:'concept-approved',notes:'Synthetic approval only'}}]},session),resources)
+ const approved=await execute(approval);assert.equal((await makeResources().read(improvementResource)).value[0].stage,'concept-approved')
+ await undoActionWithJournal({repository,auditId:approved.audit.id,session,resources,event:{}})
+ assert.equal((await makeResources().read(improvementResource)).value[0].stage,'proposed');checks.improvementApprovalSaveAndUndo=true
  return{passed:true,checks,syntheticData:true,productionWrites:false,scope:'Real action executor and persistence; no browser confirmation interaction.'}
 }

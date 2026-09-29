@@ -628,5 +628,45 @@
       "Change only requested fields, retain other saved values, and require review."
     ],
     "calculator": "clarify"
+  },
+  {
+    "id": "improvement-propose",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Propose an improvement: I report that meal lookup asks too many repeated questions. A good solution would reuse details I already gave, reducing effort; the risk is reusing the wrong meal. Measure repeated clarification questions per completed meal. Save this as a proposal for review, not an implemented feature."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "improvement.propose"
+    ],
+    "review": [
+      "Record reported evidence honestly, describe risks and a success metric, require review, and never claim implementation."
+    ],
+    "calculator": "clarify"
+  },
+  {
+    "id": "improvement-approve",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Approve the concept for the saved Voice recovery improvement. Prepare the review; do not publish anything."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "improvement.transition"
+    ],
+    "review": [
+      "Find the exact saved proposal, request concept-approved only, and require strong confirmation."
+    ],
+    "calculator": "clarify"
   }
 ]

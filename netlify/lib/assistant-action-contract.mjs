@@ -1,3 +1,4 @@
+import {IMPROVEMENT_RESOURCE,normalizeImprovementPayload,improvementPermission} from './improvement-workflow.mjs'
 import { randomUUID } from 'node:crypto'
 import { MEALS_BY_ID, MEAL_TYPES } from '../../src/meals/mealLibrary.js'
 import { householdPermissionForOperation, householdResourceKeyForAction } from '../../src/household/householdActionModel.js'
@@ -7,6 +8,8 @@ import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-pla
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 export const ACTION_DOMAINS = ['planning', 'calendar', 'projects', 'finance']
 export const ACTION_TYPES = {
+  'improvement.propose':'planning',
+  'improvement.transition':'planning',
   'decision.create': 'planning',
   'decision.update': 'planning',
   'assignment.create': 'planning',
@@ -71,6 +74,8 @@ export const ACTION_TYPES = {
 export const FORBIDDEN_ACTION_PATTERN = /payment|purchase|transfer|withdraw|deposit|connect|disconnect|password|credential|bank\.account/i
 export const SCOPES = ['this-item', 'this-and-future']
 const ACTION_PAYLOAD_FIELDS = {
+  'improvement.propose':['title','problem','evidence','solution','benefit','risks','successMetric'],
+  'improvement.transition':['stage','notes','previewUrl','commitSha','evaluationSummary'],
   'decision.create': ['title', 'notes', 'owner', 'participants', 'status', 'date'],
   'decision.update': ['title', 'notes', 'owner', 'participants', 'status', 'date'],
   'assignment.create': ['title', 'notes', 'owner', 'participants', 'status', 'date', 'priority'],
@@ -169,10 +174,11 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
@@ -272,6 +278,7 @@ function normalizeActionPayload(type, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`The ${type} action details must be an object.`)
   if (type.startsWith('plan.')) return normalizeDailyPlanActionPayload(type, input)
   const payload = input
+  if(type.startsWith('improvement.'))return normalizeImprovementPayload(type,payload)
   const allowed = new Set(ACTION_PAYLOAD_FIELDS[type])
   const unsupported = Object.keys(payload).find(field => !allowed.has(field))
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
@@ -456,8 +463,9 @@ export function normalizeActionOperation(input = {}) {
     risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
-  if (((operation.domain === 'planning' && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
+  if (((operation.domain === 'planning' && !type.startsWith('improvement.') && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
+  if(type==='improvement.transition'&&!operation.targetId)throw new Error('Find the exact saved improvement proposal first.')
   if (type === 'plan.overview.update' && operation.targetId !== 'overview') throw new Error('A daily-plan overview action requires the exact overview record.')
   if (type === 'plan.pillar.update' && (!DAILY_PLAN_PILLARS.includes(payload.pillar) || operation.targetId !== payload.pillar)) throw new Error('A daily-plan pillar action requires the exact pillar record.')
   if (type === 'plan.alignment.update' && operation.targetId !== 'morningAlignment') throw new Error('A Morning Alignment action requires the exact alignment record.')
@@ -630,6 +638,7 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type.startsWith('improvement.'))return improvementPermission({operation,member,role,permissions,currentRecord})
   if(operation.type==='meal.recipe.update')return currentRecord&&(role==='admin'||permissions?.planning)?{allowed:true}:{allowed:false,reason:'Recipe changes require an existing recipe and household planning access.'}
   if(operation.type==='nutrition.meal.log' && operation.targetId!==member)return {allowed:false,reason:'Members can log only their own meals.'}
   if(['nutrition.meal.update','nutrition.meal.remove'].includes(operation.type))return operation.targetId===member && currentRecord?.member===member && currentRecord?.date===operation.targetDate ? {allowed:true} : {allowed:false,reason:'Members can correct only their own saved meals.'}

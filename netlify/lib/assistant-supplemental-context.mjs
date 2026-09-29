@@ -26,6 +26,6 @@ export async function loadAssistantSupplementalContext({canonical,member,resourc
 export function assertActionSourcesAvailable(operation,context){
   const states=context.supplementalSources||{}
   const needed=operation.type.startsWith('nutrition.meal.')?`nutrition:${operation.targetDate}`:operation.type==='meal.recipe.update'?'recipe-library':operation.type.startsWith('calendar.')?'apple-calendar':null
-  const canonicalSource=/^(plan\.|decision\.|assignment\.)/.test(operation.type)?'daily-plan':/^(project\.|transaction\.|budget\.|forecast\.|recurring\.)/.test(operation.type)?'shared-action-records':null
+  const canonicalSource=/^(plan\.|decision\.|assignment\.)/.test(operation.type)?'daily-plan':/^(improvement\.|project\.|transaction\.|budget\.|forecast\.|recurring\.)/.test(operation.type)?'shared-action-records':null
   if(needed&&states[needed]==='unavailable'||canonicalSource&&context.sources?.some(source=>source.id===canonicalSource&&source.state==='unavailable'))throw new Error('That saved record is temporarily unavailable. I can discuss the change, but need to reload it before preparing a safe review. Please ask me to retry.')
 }

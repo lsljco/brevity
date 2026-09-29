@@ -1,3 +1,4 @@
+import {IMPROVEMENT_RESOURCE,applyImprovement} from './improvement-workflow.mjs'
 import {RECIPE_RESOURCE,resolvedRecipes,applyRecipeUpdate} from './recipe-library-actions.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from '@netlify/blobs'
@@ -31,6 +32,7 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
   if(operation.type==='meal.recipe.update')return RECIPE_RESOURCE
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
@@ -54,6 +56,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type==='improvement.transition')return (Array.isArray(value)?value:[]).find(item=>item.id===operation.targetId)
   if(operation.type==='meal.recipe.update')return resolvedRecipes(value).find(meal=>meal.id===operation.targetId)||null
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return (value?.entries||[]).find(entry=>entry.id===operation.payload?.entryId)||null
   if (operation.type.startsWith('household.')) return householdRecordForOperation(value,operation)
@@ -80,6 +83,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type.startsWith('improvement.'))return {before,after:applyImprovement(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   const payload = operation.payload || {}
   if(operation.type==='nutrition.meal.update' || operation.type==='nutrition.meal.remove'){
     const entries=value?.entries||[],index=entries.findIndex(entry=>entry.id===payload.entryId&&entry.member===operation.targetId&&entry.date===operation.targetDate)

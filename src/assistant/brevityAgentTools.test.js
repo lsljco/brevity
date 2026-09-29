@@ -1,3 +1,4 @@
+import {assistantResponseSchema} from '../../netlify/lib/brevity-response-schema.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {getInputItems} from '../../node_modules/@openai/agents-openai/dist/openaiResponsesConverter.mjs'
@@ -249,3 +250,15 @@ test('invalid proposal gets one production-contract repair before leaving the ag
  }}})
  assert.equal(calls,2);assert.equal(validations,2);assert.ok(result.output.proposal)
 })
+
+ test('SDK review tool retains validated proposal even when final response omits it',async()=>{
+ const proposal={summary:'Inspect garage',operations:[{type:'assignment.create',description:'Inspect garage',targetId:'',targetDate:'2026-09-28',payloadJson:'{"title":"Inspect garage","owner":"Larry"}',allowedScopes:['this-item'],defaultScope:'this-item'}]}
+ let validations=0
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical,browser:{},prompt:'Create an assignment',logger:()=>{},validateOutput:()=>validations++,runner:{run:async agent=>{
+  const tool=agent.tools.find(tool=>tool.name==='prepare_action_review')
+  const review=JSON.parse(await tool.invoke({},JSON.stringify(proposal)))
+  assert.equal(review.saved,false);assert.equal(review.validForReview,true)
+  return {get finalOutput(){return {message:'Review the assignment',proposal:null}}}
+ }}})
+ assert.deepEqual(result.output.proposal,proposal);assert.equal(validations,2)
+ })
