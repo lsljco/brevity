@@ -135,22 +135,27 @@ export function extractNutritionEvidence(html){
   return text
 }
 
-export async function retrieveNutritionReferences(references,{referenceFetcher=fetchRecipeHtml,onFailure=()=>{}}={}){
+export async function retrieveNutritionReferences(references,{referenceFetcher=fetchRecipeHtml,onFailure=()=>{},referenceCache=new Map()}={}){
   const urls=[...new Set(references.map(item=>item.url))].filter(value=>{try{return new URL(value).pathname.replace(/\//g,'').length>0}catch{return false}}).slice(0,4)
   const results=await Promise.allSettled(urls.map(async url=>{
     try{
-      const {html,sourceUrl}=await referenceFetcher(url,{timeoutMs:6000})
-      return {url:sourceUrl,details:extractNutritionEvidence(html)}
+      if(!referenceCache.has(url))referenceCache.set(url,(async()=>{
+        const {html,sourceUrl}=await referenceFetcher(url,{timeoutMs:6000})
+        return {url:sourceUrl,details:extractNutritionEvidence(html)}
+      })())
+      const reference=await referenceCache.get(url)
+      referenceCache.set(reference.url,Promise.resolve(reference))
+      return reference
     }catch(error){onFailure({url,reason:error.message});throw error}
   }))
   return results.filter(item=>item.status==='fulfilled').map(item=>item.value)
 }
 
-export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, timeoutMs=40000,referenceFetcher=fetchRecipeHtml} = {}) {
+export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, timeoutMs=40000,referenceFetcher=fetchRecipeHtml,referenceCache=new Map()} = {}) {
   const request=normalizeNutritionRequest(body)
   if(!process.env.OPENAI_API_KEY)throw Object.assign(new Error('Brevity nutrition calculation is not configured.'),{status:503})
   const referenceFailures=[]
-  if(request.conversational)request.productReferences=await retrieveNutritionReferences(request.productReferences,{referenceFetcher,onFailure:failure=>referenceFailures.push(failure)})
+  if(request.conversational)request.productReferences=await retrieveNutritionReferences(request.productReferences,{referenceFetcher,referenceCache,onFailure:failure=>referenceFailures.push(failure)})
   const controller=new AbortController()
   const timeout=setTimeout(()=>controller.abort(),timeoutMs)
   let response

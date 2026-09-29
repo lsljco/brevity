@@ -215,3 +215,23 @@ test('reference failures are surfaced without using an invented fallback summary
  assert.deepEqual(refs,[])
  assert.deepEqual(failures,[{url:'https://example.com/product',reason:'HTTP 404'}])
 })
+
+test('server reference cache reuses actual evidence and failures within one run',async()=>{
+ const referenceCache=new Map(),calls=[],failures=[]
+ const referenceFetcher=async url=>{
+  calls.push(url)
+  if(url.endsWith('/missing'))throw Error('No label')
+  return {sourceUrl:'https://example.com/canonical-product',html:'Nutrition Facts Serving Size 1 bottle Calories 160 Protein 30g Total Fat 3g Total Carbohydrate 4g'}
+ }
+ const options={referenceCache,referenceFetcher,onFailure:failure=>failures.push(failure)}
+ const first=await retrieveNutritionReferences([{url:'https://example.com/product'},{url:'https://example.com/missing'}],options)
+ const again=await retrieveNutritionReferences([{url:'https://example.com/product',details:'Fabricated values'},{url:'https://example.com/canonical-product'},{url:'https://example.com/missing'}],options)
+ assert.equal(calls.length,2)
+ assert.equal(again.length,2)
+ assert.deepEqual(again[0],first[0])
+ assert.equal(failures.length,2)
+ assert.doesNotMatch(again[0].details,/Fabricated/)
+ // A new run fetches again rather than sharing the previous member's context.
+ await retrieveNutritionReferences([{url:'https://example.com/product'}],{referenceFetcher})
+ assert.equal(calls.length,3)
+})

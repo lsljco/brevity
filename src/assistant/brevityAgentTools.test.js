@@ -8,7 +8,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -33,7 +33,7 @@ test('SDK runner is bounded and returns structured output to Action Mode',async(
   const runner={run:async(agent,prompt,options)=>{
     assert.equal(agent.name,'Brevity')
     assert.equal(prompt,'Read Finance')
-    assert.equal(options.maxTurns,8)
+    assert.equal(options.maxTurns,12)
     return {finalOutput:{message:'Read Finance',proposal:null},interruptions:[]}
   }}
   const result=await runBrevitySdkAgent({prompt:'Read Finance',model:'test',schema,canonical,browser:{},runner})
@@ -151,4 +151,28 @@ test('completed estimate with an omitted review gets one bounded proposal repair
  assert.equal(calls,2)
  assert.ok(result.output.proposal)
  assert.equal(result.estimates.size,1)
+})
+
+test('agent can inspect real product evidence before calculation and reuse its private cache',async()=>{
+ let fetches=0
+ const referenceFetcher=async url=>{
+  fetches++
+  if(url.endsWith('/missing'))throw Error('No readable label')
+  return {sourceUrl:url,html:'Nutrition Facts Serving Size 1 bottle Calories 160 Protein 30g Total Fat 3g Total Carbohydrate 4g'}
+ }
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},referenceFetcher,calculate:async(input,options)=>{
+  const {retrieveNutritionReferences}=await import('../../netlify/lib/meal-nutrition.mjs')
+  const evidence=await retrieveNutritionReferences(input.productReferences,options)
+  assert.match(evidence[0].details,/Protein 30g/)
+  assert.doesNotMatch(evidence[0].details,/invented/)
+  return {perServingMacros:{calories:160,proteinGrams:30}}
+ }})
+ const reader=agent.tools.find(item=>item.name==='read_product_nutrition')
+ const read=JSON.parse(await reader.invoke({},JSON.stringify({urls:['https://example.com/product','https://example.com/missing']})))
+ assert.equal(read.references.length,1)
+ assert.equal(read.failures[0].reason,'No readable label')
+ const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['1 Example shake'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[{url:'https://example.com/product',details:'invented'}]})))
+ assert.equal(fetches,2)
+ assert.ok(result.estimateId)
+ assert.equal(result.logged,false)
 })
