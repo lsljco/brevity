@@ -7,7 +7,7 @@ export const releaseJobs=()=>getStore({name:'brevity-release-checks',consistency
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
 export const handler=async event=>{
  const session=await householdAuth.readSession(event).catch(()=>null),denied=releaseCheckAccess(session)
- if(denied)return json(denied.status,{error:denied.error})
+ if(denied){const cookieHeader=event.headers?.cookie||event.headers?.Cookie||'';const hasCookie=cookieHeader.split(';').some(part=>part.trim().startsWith('brevity_household_session='));return json(denied.status,{error:denied.status===401?`${denied.error} ${hasCookie?'A session cookie was received but could not be verified.':'The request did not include a session cookie.'}`:denied.error})}
  if(event.httpMethod==='GET'){
   const id=event.queryStringParameters?.id
   if(!id)return json(200,{build:releaseBuild,cases:evaluationCases.map(({id,review})=>({id,review}))})
