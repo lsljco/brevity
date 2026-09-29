@@ -22,3 +22,17 @@ test('uncertain dispatch is retained and never automatically repeated',async()=>
  const args={record,member:'Larry',role:'admin',preview:false,token:'test-only',store,fetcher:async()=>{calls++;throw Error('timeout')}}
  assert.equal((await requestArchitectPrototype(args)).state,'dispatch-unknown');await requestArchitectPrototype(args);assert.equal(calls,1)
 })
+
+test('trusted prototype patch checker rejects dependency and workflow changes',async()=>{
+ const {mkdtemp,writeFile,mkdir,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),path=await import('node:path'),{spawnSync}=await import('node:child_process')
+ const root=await mkdtemp(path.join(tmpdir(),'brevity-prototype-scope-')),checker=path.resolve('scripts/architect/check-patch.mjs')
+ const git=(...args)=>{const result=spawnSync('git',args,{cwd:root});assert.equal(result.status,0,result.stderr.toString())}
+ try{
+  git('init','-q');await mkdir(path.join(root,'src'));await writeFile(path.join(root,'src','Example.jsx'),'export default function Example(){return null}\n');git('add','src')
+  assert.equal(spawnSync(process.execPath,[checker],{cwd:root}).status,0)
+  await mkdir(path.join(root,'netlify/functions'),{recursive:true});await writeFile(path.join(root,'netlify/functions/package.json'),'{}');git('add','netlify')
+  assert.notEqual(spawnSync(process.execPath,[checker],{cwd:root}).status,0)
+  git('rm','--cached','netlify/functions/package.json');await mkdir(path.join(root,'.github/workflows'),{recursive:true});await writeFile(path.join(root,'.github/workflows/unsafe.yml'),'name: forbidden');git('add','.github')
+  assert.notEqual(spawnSync(process.execPath,[checker],{cwd:root}).status,0)
+ }finally{await rm(root,{recursive:true,force:true})}
+})
