@@ -5,7 +5,7 @@ const names={'assignment.create':'Create a task','household.schedule.block.creat
 const fieldNames={title:'Title',owner:'Owner',participants:'Participants',date:'Date',startTime:'Start time',endTime:'End time',pillar:'Pillar',notes:'Notes',status:'Status',priority:'Priority',source:'Source'}
 export const VOICE_REVIEW_MAX_AGE_MS=120000
 export function voiceApprovalCommand(text){
- const normalized=String(text||'').trim().toLowerCase().replace(/[.!?,]+$/g,'').trim().replace(/\s+/g,' ')
+ const normalized=String(text||'').trim().toLowerCase().replace(/[.!]+$/g,'').trim().replace(/\s+/g,' ')
  return normalized==='apply this change'?'approve':normalized==='cancel this change'?'cancel':null
 }
 export function voiceReviewText(proposal,member,now=Date.now()){

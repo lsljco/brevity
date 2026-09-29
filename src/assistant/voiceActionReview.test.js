@@ -12,7 +12,7 @@ test('spoken review uses actual normalized fields, not a model-authored summary'
 })
 test('only explicit whole approval or cancellation phrases are recognized',()=>{
  assert.equal(voiceApprovalCommand('Apply this change.'),'approve');assert.equal(voiceApprovalCommand('Cancel this change!'),'cancel')
- for(const phrase of ['yes','okay','do not apply this change','apply this change tomorrow','say apply this change','"apply this change"'])assert.equal(voiceApprovalCommand(phrase),null)
+ for(const phrase of ['yes','okay','apply this change?','do not apply this change','apply this change tomorrow','say apply this change','"apply this change"'])assert.equal(voiceApprovalCommand(phrase),null)
 })
 test('voice approval rejects a different member, proposal, stale review, future timestamp and expanded scope',()=>{
  const base=input(),op=base.proposal.operations[0]

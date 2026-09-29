@@ -1207,9 +1207,10 @@ test('a reviewed household block persists, moves by exact ID, retries once and r
   const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),date='2026-09-29'
   const prepare=async operation=>captureExpectedVersions(normalizeActionProposal({summary:'Household work block review',operations:[operation]},{...session}),resources)
   const creation=await prepare({type:'household.schedule.block.create',targetDate:date,payload:{title:'Priorities',date,startTime:'18:00',endTime:'18:15',owner:'Larry'}})
+  creation.confirmationMode='voice-confirmation'
   const run=proposal=>executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
   const created=await run(creation),repeated=await run(creation)
-  assert.equal(created.audit.id,repeated.audit.id);assert.equal(writes,1)
+  assert.equal(created.audit.id,repeated.audit.id);assert.equal(writes,1);assert.equal(created.audit.confirmationMode,'voice-confirmation')
   const saved=(await resources.read()).value.blocks[0]
   assert.equal(saved.startTime,'18:00');assert.equal(saved.owner,'Larry')
   const move=await prepare({type:'household.schedule.block.update',targetId:saved.id,targetDate:date,payload:{startTime:'19:00',endTime:'19:15'}})
