@@ -751,14 +751,19 @@
       }
     ],
     "requiredTools": [
-      "get_pillar_records"
+      "prepare_action_review"
     ],
     "allowedProposalTypes": [
       "activity.record"
     ],
     "review": [
       "Record member-reported completed walk with 30 minutes and today, no calories inferred."
-    ]
+    ],
+    "expectedActivity": {
+      "kind": "workout",
+      "durationMinutes": 30,
+      "status": "complete"
+    }
   },
   {
     "id": "actual-hydration",

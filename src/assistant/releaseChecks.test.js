@@ -2,6 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {releaseCheckAccess} from '../../netlify/lib/release-check-access.mjs'
 import {evaluateHouseholdCase,evaluationCases} from '../../netlify/lib/household-agent-evaluation.mjs'
+test('completed workout evaluation checks the requested record, not a redundant lookup',async()=>{
+ const item=evaluationCases.find(item=>item.id==='actual-workout')
+ const base={type:'activity.record',targetId:'Larry',targetDate:'2026-09-28',payload:{kind:'workout',title:'30-minute walk',durationMinutes:30,status:'complete'}}
+ for(const [operation,expected] of [[base,true],[{...base,payload:{...base.payload,durationMinutes:20}},false],[{...base,payload:{...base.payload,calories:200}},false],[{...base,targetId:'Lorenzo'},false],[{...base,targetDate:'2026-09-29'},false]]){
+  const result=await evaluateHouseholdCase(item,{run:async args=>{args.onTool('prepare_action_review');return {output:{message:'Review the completed walk.',proposal:{summary:'Completed walk',operations:[operation]}},estimates:new Map()}}})
+  assert.equal(result.checks.requestedActivityMatches,expected)
+  assert.equal(result.structuralPass,expected)
+ }
+})
 test('release checks remain unavailable in production and require a preview administrator',()=>{
  assert.equal(releaseCheckAccess({role:'admin'},{preview:false}).status,404)
  assert.equal(releaseCheckAccess(null,{preview:true}).status,401)

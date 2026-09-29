@@ -43,8 +43,15 @@ export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=p
   }catch(error){contractValid=false;contractError=error.message}
   const requestedPayloadMatches=!item.expectedPayload||result.output?.proposal?.operations?.some(operation=>{try{const payload=operation.payload||JSON.parse(operation.payloadJson);return JSON.stringify(payload)===JSON.stringify(item.expectedPayload)}catch{return false}})
   const foods=calculationInputs.flat().join(' ').toLowerCase()
+  const requestedActivityMatches=!item.expectedActivity||result.output?.proposal?.operations?.length===1&&result.output.proposal.operations.every(operation=>{
+   try{
+    const payload=operation.payload||JSON.parse(operation.payloadJson)
+    return operation.type==='activity.record'&&operation.targetId===member&&operation.targetDate===date&&Object.entries(item.expectedActivity).every(([key,value])=>payload[key]===value)&&/walk/i.test(payload.title||'')&&!Object.keys(payload).some(key=>/calori|energy/i.test(key))
+   }catch{return false}
+  })
   const mealBoundaryPreserved=!item.expectedFoods||(item.expectedFoods.every(food=>foods.includes(food))&&!(item.forbiddenFoods||[]).some(food=>foods.includes(food)))
   const checks={mealBoundaryPreserved,requestedPayloadMatches,nonemptyReply:Boolean(result.output?.message?.trim()),requiredTools:item.requiredTools.every(name=>observed.includes(name)||(name==='get_pillar_records'&&item.id==='preference-recall'&&observed.includes('get_member_preferences'))||(name==='get_pillar_records'&&item.id==='preference-remember'&&observed.includes('remember_member_preference'))||(name==='get_pillar_records'&&((item.id==='meal-outage'&&observed.includes('get_weekly_household_briefing'))||(item.id.startsWith('meal-')&&observed.includes('search_meal_records'))||((item.id.startsWith('improvement-')||item.id==='household-project')&&observed.includes('search_household_records'))))),allowedActions:types.every(type=>item.allowedProposalTypes.includes(type)),expectedProposalPresent:!item.allowedProposalTypes.length||types.length>0,contractValid}
+  checks.requestedActivityMatches=Boolean(requestedActivityMatches)
   return{id:item.id,durationMs:Date.now()-started,checks,structuralPass:Object.values(checks).every(Boolean),humanReviewRequired:true,reviewChecklist:item.review,observedFunctionTools:observed,calculationInputs,output:result.output,...(contractError?{contractError}:{})}
  }catch(error){return{id:item.id,durationMs:Date.now()-started,structuralPass:false,humanReviewRequired:true,errorCategory:error?.name||'Error',diagnostic:String(error?.message||'Unknown failure').replace(/(?:sk-|org-)[A-Za-z0-9_-]+/g,'[redacted]').slice(0,600),observedFunctionTools:observed}}
 }
