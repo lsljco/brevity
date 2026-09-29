@@ -336,3 +336,29 @@ test('an incomplete offer gets one completion check while questions remain read-
  }}})
  assert.equal(calls,2);assert.equal(result.output.proposal,null);assert.equal(result.diagnostics.toolCalls.request_completion_check,1)
 })
+
+for(const completionStatus of ['answered','needs_information','blocked'])test(`${completionStatus} returns without a redundant model pass`,async()=>{
+ let calls=0
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},prompt:'Read my schedule',logger:()=>{},runner:{run:async()=>{
+  calls++;return {finalOutput:{completionStatus,message:'The verified answer or specific missing information.',proposal:null},history:[]}
+ }}})
+ assert.equal(calls,1);assert.equal(result.output.proposal,null)
+ assert.equal(result.diagnostics.toolCalls.request_completion_check,undefined)
+})
+
+test('an unfulfilled requested change still gets a completion recovery pass',async()=>{
+ let calls=0
+ const proposal={summary:'Review task',operations:[]}
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},prompt:'Prepare my task',logger:()=>{},runner:{run:async()=>{
+  calls++;return {finalOutput:{completionStatus:'review_required',message:'Review requested',proposal:calls===1?null:proposal},history:[]}
+ }}})
+ assert.equal(calls,2);assert.equal(result.output.proposal,proposal)
+})
+
+test('household schedule and chore review types are expressible in the response schema',async()=>{
+ const {ACTION_TYPES,normalizeActionProposal}=await import('../../netlify/lib/assistant-action-contract.mjs')
+ const types=assistantResponseSchema.properties.proposal.anyOf[1].properties.operations.items.properties.type.enum
+ for(const type of Object.keys(ACTION_TYPES).filter(type=>/^household\.(schedule|maintenance)\./.test(type)))assert.ok(types.includes(type),type)
+ const review=normalizeActionProposal({summary:'Review priorities',operations:[{type:'household.schedule.block.create',targetDate:'2026-09-29',payload:{title:'Priorities review',date:'2026-09-29',startTime:'18:00',endTime:'18:15',owner:'Larry',participants:[],pillar:'household',notes:''}}]},{member:'Larry',role:'admin'})
+ assert.equal(review.operations[0].payload.startTime,'18:00')
+})
