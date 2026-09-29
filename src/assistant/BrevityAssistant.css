@@ -38,3 +38,9 @@
 .brevity-assistant-input-row .brevity-assistant-composer-actions{top:50%;right:12px}
 .brevity-assistant-composer>label.brevity-conversation-notice{display:block;margin:0 0 8px}
 .brevity-assistant-composer input[type=file]{display:block;box-sizing:border-box;max-width:100%;padding:3px 0;border:0;background:transparent;color:var(--soft-white);font:11px var(--font-sans)}
+
+/* Keep voice review guidance and controls readable inside the assistant drawer. */
+.brevity-action-review footer{flex-wrap:wrap;align-items:center}
+.brevity-action-review footer>p{flex:0 0 100%;margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.brevity-action-review footer>p+button{flex:0 0 100%}
+.brevity-action-review footer>button{min-height:44px;white-space:normal}
