@@ -2,7 +2,7 @@ import {allowedReleaseOrigin} from '../lib/build-isolation.mjs'
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 import {randomUUID} from 'node:crypto'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import {releaseCheckAccess,releaseBuild} from '../lib/release-check-access.mjs'
 import {evaluationCases} from '../lib/household-agent-evaluation.mjs'
 export const releaseJobs=()=>getStore({name:'brevity-release-checks',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})

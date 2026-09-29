@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import { mealImageContentType, mealImageKey, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'

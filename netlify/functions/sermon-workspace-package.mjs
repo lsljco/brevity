@@ -1,5 +1,5 @@
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { workspaceKey,packageKey,pointerKey,deckKey,safeId,sermonSourceHash,sermonJobId,applyPackage } from '../lib/sermon-workspace-package.mjs'
 const {readSession}=householdAuth
 const store=()=>getStore({name:'brevity-sermon-repository',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})

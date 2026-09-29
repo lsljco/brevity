@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import storage from './storage.js'
 import { getOneDriveRepositoryState, oneDriveConfigured } from '../lib/onedrive.mjs'
 const {getTokens}=storage,{readSession}=householdAuth

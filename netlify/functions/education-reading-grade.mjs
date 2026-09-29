@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { scoreReadingTranscript } from '../../src/education/readingFluency.js'
 
 const { readSession }=householdAuth

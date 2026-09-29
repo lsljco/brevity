@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'

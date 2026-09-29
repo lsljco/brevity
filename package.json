@@ -14,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@netlify/aws-lambda-compat": "^2.0.0",
     "@netlify/blobs": "^10.7.9",
     "@openai/agents": "^0.18.0",
     "chart.js": "^4.4.1",

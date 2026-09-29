@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js';
+import householdAuth from '../lib/household-auth.cjs';
 import { getStore } from '../lib/scoped-store.mjs';
 import { PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisContextSignature } from '../../src/household/pillarAnalysisCache.js';
 import { PILLAR_ANALYSIS_GUARDRAIL_VERSION, buildDeterministicPillarFallback, enforcePillarAnalysisGuardrails, operationalizePillarAnalysis, pillarAnalysisEvidence, pillarAnalysisFactPack } from '../../src/household/pillarAnalysisGuardrails.js';

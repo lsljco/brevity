@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import { productionSermonSourceRepository, sermonSourceHash } from '../lib/sermon-source-repository.mjs'
 

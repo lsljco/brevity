@@ -1,5 +1,5 @@
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { importSermonFields, importedWorkspaceSermon } from '../lib/sermon-workspace-import.mjs'
 
 const { readSession } = householdAuth

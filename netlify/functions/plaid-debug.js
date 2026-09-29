@@ -1,6 +1,6 @@
 // plaid-debug.js — surfaces Plaid/Blobs status to the browser for diagnosis
 const { getTokens, useBlobStore } = require('./storage')
-const { readSession } = require('./household-auth')
+const { readSession } = require('../lib/household-auth.cjs')
 
 let blobsGetStore = null
 try {

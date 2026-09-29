@@ -1,5 +1,5 @@
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { mealImageJobKey, MEAL_IMAGE_JOB_STORE } from '../lib/meal-image.mjs'
 
 const {readSession}=householdAuth

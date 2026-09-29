@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { fetchWeatherForecast } from '../lib/weather-forecast.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 

@@ -1,5 +1,5 @@
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'

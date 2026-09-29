@@ -1,6 +1,6 @@
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens } = require('./storage')
-const { readSession } = require('./household-auth')
+const { readSession } = require('../lib/household-auth.cjs')
 const {
   createAccountSourceReceipt,
   normalizePlaidAccountBalances,

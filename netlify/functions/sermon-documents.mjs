@@ -4,7 +4,7 @@ import {
   ShadingType, Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
 } from 'docx'
 import PDFDocument from 'pdfkit'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs } from '../lib/sermon-document-model.mjs'
 
 export { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs }

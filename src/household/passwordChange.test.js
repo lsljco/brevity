@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import test from 'node:test'
 
 const require = createRequire(import.meta.url)
-const authPath = require.resolve('../../netlify/functions/household-auth.js')
+const authPath = require.resolve('../../netlify/lib/household-auth.cjs')
 const blobsPath = require.resolve('@netlify/blobs')
 
 const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) => ({
@@ -75,4 +75,19 @@ test('changing your own password invalidates the old session and issues a replac
 
   const oldSession = await handler(event({ token:memberToken, action:'session', method:'GET' }))
   assert.equal(JSON.parse(oldSession.body).authenticated, false)
+})
+
+test('modern Netlify adapter preserves login cookies, session lookup and logout',async()=>{
+  const {withLambda}=await import('@netlify/aws-lambda-compat')
+  const {handler}=installAuth({'users/larry':{member:'Larry',role:'admin',authVersion:0,...hashPassword('fixture-only-password')}})
+  const modern=withLambda(handler),context={requestId:'native-auth-test'},origin='https://fixture.netlify.app/.netlify/functions/household-auth'
+  const login=await modern(new Request(`${origin}?action=login`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({member:'Larry',password:'fixture-only-password'})}),context)
+  assert.equal(login.status,200)
+  const cookie=login.headers.get('set-cookie');assert.match(cookie,/HttpOnly; Secure; SameSite=Strict/)
+  const session=await modern(new Request(`${origin}?action=session`,{headers:{cookie:cookie.split(';')[0]}}),context)
+  assert.deepEqual(await session.json(),{authenticated:true,member:'Larry',role:'admin',bootstrapRequired:false})
+  const logout=await modern(new Request(`${origin}?action=logout`,{method:'POST',headers:{'content-type':'application/json',cookie:cookie.split(';')[0]},body:'{}'}),context)
+  assert.equal(logout.status,200);assert.match(logout.headers.get('set-cookie'),/Max-Age=0/)
+  const rejected=await modern(new Request(`${origin}?action=login`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({member:'Larry',password:'wrong'})}),context)
+  assert.equal(rejected.status,401)
 })

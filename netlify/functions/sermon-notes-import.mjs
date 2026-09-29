@@ -1,6 +1,6 @@
 import mammoth from 'mammoth'
 import pdf from 'pdf-parse/lib/pdf-parse.js'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 
 const {readSession}=householdAuth
 const MAX_FILE_BYTES=4_500_000

@@ -1,5 +1,5 @@
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { FITNESS_IMAGE_JOB_STORE, fitnessImageJobKey } from '../lib/fitness-image.mjs'
 
 const {readSession}=householdAuth,householdId=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'

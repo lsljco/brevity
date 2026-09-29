@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { workspaceKey,safeId } from '../lib/sermon-workspace-package.mjs'
 import { COVER_STORE,COVER_JOB_STORE,SERMON_IDENTITY_STORE,SERMON_PHOTO_SUBJECTS,sermonIdentityMetaKey,coverKey,postImageJobKey,postImageSourceHash,defaultPostSubject } from '../lib/sermon-cover.mjs'
 

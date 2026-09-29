@@ -1,7 +1,7 @@
 const crypto = require('crypto')
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens, getTransactionSyncState, setTransactionSyncState } = require('./storage')
-const { readSession } = require('./household-auth')
+const { readSession } = require('../lib/household-auth.cjs')
 
 const SYNC_PAGE_SIZE = 500
 const MAX_SYNC_PAGES = 100

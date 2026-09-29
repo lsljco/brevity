@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionSermonSourceRepository, sermonJobStatus } from '../lib/sermon-source-repository.mjs'
 
 const { readSession } = householdAuth

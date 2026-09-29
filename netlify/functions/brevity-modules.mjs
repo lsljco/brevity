@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import {createProductionActionResources} from '../lib/assistant-action-executor.mjs'
 import {MODULE_RESOURCE,resolveModules} from '../../src/modules/configuration.js'
 export const handler=async event=>{

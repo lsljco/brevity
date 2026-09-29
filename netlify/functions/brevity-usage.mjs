@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import {productionUsageRepository} from '../lib/usage-metrics.mjs'
 import {HOUSEHOLD_MEMBERS} from '../lib/assistant-action-contract.mjs'
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})

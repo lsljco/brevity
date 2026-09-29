@@ -1,5 +1,5 @@
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { sermonFormationPermission } from './sermon-formation-start.mjs'
 import { buildSermonSlides, sermonSlidesFileName } from '../lib/sermon-slides.mjs'
 import { buildSevenDayDevotionsPdf } from '../lib/devotion-document.mjs'

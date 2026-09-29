@@ -1,6 +1,6 @@
 import { getStore } from '../lib/scoped-store.mjs'
 import { createHash } from 'node:crypto'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { SERMON_IDENTITY_STORE,SERMON_PHOTO_SUBJECTS,sermonIdentityKey,sermonIdentityMetaKey } from '../lib/sermon-cover.mjs'
 
 const {readSession}=householdAuth

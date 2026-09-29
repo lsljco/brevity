@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionEstateRepository } from '../lib/estate-store.mjs'
 import { productionEstateVaultRepository } from '../lib/estate-vault-store.mjs'
 import { MALBEC_PROPERTY_ID } from '../../src/estate/estateModel.js'

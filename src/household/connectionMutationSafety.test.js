@@ -47,7 +47,7 @@ test('Plaid UI keeps existing-source sync but exposes no connection mutation pat
 })
 
 test('member-password mutation requires authenticated current-password verification and rotates account sessions',()=>{
-  const source=read('../../netlify/functions/household-auth.js')
+  const source=read('../../netlify/lib/household-auth.cjs')
   const handlerSource=source.slice(source.indexOf('exports.handler ='))
   assert.equal((handlerSource.match(/action === 'set-member-password'/g)||[]).length,1)
   assert.match(handlerSource,/const session = await readSession\(event\)/)

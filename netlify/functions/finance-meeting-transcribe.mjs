@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe'

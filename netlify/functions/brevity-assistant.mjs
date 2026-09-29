@@ -12,7 +12,7 @@ import {loadAssistantSupplementalContext,assertActionSourcesAvailable} from '../
 import {productionMealPlanRepository} from '../lib/meal-plan-store.mjs'
 import {bindRecipeOperation} from '../lib/recipe-library-actions.mjs'
 import {bindNutritionOperation} from '../lib/nutrition-conversation.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import {
   loadProductionAuthoritativeAssistantContext,
   sanitizeAuthoritativeContext,

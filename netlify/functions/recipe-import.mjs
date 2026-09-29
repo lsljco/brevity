@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { importRecipe } from '../lib/recipe-import.mjs'
 
 const { readSession } = householdAuth

@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { householdDate } from '../lib/assistant-authoritative-context.mjs'
 import { createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { dailyNutrition, NUTRIENTS } from '../lib/nutrition-ledger.mjs'

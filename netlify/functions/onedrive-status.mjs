@@ -1,4 +1,4 @@
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { getOneDriveRepositoryState, oneDriveConfigured } from '../lib/onedrive.mjs'
 const {readSession}=householdAuth
 const json=(status,body)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','cache-control':'no-store'}})
