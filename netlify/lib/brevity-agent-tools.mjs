@@ -25,3 +25,10 @@ export function pillarRecords(pillar, canonical, browser) {
     default:throw Error('Unsupported pillar.')
   }
 }
+
+export function searchHouseholdRecords(query,canonical){
+ const tokens=String(query||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+ if(!tokens.length)return []
+ const groups={improvement:canonical.actionRecords?.improvementProposals,assignment:canonical.dailyPlan?.assignments,decision:canonical.dailyPlan?.decisions,project:canonical.actionRecords?.projects}
+ return Object.entries(groups).flatMap(([kind,records])=>(Array.isArray(records)?records:[]).map(record=>({kind,record,score:tokens.filter(token=>String(record.title||record.name||'').toLowerCase().includes(token)).length}))).filter(item=>item.score>0).sort((a,b)=>b.score-a.score).slice(0,20).map(({kind,record})=>({kind,record}))
+}

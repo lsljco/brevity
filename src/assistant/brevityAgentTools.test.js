@@ -9,7 +9,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -262,3 +262,12 @@ test('invalid proposal gets one production-contract repair before leaving the ag
  }}})
  assert.deepEqual(result.output.proposal,proposal);assert.equal(validations,2)
  })
+
+test('saved household search locates improvement records by title without invented targets',async()=>{
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical:{actionRecords:{improvementProposals:[{id:'voice-recovery',title:'Voice recovery',stage:'proposed'}],projects:[{id:'garage',title:'Garage door'}]},dailyPlan:{assignments:[]}},browser:{}})
+ const search=agent.tools.find(tool=>tool.name==='search_household_records')
+ const result=JSON.parse(await search.invoke({},JSON.stringify({query:'Voice recovery'})))
+ assert.deepEqual(result.matches,[{kind:'improvement',record:{id:'voice-recovery',title:'Voice recovery',stage:'proposed'}}])
+ const absent=JSON.parse(await search.invoke({},JSON.stringify({query:'unrecorded request'})))
+ assert.deepEqual(absent.matches,[])
+})
