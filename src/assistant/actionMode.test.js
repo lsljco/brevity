@@ -1196,3 +1196,27 @@ test('built-in recipe updates retain batch calculations and survive creating a c
   assert.equal(saved.name,'Updated breakfast');assert.equal(saved.yieldQuantity,6);assert.deepEqual(saved.macros,estimate.perServingMacros)
   assert.throws(()=>bindRecipeOperation({...op,targetId:'missing'},{library:resolvedRecipes({}),estimates:new Map()}),/Find the saved recipe/)
 })
+
+test('a reviewed household block persists, moves by exact ID, retries once and retains Undo',async()=>{
+  const repository=createAssistantActionRepository({store:versionedBlobStore(),householdId:'spoken-household'})
+  let serialized='[]',version=0,writes=0,record={}
+  const resources={read:async()=>({value:JSON.parse(serialized),version,record}),write:async(_key,value,expected,actor,mutationId)=>{
+    if(expected!==version)throw Object.assign(new Error('Newer household data'),{code:'VERSION_CONFLICT'})
+    version++;writes++;record={lastActionId:mutationId,updatedBy:actor};serialized=JSON.stringify(value);return{value:JSON.parse(serialized),version,record}
+  }}
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),date='2026-09-29'
+  const prepare=async operation=>captureExpectedVersions(normalizeActionProposal({summary:'Household work block review',operations:[operation]},{...session}),resources)
+  const creation=await prepare({type:'household.schedule.block.create',targetDate:date,payload:{title:'Priorities',date,startTime:'18:00',endTime:'18:15',owner:'Larry'}})
+  creation.confirmationMode='voice-confirmation'
+  const run=proposal=>executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+  const created=await run(creation),repeated=await run(creation)
+  assert.equal(created.audit.id,repeated.audit.id);assert.equal(writes,1);assert.equal(created.audit.confirmationMode,'voice-confirmation')
+  const saved=(await resources.read()).value.blocks[0]
+  assert.equal(saved.startTime,'18:00');assert.equal(saved.owner,'Larry')
+  const move=await prepare({type:'household.schedule.block.update',targetId:saved.id,targetDate:date,payload:{startTime:'19:00',endTime:'19:15'}})
+  const moved=await run(move)
+  assert.equal((await resources.read()).value.blocks[0].startTime,'19:00')
+  assert.equal((await repository.getAudit(moved.audit.id)).actor,'Larry')
+  await undoActionWithJournal({repository,auditId:moved.audit.id,session,resources,event:{},leaseMs:0})
+  assert.equal((await resources.read()).value.blocks[0].startTime,'18:00')
+})

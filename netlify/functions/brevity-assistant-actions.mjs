@@ -1,3 +1,4 @@
+import {assertVoiceApproval} from '../../src/assistant/voiceActionReview.js'
 import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
 import {recordUsage} from '../lib/usage-metrics.mjs'
 import { createHash, randomUUID } from 'node:crypto'
@@ -25,7 +26,7 @@ const executedNutrition=async(operations,session,resources)=>{
 }
 export const publicAssistantAudit=audit=>({
   id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,
-  action:audit.action,status:audit.status,occurredAt:audit.occurredAt,
+  action:audit.action,status:audit.status,occurredAt:audit.occurredAt,confirmationMode:audit.confirmationMode||'confirmation',
   undoAvailable:Boolean(audit.undoAvailable),undoneAt:audit.undoneAt||null,undoneBy:audit.undoneBy||null,
   affectedRecords:(audit.affectedRecords||audit.changes||[]).map(({resource,beforeVersion,afterVersion})=>({resource,beforeVersion,afterVersion})),
   operations:(audit.operations||[]).map(({id,type,domain,description,targetId,targetDate,selectedScope})=>({id,type,domain,description,...(targetId?{targetId}:{}),...(targetDate?{targetDate}:{}),selectedScope})),
@@ -370,7 +371,7 @@ export async function executeActionWithJournal({repository,proposal,operations,s
     const calendarPlan=await prepareCalendarOperations({event,operations,session,permissions,expectedCalendarVersion:proposal.expectedCalendarVersion,calendarRequestFn})
     journal=await repository.ensureJournal({
       id:journalId,kind:'execute',subjectId:proposal.id,proposalId:proposal.id,auditId,requestHash,
-      state:'prepared',actor:session.member,actorRole:session.role,summary:proposal.summary,operations,
+      state:'prepared',actor:session.member,actorRole:session.role,summary:proposal.summary,operations,confirmationMode:proposal.confirmationMode||'confirmation',
       recordPrepared:recordPlan.prepared,calendarPrepared:calendarPlan.prepared,
       preparedAt:dateFromNow(now).toISOString(),
     })
@@ -397,7 +398,7 @@ export async function executeActionWithJournal({repository,proposal,operations,s
     audit=await repository.addAudit({
       id:journal.auditId,journalId:journal.id,proposalId:journal.proposalId,summary:journal.summary,
       actor:journal.actor,action:'execute',status:'completed',occurredAt:journal.mutatedAt,
-      actorRole:journal.actorRole,
+      actorRole:journal.actorRole,confirmationMode:journal.confirmationMode||'confirmation',
       operations:journal.operations,changes:journal.changes,completionHash,undoAvailable:true,
     },{idempotent:true})
     journal=await repository.updateJournal(journalId,current=>['audited','completed'].includes(current.state)?current:{...current,state:'audited',auditedAt:audit.occurredAt})
@@ -667,13 +668,14 @@ export const handler=async event=>{
       let operations,executingMember
       if(proposal.state==='pending'){
         if(new Date(proposal.expiresAt)<=new Date())return json(410,{error:'This proposal expired. Ask Brevity to prepare a current version.'})
+        if(body.voiceApproval){try{assertVoiceApproval({proposal,member:session.member,voiceApproval:body.voiceApproval,selections:body.selections})}catch(error){return json(400,{error:error.message})}}
         operations=proposal.operations.map(operation=>selectedOperation(operation,body.selections?.[operation.id]))
         assertExecutableProposalVersions(proposal,operations)
         const strong=proposal.risk==='strong-confirmation'||operations.some(operation=>operation.risk==='strong-confirmation')
         if(strong&&body.confirmation!=='CONFIRM')return json(400,{error:'Type CONFIRM to authorize this higher-impact change.'})
         if(!strong&&!body.confirmed)return json(400,{error:'Review and confirm the proposed changes before applying them.'})
         executingMember=session.member
-        const started={...proposal,state:'executing',journalVersion:1,selectedOperations:operations,startedAt:new Date().toISOString(),startedBy:executingMember,startedRole:session.role,confirmationMode:strong?'strong-confirmation':'confirmation'}
+        const started={...proposal,state:'executing',journalVersion:1,selectedOperations:operations,startedAt:new Date().toISOString(),startedBy:executingMember,startedRole:session.role,confirmationMode:body.voiceApproval?'voice-confirmation':strong?'strong-confirmation':'confirmation'}
         const claim=await repository.saveProposalState(started,{onlyIfMatch:proposalEntry.etag})
         if(!claim.modified)return json(409,{error:'This proposal was already claimed or changed. Retry to recover its current state.'})
         proposal=started
