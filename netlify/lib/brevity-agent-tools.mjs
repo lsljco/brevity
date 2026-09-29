@@ -1,3 +1,4 @@
+import {householdSchedule} from './household-schedule.mjs'
 import {PILLAR_FIELDS} from './daily-plan-core-fields.mjs'
 import { nutritionProgress, suggestPlannedMeals } from './nutrition-progress.mjs'
 
@@ -21,7 +22,10 @@ export function pillarRecords(pillar, canonical, browser) {
       return {...base,dailyPlan:canonical.dailyPlan?.health,plannedMeals:canonical.rollingMealPlan,recipeLibrary:canonical.mealLibrary,consumedMeals:canonical.dailyNutrition,recentConsumedMeals:canonical.recentNutrition,unavailableNutritionDates:canonical.unavailableNutritionDates,nutritionTargets:canonical.nutritionTargets,nutritionProgress:progress,plannedMealOptions:progress?suggestPlannedMeals(progress,canonical.rollingMealPlan,canonical.householdDate):[],healthAlerts:browser.publicHealthAlerts,analysis:browser.todayPillarAnalyses?.health}
     }
     case 'fitness':return {...base,dailyPlan:canonical.dailyPlan?.fitness,analysis:browser.todayPillarAnalyses?.fitness}
-    case 'household':return {...base,dailyPlan:canonical.dailyPlan?.household,assignments:canonical.dailyPlan?.assignments,decisions:canonical.dailyPlan?.decisions,familyCalendar:canonical.appleFamilyCalendar,projects:records.projects,improvementProposals:records.improvementProposals,analysis:browser.todayPillarAnalyses?.household}
+    case 'household':{
+      const schedule=householdSchedule(canonical)
+      return {...base,schedule,dailyPlan:canonical.dailyPlan?.household,assignments:canonical.dailyPlan?.assignments,decisions:canonical.dailyPlan?.decisions,familyCalendar:{events:schedule.events.filter(event=>event.source==='Apple Calendar'),date:schedule.date,state:schedule.sources.appleCalendar},brevityCalendar:schedule.events.filter(event=>event.source==='Brevity Calendar'),calendarNotice:'These events cover today only. Use get_household_schedule for another date.',projects:records.projects,improvementProposals:records.improvementProposals,analysis:browser.todayPillarAnalyses?.household}
+    }
     case 'education':return {...base,learningRecord:canonical.learningRecord,dailyPlan:canonical.dailyPlan?.education,analysis:browser.todayPillarAnalyses?.education}
     case 'finance':return {...base,finance:records.finance,browserFinance:browser.finance,analysis:browser.todayPillarAnalyses?.finance}
     case 'ministry':return {...base,activeSermon:canonical.activeSermon,dailyPlan:canonical.dailyPlan?.ministry,analysis:browser.todayPillarAnalyses?.ministry}

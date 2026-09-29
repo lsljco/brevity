@@ -1,3 +1,4 @@
+import {compactAssistantCalendar} from '../lib/household-schedule.mjs'
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {requestArchitectPrototype} from '../lib/architect-prototype.mjs'
 import {readConsumptionImage} from '../lib/consumption-image.mjs'
@@ -90,7 +91,7 @@ export const processAssistantRequest = async event => {
   const {calendar:appleCalendar,...sourceContext}=supplemental
   Object.assign(canonicalServerContext,sourceContext)
   const mealFocus=mealProteinFocus(messages,canonicalServerContext)
-  if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300).map(item=>Object.fromEntries(['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'].filter(field=>item?.[field]!==undefined).map(field=>[field,item[field]]))),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
+  if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar=compactAssistantCalendar(appleCalendar)
   const browserSnapshot=cleanBrowserContext(body.context)
   if(!canonicalServerContext.access.finance){if(canonicalServerContext.actionRecords)delete canonicalServerContext.actionRecords.finance;if(canonicalServerContext.dailyPlan)delete canonicalServerContext.dailyPlan.finance;delete browserSnapshot.finance;if(browserSnapshot.todayPillarAnalyses)delete browserSnapshot.todayPillarAnalyses.finance}
   if(!canonicalServerContext.access.education){if(canonicalServerContext.dailyPlan)delete canonicalServerContext.dailyPlan.education;if(browserSnapshot.todayPillarAnalyses)delete browserSnapshot.todayPillarAnalyses.education}
