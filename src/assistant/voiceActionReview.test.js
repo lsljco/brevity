@@ -18,8 +18,16 @@ test('voice approval rejects a different member, proposal, stale review, future 
  const base=input(),op=base.proposal.operations[0]
  for(const changes of [{member:'Terica'},{voiceApproval:{...base.voiceApproval,proposalId:'other'}},{voiceApproval:{...base.voiceApproval,reviewedAt:now-VOICE_REVIEW_MAX_AGE_MS-1}},{voiceApproval:{...base.voiceApproval,reviewedAt:now+1}},{selections:{[op.id]:'this-and-future'}}])assert.throws(()=>assertVoiceApproval({...base,...changes}),/current routine-item review/)
 })
-test('higher-impact, multiple, expired, already applied, finance and update proposals remain on-screen',()=>{
+test('higher-impact, multiple, expired, already applied, finance and unbound update proposals remain on-screen',()=>{
  const base=proposal()
  for(const value of [{...base,risk:'strong-confirmation'},{...base,operations:[...base.operations,...base.operations]},{...base,expiresAt:new Date(now).toISOString()},{...base,state:'executed'},...['budget.update','household.schedule.block.update','household.schedule.block.delete','calendar.create'].map(type=>({...base,operations:[{...base.operations[0],type}]}))])assert.equal(voiceReviewText(value,'Larry',now),'')
  assert.equal(voiceReviewText({...base,operations:[{...base.operations[0],payload:{...base.operations[0].payload,unknown:'hidden change'}}]},'Larry',now),'')
+})
+
+test('updates read the saved identity, changed fields and explicit clearing',()=>{
+ const p=proposal(),op=p.operations[0];op.type='assignment.update';op.targetId='saved-task';op.payload={status:'complete',notes:''};op.voiceTarget={id:'saved-task',title:'School follow-up',owner:'Larry',status:'in-progress',resource:'plan:2026-09-29',version:7};p.expectedVersions={'plan:2026-09-29':7}
+ const text=voiceReviewText(p,'Larry',now)
+ assert.match(text,/Existing item: School follow-up/);assert.match(text,/Status: in-progress/);assert.match(text,/Status: complete/);assert.match(text,/Notes: clear this field/)
+ assert.doesNotThrow(()=>assertVoiceApproval({...input(),proposal:p}))
+ for(const change of [{id:'wrong'},{title:''},{version:8},{resource:'wrong'}]){const q=structuredClone(p);Object.assign(q.operations[0].voiceTarget,change);assert.equal(voiceReviewText(q,'Larry',now),'')}
 })

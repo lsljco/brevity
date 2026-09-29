@@ -664,15 +664,23 @@ export async function executeRecordOperations({ proposal, selections = {}, sessi
 }
 
 export async function captureExpectedVersions(proposal, resources) {
-  const expectedVersions={}
+  const expectedVersions={},snapshots=new Map(),operations=[]
   for(const operation of proposal.operations){
-    if(operation.type.startsWith('calendar.'))continue
+    if(operation.type.startsWith('calendar.')){operations.push(operation);continue}
     const resource=resourceForOperation(operation)
-    if(expectedVersions[resource]===undefined){
-      const version=(await resources.read(resource)).version
+    if(!snapshots.has(resource)){
+      const snapshot=await resources.read(resource),version=snapshot.version
       if(typeof version!=='number'||!Number.isInteger(version)||version<0)throw Object.assign(new Error('Household data did not provide an exact version for Action Mode review.'),{code:'VERSION_CONFLICT'})
-      expectedVersions[resource]=version
+      expectedVersions[resource]=version;snapshots.set(resource,snapshot)
     }
+    // This identity comes from the same stored version used at execution, never
+    // from the agent-authored summary or payload. Old proposals stay ineligible.
+    if(['assignment.update','household.schedule.block.update'].includes(operation.type)){
+      const saved=recordForOperation(snapshots.get(resource).value,operation)
+      const fields=['title','owner','date','startTime','endTime','status']
+      const voiceTarget=saved?.id===operation.targetId&&typeof saved.title==='string'&&saved.title.trim()?{id:saved.id,resource,version:expectedVersions[resource],...Object.fromEntries(fields.filter(key=>typeof saved[key]==='string').map(key=>[key,saved[key]]))}:null
+      operations.push({...operation,voiceTarget})
+    }else operations.push(operation)
   }
-  return {...proposal,expectedVersions}
+  return {...proposal,operations,expectedVersions}
 }
