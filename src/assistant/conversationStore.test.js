@@ -42,3 +42,10 @@ test('conversation HTTP controls bind to session identity, never a supplied memb
  assert.equal(result.statusCode,200);assert.equal((await f.repository.read('Larry')).messages.length,2)
  const denied=createConversationHandler({readSession:async()=>null});assert.equal((await denied({httpMethod:'GET'})).statusCode,401)
 })
+
+test('completed action receipts persist with chat and are retry-safe',async()=>{
+ const f=fixture();await f.repository.appendTurn('Larry',turn())
+ await f.repository.appendReceipt('Larry',{id:'action-one',content:'Completed: fixture walk.'})
+ const value=await f.repository.appendReceipt('Larry',{id:'action-one',content:'Completed: fixture walk.'})
+ assert.equal(value.messages.length,3);assert.equal(value.messages.at(-1).content,'Completed: fixture walk.');assert.equal(value.receiptIds,undefined)
+})

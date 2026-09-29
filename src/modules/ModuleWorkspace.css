@@ -1,0 +1,5 @@
+.brevity-module-workspace{padding:24px;color:var(--soft-white);background:var(--black);overflow-wrap:anywhere}
+.brevity-module-workspace article{border:1px solid var(--glass-border);border-radius:12px;padding:16px;margin-bottom:12px;background:var(--glass-bg)}
+.brevity-module-workspace button{background:var(--glass-bg);color:var(--gold-light);border:1px solid var(--glass-border);border-radius:12px;padding:12px 16px;font:inherit;cursor:pointer}
+.brevity-module-workspace button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.brevity-module-workspace p{line-height:1.6}

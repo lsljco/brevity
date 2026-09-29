@@ -1,1 +1,1 @@
-module.exports = {"preview":false,"commit":"local","reviewId":""}
+module.exports = {"preview":false,"commit":"local","reviewId":"","origin":""}

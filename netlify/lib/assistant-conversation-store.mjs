@@ -10,7 +10,7 @@ export function createConversationRepository({store,householdId='lslj-family',no
   const clean=messages=>(Array.isArray(messages)?messages:[]).filter(m=>['user','assistant'].includes(m?.role)&&typeof m.content==='string'&&m.content.trim()).slice(-60).map(m=>({role:m.role,content:m.content.slice(0,6000),createdAt:m.createdAt||now().toISOString(),...(m.role==='assistant'&&m.proposal?{proposal:m.proposal}:{})}))
   const visible=value=>({...value,messages:clean(value?.messages).filter(m=>Date.parse(m.createdAt)>now().getTime()-30*DAY),version:value?.version||0,canRestore:Boolean(value?.archive&&Date.parse(value.archive.expiresAt)>now().getTime()),retentionDays:30})
   const readEntry=async member=>{const entry=await store.getWithMetadata(key(member),{type:'json'});return {entry,current:visible(entry?.data||{messages:[],version:0})}}
-  const publicValue=value=>{const {archive,lastTurnId,...rest}=visible(value);return rest}
+  const publicValue=value=>{const {archive,lastTurnId,receiptIds,...rest}=visible(value);return rest}
   const mutate=async(member,version,update)=>{
     const {entry,current}=await readEntry(member)
     if(!Number.isInteger(version)||version!==current.version)throw conflict()
@@ -24,9 +24,16 @@ export function createConversationRepository({store,householdId='lslj-family',no
     read:async member=>publicValue((await readEntry(member)).current),
     async appendTurn(member,{version,turnId,user,assistant,seed=[]}){
       const {current}=await readEntry(member)
-      if(current.lastTurnId===turnId)return publicValue(current)
+      if(turnId&&current.lastTurnId===turnId)return publicValue(current)
       if(!turnId||user?.role!=='user'||assistant?.role!=='assistant')throw Error('A completed conversation turn is required.')
       return mutate(member,version,value=>({...value,lastTurnId:turnId,messages:clean([...(value.messages.length?value.messages:version===0?clean(seed).map(({role,content,createdAt})=>({role,content,createdAt})):[]),user,assistant])}))
+    },
+    async appendReceipt(member,{id,content}){
+      for(let attempt=0;attempt<4;attempt++){
+        const {current}=await readEntry(member)
+        if(current.receiptIds?.includes(id))return publicValue(current)
+        try{return await mutate(member,current.version,value=>({...value,receiptIds:[...(value.receiptIds||[]),id].slice(-60),messages:clean([...value.messages,{role:'assistant',content}])}))}catch(error){if(error.status!==409||attempt===3)throw error}
+      }
     },
     clear:(member,version)=>mutate(member,version,value=>({messages:[],archive:{messages:value.messages,expiresAt:new Date(now().getTime()+7*DAY).toISOString()}})),
     restore:(member,version)=>mutate(member,version,value=>{if(!value.canRestore)throw Error('No recently cleared conversation is available.');if(value.messages.length)throw Error('Restore before starting a new conversation.');return {messages:value.archive.messages}}),

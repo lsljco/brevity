@@ -21,3 +21,12 @@ test('an unavailable source never produces a complete backup',async()=>{
  assert.equal(manifest.state,'incomplete');assert.equal(manifest.errors.length,4)
  await assert.rejects(()=>readBackupRecord({manifest}),/Incomplete/)
 })
+
+test('maintenance signatures bind the job body and expire, with no shared token sent',async()=>{
+ const {dispatchMaintenance,verifyMaintenanceRequest}=await import('../../netlify/lib/maintenance-dispatch.mjs')
+ let request
+ await dispatchMaintenance('backup',{origin:'https://fixture.netlify.app',key:'test-key',fetcher:async(url,options)=>{request=options;return{status:202}}})
+ const args={body:request.body,time:request.headers['x-brevity-time'],proof:request.headers['x-brevity-proof'],key:'test-key'}
+ assert.equal(verifyMaintenanceRequest(args),true);assert.equal(verifyMaintenanceRequest({...args,body:'changed'}),false);assert.equal(verifyMaintenanceRequest({...args,now:Number(args.time)+180000}),false)
+ assert.doesNotMatch(JSON.stringify(request),/test-key/)
+})

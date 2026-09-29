@@ -28,7 +28,7 @@ export async function readBackupRecord({destination,manifest,recordId}){
  const expected=manifest.records.find(item=>item.recordId===recordId)
  if(!expected||!BACKUP_STORES.includes(expected.store))throw Error('Unknown backup record.')
  const record=await destination.get(`${manifest.root}/records/${recordId}`,{type:'json'})
- if(!record||record.key!==expected.key||record.store!==expected.store||digest(Buffer.from(record.data,'base64'))!==expected.hash)throw Error('Backup integrity check failed.')
+ if(!record||record.hash!==expected.hash||record.key!==expected.key||record.store!==expected.store||digest(Buffer.from(record.data,'base64'))!==expected.hash)throw Error('Backup integrity check failed.')
  return {...record,bytes:Buffer.from(record.data,'base64')}
 }
 export async function restoreReviewedBackupRecord({destination,manifest,recordId,target,expectedEtag,confirmHash}){
@@ -37,4 +37,9 @@ export async function restoreReviewedBackupRecord({destination,manifest,recordId
  const result=await target.set(record.key,record.bytes,{metadata:record.metadata,...(expectedEtag?{onlyIfMatch:expectedEtag}:{onlyIfNew:true})})
  if(result?.modified===false)throw Error('The destination changed after review. No restore was performed.')
  return {restored:true,store:record.store,key:record.key,hash:record.hash}
+}
+
+export async function pruneHouseholdBackups(store,now=new Date()){
+ const cutoff=new Date(now.getTime()-30*86400000).toISOString().slice(0,10)
+ for await(const page of store.list({prefix:'snapshots/',paginate:true}))for(const blob of page.blobs){const date=blob.key.split('/')[1];if(/^\d{4}-\d{2}-\d{2}$/.test(date)&&date<cutoff)await store.delete(blob.key)}
 }

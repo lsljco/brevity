@@ -1,8 +1,9 @@
+import {createHouseholdBackup,restoreReviewedBackupRecord} from './household-backup.mjs'
 import {createConversationRepository} from './assistant-conversation-store.mjs'
 import {createUsageRepository} from './usage-metrics.mjs'
 import assert from 'node:assert/strict'
 import {createAssistantActionRepository} from './assistant-action-repository.mjs'
-import {createProductionActionResources,captureExpectedVersions,executeRecordOperations} from './assistant-action-executor.mjs'
+import {createProductionActionResources,captureExpectedVersions,executeRecordOperations,sameResourceValue} from './assistant-action-executor.mjs'
 import {normalizeActionProposal,defaultActionPermissions} from './assistant-action-contract.mjs'
 import {executeActionWithJournal,undoActionWithJournal} from '../functions/brevity-assistant-actions.mjs'
 import {dailyNutrition} from './nutrition-ledger.mjs'
@@ -72,7 +73,7 @@ export async function verifyReleasePersistence({store,runId}){
   const before=(await resources.read(spec.resource)).value,applied=await execute(proposal)
   spec.verify((await makeResources().read(spec.resource)).value)
   await undoActionWithJournal({repository,auditId:applied.audit.id,session,resources,event:{}})
-  assert.deepEqual((await makeResources().read(spec.resource)).value,before);checks[spec.name]=true
+  assert.ok(sameResourceValue(spec.resource,(await makeResources().read(spec.resource)).value,before));checks[spec.name]=true
  }
  const conversations=()=>createConversationRepository({store:scoped('conversations')})
  await conversations().appendTurn('Larry',{version:0,turnId:'fixture-turn',user:{role:'user',content:'Fixture question'},assistant:{role:'assistant',content:'Fixture answer'}})
@@ -86,5 +87,15 @@ export async function verifyReleasePersistence({store,runId}){
  await usage().record('Larry',{id:'fixture-request',kind:'assistant',outcome:'answered'})
  assert.equal((await usage().summary(['Larry'])).members[0].requests,1)
  assert.equal((await usage().summary(['Lorenzo'])).members[0].requests,0);checks.usagePersistenceDeduplicationAndIsolation=true
+
+ const backupDestination=scoped('backups'),fixtureKey=`${runId}/backup-input/fixture`
+ await store.setJSON(fixtureKey,{synthetic:true,value:'recovery rehearsal'})
+ const snapshot=await createHouseholdBackup({id:runId,destination:backupDestination,sourceStore:()=>({async *list(){yield{blobs:[{key:'fixture'}]}},getWithMetadata:(_,options)=>store.getWithMetadata(fixtureKey,options)})})
+ assert.equal(snapshot.state,'complete')
+ const snapshotRecord=snapshot.records[0],restoredKey=`${runId}/backup-restored/fixture`
+ await restoreReviewedBackupRecord({destination:backupDestination,manifest:snapshot,recordId:snapshotRecord.recordId,confirmHash:snapshotRecord.hash,target:{set:(_,bytes,options)=>store.set(restoredKey,bytes,options)}})
+ assert.deepEqual(await store.get(restoredKey,{type:'json'}),{synthetic:true,value:'recovery rehearsal'})
+ await assert.rejects(()=>restoreReviewedBackupRecord({destination:backupDestination,manifest:snapshot,recordId:snapshotRecord.recordId,confirmHash:snapshotRecord.hash,target:{set:(_,bytes,options)=>store.set(restoredKey,bytes,options)}}),/changed after review/)
+ checks.backupIntegrityConditionalRestoreRehearsal=true
  return{passed:true,checks,syntheticData:true,productionWrites:false,scope:'Real action executor and persistence; no browser confirmation interaction.'}
 }

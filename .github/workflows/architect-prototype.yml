@@ -1,0 +1,96 @@
+name: Brevity isolated prototype
+run-name: Brevity prototype ${{ inputs.proposal_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      packet:
+        description: Approved implementation packet JSON; no household private records or credentials
+        required: true
+        type: string
+      proposal_id:
+        description: Approved improvement record ID
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: architect-${{ inputs.proposal_id }}
+  cancel-in-progress: false
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Generate source without executing generated code
+        run: node scripts/architect/prototype-agent.mjs
+        env:
+          OPENAI_API_KEY: ${{ secrets.BREVITY_ARCHITECT_OPENAI_KEY }}
+          BREVITY_PROTOTYPE_PACKET: ${{ inputs.packet }}
+      - name: Validate and capture patch
+        run: |
+          git add src netlify/lib netlify/functions
+          node scripts/architect/check-patch.mjs
+          git diff --cached --binary > prototype.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prototype-source
+          path: |
+            prototype.patch
+            prototype-summary.txt
+          retention-days: 7
+  verify:
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: prototype-source
+      - name: Prepare trusted dependencies before applying untrusted code
+        run: docker run --rm -v "$PWD:/work" -w /work node:24-bookworm-slim npm ci
+      - name: Validate patch using trusted checker
+        run: |
+          git apply --index prototype.patch
+          node scripts/architect/check-patch.mjs
+      - name: Test generated code without network or credentials
+        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 4g -v "$PWD:/work" -w /work node:24-bookworm-slim sh -c 'npm test && npm run build'
+  propose:
+    if: ${{ vars.BREVITY_ARCHITECT_STAGING_APPROVED == 'true' }}
+    environment: architect-prototype-review
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: prototype-source
+      - name: Create reviewed prototype branch and draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git apply --index prototype.patch
+          node scripts/architect/check-patch.mjs
+          branch="architect/prototype-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+          git config user.name 'Brevity prototype workflow'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Prepare isolated Brevity prototype for review'
+          git push origin "$branch"
+          printf '%s\n\n' 'Generated from an approved implementation packet. Isolated tests and build passed without network or application credentials. This is a draft: review permissions, behavior and live staging evidence before any release.' > prototype-pr.md
+          cat prototype-summary.txt >> prototype-pr.md
+          gh pr create --draft --base main --head "$branch" --title 'Brevity Architect prototype — review required' --body-file prototype-pr.md

@@ -28,3 +28,6 @@
 .brevity-action-review input,.brevity-action-review select{font-size:16px}
 
 .brevity-conversation-notice{font-size:12px;line-height:1.5;color:var(--muted);margin:0 0 12px}
+
+.brevity-conversation-notice button,.brevity-conversation-notice input::file-selector-button{background:var(--glass-bg);color:var(--soft-white);border:1px solid var(--glass-border);border-radius:8px;padding:8px;margin:4px;font:inherit}
+.brevity-conversation-notice input{display:block;max-width:100%;color:var(--soft-white);margin-top:6px}

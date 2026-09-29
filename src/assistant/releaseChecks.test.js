@@ -46,3 +46,12 @@ test('project lookup accepts the dedicated saved-record search as authoritative 
  const result=await evaluateHouseholdCase(evaluationCases.find(item=>item.id==='household-project'),{run:async args=>{args.onTool('search_household_records');return {output:{message:'Kitchen project status: In Progress.',proposal:null},estimates:new Map()}}})
  assert.equal(result.structuralPass,true)
 })
+
+test('complete isolated persistence harness remains executable with conditional storage',async()=>{
+ const {verifyReleasePersistence}=await import('../../netlify/lib/release-persistence-checks.mjs')
+ const values=new Map();let seq=0
+ const store={async get(key){return structuredClone(values.get(key)?.data||null)},async getWithMetadata(key,options){const entry=structuredClone(values.get(key)||null);if(entry&&options?.type==='arrayBuffer')entry.data=Uint8Array.from(Buffer.from(JSON.stringify(entry.data))).buffer;return entry},async setJSON(key,data,options={}){const old=values.get(key);if(options.onlyIfNew&&old||options.onlyIfMatch&&old?.etag!==options.onlyIfMatch)return {modified:false};values.set(key,{data:structuredClone(data),etag:String(++seq)});return{modified:true}}}
+ store.set=async(key,bytes,options)=>store.setJSON(key,JSON.parse(Buffer.from(bytes).toString()),options)
+ const report=await verifyReleasePersistence({store,runId:'11111111-1111-4111-8111-111111111111'})
+ assert.equal(report.passed,true);assert.equal(Object.keys(report.checks).length,20)
+})
