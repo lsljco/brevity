@@ -17,6 +17,12 @@ export function evaluationFixture(item){
  canonical.actionRecords.improvementProposals=[{id:'voice-recovery-idea',title:'Voice recovery',stage:'proposed',problem:'Reported stalled voice after an error',evidence:'User report',solution:'Restart microphone after clearing busy state',benefit:'Hands-free continuation',risks:'Duplicate submissions',successMetric:'Recovery tests pass without duplicate sends'}]
  canonical.memberPreferences=item.id==='preference-remember'?{}:{communication:'Prefer short spoken answers'}
  canonical.recentNutrition=[canonical.dailyNutrition]
+ if(item.id==='meal-remove'){
+  // The request says breakfast was logged twice: provide the duplicate rather
+  // than rewarding an agent for deleting the only real meal in the fixture.
+  canonical.dailyNutrition.entries.push({...structuredClone(canonical.dailyNutrition.entries[0]),id:'breakfast-duplicate'})
+  canonical.dailyNutrition.totals={calories:280,proteinGrams:8,carbohydrateGrams:52,fatGrams:4}
+ }
  if(item.outage){canonical.dailyNutrition=null;canonical.recentNutrition=[];canonical.nutritionUnavailable=true;canonical.supplementalSources[`nutrition:${date}`]='unavailable'}
  return{member,date,canonical}
 }

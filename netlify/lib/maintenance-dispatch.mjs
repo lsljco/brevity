@@ -12,4 +12,5 @@ export async function dispatchMaintenance(job,{origin=build.origin,key=process.e
  const body=JSON.stringify({id:randomUUID(),job}),time=String(Date.now())
  const result=await fetcher(url,{method:'POST',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json','x-brevity-time':time,'x-brevity-proof':signature(body,time,key)},body})
  if(result.status!==202)throw Error(`Maintenance dispatch rejected (${result.status}).`)
+ console.info('[brevity-maintenance-dispatch]',JSON.stringify({id:JSON.parse(body).id,job,state:'dispatched',origin:url.origin,commit:build.commit}))
 }
