@@ -60,7 +60,7 @@ test('an open Finance screen revalidates aged claims and remote balance snapshot
 
 test('explicit transaction refresh requests a Plaid institution update without blocking cached reads',()=>{
   assert.match(transactionsFunction,/params\.get\('refresh'\) === '1'/)
-  assert.match(transactionsFunction,/plaidClient\.transactionsRefresh/)
+  assert.match(transactionsFunction,/getPlaidClient\(\)\.transactionsRefresh/)
   assert.match(transactionsFunction,/transactionsSync/)
   assert.doesNotMatch(transactionsFunction,/transactionsGet/)
   assert.doesNotMatch(financeRefresh,/start_date=2000-01-01/)

@@ -1,4 +1,3 @@
-const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid')
 const { getTokens } = require('./storage')
 const { readSession } = require('../lib/household-auth.cjs')
 const {
@@ -8,13 +7,21 @@ const {
   LIVE_BALANCE_PROVENANCE,
 } = require('../lib/plaid-account-source.cjs')
 
-const plaidClient = new PlaidApi(new Configuration({
+let nativePlaid = null, plaidClient = null
+exports.setNativePlaid = value => { nativePlaid = value; plaidClient = null }
+function getPlaidClient() {
+ if (plaidClient) return plaidClient
+ const {Configuration,PlaidApi,PlaidEnvironments} = nativePlaid || require('plaid')
+ plaidClient = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
   baseOptions: { headers: {
     'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
     'PLAID-SECRET': process.env.PLAID_SECRET,
   }},
 }))
+ return plaidClient
+}
+
 // Some production institutions (including Pinnacle) legitimately take longer
 // than 20 seconds to complete the institution-facing balance request. Keep the
 // call bounded, but allow a full 30 seconds before falling back to cached
@@ -55,14 +62,14 @@ exports.handler = async (event) => {
         let returnedLiveBalance = liveBalance
         try {
           res = liveBalance
-            ? await plaidClient.accountsBalanceGet({ access_token }, { timeout:LIVE_BALANCE_TIMEOUT_MS })
-            : await plaidClient.accountsGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
+            ? await getPlaidClient().accountsBalanceGet({ access_token }, { timeout:LIVE_BALANCE_TIMEOUT_MS })
+            : await getPlaidClient().accountsGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
         } catch (err) {
           if (!liveBalance || !timedOut(err)) throw err
           // A slow institution must not hold the entire Finance screen open
           // until the browser gives up. Preserve account identity from Plaid's
           // cached roster, but never sign or import those balances as current.
-          res = await plaidClient.accountsGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
+          res = await getPlaidClient().accountsGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
           returnedLiveBalance = false
           liveBalanceTimedOut = true
           syncErrors.push({

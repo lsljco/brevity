@@ -52,7 +52,9 @@ function installHandler({ client, tokens, session = { householdId:'household-tes
       require.cache[path] = { id:path, filename:path, loaded:true, exports }
     }
     delete require.cache[handlerPath]
-    return require(handlerPath).handler
+    const endpoint=require(handlerPath)
+    endpoint.setNativePlaid(mockedModules.get(plaidPath))
+    return endpoint.handler
   } finally {
     delete require.cache[handlerPath]
     for (const [path, prior] of priorEntries) {
