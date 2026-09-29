@@ -23,3 +23,10 @@ test('a missing daily plan still uses Today’s weekly workout program, but an o
  c.sources=[{id:'daily-plan',state:'unavailable'}]
  assert.equal(dailyHouseholdBriefing(c).pillars.fitness.plannedWorkout,null)
 })
+
+test('briefing includes authorized upcoming obligations independently of a missing daily plan',()=>{
+ const c=context();c.dailyPlan=null;c.actionRecords={finance:{upcomingSchedule:{state:'available',items:[{title:'Electricity',date:'2026-09-30',amount:80,status:'scheduled-unconfirmed'}]}}}
+ assert.equal(dailyHouseholdBriefing(c).pillars.finance.upcomingSchedule.items[0].title,'Electricity')
+ c.access.finance=false
+ assert.ok(!JSON.stringify(dailyHouseholdBriefing(c)).includes('Electricity'))
+})
