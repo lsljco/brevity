@@ -32,3 +32,10 @@ test('agent cannot replace an unreadable calendar event with a made-up plan appo
  const operation={type:'plan.pillar.update',targetId:'household',targetDate:'2026-09-29',payloadJson:JSON.stringify({pillar:'household',patch:{appointments:[{title:'appointment',startTime:'10:00',endTime:'10:30'}]}})}
  assert.throws(()=>validateAgentProposal({proposal:{operations:[operation]}},{canonical:{householdDate:'2026-09-28',supplementalSources:{'apple-calendar':'unavailable'}},member:'Larry',estimates:new Map()}),/not a substitute/)
 })
+
+test('administrator Undo cannot bypass preference ownership or improvement approver limits',async()=>{
+ const {authorizeUndoOperations}=await import('../../netlify/functions/brevity-assistant-actions.mjs')
+ await assert.rejects(()=>authorizeUndoOperations({audit:{changes:[{resource:'member-context:Larry'}]},session:{member:'Lorenzo',role:'admin'}}),/own preference/)
+ await assert.rejects(()=>authorizeUndoOperations({audit:{operations:[{type:'improvement.transition'}]},session:{member:'Terica',role:'admin'}}),/Larry or Lorenzo/)
+ await assert.doesNotReject(()=>authorizeUndoOperations({audit:{changes:[{resource:'member-context:Larry'}]},session:{member:'Larry',role:'admin'}}))
+})

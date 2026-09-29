@@ -41,3 +41,8 @@ test('meal boundary evaluation rejects carrying breakfast foods into a separate 
   assert.equal(result.checks.mealBoundaryPreserved,expected)
  }
 })
+
+test('project lookup accepts the dedicated saved-record search as authoritative evidence',async()=>{
+ const result=await evaluateHouseholdCase(evaluationCases.find(item=>item.id==='household-project'),{run:async args=>{args.onTool('search_household_records');return {output:{message:'Kitchen project status: In Progress.',proposal:null},estimates:new Map()}}})
+ assert.equal(result.structuralPass,true)
+})

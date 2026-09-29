@@ -47,12 +47,14 @@ export async function verifyReleasePersistence({store,runId}){
  const improvementResource='shared:brevity_improvement_proposals_v1',idea=(await makeResources().read(improvementResource)).value[0]
  const approval=await captureExpectedVersions(normalizeActionProposal({summary:'Isolated concept approval',operations:[{type:'improvement.transition',targetId:idea.id,payload:{stage:'concept-approved',notes:'Synthetic approval only'}}]},session),resources)
  const approved=await execute(approval);assert.equal((await makeResources().read(improvementResource)).value[0].stage,'concept-approved')
+ await assert.rejects(()=>undoActionWithJournal({repository,auditId:approved.audit.id,session:{member:'Terica',role:'admin'},resources,event:{}}),/Larry or Lorenzo/)
  await undoActionWithJournal({repository,auditId:approved.audit.id,session,resources,event:{}})
  assert.equal((await makeResources().read(improvementResource)).value[0].stage,'proposed');checks.improvementApprovalSaveAndUndo=true
  const preference=await prepare('member.preference.set',{category:'communication',value:'Prefer short answers'})
  const preferenceSaved=await execute(preference)
  assert.equal((await makeResources().read('member-context:Larry')).value.preferences.communication,'Prefer short answers')
  assert.deepEqual((await makeResources().read('member-context:Lorenzo')).value.preferences,{})
+ await assert.rejects(()=>undoActionWithJournal({repository,auditId:preferenceSaved.audit.id,session:{member:'Lorenzo',role:'admin'},resources,event:{}}),/own preference/)
  const forgedPreference={...preference,operations:preference.operations.map(operation=>({...operation,targetId:'Lorenzo'})),expectedVersions:{'member-context:Lorenzo':0}}
  await assert.rejects(()=>executeRecordOperations({proposal:forgedPreference,session,permissions,resources}),/own preferences/)
  await undoActionWithJournal({repository,auditId:preferenceSaved.audit.id,session,resources,event:{}})

@@ -18,8 +18,8 @@ export const handler=async event=>{
  }
  if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
  let body;try{body=JSON.parse(event.body||'{}')}catch{return json(400,{error:'Invalid request.'})}
- const ids=body.caseIds||evaluationCases.map(item=>item.id)
- if(!Array.isArray(ids)||!ids.length||ids.length>50||ids.some(id=>!evaluationCases.some(item=>item.id===id)))return json(400,{error:'Choose known evaluation cases.'})
+ const ids=body.persistenceOnly===true?[]:body.caseIds||evaluationCases.map(item=>item.id)
+ if(!Array.isArray(ids)||(!ids.length&&body.persistenceOnly!==true)||ids.length>50||ids.some(id=>!evaluationCases.some(item=>item.id===id)))return json(400,{error:'Choose known evaluation cases.'})
  const host=event.headers?.host||'',origin=event.headers?.origin
  if(!/^deploy-preview-\d+--brevityoflife\.netlify\.app$/.test(host)||origin&&origin!==`https://${host}`)return json(403,{error:'Use this deploy preview directly.'})
  const id=randomUUID(),job={id,owner:session.member,state:'queued',createdAt:new Date().toISOString(),build:releaseBuild,caseIds:[...new Set(ids)],syntheticData:true,productionWrites:false,results:[]}

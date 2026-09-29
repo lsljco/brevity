@@ -422,6 +422,8 @@ const undoForbidden=message=>Object.assign(new Error(message),{code:'FORBIDDEN'}
 // or running version preflight. Administrators retain the same explicit
 // override used by normal Action Mode execution.
 export async function authorizeUndoOperations({event,audit,session,permissions,resources,calendarRequestFn=calendarRequest}) {
+  if((audit.changes||[]).some(change=>change.resource?.startsWith('member-context:')&&change.resource!==`member-context:${session.member}`))throw undoForbidden('Members can undo only their own preference changes.')
+  if((audit.operations||[]).some(operation=>operation.type==='improvement.transition')&&!['Larry','Lorenzo'].includes(session.member))throw undoForbidden('Only Larry or Lorenzo can undo improvement approval stages.')
   if(session.role==='admin')return
   if(audit.actor!==session.member)throw undoForbidden('Only the member who completed this action or an administrator can undo it.')
   const operations=Array.isArray(audit.operations)?audit.operations:[]
