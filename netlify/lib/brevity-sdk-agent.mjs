@@ -108,7 +108,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
   const actionTypes=schema?.properties?.proposal?.anyOf?.find(item=>item.type==='object')?.properties?.operations?.items?.properties?.type?.enum||[]
   const prepareReview=actionTypes.length?tool({
     name:'prepare_action_review',
-    description:'Prepare and validate a supported Brevity change for the human confirmation screen. This is the write-capability entry point for assignments, plans, meals, recipes, projects and other allowed actions. It NEVER applies, saves, publishes or sends the change. Use exact saved records and calculated estimate IDs. Return the validated proposal in the final response.',
+    description:'Prepare and validate a supported Brevity change for the human confirmation screen. This is the write-capability entry point for completed activity records, learning observations, module configuration, assignments, plans, meals, recipes, projects and other allowed actions. activity.record saves reported completed activity after review; it does not change a plan. It NEVER applies, saves, publishes or sends the change. Use exact saved records and calculated estimate IDs. Return the validated proposal in the final response.',
     parameters:z.object({summary:z.string().min(1).max(800),operations:z.array(z.object({type:z.enum(actionTypes),description:z.string(),targetId:z.string(),targetDate:z.string(),payloadJson:z.string(),allowedScopes:z.array(z.enum(['this-item','this-and-future'])),defaultScope:z.enum(['this-item','this-and-future'])})).min(1).max(8)}),
     async execute(proposal){
       onTool('prepare_action_review')
