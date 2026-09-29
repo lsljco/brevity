@@ -20,21 +20,24 @@
 
 [functions]
   node_bundler = "esbuild"
+# The shared CJS storage wrapper is also imported by native ESM background functions.
+# Ship the package explicitly so runtime require() resolves in those artifacts.
+external_node_modules = ["@netlify/blobs"]
 
 [functions."sermon-documents"]
-  external_node_modules = ["pdfkit"]
+  external_node_modules = ["@netlify/blobs", "pdfkit"]
   included_files = ["node_modules/pdfkit/js/data/**"]
 
 [functions."sermon-workflow"]
-  external_node_modules = ["pdfkit"]
+  external_node_modules = ["@netlify/blobs", "pdfkit"]
   included_files = ["node_modules/pdfkit/js/data/**"]
 
 [functions."daily-household-plan-background"]
-  external_node_modules = ["pdfkit"]
+  external_node_modules = ["@netlify/blobs", "pdfkit"]
   included_files = ["node_modules/pdfkit/js/data/**"]
 
 [functions."sermon-slides-background"]
-  external_node_modules = ["pptxgenjs"]
+  external_node_modules = ["@netlify/blobs", "pptxgenjs"]
   included_files = ["netlify/assets/sermon-characters/**"]
 
 [functions."fitness-image-generate"]
