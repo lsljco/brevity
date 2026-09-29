@@ -6,7 +6,7 @@ import { budgetLineId } from '../../src/finance/budgetBreakdown.js'
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const HOUSEHOLD_STORE = 'brevity-household'
 const SHARED_STORE = 'brevity-household-state'
-const ACTION_SHARED_KEYS = ['lslj_finance_v9','lslj_budget_v1','brevity_finance_scenarios_v1','brevity_finance_debts_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','homehq_items_v1','family_calendar_events_v1','brevity_household_intelligence_v1']
+const ACTION_SHARED_KEYS = ['brevity_improvement_proposals_v1','lslj_finance_v9','lslj_budget_v1','brevity_finance_scenarios_v1','brevity_finance_debts_v1','lslj_tx_overrides_v1','lslj_tx_rules_v1','homehq_items_v1','family_calendar_events_v1','brevity_household_intelligence_v1']
 const ACTIVE_SERMON_KEY = `${HOUSEHOLD_ID}/spiritual/active-sermon`
 const SENSITIVE_KEY = /token|secret|password|credential|api.?key|access.?key|client.?id|private.?key/i
 const LARGE_VALUE = /^(?:data:|[A-Za-z0-9+/]{300,}={0,2}$)/
@@ -109,6 +109,7 @@ const compactSharedRecords=records=>{
       transactionOverrides:parseSharedValue(records?.lslj_tx_overrides_v1)||{},
       transactionRules:parseSharedValue(records?.lslj_tx_rules_v1)||[],
     },
+    improvementProposals:parseSharedValue(records?.brevity_improvement_proposals_v1)||[],
     householdIntelligence:parseSharedValue(records?.brevity_household_intelligence_v1)||null,
     versions:Object.fromEntries(ACTION_SHARED_KEYS.map(key=>[key,Number(records?.[key]?.version||0)])),
   }
@@ -184,9 +185,9 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
     member,
     date,
     now,
-    loadDailyPlan: targetDate => dataStore.get(`${HOUSEHOLD_ID}/daily-plans/${targetDate}`, { type: 'json' }).catch(() => null),
+    loadDailyPlan: targetDate => readOptionalAuthoritativeRecord(dataStore,`${HOUSEHOLD_ID}/daily-plans/${targetDate}`),
     loadMealWindow: startDate => meals.getWindowReadOnly({ startDate, count: 7 }),
     loadActiveSermon: () => readOptionalAuthoritativeRecord(dataStore, ACTIVE_SERMON_KEY),
-    loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await sharedStore.get(`${HOUSEHOLD_ID}/records/${key}`,{type:'json'}).catch(()=>null)]))),
+    loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await readOptionalAuthoritativeRecord(sharedStore,`${HOUSEHOLD_ID}/records/${key}`)]))),
   })
 }

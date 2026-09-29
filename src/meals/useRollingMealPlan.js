@@ -27,7 +27,7 @@ export function rollingMealPlanView({ enabled = true, startDate, count = 7, requ
 export function shouldReloadRollingMealPlan(event) {
   if(event?.type===ROLLING_MEAL_APP_REFRESH_EVENT)return true
   if(event?.type!==ACTION_COMPLETED_EVENT)return false
-  return (event?.detail?.audit?.operations || []).some(operation=>operation?.type==='meal.substitute')
+  return (event?.detail?.audit?.operations || []).some(operation=>['meal.substitute','meal.recipe.update'].includes(operation?.type))
 }
 
 export function validateRollingMealPlan(result,startDate) {

@@ -1,3 +1,6 @@
+import {applyMemberPreference} from './member-preferences.mjs'
+import {IMPROVEMENT_RESOURCE,applyImprovement} from './improvement-workflow.mjs'
+import {RECIPE_RESOURCE,resolvedRecipes,applyRecipeUpdate} from './recipe-library-actions.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from '@netlify/blobs'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from '../../src/finance/recurrenceEditing.js'
@@ -30,6 +33,9 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type==='member.preference.set')return `member-context:${operation.targetId}`
+  if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
+  if(operation.type==='meal.recipe.update')return RECIPE_RESOURCE
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
@@ -52,6 +58,8 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type==='improvement.transition')return (Array.isArray(value)?value:[]).find(item=>item.id===operation.targetId)
+  if(operation.type==='meal.recipe.update')return resolvedRecipes(value).find(meal=>meal.id===operation.targetId)||null
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return (value?.entries||[]).find(entry=>entry.id===operation.payload?.entryId)||null
   if (operation.type.startsWith('household.')) return householdRecordForOperation(value,operation)
   if (operation.type === 'sermon.activate') return value || null
@@ -77,6 +85,8 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type==='member.preference.set')return {before,after:applyMemberPreference(value,operation)}
+  if(operation.type.startsWith('improvement.'))return {before,after:applyImprovement(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   const payload = operation.payload || {}
   if(operation.type==='nutrition.meal.update' || operation.type==='nutrition.meal.remove'){
     const entries=value?.entries||[],index=entries.findIndex(entry=>entry.id===payload.entryId&&entry.member===operation.targetId&&entry.date===operation.targetDate)
@@ -85,14 +95,14 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     if(operation.type==='nutrition.meal.remove')afterEntries.splice(index,1)
     else {
       const estimate=payload.estimateJson?JSON.parse(payload.estimateJson):null
-      afterEntries[index]={...afterEntries[index],name:payload.name,macros:Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].map(key=>[key,payload[key]])),...(estimate?{ingredients:clone(estimate.ingredients),warnings:clone(estimate.warnings||[])}:{}),nutritionBasis:estimate?.nutritionBasis||`Member corrected: ${payload.reason}`,correctedAt:nowIso(context.now||(()=>new Date())),correctedBy:context.actor||operation.targetId,correctionReason:payload.reason}
+      afterEntries[index]={...afterEntries[index],name:payload.name,macros:Object.fromEntries(['calories','proteinGrams','carbohydrateGrams','fatGrams'].map(key=>[key,payload[key]])),...(estimate?{ingredients:clone(estimate.ingredients),nutrients:clone(estimate.perServingNutrients||null),warnings:clone(estimate.warnings||[])}:{}),nutritionBasis:estimate?.nutritionBasis||`Member corrected: ${payload.reason}`,correctedAt:nowIso(context.now||(()=>new Date())),correctedBy:context.actor||operation.targetId,correctionReason:payload.reason}
     }
     return{before,after:{...value,entries:afterEntries}}
   }
   if(operation.type==='nutrition.targets.update')return{before,after:{...(value||{}),member:operation.targetId,...clone(payload)}}
   if(operation.type==='nutrition.meal.log'){
     const estimate=JSON.parse(payload.estimateJson)
-    const item={id:createId(),name:payload.name,member:operation.targetId,date:operation.targetDate,ingredients:clone(estimate.ingredients),macros:clone(estimate.perServingMacros),warnings:clone(estimate.warnings||[]),nutritionBasis:estimate.nutritionBasis||'',loggedAt:nowIso(context.now||(()=>new Date())),loggedBy:context.actor||operation.targetId}
+    const item={id:createId(),name:payload.name,member:operation.targetId,date:operation.targetDate,ingredients:clone(estimate.ingredients),macros:clone(estimate.perServingMacros),nutrients:clone(estimate.perServingNutrients||null),warnings:clone(estimate.warnings||[]),nutritionBasis:estimate.nutritionBasis||'',loggedAt:nowIso(context.now||(()=>new Date())),loggedBy:context.actor||operation.targetId}
     return{before,after:{...(value||{}),member:operation.targetId,date:operation.targetDate,entries:[...(value?.entries||[]),item]},createdId:item.id}
   }
   if (operation.type.startsWith('household.')) return applyHouseholdRecordOperation(value,operation,{...context,createId})
@@ -182,6 +192,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const notes={...(current.cadenceNotes||{})},cadenceNotes={...(notes[payload.cadence]||{}),[payload.noteIndex]:payload.note}
     return{before,after:{...current,cadenceNotes:{...notes,[payload.cadence]:cadenceNotes}}}
   }
+  if(operation.type==='meal.recipe.update')return {before,after:applyRecipeUpdate(value,operation,{actor:context.actor,now:context.now||(()=>new Date())})}
   if(operation.type==='meal.substitute'){
     const errors=validateMealSubstitution({date:operation.targetDate,mealType:payload.mealType,mealId:payload.mealId})
     if(errors.length)throw new Error(errors.join(' '))
@@ -462,9 +473,15 @@ export function createProductionActionResources({ now = () => new Date(), shared
   const mealKey = date => `${HOUSEHOLD_ID}/days/${date}`
   const nutritionKey = (member,date) => `${HOUSEHOLD_ID}/nutrition/${member}/${date}`
   const nutritionTargetsKey = member => `${HOUSEHOLD_ID}/nutrition/${member}/targets`
+  const memberContextKey = member => `${HOUSEHOLD_ID}/member-context/${member}`
   const activeSermonKey = `${HOUSEHOLD_ID}/spiritual/active-sermon`
   return {
     async read(resource) {
+      if(resource.startsWith('member-context:')){
+        const member=resource.slice('member-context:'.length),entry=await readStoreEntry(mealStorage(),memberContextKey(member)),value=entry?.data
+        return {value:value||{member,preferences:{}},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
+      }
+      if(resource===RECIPE_RESOURCE){const entry=await readStoreEntry(mealStorage(),`${HOUSEHOLD_ID}/library/custom`);return {value:entry?.data||{meals:[],overrides:{}},version:Number(entry?.data?.version||0),etag:entry?.etag||null}}
       if(resource.startsWith('nutrition-targets:')){
         const member=resource.slice('nutrition-targets:'.length),entry=await readStoreEntry(mealStorage(),nutritionTargetsKey(member)),value=entry?.data
         return{value:value||{member},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
@@ -491,6 +508,18 @@ export function createProductionActionResources({ now = () => new Date(), shared
     },
     async write(resource, value, expectedVersion, actor, mutationId = '') {
       const occurredAt=nowIso(now)
+      if(resource.startsWith('member-context:')){
+        const member=resource.slice('member-context:'.length),store=mealStorage(),key=memberContextKey(member),entry=await readStoreEntry(store,key),version=Number(entry?.data?.version||0)
+        if(version!==expectedVersion)throw Object.assign(Error('Your preferences changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
+        const record={...value,member,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''}
+        await conditionalStoreJson(store,key,record,entry);return {version:record.version,value:record}
+      }
+      if(resource===RECIPE_RESOURCE){
+        const storageKey=`${HOUSEHOLD_ID}/library/custom`,store=mealStorage(),entry=await readStoreEntry(store,storageKey),version=Number(entry?.data?.version||0)
+        if(version!==expectedVersion)throw Object.assign(new Error('The recipe library changed after review. Ask Brevity to refresh it.'),{code:'VERSION_CONFLICT'})
+        const record={...value,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''}
+        await conditionalStoreJson(store,storageKey,record,entry);return {version:record.version,value:record}
+      }
       if(resource.startsWith('nutrition-targets:')){
         const member=resource.slice('nutrition-targets:'.length),storageKey=nutritionTargetsKey(member),store=mealStorage(),entry=await readStoreEntry(store,storageKey),current=entry?.data,version=Number(current?.version||0)
         if(version!==expectedVersion)throw Object.assign(new Error('Nutrition targets changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
@@ -541,7 +570,7 @@ const withoutManagedMetadata = value => {
   delete result.lastActionId
   return result
 }
-export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
+export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
 export const resourceLastWriter=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
 export const resourceLastActionId=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
 
