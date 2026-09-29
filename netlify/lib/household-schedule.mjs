@@ -1,3 +1,5 @@
+import {householdScheduleCalendarEvents} from '../../src/household/householdScheduleData.js'
+import {buildHouseholdMaintenanceWeek,householdOccurrence,occurrenceStatus} from '../../src/household/householdMaintenanceData.js'
 const dateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value
 const list = value => Array.isArray(value) ? value : []
 const fields = ['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','members','location','status','priority','href','etag','updatedAt']
@@ -28,11 +30,15 @@ export function householdSchedule(canonical, requestedDate = 'today') {
   const namedFor = event => [event.owner,...list(event.participants),...list(event.members)].some(name => String(name).toLowerCase() === String(member).toLowerCase())
   const hasNamedMember = event => [event.owner,...list(event.participants),...list(event.members)].some(name => name && !['family','household','everyone'].includes(String(name).toLowerCase()))
   const plan = date === canonical.householdDate ? canonical.dailyPlan : list(canonical.recentDailyPlans).find(day => day.date === date)
-  return {date,member,timeZone:'America/New_York',events,
+  const scheduleAvailable=canonical.supplementalSources?.['household-schedule']==='available'
+  const choresAvailable=canonical.supplementalSources?.['household-maintenance']==='available'
+  const timeBlocks=scheduleAvailable?householdScheduleCalendarEvents(canonical.householdScheduleState||{},{start:date,days:1}).filter(onDate):[]
+  const chores=choresAvailable?buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),canonical.householdMaintenanceState||{}).find(day=>day.date===date)?.tasks.map(task=>({...task,status:occurrenceStatus(task,householdOccurrence(canonical.householdMaintenanceState||{},task))}))||[]:[]
+  return {date,member,timeZone:'America/New_York',events,timeBlocks,chores,
     personalAppointments:events.filter(namedFor),
     sharedAppointments:events.filter(event => !hasNamedMember(event)),
     otherMemberAppointments:events.filter(event => hasNamedMember(event) && !namedFor(event)),
     assignments:plan ? list(plan.assignments) : [],
-    sources:{appleCalendar:appleAvailable?'available':'unavailable',brevityCalendar:sharedState,dailyPlan:canonical.supplementalSources?.[`plan:${date}`] || (date === canonical.householdDate ? canonical.sources?.find(source=>source.id==='daily-plan')?.state : 'not-loaded') || 'unavailable'},
-    notice:'Read-only schedule. Include appointment times and distinguish named personal appointments from shared or other-member appointments. Do not infer ownership from initials in titles. Tasks are separate from appointments. An unavailable source is not an empty schedule. Do not claim a future daily plan is empty when not loaded. Source records may overlap; do not double-count an apparent duplicate without matching identifiers.'}
+    sources:{householdSchedule:scheduleAvailable?'available':'unavailable',householdChores:choresAvailable?'available':'unavailable',appleCalendar:appleAvailable?'available':'unavailable',brevityCalendar:sharedState,dailyPlan:canonical.supplementalSources?.[`plan:${date}`] || (date === canonical.householdDate ? canonical.sources?.find(source=>source.id==='daily-plan')?.state : 'not-loaded') || 'unavailable'},
+    notice:'Read-only schedule. Include appointment times and distinguish named personal appointments from shared or other-member appointments. Do not infer ownership from initials in titles. Tasks, timeBlocks and chores are separate from appointments. Use chore occurrenceId for existing chore changes and the exact source IDs for time-block changes; never substitute an assignment for a saved chore. An unavailable source is not an empty schedule. Do not claim a future daily plan is empty when not loaded. Source records may overlap; do not double-count an apparent duplicate without matching identifiers.'}
 }

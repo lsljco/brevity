@@ -17,3 +17,5 @@ test('authoritative Brevity calendar retains late records without exposing sensi
  assert.equal(householdSchedule(c).events[0].id,'event-399')
  assert.equal(JSON.stringify(c).includes('must-not-appear'),false)
 })
+
+test('schedule reads real household blocks and chores separately and does not fabricate them on source failure',()=>{const c=context();c.supplementalSources['household-schedule']='available';c.supplementalSources['household-maintenance']='available';c.householdScheduleState={blocks:[{id:'block-1',title:'Review priorities',date:'2026-09-29',startTime:'18:00',endTime:'18:15',owner:'Larry',participants:[]}]};c.householdMaintenanceState={};const r=householdSchedule(c);assert.equal(r.timeBlocks.length,1);assert.equal(r.timeBlocks[0].title,'Review priorities');assert.ok(r.chores.length>0);assert.ok(r.chores.every(chore=>chore.occurrenceId.startsWith('2026-09-29:')&&chore.status==='Scheduled'));c.supplementalSources['household-maintenance']='unavailable';assert.deepEqual(householdSchedule(c).chores,[]);assert.equal(householdSchedule(c).sources.householdChores,'unavailable')})
