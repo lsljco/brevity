@@ -40,9 +40,13 @@ button, input, select, textarea { font: inherit; }
   :where(.kpi-grid,.finance-summary-grid,.finance-budget-summary,.finance-cashflow-summary,.estate-command-grid,.inventory-metrics) {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+  .meal-day-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .meal-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 641px) and (max-width: 899px) {
   .meal-day-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .meal-slot:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--glass-border); }
-  .meal-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Phone layout: readable controls, safe insets, one-column forms and cards. */
