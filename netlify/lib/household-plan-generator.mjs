@@ -1,4 +1,4 @@
-import { getStore } from './scoped-store.cjs';
+import { getStore } from './scoped-store.mjs';
 import { randomUUID } from 'node:crypto';
 import { productionMealPlanRepository } from './meal-plan-store.mjs';
 import {

@@ -1,6 +1,6 @@
 import householdAuth from './household-auth.js'
 import { fetchWeatherForecast } from '../lib/weather-forecast.mjs'
-import {getStore} from '../lib/scoped-store.cjs'
+import {getStore} from '../lib/scoped-store.mjs'
 
 const {readSession}=householdAuth
 const FRESH_MS=15*60*1000

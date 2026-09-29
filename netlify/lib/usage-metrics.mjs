@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto'
-import {getStore} from './scoped-store.cjs'
+import {getStore} from './scoped-store.mjs'
 import {householdDate} from './assistant-authoritative-context.mjs'
 import build from './release-build-context.mjs'
 const KINDS=['assistant','action','feedback']

@@ -1,4 +1,4 @@
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import { createHash } from 'node:crypto'
 import householdAuth from './household-auth.js'
 import { SERMON_IDENTITY_STORE,SERMON_PHOTO_SUBJECTS,sermonIdentityKey,sermonIdentityMetaKey } from '../lib/sermon-cover.mjs'

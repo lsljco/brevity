@@ -1,4 +1,4 @@
-import { getStore } from './scoped-store.cjs'
+import { getStore } from './scoped-store.mjs'
 import { productionMealPlanRepository } from './meal-plan-store.mjs'
 import { canonicalizeCalendarReadEvent } from '../../src/family/calendarNames.js'
 import { budgetLineId } from '../../src/finance/budgetBreakdown.js'

@@ -1,4 +1,4 @@
-import {getStore} from '../lib/scoped-store.cjs'
+import {getStore} from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 const {readSession}=householdAuth
 const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',STORE_NAME='brevity-sermon-slides'

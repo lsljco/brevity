@@ -28,7 +28,7 @@ export function createEstateVaultRepository({ store, householdId = 'lslj-family'
 }
 
 export async function productionEstateVaultRepository(options = {}) {
-  const { getStore } = await import('./scoped-store.cjs')
+  const { getStore } = await import('./scoped-store.mjs')
   const store = getStore({
     name: STORE_NAME,
     consistency: 'strong',

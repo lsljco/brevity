@@ -1,6 +1,6 @@
 import householdAuth from './household-auth.js'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import { mealImageContentType, mealImageKey, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'
 import { randomUUID } from 'node:crypto'
 

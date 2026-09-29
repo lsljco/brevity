@@ -21,7 +21,7 @@ import { productionAssistantActionRepository } from '../lib/assistant-action-rep
 import { captureExpectedVersions, createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { mealProteinFocus } from '../lib/assistant-meal-protein.mjs'
 import { runBrevitySdkAgent } from '../lib/brevity-sdk-agent.mjs'
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import { randomUUID } from 'node:crypto'
 
 const { readSession } = householdAuth

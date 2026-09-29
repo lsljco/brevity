@@ -1,4 +1,4 @@
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { readDailyPlanDraft } from '../lib/household-plan-generator.mjs'
 

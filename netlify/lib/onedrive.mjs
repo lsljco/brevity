@@ -1,5 +1,5 @@
 import releaseBuild from './release-build-context.mjs'
-import { getStore } from './scoped-store.cjs'
+import { getStore } from './scoped-store.mjs'
 
 const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'
 const STORE_NAME='brevity-household'

@@ -1,4 +1,4 @@
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import {
   AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph,
   ShadingType, Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,

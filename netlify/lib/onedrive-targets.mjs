@@ -1,5 +1,5 @@
 import releaseBuild from './release-build-context.mjs'
-import { getStore } from './scoped-store.cjs'
+import { getStore } from './scoped-store.mjs'
 const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',STORE_NAME='brevity-household',CONNECTION_KEY=`${HOUSEHOLD_ID}/integrations/onedrive`,REDIRECT_URI='https://brevityoflife.netlify.app/.netlify/functions/onedrive-oauth-callback'
 export const SERMON_TARGETS={word:'https://1drv.ms/f/c/0675525c56f14fef/IgBAFpOkyOC1TImi4vwdATDAAeeDqDWqd5NdChS4zVEGsyY',pdf:'https://1drv.ms/f/c/0675525c56f14fef/IgARcbb-ZETMTa8oWW81C-AYAbQ-ripTssZ9kc9xmP0aEAM',devotions:'https://1drv.ms/f/c/0675525c56f14fef/IgDXneTEyqhkQbijIB2DSCHgAacxlIATQBYvRb5QeOuZXE0',images:'https://1drv.ms/f/c/0675525c56f14fef/IgAKn3pyfEBaRpkNW37-kbX3ARPmGXAi5ywV3dcn20pQ2qw',slides:'https://1drv.ms/f/c/0675525c56f14fef/IgAKn3pyfEBaRpkNW37-kbX3ARPmGXAi5ywV3dcn20pQ2qw'}
 const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN}),shareId=url=>`u!${Buffer.from(url).toString('base64url')}`,safeFileName=name=>String(name||'Brevity document').replace(/["*:<>?\\/|]/g,'-').replace(/[. ]+$/g,'').replace(/\s+/g,' ').slice(0,180)

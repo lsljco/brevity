@@ -1,4 +1,4 @@
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { workspaceKey,packageKey,pointerKey,deckKey,safeId,sermonSourceHash,sermonJobId,applyPackage } from '../lib/sermon-workspace-package.mjs'
 const {readSession}=householdAuth

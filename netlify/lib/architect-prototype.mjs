@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto'
 import build from './release-build-context.mjs'
-import {getStore} from './scoped-store.cjs'
+import {getStore} from './scoped-store.mjs'
 const packetFields=['title','problem','requirements','userStories','dataChanges','permissionChanges','testPlan','rolloutPlan','rollbackPlan']
 export function approvedPrototypePacket(record){
  if(record?.stage!=='implementation-planned'||!['Larry','Lorenzo'].includes(record.updatedBy))throw Error('Larry or Lorenzo must approve a complete implementation plan before prototype generation.')

@@ -1,5 +1,5 @@
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
-import {getStore} from '../lib/scoped-store.cjs'
+import {getStore} from '../lib/scoped-store.mjs'
 import {randomUUID} from 'node:crypto'
 import householdAuth from './household-auth.js'
 import {releaseCheckAccess,releaseBuild} from '../lib/release-check-access.mjs'

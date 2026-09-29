@@ -1,5 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto'
-import {getStore} from './scoped-store.cjs'
+import {getStore} from './scoped-store.mjs'
 export const BACKUP_STORES=['brevity-household-state','brevity-household','brevity-meals','brevity-assistant-actions']
 const digest=value=>createHash('sha256').update(value).digest('hex')
 export const backupStore=name=>getStore({name,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})

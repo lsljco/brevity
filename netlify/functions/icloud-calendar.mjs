@@ -1,6 +1,6 @@
 import releaseBuild from '../lib/release-build-context.mjs'
 import crypto from "node:crypto";
-import { getStore } from "../lib/scoped-store.cjs";
+import { getStore } from "../lib/scoped-store.mjs";
 import householdAuth from "./household-auth.js";
 import { fetchCalendarList, fetchCalendarReport, firstDavPropertyHref, resolveAppleDavHref } from "../lib/icloud-calendar-report.mjs";
 import { productionAssistantActionRepository } from "../lib/assistant-action-repository.mjs";

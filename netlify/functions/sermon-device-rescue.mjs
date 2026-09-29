@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { inspectApostolicDeviceExport, mergeApostolicSermonIndex } from '../../src/household/sermonLegacyMigration.js'
 

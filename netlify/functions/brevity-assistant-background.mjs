@@ -1,5 +1,5 @@
 import {recordUsage} from '../lib/usage-metrics.mjs'
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { processAssistantRequest } from './brevity-assistant.mjs'
 

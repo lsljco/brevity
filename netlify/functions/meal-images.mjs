@@ -1,4 +1,4 @@
-import { getStore } from '../lib/scoped-store.cjs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { MEAL_IMAGE_STORE, mealImageContentType, mealImageKey } from '../lib/meal-image.mjs'
 
