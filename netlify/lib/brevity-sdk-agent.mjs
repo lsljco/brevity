@@ -35,7 +35,17 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
         return JSON.stringify({references:[],failures:[],researchUnavailable:true,notice:'Focused product research could not complete. Do not invent labels or totals. You may use web_search and read_product_nutrition for a relevant source, or explain that exact evidence remains unavailable.'})
       }
       const failures=[]
-      const references=await retrieveNutritionReferences(urls.map(url=>({url})),{referenceFetcher,referenceCache,onFailure:failure=>failures.push(failure)})
+      let references=await retrieveNutritionReferences(urls.map(url=>({url})),{referenceFetcher,referenceCache,onFailure:failure=>failures.push(failure)})
+      // A failed first lookup is not the end of already-authorized research.
+      // Retry discovery once with concrete failed URLs, rather than asking the
+      // member to manage a search loop. Fetch caching prevents repeated traffic.
+      if(!references.length){
+        onTool('find_product_nutrition_retry')
+        try{
+          const alternatives=await findSources(product,{model,unavailableUrls:urls})
+          references=await retrieveNutritionReferences(alternatives.filter(url=>!urls.includes(url)).map(url=>({url})),{referenceFetcher,referenceCache,onFailure:failure=>failures.push(failure)})
+        }catch{onTool('find_product_nutrition_failed')}
+      }
       return JSON.stringify({references,failures,notice:'These are retrieved candidate pages, not automatic proof of an exact variant. Match product identity, bottle size and label serving before calculation. Pass matching URLs to estimate_meal_nutrition. Do not claim a mismatching volume is verified. If no usable exact label remains, explain the specific limitation and ask once about approximation rather than asking permission to keep researching.'})
     },
   })

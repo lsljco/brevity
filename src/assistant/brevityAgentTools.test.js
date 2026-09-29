@@ -196,9 +196,29 @@ test('product source discovery has bounded research and filters invalid candidat
  const result=await findProductNutritionSources('Example Vanilla 11 fl oz',{model:'test',runner:{run:async(agent,input,options)=>{
   assert.equal(options.maxTurns,4)
   assert.equal(agent.modelSettings.store,false)
+  assert.equal(agent.modelSettings.toolChoice,'required')
   assert.deepEqual(agent.tools.map(tool=>tool.name),['web_search'])
   assert.equal(input[0].content[0].text,'Example Vanilla 11 fl oz')
   return {finalOutput:{urls:['https://example.com/product','https://example.com/product','http://example.com/other']}}
  }}})
  assert.deepEqual(result,['https://example.com/product'])
+})
+
+test('failed source discovery retries once with failed URLs before returning unavailable',async()=>{
+ const queries=[],fetches=[],events=[]
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},onTool:event=>events.push(event),findSources:async(product,options)=>{
+  queries.push(options)
+  return options.unavailableUrls?['https://example.com/missing','https://example.com/readable']:['https://example.com/missing']
+ },referenceFetcher:async url=>{
+  fetches.push(url)
+  if(url.endsWith('missing'))throw Error('No readable label')
+  return {sourceUrl:url,html:'Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Total Fat 15g Total Carbohydrates 5g'}
+ }})
+ const result=JSON.parse(await agent.tools.find(tool=>tool.name==='find_product_nutrition').invoke({},JSON.stringify({product:'Example Original sausage'})))
+ assert.equal(queries.length,2)
+ assert.deepEqual(queries[1].unavailableUrls,['https://example.com/missing'])
+ assert.deepEqual(fetches,['https://example.com/missing','https://example.com/readable'])
+ assert.equal(result.references.length,1)
+ assert.equal(result.failures.length,1)
+ assert.ok(events.includes('find_product_nutrition_retry'))
 })
