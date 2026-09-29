@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { householdDate } from '../lib/assistant-authoritative-context.mjs'
 import { createProductionActionResources } from '../lib/assistant-action-executor.mjs'
@@ -25,3 +27,5 @@ export async function handler(event){
     return json(200,{member:session.member,date,days,weeklyTotals,targets,progress:nutritionProgress(days[0].totals,targets),pilot:weeklyNutritionPilot(days),targetVersion:target.version,targetsUpdatedAt:target.value?.updatedAt||''})
   }catch(error){console.error('[nutrition-records]',error);return json(500,{error:'Could not load nutrition records. Try again.'})}
 }
+
+export default withLambda(handler)

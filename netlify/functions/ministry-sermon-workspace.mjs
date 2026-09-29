@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { importSermonFields, importedWorkspaceSermon } from '../lib/sermon-workspace-import.mjs'
@@ -91,3 +93,5 @@ export function createMinistrySermonWorkspaceHandler({ authenticate=readSession,
 }
 
 export const handler=createMinistrySermonWorkspaceHandler()
+
+export default withLambda(handler)

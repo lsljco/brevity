@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 import {verifyMaintenanceRequest} from '../lib/maintenance-dispatch.mjs'
 import {createHouseholdBackup,backupStore,pruneHouseholdBackups} from '../lib/household-backup.mjs'

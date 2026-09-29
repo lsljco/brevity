@@ -6,7 +6,7 @@ import { buildPlaidBalanceSourceResult } from './financeRefresh.js'
 
 const require=createRequire(import.meta.url)
 const {createAccountSourceReceipt,verifyAccountSourceReceipt,mergeVerifiedPlaidBalances,normalizePlaidAccountBalances,RECEIPT_TTL_MS,LIVE_BALANCE_MODE,LIVE_BALANCE_PROVENANCE}=require('../../netlify/lib/plaid-account-source.cjs')
-const {validatePlaidFinanceUpdate}=require('../../netlify/functions/household-state.js')
+const {validatePlaidFinanceUpdate}=require('../../netlify/legacy-functions/household-state.js')
 const secret='test-account-receipt-secret'
 const issued=new Date('2026-09-07T16:00:00.000Z')
 const source=[{accountId:'plaid-operating',itemId:'item-1',name:'Operating Account',officialName:'Primary Checking',type:'depository',subtype:'checking',mask:'607',balance:756.74,availableBalance:815.82,institution:'Pinnacle'}]

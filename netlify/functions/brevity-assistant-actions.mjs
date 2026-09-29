@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import {assertVoiceApproval} from '../../src/assistant/voiceActionReview.js'
 import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
 import {recordUsage} from '../lib/usage-metrics.mjs'
@@ -722,3 +724,5 @@ export const handler=async event=>{
     return json(500,{error:error.message||'Brevity Action Mode is temporarily unavailable.'})
   }
 }
+
+export default withLambda(handler)

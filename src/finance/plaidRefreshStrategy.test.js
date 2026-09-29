@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const accountsFunction=readFileSync(new URL('../../netlify/functions/plaid-accounts.js',import.meta.url),'utf8')
-const transactionsFunction=readFileSync(new URL('../../netlify/functions/plaid-transactions.js',import.meta.url),'utf8')
+const accountsFunction=readFileSync(new URL('../../netlify/legacy-functions/plaid-accounts.js',import.meta.url),'utf8')
+const transactionsFunction=readFileSync(new URL('../../netlify/legacy-functions/plaid-transactions.js',import.meta.url),'utf8')
 const plaidConnect=readFileSync(new URL('./PlaidConnect.jsx',import.meta.url),'utf8')
 const financePlanner=readFileSync(new URL('./FinancePlanner.jsx',import.meta.url),'utf8')
 

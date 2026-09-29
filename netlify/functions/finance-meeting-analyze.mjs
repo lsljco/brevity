@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
@@ -106,3 +108,5 @@ ${transcript}`
     analyzedAt: new Date().toISOString(),
   })
 }
+
+export default withLambda(handler)

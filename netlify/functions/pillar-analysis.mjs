@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs';
 import { getStore } from '../lib/scoped-store.mjs';
 import { PILLAR_ANALYSIS_SCHEMA_VERSION, pillarAnalysisContextSignature } from '../../src/household/pillarAnalysisCache.js';
@@ -323,3 +325,5 @@ export const handler = async event => {
   if(['validated','repaired','insufficient-data'].includes(quality.status))await writeAnalysisCacheIfCurrent({dataStore,key:cacheKey,result}).catch(error=>console.error('[pillar-analysis cache]',error));
   return json(200, { ...result, cached:false });
 };
+
+export default withLambda(handler)

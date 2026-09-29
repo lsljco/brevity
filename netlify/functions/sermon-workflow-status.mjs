@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import {readSermonWorkflow} from '../lib/sermon-workflow-state.mjs'
 const {readSession}=householdAuth
@@ -9,3 +11,5 @@ export const handler=async event=>{
  const workflow=await readSermonWorkflow(id);if(!workflow)return json(404,{error:'Sermon workflow not found.'})
  return json(200,{workflow})
 }
+
+export default withLambda(handler)

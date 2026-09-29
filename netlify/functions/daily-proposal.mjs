@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
@@ -86,3 +88,5 @@ export const handler = async event => {
     return json(502, { error: error.message || 'Could not generate the daily proposal.' })
   }
 }
+
+export default withLambda(handler)

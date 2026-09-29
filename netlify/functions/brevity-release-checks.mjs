@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import {allowedReleaseOrigin} from '../lib/build-isolation.mjs'
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
@@ -37,3 +39,5 @@ export const handler=async event=>{
  if(!response.ok){await store.setJSON(id,{...job,state:'failed',error:'Could not start release checks.'});return json(502,{error:'Could not start release checks.'})}
  return json(202,{id})
 }
+
+export default withLambda(handler)

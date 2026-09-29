@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
@@ -46,3 +48,5 @@ export function createPostImageHandler({authenticate=readSession,repositoryFacto
  }catch(error){console.error('[sermon-post-image]',error);return json(500,{error:'Could not prepare sermon photography.'})}}
 }
 export const handler=createPostImageHandler()
+
+export default withLambda(handler)

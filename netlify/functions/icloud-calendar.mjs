@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import releaseBuild from '../lib/release-build-context.mjs'
 import crypto from "node:crypto";
 import { getStore } from "../lib/scoped-store.mjs";
@@ -631,3 +633,5 @@ export const createICloudCalendarHandler = ({
 };
 
 export const handler = createICloudCalendarHandler();
+
+export default withLambda(handler)

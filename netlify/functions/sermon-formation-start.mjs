@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import { productionSermonSourceRepository, sermonSourceHash } from '../lib/sermon-source-repository.mjs'
@@ -96,3 +98,5 @@ export function createSermonFormationStartHandler({
 }
 
 export const handler = createSermonFormationStartHandler()
+
+export default withLambda(handler)

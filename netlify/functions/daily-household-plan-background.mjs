@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import crypto from 'node:crypto';
 import { generateDailyPlanDraft } from '../lib/household-plan-generator.mjs';
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs';

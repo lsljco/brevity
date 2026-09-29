@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 const {readSession}=householdAuth
 const MODEL=process.env.BREVITY_AI_MODEL||'gpt-5.6'
@@ -17,3 +19,5 @@ export const handler=async event=>{
   let result;try{result=JSON.parse(text(payload))}catch{return json(502,{error:'Brevity returned an invalid classification.'})}
   return json(200,{...result,generatedAt:new Date().toISOString(),model:MODEL,notice:'Classifications are provisional until confirmed; no calendar or household record was changed.'})
 }
+
+export default withLambda(handler)

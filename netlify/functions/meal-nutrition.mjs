@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import {calculateMealNutrition} from '../lib/meal-nutrition.mjs'
 
@@ -20,3 +22,5 @@ export const handler=async event=>{
 }
 
 export const config={path:'/.netlify/functions/meal-nutrition'}
+
+export default withLambda(handler)

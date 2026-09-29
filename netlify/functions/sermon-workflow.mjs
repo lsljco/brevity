@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { sermonFormationPermission } from './sermon-formation-start.mjs'
@@ -85,3 +87,5 @@ export function createSermonWorkflowHandler({
 }
 
 export const handler = createSermonWorkflowHandler()
+
+export default withLambda(handler)

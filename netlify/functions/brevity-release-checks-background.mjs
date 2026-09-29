@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 import {verifyReleasePersistence} from '../lib/release-persistence-checks.mjs'
 import householdAuth from '../lib/household-auth.cjs'

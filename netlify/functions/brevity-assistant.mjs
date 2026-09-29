@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import {compactAssistantCalendar} from '../lib/household-schedule.mjs'
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {requestArchitectPrototype} from '../lib/architect-prototype.mjs'
@@ -174,3 +176,5 @@ export const handler=async event=>{
     return json(202,{state:'queued',jobId:id})
   }catch(error){console.error('[brevity-assistant-dispatch]',error);return json(502,{error:'Brevity Assistant could not start. Please retry.'})}
 }
+
+export default withLambda(handler)

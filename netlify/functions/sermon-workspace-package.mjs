@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { workspaceKey,packageKey,pointerKey,deckKey,safeId,sermonSourceHash,sermonJobId,applyPackage } from '../lib/sermon-workspace-package.mjs'
@@ -37,3 +39,5 @@ export function createSermonWorkspacePackageHandler({authenticate=readSession,da
  }catch(error){console.error('[sermon-workspace-package]',error);return json(500,{error:'Could not prepare sermon materials.'})}}
 }
 export const handler=createSermonWorkspacePackageHandler()
+
+export default withLambda(handler)

@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import {analyzeMealImage} from '../lib/meal-image-import.mjs'
 
@@ -13,3 +15,5 @@ export const handler=async event=>{
   }catch(error){console.error('[meal-image-import]',error);return json(Number(error.status)|| (error instanceof SyntaxError?400:500),{error:error.message||'Meal image import failed.'})}
 }
 export const config={path:'/.netlify/functions/meal-image-import'}
+
+export default withLambda(handler)

@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import {
   AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph,
@@ -163,3 +165,5 @@ export const handler = async event => {
     return json(500,{error:'Brevity could not create or archive the sermon documents.'})
   }
 }
+
+export default withLambda(handler)

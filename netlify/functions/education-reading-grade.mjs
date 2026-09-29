@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { scoreReadingTranscript } from '../../src/education/readingFluency.js'
 
@@ -46,3 +48,5 @@ export const handler=async event=>{
     return json(502,{error:'Brevity could not grade this reading sample.'})
   }
 }
+
+export default withLambda(handler)

@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
@@ -69,3 +71,5 @@ export const handler = async event => {
     return response(status, { error: error.message || 'Meal-plan request failed.' })
   }
 }
+
+export default withLambda(handler)

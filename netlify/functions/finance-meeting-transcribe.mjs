@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
@@ -53,3 +55,5 @@ export const handler = async event => {
     transcribedAt: new Date().toISOString(),
   })
 }
+
+export default withLambda(handler)

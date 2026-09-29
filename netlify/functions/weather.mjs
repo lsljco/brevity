@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { fetchWeatherForecast } from '../lib/weather-forecast.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
@@ -28,3 +30,5 @@ export const handler=async event=>{
 }
 
 export const config={path:'/.netlify/functions/weather'}
+
+export default withLambda(handler)

@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import { currentNewYorkDate, currentNewYorkHour } from '../lib/household-plan-generator.mjs';
 
 export default async function handler() {

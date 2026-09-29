@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { mealImageJobKey, MEAL_IMAGE_JOB_STORE } from '../lib/meal-image.mjs'

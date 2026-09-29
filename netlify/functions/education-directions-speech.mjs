@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { getStore } from '../lib/scoped-store.mjs'
 
@@ -27,3 +29,5 @@ export const handler=async event=>{
     return json(200,{audioBase64:audio,mimeType:'audio/mpeg',model:MODEL,voice:VOICE,text:record.directions})
   }catch(error){console.error('[education-directions-speech]',error);return json(502,{error:'Brevity could not read the directions aloud.'})}
 }
+
+export default withLambda(handler)

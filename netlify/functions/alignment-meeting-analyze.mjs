@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
@@ -44,3 +46,5 @@ ${transcript}`
   try{parsed=JSON.parse(stripFence(outputText(payload)))}catch{return json(502,{error:'Brevity returned an invalid alignment reconciliation. Please try again.'})}
   return json(200,{...parsed,model:MODEL,member:session.member,analyzedAt:new Date().toISOString()})
 }
+
+export default withLambda(handler)

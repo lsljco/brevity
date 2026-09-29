@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import householdData from '../../netlify/functions/household-data.js'
-import householdState from '../../netlify/functions/household-state.js'
+import householdData from '../../netlify/legacy-functions/household-data.js'
+import householdState from '../../netlify/legacy-functions/household-state.js'
 import { readOptionalHouseholdRecord } from '../../netlify/lib/household-plan-generator.mjs'
 import { hashValue } from './sharedState.js'
 

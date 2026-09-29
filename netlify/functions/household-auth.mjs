@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import {getStore} from '@netlify/blobs'
 import householdAuth from '../lib/household-auth.cjs'

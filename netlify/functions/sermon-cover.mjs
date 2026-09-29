@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
@@ -51,3 +53,5 @@ export function createSermonCoverHandler({authenticate=readSession,repositoryFac
  }catch(error){console.error('[sermon-cover]',error);return json(500,{error:'Could not prepare the sermon cover.'})}}
 }
 export const handler=createSermonCoverHandler()
+
+export default withLambda(handler)

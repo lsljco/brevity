@@ -1,5 +1,7 @@
 // Build-time scope is trusted; neither request hosts nor client fields choose stores.
-const blobs = require('@netlify/blobs')
+let nativeBlobs = null
+const client = () => nativeBlobs || require('@netlify/blobs')
+const setNativeBlobs = value => { nativeBlobs = value }
 const build = require('./release-build-context.cjs')
 function scopedName(name, context = build) {
   if (!context.preview) return name
@@ -7,6 +9,6 @@ function scopedName(name, context = build) {
   return `preview-${review}-${name}`
 }
 function getStore(options) {
-  return blobs.getStore(typeof options === 'string' ? scopedName(options) : {...options,name:scopedName(options.name)})
+  return client().getStore(typeof options === 'string' ? scopedName(options) : {...options,name:scopedName(options.name)})
 }
-module.exports = {...blobs,getStore,scopedName,preview:build.preview}
+module.exports = {getStore,scopedName,preview:build.preview,setNativeBlobs,connectLambda:event=>client().connectLambda(event)}

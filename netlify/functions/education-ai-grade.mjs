@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { getStore } from '../lib/scoped-store.mjs'
 
@@ -62,3 +64,5 @@ export const handler=async event=>{
   const numeric=results.filter(item=>Number.isFinite(item.score)),earned=numeric.reduce((sum,item)=>sum+item.score,0),possible=numeric.reduce((sum,item)=>sum+item.possible,0)
   return json(200,{exerciseId,mode:'content',earned,possible,percent:possible?Math.round(earned/possible*100):null,items:results,reviewed:false,evidenceStatus:'draft-adult-review-required',note:'This grade is draft instructional evidence. Adult-reviewed session completion controls mastery promotion.'})
 }
+
+export default withLambda(handler)

@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
@@ -26,3 +28,5 @@ export async function analyzeSermonFormation(body={}) {
 export const handler=async event=>{
  if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to generate sermon notes and formation.'});return json(423,{error:'Direct sermon analysis is disabled. Start the reviewed sermon-source workflow so Brevity can retain a versioned draft without replacing the active sermon.'})
 }
+
+export default withLambda(handler)

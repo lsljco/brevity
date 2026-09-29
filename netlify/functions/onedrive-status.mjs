@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { getOneDriveRepositoryState, oneDriveConfigured } from '../lib/onedrive.mjs'
 const {readSession}=householdAuth

@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { getStore } from '../lib/scoped-store.mjs'
 
@@ -56,3 +58,5 @@ export const handler=async event=>{
     return json(201,{exercise:{id,title:generated.title,intro:generated.intro,directions:generated.directions,passage:generated.passage,sectionMinutes:generated.sectionMinutes,difficultyNote:generated.difficultyNote,vocabulary:generated.vocabulary,questions:generated.questions.map(publicQuestion)},provenance:{model:MODEL,promptVersion:PROMPT_VERSION,standards,curriculum,createdBy:session.member}})
   }catch(error){console.error('[education-ai-exercise]',error);return json(502,{error:'Brevity could not generate the reading exercise.'})}
 }
+
+export default withLambda(handler)

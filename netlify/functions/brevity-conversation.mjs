@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
@@ -14,3 +16,5 @@ export const createConversationHandler=({readSession=householdAuth.readSession,r
   }catch(error){return json(error.status||400,{error:error.message})}
 }
 export const handler=createConversationHandler()
+
+export default withLambda(handler)

@@ -1,3 +1,5 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import mammoth from 'mammoth'
 import pdf from 'pdf-parse/lib/pdf-parse.js'
 import householdAuth from '../lib/household-auth.cjs'
@@ -31,3 +33,5 @@ export const handler=async event=>{
 }
 
 export const config={path:'/.netlify/functions/sermon-notes-import'}
+
+export default withLambda(handler)

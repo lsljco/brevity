@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { randomUUID } from 'node:crypto'
 import { analyzeSermonFormation } from './sermon-formation.mjs'

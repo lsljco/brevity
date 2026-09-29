@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
 import { workspaceKey,packageKey,deckKey,safeId,sermonSourceHash,normalizePackage,buildWorkspaceDeck } from '../lib/sermon-workspace-package.mjs'

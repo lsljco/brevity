@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import {recordUsage} from '../lib/usage-metrics.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'

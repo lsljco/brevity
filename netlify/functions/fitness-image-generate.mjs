@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from '../lib/household-auth.cjs'
