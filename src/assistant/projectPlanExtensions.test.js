@@ -25,6 +25,18 @@ test('feedback and measurements bind to authenticated member, not client member'
  await handler({httpMethod:'POST',body:JSON.stringify({id:'feedback-11111111-1111-4111-8111-111111111111',outcome:'friction',member:'Larry',text:'discard'})})
  assert.equal(seen[0][0],'Isaiah');assert.equal(seen[0][1].text,undefined)
 })
+test('usage coverage separates recorded days, absent history and failed reads',async()=>{
+ const f=fixture(),now=()=>new Date('2026-09-29T12:00Z'),repo=createUsageRepository({store:f.store,now})
+ await repo.record('Larry',{id:'request',kind:'assistant',outcome:'answered',durationMs:10})
+ const original=f.store.getWithMetadata
+ f.store.getWithMetadata=async key=>{if(key.includes('/2026-09-27/'))throw Error('Unavailable');return original(key)}
+ const summary=await repo.summary(['Larry'],{days:3}),member=summary.members[0]
+ assert.deepEqual(member.recordedDays,['2026-09-29'])
+ assert.deepEqual(member.missingDays,['2026-09-28'])
+ assert.deepEqual(member.unavailableDays,['2026-09-27'])
+ assert.equal(member.requests,1)
+ assert.match(summary.notice,/No failed reads does not prove full coverage/)
+})
 test('module customization requires administrator and preserves underlying records when hidden',()=>{
  const op=normalizeActionProposal({summary:'Customize modules',operations:[{type:'module.configuration.update',targetId:'household-modules',payload:{modules:[{id:'custom-care',label:'Caregiving',pillarId:'household'},{id:'meal-plan',enabled:false}]}}]},{member:'Larry',role:'admin'}).operations[0]
  assert.equal(resourceForOperation(op),'shared:brevity_modules_v1')
