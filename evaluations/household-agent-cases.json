@@ -705,5 +705,42 @@
     "review": [
       "Uses saved short spoken answers preference; does not invent other preferences."
     ]
+  },
+  {
+    "id": "meal-separate-occasions",
+    "pillar": "health",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Breakfast was 6 oz Eckrich smoked sausage, 1 Premier Protein shake, and 2 slices Nature's Own Honey Wheat toast."
+      },
+      {
+        "role": "assistant",
+        "content": "We discussed the breakfast foods and portions."
+      },
+      {
+        "role": "user",
+        "content": "For lunch, a separate meal, I ate 6.7 oz cooked New York strip steak and a 300 g baked potato, plain. An approximate estimate is okay. Prepare the lunch review only."
+      }
+    ],
+    "requiredTools": [
+      "estimate_meal_nutrition"
+    ],
+    "allowedProposalTypes": [
+      "nutrition.meal.log"
+    ],
+    "expectedFoods": [
+      "steak",
+      "potato"
+    ],
+    "forbiddenFoods": [
+      "sausage",
+      "toast",
+      "shake",
+      "bread"
+    ],
+    "review": [
+      "Calculate and propose only steak and potato for lunch. Never include the earlier breakfast foods; do not correct or duplicate breakfast."
+    ]
   }
 ]

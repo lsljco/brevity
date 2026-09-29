@@ -33,3 +33,11 @@ test('target evaluation checks exact requested values and rejects extra changes 
   assert.equal(result.structuralPass,expected)
  }
 })
+
+test('meal boundary evaluation rejects carrying breakfast foods into a separate lunch',async()=>{
+ const item={...evaluationCases.find(item=>item.id==='meal-separate-occasions'),requiredTools:[],allowedProposalTypes:[]}
+ for(const [ingredients,expected] of [[['6.7 oz cooked steak','300 g plain baked potato'],true],[['6.7 oz cooked steak','300 g plain baked potato','breakfast sausage and toast'],false]]){
+  const result=await evaluateHouseholdCase(item,{run:async args=>{await args.calculate({ingredients,yieldQuantity:1,yieldUnit:'meal'});return {output:{message:'Fixture',proposal:null},estimates:new Map()}}})
+  assert.equal(result.checks.mealBoundaryPreserved,expected)
+ }
+})

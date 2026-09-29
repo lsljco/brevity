@@ -185,3 +185,7 @@
 .consumed-meal-correction textarea{min-height:4rem}
 .consumed-meal-correction button{margin-right:.6rem}
 [data-theme="light"] .consumed-nutrition-fields input,[data-theme="light"] .consumed-meal-correction input,[data-theme="light"] .consumed-meal-correction textarea{color-scheme:light}
+
+.consumed-nutrition-panel button{font:inherit;cursor:pointer;padding:.65rem .85rem;margin:.35rem .5rem .35rem 0;border:1px solid var(--glass-border);border-radius:.6rem;background:var(--glass-bg);color:var(--gold-light)}
+.consumed-nutrition-panel button:hover{border-color:var(--gold-light)}
+.consumed-nutrition-panel button:focus-visible{outline:2px solid var(--gold-light);outline-offset:3px}
