@@ -31,6 +31,7 @@ export function createSermonCoverHandler({authenticate=readSession,repositoryFac
    const sermon=(await data.get(workspaceKey,{type:'json'}))?.sermons?.find(item=>item.id===query.sermonId)
    if(!sermon)return json(404,{error:'Sermon not found.'})
    const status=await jobStore.get(coverJobKey(householdId,sermon.id),{type:'json'})
+   if(status&&status.sourceHash!==coverSourceHash(sermon))return json(200,{state:'not-started',sermonId:sermon.id})
    if(status&&['queued','generating'].includes(status.state)&&now().getTime()-new Date(status.updatedAt||status.createdAt).getTime()>12*60*1000)return json(200,{...status,state:'error',error:'The cover took too long. Try again.'})
    return json(200,status||{state:'not-started',sermonId:sermon.id})
   }
@@ -41,7 +42,7 @@ export function createSermonCoverHandler({authenticate=readSession,repositoryFac
   if(!String(sermon.outline||sermon.bigIdea||'').trim()||sermon.title==='Untitled Sermon')return json(400,{error:'Save a sermon title and theme before creating its cover.'})
   const key=coverJobKey(householdId,sermon.id),current=await jobStore.get(key,{type:'json'})
   if(current&&['queued','generating'].includes(current.state)&&now().getTime()-new Date(current.updatedAt||current.createdAt).getTime()<12*60*1000)return json(202,current)
-  if(current?.state==='ready'&&!body.regenerate)return json(200,current)
+  if(current?.state==='ready'&&current.sourceHash===coverSourceHash(sermon)&&!body.regenerate)return json(200,current)
   const status={id:randomUUID(),sermonId:sermon.id,assetId:randomUUID(),sourceHash:coverSourceHash(sermon),state:'queued',requestedBy:session.member,createdAt:now().toISOString()}
   await jobStore.setJSON(key,status)
   const response=await dispatch(backgroundUrl(event),{method:'POST',headers:{'content-type':'application/json',cookie:event.headers?.cookie||event.headers?.Cookie||''},body:JSON.stringify({sermonId:sermon.id,jobId:status.id})})
