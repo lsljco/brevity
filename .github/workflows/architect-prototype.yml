@@ -58,13 +58,13 @@ jobs:
         with:
           name: prototype-source
       - name: Prepare trusted dependencies before applying untrusted code
-        run: docker run --rm -v "$PWD:/work" -w /work node:24-bookworm-slim npm ci
+        run: docker run --rm --user "$(id -u):$(id -g)" -e npm_config_cache=/tmp/npm-cache -v "$PWD:/work" -w /work node:24-bookworm npm ci
       - name: Validate patch using trusted checker
         run: |
           git apply --index prototype.patch
           node scripts/architect/check-patch.mjs
       - name: Test generated code without network or credentials
-        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 4g -v "$PWD:/work" -w /work node:24-bookworm-slim sh -c 'npm test && npm run build'
+        run: docker run --rm --user "$(id -u):$(id -g)" -e npm_config_cache=/tmp/npm-cache --network none --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 4g -v "$PWD:/work" -w /work node:24-bookworm sh -c 'npm test && npm run build'
   propose:
     if: ${{ vars.BREVITY_ARCHITECT_STAGING_APPROVED == 'true' }}
     environment: architect-prototype-review
