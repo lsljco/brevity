@@ -343,3 +343,62 @@ test('Today Finance displays stored cash and scheduled obligations without claim
   await expect(finance).not.toContainText('Posted · linked')
   await expect(finance).toContainText('No finance decision recorded today.')
 })
+
+for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt while ${interruptPhase} and resume the next turn`,async({page})=>{
+  const requests=[]
+  let releaseSpeech
+  const heldSpeech=new Promise(resolve=>{releaseSpeech=resolve})
+  let speechRequests=0
+  await page.route('**/.netlify/functions/brevity-conversation',route=>route.fulfill({json:{version:0,messages:[]}}))
+  await page.route('**/.netlify/functions/brevity-assistant',async route=>{
+    requests.push(route.request().postDataJSON())
+    await route.fulfill({json:{message:`Verified schedule answer ${requests.length}.`,proposal:null}})
+  })
+  await page.route('**/elevenlabs-voices',route=>route.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test voice'}]}}))
+  await page.route('**/elevenlabs-tts',async route=>{
+    speechRequests++
+    if(interruptPhase==='preparing'&&speechRequests===1)await heldSpeech
+    await route.fulfill({contentType:'audio/mpeg',body:'test-audio'}).catch(()=>{})
+  })
+  await page.addInitScript(()=>{
+    localStorage.setItem('brevity_el_voice_v1','test-voice')
+    window.voiceTest={starts:0,plays:0,current:null,audio:null}
+    window.SpeechRecognition=class {
+      start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.()}
+      stop(){this.onend?.()}
+      abort(){this.onend?.()}
+    }
+    window.Audio=class {
+      constructor(){window.voiceTest.audio=this}
+      async play(){window.voiceTest.plays++}
+      pause(){}
+    }
+  })
+  await page.reload()
+  await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+  await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(1)
+  await page.evaluate(()=>window.voiceTest.current.onresult({results:[[{transcript:'What appointments do I have today?'}]]}))
+  // Exercise the real seven-second silence submission, not only the Send button.
+  await expect.poll(()=>requests.length,{timeout:10000}).toBe(1)
+  await expect(dialog.getByText('Verified schedule answer 1.',{exact:true})).toBeVisible()
+  if(interruptPhase==='playing')await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(1)
+  await dialog.getByRole('button',{name:'Interrupt and speak',exact:true}).click()
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(2)
+  if(interruptPhase==='preparing'){
+    releaseSpeech()
+    await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(0)
+  }
+  await page.evaluate(()=>window.voiceTest.current.onresult({results:[[{transcript:'And what chores are due?'}]]}))
+  await dialog.getByRole('button',{name:'Send message',exact:true}).click()
+  await expect.poll(()=>requests.length).toBe(2)
+  expect(requests[1].messages.at(-1).content).toBe('And what chores are due?')
+  expect(requests[1].messages.some(message=>message.content==='Verified schedule answer 1.')).toBe(true)
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(interruptPhase==='playing'?2:1)
+  await page.evaluate(()=>window.voiceTest.audio.onended())
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(3)
+  await dialog.getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+  await expect(page.getByRole('button',{name:'Open Brevity Assistant',exact:true})).toBeVisible()
+  expect(requests.length).toBe(2)
+})
