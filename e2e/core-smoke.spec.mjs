@@ -402,3 +402,58 @@ for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt wh
   await expect(page.getByRole('button',{name:'Open Brevity Assistant',exact:true})).toBeVisible()
   expect(requests.length).toBe(2)
 })
+
+for(const outcome of ['approve','cancel','interim','interrupted'])test(`routine spoken review ${outcome} stays bound to the reviewed proposal`,async({page})=>{
+  let executions=0,saved=false
+  const messages=[]
+  const proposal={id:'voice-proposal',actor:'Larry',actorRole:'admin',state:'pending',risk:'confirmation',expiresAt:new Date(Date.now()+1800000).toISOString(),summary:'Create household priorities',operations:[{id:'voice-op',type:'household.schedule.block.create',domain:'planning',risk:'confirmation',description:'Create priorities work block',targetDate:today(),targetId:'Larry',payload:{title:'Voice approval verification',date:today(),owner:'Larry',startTime:'18:00',endTime:'18:15'},allowedScopes:['this-item'],defaultScope:'this-item'}]}
+  await page.route('**/.netlify/functions/brevity-conversation',route=>route.fulfill({json:{version:saved?1:0,messages}}))
+  await page.route('**/.netlify/functions/brevity-assistant',route=>route.fulfill({json:{message:'Review prepared. Nothing saved.',proposal}}))
+  await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{
+    const body=route.request().postDataJSON()
+    expect(body.proposalId).toBe(proposal.id);expect(body.voiceApproval.proposalId).toBe(proposal.id)
+    expect(body.voiceApproval.phrase.toLowerCase()).toBe('apply this change');expect(body.confirmed).toBe(true)
+    expect(body.selections).toEqual({'voice-op':'this-item'})
+    executions++;saved=true;messages.push({role:'assistant',content:'Completed: Voice approval verification.'})
+    await route.fulfill({json:{audit:{id:'voice-audit',summary:'Voice approval verification'},conversation:{version:1,messages}}})
+  })
+  await page.route('**/elevenlabs-voices',route=>route.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test voice'}]}}))
+  await page.route('**/elevenlabs-tts',route=>route.fulfill({contentType:'audio/mpeg',body:'test-audio'}))
+  await page.addInitScript(()=>{
+    localStorage.setItem('brevity_el_voice_v1','test-voice')
+    window.voiceTest={starts:0,plays:0,current:null,audio:null}
+    window.SpeechRecognition=class {start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.()}stop(){this.onend?.()}abort(){this.onend?.()}}
+    window.Audio=class {constructor(){window.voiceTest.audio=this}async play(){window.voiceTest.plays++}pause(){}}
+  })
+  await page.reload();await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+  await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+  await dialog.getByRole('textbox').fill('Prepare a household priorities block for 6 to 6:15 PM.')
+  await dialog.getByRole('button',{name:'Send message',exact:true}).click()
+  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes',exact:true})
+  await expect(review).toBeVisible();await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(1)
+  expect(executions).toBe(0)
+  if(outcome==='interrupted'){
+    await page.evaluate(()=>{window.lateReviewEnd=window.voiceTest.audio.onended})
+    await review.getByRole('button',{name:'Cancel',exact:true}).click()
+    await page.evaluate(()=>window.lateReviewEnd())
+    await expect(review).toHaveCount(0);expect(executions).toBe(0);return
+  }
+  await page.evaluate(()=>window.voiceTest.audio.onended())
+  await expect(review.getByRole('status')).toContainText('Say “Apply this change”')
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(2)
+  await page.evaluate(({outcome})=>{const result=[{transcript:outcome==='cancel'?'Cancel this change':'Apply this change'}];result.isFinal=outcome!=='interim';window.voiceTest.current.onresult({results:[result]})},{outcome})
+  if(outcome==='approve'){
+    await expect.poll(()=>executions,{timeout:10000}).toBe(1)
+    await expect(review).toHaveCount(0)
+    await expect(dialog.getByText('Completed: Voice approval verification.',{exact:true})).toBeVisible()
+    await page.reload();await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+    await expect(page.getByText('Completed: Voice approval verification.',{exact:true})).toBeVisible()
+    expect(executions).toBe(1)
+  }else if(outcome==='cancel'){
+    await expect(review).toHaveCount(0,{timeout:10000});expect(executions).toBe(0)
+  }else{
+    await expect(dialog.getByRole('alert')).toContainText('Nothing was applied',{timeout:10000})
+    await expect(review).toBeVisible();expect(executions).toBe(0)
+  }
+})
