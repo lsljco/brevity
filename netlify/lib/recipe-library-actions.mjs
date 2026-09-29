@@ -7,7 +7,7 @@ const words=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').tr
 export function searchMealRecords(query,{library=[],recentNutrition=[],rollingMealPlan}={}){
   const tokens=words(query),score=item=>tokens.reduce((sum,token)=>sum+(words(item.name).includes(token)?2:words(JSON.stringify(item.ingredients||[])).includes(token)?1:0),0)
   const candidates=[...library.map(item=>({...item,kind:'recipe'})),...recentNutrition.flatMap(day=>day.entries.map(item=>({...item,kind:'consumed',date:day.date}))),...(rollingMealPlan?.days||[]).flatMap(day=>Object.entries(day.meals||{}).filter(([,meal])=>meal&&typeof meal==='object').map(([mealType,meal])=>({...meal,kind:'planned',date:day.date,mealType}))) ]
-  return candidates.map(item=>({item,score:score(item)})).filter(row=>!tokens.length||row.score>0).sort((a,b)=>b.score-a.score).slice(0,12).map(({item})=>({kind:item.kind,id:item.id,name:item.name,date:item.date,mealType:item.mealType,ingredients:item.ingredients,macros:item.macros,serving:item.serving,yieldQuantity:item.yieldQuantity,yieldUnit:item.yieldUnit,instructions:item.instructions}))
+  return candidates.map(item=>({item,score:score(item)})).filter(row=>!tokens.length||row.score>0).sort((a,b)=>b.score-a.score).slice(0,12).map(({item})=>({kind:item.kind,id:item.id,name:item.name,...(item.kind==='consumed'?{member:item.member}:{}),date:item.date,mealType:item.mealType,ingredients:item.ingredients,macros:item.macros,serving:item.serving,yieldQuantity:item.yieldQuantity,yieldUnit:item.yieldUnit,instructions:item.instructions}))
 }
 export function bindRecipeOperation(operation,{library,estimates}){
   if(operation.type!=='meal.recipe.update')return operation

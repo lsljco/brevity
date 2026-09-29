@@ -283,3 +283,11 @@ test('explicit preference tool binds the authenticated member and retains review
  assert.equal(reviews[0].operations[0].targetId,'Larry')
  assert.equal(reviews[0].operations[0].type,'member.preference.set')
 })
+
+test('consumed meal search preserves member ownership instead of returning an ownerless match',async()=>{
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical:{signedInMember:'Larry',recentNutrition:[{date:'2026-09-28',entries:[{id:'b',member:'Larry',name:'Breakfast'}]}]},browser:{}})
+ const result=JSON.parse(await agent.tools.find(tool=>tool.name==='search_meal_records').invoke({},JSON.stringify({query:'Breakfast'})))
+ assert.equal(result.consumedMember,'Larry')
+ assert.equal(result.matches[0].member,'Larry')
+ assert.match(result.notice,/never another member/)
+})
