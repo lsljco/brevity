@@ -99,7 +99,7 @@ test('agent diagnostics log only run metadata, never conversation or provider er
  await assert.rejects(()=>runBrevitySdkAgent({prompt:'PRIVATE meal detail',model:'test',schema,canonical,browser:{},runner,providerRecovery:{sleep:async()=>{}},logger:(...parts)=>logs.push(parts)}))
  const serialized=JSON.stringify(logs)
  assert.doesNotMatch(serialized,/SECRET|PRIVATE|transcript|token/)
- const metadata=JSON.parse(logs[0][1])
+ const metadata=JSON.parse(logs.find(entry=>entry[0]==='[brevity-agent-run]')[1])
  assert.equal(metadata.outcome,'failed');assert.equal(metadata.errorCategory,'rate_limit')
  assert.equal(typeof metadata.durationMs,'number')
 })
@@ -203,6 +203,16 @@ test('product source discovery has bounded research and filters invalid candidat
   return {finalOutput:{urls:['https://example.com/product','https://example.com/product','http://example.com/other']}}
  }}})
  assert.deepEqual(result,['https://example.com/product'])
+})
+
+test('product research cancels a stalled provider call instead of waiting indefinitely',async()=>{
+ const {findProductNutritionSources}=await import('../../netlify/lib/product-nutrition-research.mjs')
+ // Keep the test event loop alive while the SDK's unref'd timeout expires.
+ const keepAlive=setTimeout(()=>{},1000)
+ try{await assert.rejects(()=>findProductNutritionSources('Example chocolate shake',{model:'gpt-5.6-sol',timeoutMs:10,runner:{run:async(agent,input,{signal})=>{
+  assert.equal(agent.modelSettings.reasoning.effort,'low')
+  return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}))
+ }}}),{name:'TimeoutError'})}finally{clearTimeout(keepAlive)}
 })
 
 test('failed source discovery retries once with failed URLs before returning unavailable',async()=>{

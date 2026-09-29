@@ -143,8 +143,8 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
 
 export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,calculate,findSources,getUsageSummary,requestPrototype,requestInstructions='',validateOutput,providerRecovery={},requestId=randomUUID(),logger=console.info,onTool=()=>{},runner=new Runner({tracingDisabled:true})}) {
   const started=Date.now(),estimates=new Map(),clarifications=[],toolCalls={},preparedReviews=[],reviewErrors=[]
-  const recordTool=name=>{toolCalls[name]=(toolCalls[name]||0)+1;onTool(name)}
   const safeRequestId=/^[a-f0-9-]{36}$/.test(requestId)?requestId:randomUUID()
+  const recordTool=name=>{toolCalls[name]=(toolCalls[name]||0)+1;onTool(name);try{logger('[brevity-agent-tool]',JSON.stringify({requestId:safeRequestId,tool:name,elapsedMs:Date.now()-started}))}catch{}}
   let outcome='failed',errorCategory=null
   try{
     const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,findSources,getUsageSummary,requestPrototype,estimates,clarifications,onTool:recordTool,requestInstructions,validateOutput,preparedReviews,reviewErrors})
