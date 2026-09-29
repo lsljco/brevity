@@ -1,0 +1,109 @@
+{
+  "id": "d9701944-2731-4cd9-a268-e691e6cb042d",
+  "owner": "Larry",
+  "state": "complete",
+  "createdAt": "2026-09-29T01:54:36.077Z",
+  "build": {
+    "preview": true,
+    "commit": "fdf8a6c1fd032dc0e46f6f7461523c2e824a4092"
+  },
+  "caseIds": [
+    "household-project",
+    "preference-remember"
+  ],
+  "syntheticData": true,
+  "productionWrites": false,
+  "results": [
+    {
+      "id": "household-project",
+      "durationMs": 1873,
+      "checks": {
+        "mealBoundaryPreserved": true,
+        "requestedPayloadMatches": true,
+        "nonemptyReply": true,
+        "requiredTools": true,
+        "allowedActions": true,
+        "expectedProposalPresent": true,
+        "contractValid": true
+      },
+      "structuralPass": true,
+      "humanReviewRequired": true,
+      "reviewChecklist": [
+        "Use saved project status and avoid invented progress."
+      ],
+      "observedFunctionTools": [
+        "search_household_records"
+      ],
+      "calculationInputs": [],
+      "output": {
+        "message": "Kitchen project status: **In Progress**.\n\nI found one saved project record titled **Kitchen** with id `kitchen`.",
+        "proposal": null
+      }
+    },
+    {
+      "id": "preference-remember",
+      "durationMs": 3200,
+      "checks": {
+        "mealBoundaryPreserved": true,
+        "requestedPayloadMatches": true,
+        "nonemptyReply": true,
+        "requiredTools": true,
+        "allowedActions": true,
+        "expectedProposalPresent": true,
+        "contractValid": true
+      },
+      "structuralPass": true,
+      "humanReviewRequired": true,
+      "reviewChecklist": [
+        "Targets Larry only; communication category; concise answer preference; review not saved."
+      ],
+      "observedFunctionTools": [
+        "get_pillar_records",
+        "remember_member_preference"
+      ],
+      "calculationInputs": [],
+      "output": {
+        "message": "Preference noted: brief spoken answers. I prepared the review to save it across devices.",
+        "proposal": {
+          "summary": "Remember your communication preference",
+          "operations": [
+            {
+              "type": "member.preference.set",
+              "description": "Save your communication preference across devices",
+              "targetId": "Larry",
+              "targetDate": "",
+              "payloadJson": "{\"category\":\"communication\",\"value\":\"Prefer brief spoken answers.\"}",
+              "allowedScopes": [
+                "this-item"
+              ],
+              "defaultScope": "this-item"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "completedAt": "2026-09-29T01:55:19.699Z",
+  "persistence": {
+    "passed": true,
+    "checks": {
+      "noWriteBeforeExecution": true,
+      "persistedSave": true,
+      "idempotentRetry": true,
+      "persistedCorrection": true,
+      "staleWriteRejected": true,
+      "crossMemberWriteRejected": true,
+      "persistedUndo": true,
+      "auditPreserved": true,
+      "fitnessPlanSaveAndUndo": true,
+      "educationPlanSaveAndUndo": true,
+      "spiritualPlanSaveAndUndo": true,
+      "ministryPlanSaveAndUndo": true,
+      "improvementApprovalSaveAndUndo": true,
+      "memberPreferenceSaveIsolationAndUndo": true
+    },
+    "syntheticData": true,
+    "productionWrites": false,
+    "scope": "Real action executor and persistence; no browser confirmation interaction."
+  }
+}

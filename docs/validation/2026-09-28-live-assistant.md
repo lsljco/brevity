@@ -1,5 +1,7 @@
 # Signed-in preview validation — September 28, 2026
 
+Current consolidated status: [September 29 release candidate audit](2026-09-29-release-candidate.md). This document preserves the chronological investigation; earlier pending gates and test counts describe those earlier candidates.
+
 Preview: PR #230. These are actual signed-in assistant requests and Netlify function observations, not the synthetic evaluation harness. No test meal or recipe changes were confirmed.
 
 ## Failures reproduced
