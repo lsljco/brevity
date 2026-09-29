@@ -23,8 +23,15 @@ export const handler=async event=>{
  const host=event.headers?.host||'',origin=event.headers?.origin
  if(!/^deploy-preview-\d+--brevityoflife\.netlify\.app$/.test(host)||origin&&origin!==`https://${host}`)return json(403,{error:'Use this deploy preview directly.'})
  const id=randomUUID(),job={id,owner:session.member,state:'queued',createdAt:new Date().toISOString(),build:releaseBuild,caseIds:[...new Set(ids)],syntheticData:true,productionWrites:false,results:[]}
- await releaseJobs().setJSON(id,job,{onlyIfNew:true})
+ const store=releaseJobs(),leaseKey=`active:${session.member}`,previous=await store.getWithMetadata(leaseKey,{type:'json'})
+ if(previous?.data?.id&&Date.now()-previous.data.startedAt<15*60*1000){
+  const active=await store.get(previous.data.id,{type:'json'})
+  if(active&&['queued','running'].includes(active.state))return json(409,{error:'A release check is already running.',id:active.id})
+ }
+ const lease=await store.setJSON(leaseKey,{id,startedAt:Date.now()},previous?.etag?{onlyIfMatch:previous.etag}:{onlyIfNew:true})
+ if(lease?.modified===false)return json(409,{error:'A release check was just started. Refresh to check its progress.'})
+ await store.setJSON(id,job,{onlyIfNew:true})
  const response=await fetch(`https://${host}/.netlify/functions/brevity-release-checks-background`,{method:'POST',headers:{'content-type':'application/json',cookie:event.headers.cookie||''},body:JSON.stringify({id})})
- if(!response.ok)return json(502,{error:'Could not start release checks.'})
+ if(!response.ok){await store.setJSON(id,{...job,state:'failed',error:'Could not start release checks.'});return json(502,{error:'Could not start release checks.'})}
  return json(202,{id})
 }

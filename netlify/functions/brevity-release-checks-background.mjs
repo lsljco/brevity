@@ -18,9 +18,11 @@ export default async request=>{
  let persistence=null
  try{
   persistence=await verifyReleasePersistence({store:getStore({name:'brevity-release-fixtures',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN}),runId:id}).catch(error=>({passed:false,error:error.message}))
-  for(let index=0;index<job.caseIds.length;index+=3){
-   results.push(...await Promise.all(job.caseIds.slice(index,index+3).map(id=>evaluateHouseholdCase(evaluationCases.find(item=>item.id===id)))))
+  for(const caseId of job.caseIds){
+   results.push(await evaluateHouseholdCase(evaluationCases.find(item=>item.id===caseId)))
    await store.setJSON(id,{...job,state:'running',results,persistence})
+   // Avoid consuming the household API project's entire token allowance.
+   if(results.length<job.caseIds.length)await new Promise(resolve=>setTimeout(resolve,8000))
   }
   await store.setJSON(id,{...job,state:'complete',completedAt:new Date().toISOString(),results,persistence})
  }catch{await store.setJSON(id,{...job,state:'failed',results,persistence,error:'Release check execution failed.'})}

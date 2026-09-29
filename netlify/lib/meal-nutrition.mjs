@@ -101,6 +101,8 @@ export function calculateNutritionResult(request, modelResult = {}) {
     amountDescription:String(row.amountDescription||normalized.ingredients[index]).trim(),
     basis:String(row.basis||'Standard nutrition reference estimate').trim(),
     sourceUrl:(row.foodKind!=='packaged'||row.referenceQuality==='exact-product-label')&&normalized.productReferences?.some(reference=>reference.url===row.sourceUrl)?row.sourceUrl:null,
+    ...(row.packagedPortion?{packagedPortion:structuredClone(row.packagedPortion)}:{}),
+    referenceQuality:row.referenceQuality||'unavailable',
     confidence:['high','medium','low'].includes(row.confidence)?row.confidence:'low',
     macros:Object.fromEntries(macroFields.map(field=>[field,round(row[field])])),
     nutrients:Object.fromEntries(optionalNutrients.map(field=>[field,typeof row[field]==='number'&&Number.isFinite(row[field])&&row[field]>=0?round(row[field]):null])),

@@ -95,7 +95,7 @@ test('recipe calculations preserve batch yield through the agent tool',async()=>
 test('agent diagnostics log only run metadata, never conversation or provider error text',async()=>{
  const logs=[]
  const runner={run:async()=>{throw Object.assign(new Error('SECRET transcript and token'),{status:429})}}
- await assert.rejects(()=>runBrevitySdkAgent({prompt:'PRIVATE meal detail',model:'test',schema,canonical,browser:{},runner,logger:(...parts)=>logs.push(parts)}))
+ await assert.rejects(()=>runBrevitySdkAgent({prompt:'PRIVATE meal detail',model:'test',schema,canonical,browser:{},runner,providerRecovery:{sleep:async()=>{}},logger:(...parts)=>logs.push(parts)}))
  const serialized=JSON.stringify(logs)
  assert.doesNotMatch(serialized,/SECRET|PRIVATE|transcript|token/)
  const metadata=JSON.parse(logs[0][1])

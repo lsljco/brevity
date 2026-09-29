@@ -1,8 +1,14 @@
 import {PILLAR_FIELDS} from './daily-plan-core-fields.mjs'
 import { nutritionProgress, suggestPlannedMeals } from './nutrition-progress.mjs'
 
+export function editablePlanContract(pillar){
+ const names={text:'string',strings:'array of strings',members:'array of household member names',numbers:'non-negative number',booleans:'boolean',items:'array of plan items: title required, optional id/notes/owner/participants/status/priority/date/startTime/endTime/dueAt/requiresDecision/calendarSync/notificationLevel',nested:'object'}
+ const fields=Object.fromEntries(Object.entries(PILLAR_FIELDS[pillar]||{}).flatMap(([kind,keys])=>keys.map(key=>[key,names[kind]])))
+ if(pillar==='education')fields.isaiah={readingMinutes:'number 0–1440',sightWordsMinutes:'number 0–1440',comprehensionMinutes:'number 0–1440',mathMinutes:'number 0–1440',notes:'string'}
+ return fields
+}
 export function pillarRecords(pillar, canonical, browser) {
-  const base={editablePlanFields:PILLAR_FIELDS[pillar],householdDate:canonical.householdDate,sources:canonical.sources,supplementalSources:canonical.supplementalSources}
+  const base={editablePlanFields:editablePlanContract(pillar),householdDate:canonical.householdDate,sources:canonical.sources,supplementalSources:canonical.supplementalSources}
   const records=canonical.actionRecords||{}
   switch(pillar){
     case 'spiritual':return {...base,activeSermon:canonical.activeSermon,dailyPlan:canonical.dailyPlan?.spiritual,analysis:browser.todayPillarAnalyses?.spiritual}
