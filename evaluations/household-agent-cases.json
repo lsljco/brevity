@@ -618,16 +618,17 @@
         "content": "Set my daily protein target to 130 grams. Keep my other targets unchanged."
       }
     ],
-    "requiredTools": [
-      "get_pillar_records"
-    ],
+    "requiredTools": [],
     "allowedProposalTypes": [
       "nutrition.targets.update"
     ],
     "review": [
       "Change only requested fields, retain other saved values, and require review."
     ],
-    "calculator": "clarify"
+    "calculator": "clarify",
+    "expectedPayload": {
+      "proteinGrams": 130
+    }
   },
   {
     "id": "improvement-propose",

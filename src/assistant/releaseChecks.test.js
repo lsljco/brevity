@@ -24,3 +24,12 @@ test('evaluation rejects structurally plausible actions that fail the real actio
  assert.equal(result.checks.contractValid,false)
  assert.equal(result.structuralPass,false)
 })
+
+test('target evaluation checks exact requested values and rejects extra changes without demanding an unnecessary read',async()=>{
+ const item=evaluationCases.find(item=>item.id==='nutrition-target')
+ for(const [payload,expected] of [[{proteinGrams:130},true],[{proteinGrams:120},false],[{proteinGrams:130,calories:2000},false]]){
+  const result=await evaluateHouseholdCase(item,{run:async()=>({output:{message:'Review prepared',proposal:{summary:'Target',operations:[{type:'nutrition.targets.update',targetId:'Larry',targetDate:'2026-09-28',payload}]}},estimates:new Map()})})
+  assert.equal(result.checks.requestedPayloadMatches,expected)
+  assert.equal(result.structuralPass,expected)
+ }
+})
