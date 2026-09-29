@@ -14,7 +14,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
   const readProductNutrition=tool({
     name:'read_product_nutrition',
     description:'Read actual nutrition evidence from product URLs discovered with web_search. Returns page text or explicit retrieval failures. Inspect every identified packaged food before calculating; snippets alone do not establish the label. Does not save household data.',
-    parameters:z.object({urls:z.array(z.string().url()).min(1).max(4)}),
+    parameters:z.object({urls:z.array(z.string().min(1).max(1000)).min(1).max(4)}),
     async execute({urls}){
       onTool('read_product_nutrition')
       const failures=[]

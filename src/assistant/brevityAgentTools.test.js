@@ -168,6 +168,7 @@ test('agent can inspect real product evidence before calculation and reuse its p
   return {perServingMacros:{calories:160,proteinGrams:30}}
  }})
  const reader=agent.tools.find(item=>item.name==='read_product_nutrition')
+ assert.equal(reader.parameters.properties.urls.items.format,undefined)
  const read=JSON.parse(await reader.invoke({},JSON.stringify({urls:['https://example.com/product','https://example.com/missing']})))
  assert.equal(read.references.length,1)
  assert.equal(read.failures[0].reason,'No readable label')
