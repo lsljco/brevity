@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { getStore } from '@netlify/blobs'
+import { getStore } from './scoped-store.mjs'
 import { normalizePermissionMatrix } from './assistant-action-contract.mjs'
 
 const STORE_NAME = 'brevity-assistant-actions'

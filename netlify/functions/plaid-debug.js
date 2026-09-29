@@ -4,7 +4,7 @@ const { readSession } = require('./household-auth')
 
 let blobsGetStore = null
 try {
-  const blobs = require('@netlify/blobs')
+  const blobs = require('../lib/scoped-store.cjs')
   blobsGetStore = blobs.getStore
 } catch (e) {}
 

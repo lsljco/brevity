@@ -1,3 +1,4 @@
+import {resolveModules} from '../../src/modules/configuration.js'
 import {validateAgentProposal} from './agent-proposal-validation.mjs'
 import cases from '../../evaluations/household-agent-cases.json' with {type:'json'}
 import {runBrevitySdkAgent} from './brevity-sdk-agent.mjs'
@@ -12,16 +13,23 @@ export function evaluationFixture(item){
  const member='Larry',date='2026-09-28'
  const recipe={id:'custom-dinner-test',name:'Smoked Turkey Breast + Garlic Kale',ingredients:['6 oz turkey','1 cup garlic kale','1 roasted sweet potato'],yieldQuantity:1,yieldUnit:'serving',macros:{calories:600,proteinGrams:45,carbohydrateGrams:50,fatGrams:15}}
  const canonical={householdDate:date,signedInMember:member,sources:[],mealLibrary:[recipe],dailyPlan:{fitness:{focus:'Walk 30 minutes'},education:{focus:'Read for 20 minutes'},household:{focus:'Inspect garage'},ministry:{focus:'Prepare Sunday welcome'}},activeSermon:{title:'Stewardship',summary:'Faithful care of entrusted resources.'},actionRecords:{projects:[{id:'kitchen',title:'Kitchen',status:'In Progress'}],finance:{recurringRecords:[{id:'electric',title:'Electric bill',amount:150,frequency:'monthly',date:'2026-10-01'}]}},dailyNutrition:{member,date,entries:[{id:'breakfast',member,date,name:'Breakfast',ingredients:[{input:'2 slices toast'}],macros:{calories:140,proteinGrams:4,carbohydrateGrams:26,fatGrams:2}}],totals:{calories:140,proteinGrams:4,carbohydrateGrams:26,fatGrams:2}},nutritionTargets:{proteinGrams:100},supplementalSources:{'apple-calendar':'unavailable'}}
+ canonical.moduleConfiguration=resolveModules([]);canonical.recentActivities=[];canonical.recentNutrition=[canonical.dailyNutrition];canonical.recentDailyPlans=[{...canonical.dailyPlan,date}];canonical.historyStartDate='2026-09-22';canonical.access={finance:true,education:true}
  canonical.actionRecords.improvementProposals=[{id:'voice-recovery-idea',title:'Voice recovery',stage:'proposed',problem:'Reported stalled voice after an error',evidence:'User report',solution:'Restart microphone after clearing busy state',benefit:'Hands-free continuation',risks:'Duplicate submissions',successMetric:'Recovery tests pass without duplicate sends'}]
  canonical.memberPreferences=item.id==='preference-remember'?{}:{communication:'Prefer short spoken answers'}
  canonical.recentNutrition=[canonical.dailyNutrition]
+ if(item.id==='meal-remove'){
+  // The request says breakfast was logged twice: provide the duplicate rather
+  // than rewarding an agent for deleting the only real meal in the fixture.
+  canonical.dailyNutrition.entries.push({...structuredClone(canonical.dailyNutrition.entries[0]),id:'breakfast-duplicate'})
+  canonical.dailyNutrition.totals={calories:280,proteinGrams:8,carbohydrateGrams:52,fatGrams:4}
+ }
  if(item.outage){canonical.dailyNutrition=null;canonical.recentNutrition=[];canonical.nutritionUnavailable=true;canonical.supplementalSources[`nutrition:${date}`]='unavailable'}
  return{member,date,canonical}
 }
-export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=process.env.BREVITY_AI_MODEL||'gpt-5.6'}={}){
+export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=process.env.BREVITY_AGENT_MODEL||'gpt-5.6-sol'}={}){
  const {member,date,canonical}=evaluationFixture(item),observed=[],calculationInputs=[],started=Date.now()
  try{
-  const result=await run({model,schema:assistantResponseSchema,canonical,browser:{},logger:()=>{},onTool:name=>observed.push(name),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical,member,role:'admin',estimates}),requestInstructions:buildAssistantInstructions({member,page:item.pillar}),prompt:[{role:'user',content:`BREVITY CONTEXT (synthetic test data):\n${JSON.stringify({householdDate:date,signedInMember:member,sources:canonical.sources,supplementalSources:canonical.supplementalSources,notice:'Read relevant saved data with the pillar or meal search tools.'})}`},...item.messages],findSources:async()=>[],calculate:async request=>{
+  const result=await run({model,schema:assistantResponseSchema,canonical,browser:{},logger:()=>{},onTool:name=>observed.push(name),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical,member,role:'admin',estimates}),requestInstructions:buildAssistantInstructions({member,page:item.pillar}),prompt:[{role:'user',content:`BREVITY CONTEXT (synthetic test data):\n${JSON.stringify({memberPreferences:canonical.memberPreferences,householdDate:date,signedInMember:member,sources:canonical.sources,supplementalSources:canonical.supplementalSources,notice:'Read relevant saved data with the pillar or meal search tools.'})}`},...item.messages],findSources:async()=>[],calculate:async request=>{
    calculationInputs.push(request.ingredients)
 
    if(item.calculator==='clarify')throw Object.assign(new Error('Which exact brand and portion did you have?'),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions:['Which exact brand and portion did you have?']})
@@ -35,8 +43,15 @@ export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=p
   }catch(error){contractValid=false;contractError=error.message}
   const requestedPayloadMatches=!item.expectedPayload||result.output?.proposal?.operations?.some(operation=>{try{const payload=operation.payload||JSON.parse(operation.payloadJson);return JSON.stringify(payload)===JSON.stringify(item.expectedPayload)}catch{return false}})
   const foods=calculationInputs.flat().join(' ').toLowerCase()
+  const requestedActivityMatches=!item.expectedActivity||result.output?.proposal?.operations?.length===1&&result.output.proposal.operations.every(operation=>{
+   try{
+    const payload=operation.payload||JSON.parse(operation.payloadJson)
+    return operation.type==='activity.record'&&operation.targetId===member&&operation.targetDate===date&&Object.entries(item.expectedActivity).every(([key,value])=>payload[key]===value)&&/walk/i.test(payload.title||'')&&!Object.keys(payload).some(key=>/calori|energy/i.test(key))
+   }catch{return false}
+  })
   const mealBoundaryPreserved=!item.expectedFoods||(item.expectedFoods.every(food=>foods.includes(food))&&!(item.forbiddenFoods||[]).some(food=>foods.includes(food)))
-  const checks={mealBoundaryPreserved,requestedPayloadMatches,nonemptyReply:Boolean(result.output?.message?.trim()),requiredTools:item.requiredTools.every(name=>observed.includes(name)||(name==='get_pillar_records'&&((item.id.startsWith('meal-')&&observed.includes('search_meal_records'))||((item.id.startsWith('improvement-')||item.id==='household-project')&&observed.includes('search_household_records'))))),allowedActions:types.every(type=>item.allowedProposalTypes.includes(type)),expectedProposalPresent:!item.allowedProposalTypes.length||types.length>0,contractValid}
+  const checks={mealBoundaryPreserved,requestedPayloadMatches,nonemptyReply:Boolean(result.output?.message?.trim()),requiredTools:item.requiredTools.every(name=>observed.includes(name)||(name==='get_pillar_records'&&item.id==='preference-recall'&&observed.includes('get_member_preferences'))||(name==='get_pillar_records'&&item.id==='preference-remember'&&observed.includes('remember_member_preference'))||(name==='get_pillar_records'&&((item.id==='meal-outage'&&observed.includes('get_weekly_household_briefing'))||(item.id.startsWith('meal-')&&observed.includes('search_meal_records'))||((item.id.startsWith('improvement-')||item.id==='household-project')&&observed.includes('search_household_records'))))),allowedActions:types.every(type=>item.allowedProposalTypes.includes(type)),expectedProposalPresent:!item.allowedProposalTypes.length||types.length>0,contractValid}
+  checks.requestedActivityMatches=Boolean(requestedActivityMatches)
   return{id:item.id,durationMs:Date.now()-started,checks,structuralPass:Object.values(checks).every(Boolean),humanReviewRequired:true,reviewChecklist:item.review,observedFunctionTools:observed,calculationInputs,output:result.output,...(contractError?{contractError}:{})}
  }catch(error){return{id:item.id,durationMs:Date.now()-started,structuralPass:false,humanReviewRequired:true,errorCategory:error?.name||'Error',diagnostic:String(error?.message||'Unknown failure').replace(/(?:sk-|org-)[A-Za-z0-9_-]+/g,'[redacted]').slice(0,600),observedFunctionTools:observed}}
 }

@@ -26,3 +26,15 @@
 .brevity-action-review article>small,.brevity-action-review label span{font-size:12px}
 .brevity-action-warning{font-size:13px}
 .brevity-action-review input,.brevity-action-review select{font-size:16px}
+
+.brevity-conversation-notice{font-size:12px;line-height:1.5;color:var(--muted);margin:0 0 12px}
+
+.brevity-conversation-notice button,.brevity-conversation-notice input::file-selector-button{background:var(--glass-bg);color:var(--soft-white);border:1px solid var(--glass-border);border-radius:8px;padding:8px;margin:4px;font:inherit}
+.brevity-conversation-notice input{display:block;max-width:100%;color:var(--soft-white);margin-top:6px}
+
+/* Anchor voice/send controls to the input, independent of photo/voice controls. */
+.brevity-assistant-input-row{position:relative}
+.brevity-assistant-input-row textarea{display:block}
+.brevity-assistant-input-row .brevity-assistant-composer-actions{top:50%;right:12px}
+.brevity-assistant-composer>label.brevity-conversation-notice{display:block;margin:0 0 8px}
+.brevity-assistant-composer input[type=file]{display:block;box-sizing:border-box;max-width:100%;padding:3px 0;border:0;background:transparent;color:var(--soft-white);font:11px var(--font-sans)}

@@ -1,3 +1,5 @@
+import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
+import {recordUsage} from '../lib/usage-metrics.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import householdAuth from './household-auth.js'
 import { normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../lib/assistant-action-contract.mjs'
@@ -405,6 +407,8 @@ export async function executeActionWithJournal({repository,proposal,operations,s
   return{journal,audit}
 }
 
+async function conversationReceipt(member,audit){try{return await productionConversationRepository().appendReceipt(member,{id:audit.id,content:`${audit.action==='undo'?'Undone':'Completed'}: ${audit.summary||'Reviewed household action'}. Recorded in Action Mode history.`})}catch{return null}}
+
 export async function completeExecutionJournal({repository,journalId,completedAt}) {
   return repository.updateJournal(journalId,current=>current.state==='completed'?current:{...current,state:'completed',completedAt})
 }
@@ -422,6 +426,9 @@ const undoForbidden=message=>Object.assign(new Error(message),{code:'FORBIDDEN'}
 // or running version preflight. Administrators retain the same explicit
 // override used by normal Action Mode execution.
 export async function authorizeUndoOperations({event,audit,session,permissions,resources,calendarRequestFn=calendarRequest}) {
+  if((audit.changes||[]).some(change=>change.resource?.startsWith('activity:')&&!change.resource.startsWith(`activity:${session.member}:`)))throw undoForbidden('Members can undo only their own activity records.')
+  if((audit.operations||[]).some(operation=>operation.type==='education.observation.record')&&!['Larry','Lorenzo','Terica'].includes(session.member))throw undoForbidden('Learning evidence Undo requires an authorized adult.')
+
   if((audit.changes||[]).some(change=>change.resource?.startsWith('member-context:')&&change.resource!==`member-context:${session.member}`))throw undoForbidden('Members can undo only their own preference changes.')
   if((audit.operations||[]).some(operation=>operation.type==='improvement.transition')&&!['Larry','Lorenzo'].includes(session.member))throw undoForbidden('Only Larry or Lorenzo can undo improvement approval stages.')
   if(session.role==='admin')return
@@ -613,7 +620,7 @@ export const handler=async event=>{
       normalized.Larry={planning:true,calendar:true,projects:true,finance:true}
       if(body.confirmation!=='CONFIRM')return json(400,{error:'Type CONFIRM to authorize member permission changes.'})
       const result=await savePermissionsWithJournal({repository,matrix:normalized,session,expectedVersion:body.expectedVersion})
-      return json(200,{permissions:result.permissions,permissionVersion:result.permissionVersion,audit:publicAssistantAudit(result.audit)})
+      return json(200,{permissions:result.permissions,permissionVersion:result.permissionVersion,conversation:await conversationReceipt(session.member,result.audit),audit:publicAssistantAudit(result.audit)})
     }
     if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
     if(action==='prepare-calendar'){
@@ -653,7 +660,8 @@ export const handler=async event=>{
         if(!audit)throw new Error('The completed Action Mode proposal is missing its immutable audit record.')
         const journalEntry=await repository.getJournalEntry(actionId('execute',proposal.id))
         if(journalEntry.journal&&journalEntry.journal.state!=='completed')await completeExecutionJournal({repository,journalId:journalEntry.journal.id,completedAt:proposal.executedAt||audit.occurredAt})
-        return json(200,{ok:true,audit:publicAssistantAudit(audit),nutrition:await executedNutrition(audit.operations,session,resources),reloadRequired:true,recovered:true})
+        await recordUsage(session.member,{id:audit.id,kind:'action',outcome:(audit.operations||[]).some(op=>op.type==='nutrition.meal.update'||op.type==='activity.update')?'corrected':'completed'})
+        return json(200,{ok:true,conversation:await conversationReceipt(session.member,audit),audit:publicAssistantAudit(audit),nutrition:await executedNutrition(audit.operations,session,resources),reloadRequired:true,recovered:true})
       }
       if(!['pending','executing'].includes(proposal.state))return json(409,{error:'This proposal cannot be applied again. Ask Brevity to prepare a new one.'})
       let operations,executingMember
@@ -686,7 +694,8 @@ export const handler=async event=>{
           if(latest?.state!=='executed'||latest.auditId!==result.audit.id)throw Object.assign(new Error('The proposal state changed while Action Mode was finalizing it.'),{code:'JOURNAL_CONFLICT'})
         }
         await completeExecutionJournal({repository,journalId:result.journal.id,completedAt:result.audit.occurredAt})
-        return json(200,{ok:true,audit:publicAssistantAudit(result.audit),nutrition:await executedNutrition(operations,session,resources),reloadRequired:true})
+        await recordUsage(session.member,{id:result.audit.id,kind:'action',outcome:operations.some(op=>op.type==='nutrition.meal.update'||op.type==='activity.update')?'corrected':'completed'})
+        return json(200,{ok:true,conversation:await conversationReceipt(session.member,result.audit),audit:publicAssistantAudit(result.audit),nutrition:await executedNutrition(operations,session,resources),reloadRequired:true})
       }catch(error){
         const journal=(await repository.getJournalEntry(actionId('execute',proposal.id))).journal
         if(!journal){
@@ -699,7 +708,8 @@ export const handler=async event=>{
     if(action==='undo'){
       if(body.confirmation!=='CONFIRM')return json(400,{error:'Type CONFIRM to undo this completed action.'})
       const result=await undoActionWithJournal({repository,auditId:body.auditId,session,resources,event})
-      return json(200,{ok:true,audit:publicAssistantAudit(result.audit),reloadRequired:true})
+      await recordUsage(session.member,{id:result.audit.id,kind:'action',outcome:'undone'})
+      return json(200,{ok:true,conversation:await conversationReceipt(session.member,result.audit),audit:publicAssistantAudit(result.audit),reloadRequired:true})
     }
     return json(404,{error:'Unknown Action Mode request.'})
   }catch(error){

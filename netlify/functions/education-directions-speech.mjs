@@ -1,5 +1,5 @@
 import householdAuth from './household-auth.js'
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.mjs'
 
 const { readSession }=householdAuth
 const MODEL=process.env.BREVITY_TTS_MODEL||'gpt-4o-mini-tts'

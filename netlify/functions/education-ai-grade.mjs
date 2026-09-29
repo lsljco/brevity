@@ -1,5 +1,5 @@
 import householdAuth from './household-auth.js'
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.mjs'
 
 const { readSession }=householdAuth
 const MODEL=process.env.BREVITY_AI_MODEL||'gpt-5.6'

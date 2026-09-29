@@ -7,6 +7,9 @@ import {normalizeActionProposal} from './assistant-action-contract.mjs'
 export function validateAgentProposal(output,{canonical,member,role,estimates}){
  if(!output?.proposal)return
  const operations=output.proposal.operations.map(operation=>{
+  if(operation.type==='module.configuration.update'&&role!=='admin')throw Error('Module customization requires administrator review.')
+  if(operation.type.startsWith('activity.')&&operation.targetId!==member)throw Error('Members can change only their own activity records.')
+  if(operation.type==='education.observation.record'&&!['Larry','Lorenzo','Terica'].includes(member))throw Error('Learning evidence requires an authorized adult review.')
   if(operation.type==='member.preference.set'&&operation.targetId!==member)throw Error('Members can change only their own preferences.')
   assertActionSourcesAvailable(operation,canonical)
   if(operation.type==='plan.pillar.update'){

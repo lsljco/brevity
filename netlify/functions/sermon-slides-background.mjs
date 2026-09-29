@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { sermonFormationPermission } from './sermon-formation-start.mjs'
 import { buildSermonSlides, sermonSlidesFileName } from '../lib/sermon-slides.mjs'

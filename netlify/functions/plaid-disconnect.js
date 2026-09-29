@@ -6,6 +6,7 @@ const headers = {
 }
 
 exports.handler = async event => {
+  if(require('../lib/scoped-store.cjs').preview)return {statusCode:403,body:JSON.stringify({error:'Bank connection changes are disabled in deploy previews.'})}
   if (event.httpMethod === 'OPTIONS') return { statusCode:200, headers, body:'' }
   if (event.httpMethod !== 'POST') return { statusCode:405, headers, body:JSON.stringify({ error:'Method not allowed' }) }
   return {

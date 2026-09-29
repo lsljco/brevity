@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.mjs'
 import householdAuth from './household-auth.js'
 import { workspaceKey,packageKey,deckKey,safeId,sermonSourceHash,normalizePackage,buildWorkspaceDeck } from '../lib/sermon-workspace-package.mjs'
 const {readSession}=householdAuth

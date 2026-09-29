@@ -14,7 +14,7 @@ const crypto = require('crypto')
 let blobsGetStore = null
 let blobsConnectLambda = null
 try {
-  const blobs = require('@netlify/blobs')
+  const blobs = require('../lib/scoped-store.cjs')
   blobsGetStore = blobs.getStore
   blobsConnectLambda = blobs.connectLambda
 } catch (e) {

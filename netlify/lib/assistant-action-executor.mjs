@@ -1,8 +1,11 @@
+import {applyModulePatch,MODULE_RESOURCE} from '../../src/modules/configuration.js'
+import {applyActivity} from './member-activity.mjs'
+import {applyLearningObservation,LEARNING_RESOURCE} from './learning-observation.mjs'
 import {applyMemberPreference} from './member-preferences.mjs'
 import {IMPROVEMENT_RESOURCE,applyImprovement} from './improvement-workflow.mjs'
 import {RECIPE_RESOURCE,resolvedRecipes,applyRecipeUpdate} from './recipe-library-actions.mjs'
 import { randomUUID } from 'node:crypto'
-import { getStore } from '@netlify/blobs'
+import { getStore } from './scoped-store.mjs'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from '../../src/finance/recurrenceEditing.js'
 import { applyBudgetTarget } from '../../src/finance/budgetBreakdown.js'
 import { calculateDebtPayment } from '../../src/finance/debtModel.js'
@@ -33,6 +36,9 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type==='module.configuration.update')return MODULE_RESOURCE
+  if(operation.type.startsWith('activity.'))return `activity:${operation.targetId}:${operation.targetDate}`
+  if(operation.type==='education.observation.record')return LEARNING_RESOURCE
   if(operation.type==='member.preference.set')return `member-context:${operation.targetId}`
   if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
   if(operation.type==='meal.recipe.update')return RECIPE_RESOURCE
@@ -58,6 +64,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type.startsWith('activity.'))return (value?.entries||[]).find(item=>item.id===operation.payload?.entryId)||null
   if(operation.type==='improvement.transition')return (Array.isArray(value)?value:[]).find(item=>item.id===operation.targetId)
   if(operation.type==='meal.recipe.update')return resolvedRecipes(value).find(meal=>meal.id===operation.targetId)||null
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return (value?.entries||[]).find(entry=>entry.id===operation.payload?.entryId)||null
@@ -85,6 +92,9 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type==='module.configuration.update')return {before,after:applyModulePatch(value,operation.payload)}
+  if(operation.type.startsWith('activity.'))return {before,after:applyActivity(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
+  if(operation.type==='education.observation.record')return {before,after:applyLearningObservation(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='member.preference.set')return {before,after:applyMemberPreference(value,operation)}
   if(operation.type.startsWith('improvement.'))return {before,after:applyImprovement(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   const payload = operation.payload || {}
@@ -473,10 +483,13 @@ export function createProductionActionResources({ now = () => new Date(), shared
   const mealKey = date => `${HOUSEHOLD_ID}/days/${date}`
   const nutritionKey = (member,date) => `${HOUSEHOLD_ID}/nutrition/${member}/${date}`
   const nutritionTargetsKey = member => `${HOUSEHOLD_ID}/nutrition/${member}/targets`
+  const activityKey=(member,date)=>`${HOUSEHOLD_ID}/activity/${member}/${date}`
   const memberContextKey = member => `${HOUSEHOLD_ID}/member-context/${member}`
   const activeSermonKey = `${HOUSEHOLD_ID}/spiritual/active-sermon`
   return {
     async read(resource) {
+      if(resource.startsWith('activity:')){const [,member,date]=resource.split(':'),entry=await readStoreEntry(mealStorage(),activityKey(member,date)),value=entry?.data;return {value:value||{member,date,entries:[]},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}}
+
       if(resource.startsWith('member-context:')){
         const member=resource.slice('member-context:'.length),entry=await readStoreEntry(mealStorage(),memberContextKey(member)),value=entry?.data
         return {value:value||{member,preferences:{}},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
@@ -508,6 +521,13 @@ export function createProductionActionResources({ now = () => new Date(), shared
     },
     async write(resource, value, expectedVersion, actor, mutationId = '') {
       const occurredAt=nowIso(now)
+      if(resource.startsWith('activity:')){
+        const [,member,date]=resource.split(':'),store=mealStorage(),key=activityKey(member,date),entry=await readStoreEntry(store,key),version=Number(entry?.data?.version||0)
+        if(version!==expectedVersion)throw Object.assign(Error('This activity log changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
+        const record={...value,member,date,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''}
+        await conditionalStoreJson(store,key,record,entry);return {version:record.version,value:record}
+      }
+
       if(resource.startsWith('member-context:')){
         const member=resource.slice('member-context:'.length),store=mealStorage(),key=memberContextKey(member),entry=await readStoreEntry(store,key),version=Number(entry?.data?.version||0)
         if(version!==expectedVersion)throw Object.assign(Error('Your preferences changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
@@ -570,7 +590,7 @@ const withoutManagedMetadata = value => {
   delete result.lastActionId
   return result
 }
-export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
+export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
 export const resourceLastWriter=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
 export const resourceLastActionId=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
 

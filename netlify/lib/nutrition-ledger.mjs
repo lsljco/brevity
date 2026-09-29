@@ -1,5 +1,5 @@
 export const NUTRIENTS=['calories','proteinGrams','carbohydrateGrams','fatGrams']
-export const OPTIONAL_NUTRIENTS=['fiberGrams','sugarGrams','sodiumMilligrams']
+export const OPTIONAL_NUTRIENTS=['fiberGrams','sugarGrams','sodiumMilligrams','potassiumMilligrams','calciumMilligrams','ironMilligrams']
 
 export function dailyNutrition(record, member, date) {
   const entries=(record?.member===member&&record?.date===date&&Array.isArray(record.entries)?record.entries:[])

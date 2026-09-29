@@ -9,12 +9,12 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_member_preferences','get_module_configuration','get_weekly_household_briefing','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
-  const health=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"health"}'))
+  const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
   assert.equal(health.consumedMeals,undefined)
-  const finance=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"finance"}'))
+  const finance=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"finance"}'))
   assert.equal(finance.finance.recurringRecords[0].id,'rent')
   assert.equal(finance.browserFinance.transactionSummary.count,3)
 })
@@ -22,7 +22,7 @@ test('SDK agent reads pillar records without claiming planned meals were consume
 test('SDK nutrition tool estimates but does not save consumption',async()=>{
   const calls=[]
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},calculate:async input=>{calls.push(input);return {perServingMacros:{proteinGrams:18}}}})
-  const result=JSON.parse(await agent.tools[1].invoke({},'{"ingredients":["3 eggs","1 apple"],"yieldQuantity":1,"yieldUnit":"meal","allowGenericEstimate":false,"productReferences":[]}'))
+  const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},'{"ingredients":["3 eggs","1 apple"],"yieldQuantity":1,"yieldUnit":"meal","allowGenericEstimate":false,"productReferences":[]}'))
   assert.deepEqual(calls[0],{ingredients:['3 eggs','1 apple'],yieldQuantity:1,yieldUnit:'meal',conversational:true,allowGenericEstimate:false,productReferences:[]})
   assert.equal(result.logged,false)
   assert.match(result.estimateId,/^[a-f0-9-]{36}$/)
@@ -48,10 +48,10 @@ test('clarification blocks estimates and proposals until a new conversational tu
   const calculate=async()=>{calls++;throw Object.assign(new Error('Which sausage brand did you have?'),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions:['Which sausage brand did you have?']})}
   const input=JSON.stringify({ingredients:['a smoked sausage','two pieces of toast'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]})
   const runner={run:async agent=>{
-    const first=JSON.parse(await agent.tools[1].invoke({},input))
+    const first=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input))
     assert.equal(first.estimateId,null)
     assert.equal(first.logged,false)
-    await agent.tools[1].invoke({},input)
+    await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input)
     return {finalOutput:{message:'Guessed meal',proposal:{summary:'Unsafe guess'}},interruptions:[]}
   }}
   const result=await runBrevitySdkAgent({prompt:'I ate a sausage and toast',model:'test',schema,canonical,browser:{},calculate,runner})
@@ -68,7 +68,7 @@ test('clarified foods and retrieved product references reach the calculator toge
     assert.equal(input.allowGenericEstimate,false)
     return {perServingMacros:{calories:570,proteinGrams:18,carbohydrateGrams:6,fatGrams:51}}
   }})
-  const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['6 oz Example Original smoked sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[reference]})))
+  const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['6 oz Example Original smoked sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[reference]})))
   assert.ok(result.estimateId)
   assert.equal(result.logged,false)
 })
@@ -88,7 +88,7 @@ test('recipe calculations preserve batch yield through the agent tool',async()=>
    assert.equal(request.yieldQuantity,6);assert.equal(request.yieldUnit,'servings')
    return {yieldQuantity:6,perServingMacros:{calories:200}}
  }})
- const output=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['12 eggs'],yieldQuantity:6,yieldUnit:'servings',allowGenericEstimate:false,productReferences:[]})))
+ const output=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['12 eggs'],yieldQuantity:6,yieldUnit:'servings',allowGenericEstimate:false,productReferences:[]})))
  assert.equal(output.estimate.yieldQuantity,6)
 })
 
@@ -99,7 +99,7 @@ test('agent diagnostics log only run metadata, never conversation or provider er
  await assert.rejects(()=>runBrevitySdkAgent({prompt:'PRIVATE meal detail',model:'test',schema,canonical,browser:{},runner,providerRecovery:{sleep:async()=>{}},logger:(...parts)=>logs.push(parts)}))
  const serialized=JSON.stringify(logs)
  assert.doesNotMatch(serialized,/SECRET|PRIVATE|transcript|token/)
- const metadata=JSON.parse(logs[0][1])
+ const metadata=JSON.parse(logs.find(entry=>entry[0]==='[brevity-agent-run]')[1])
  assert.equal(metadata.outcome,'failed');assert.equal(metadata.errorCategory,'rate_limit')
  assert.equal(typeof metadata.durationMs,'number')
 })
@@ -122,11 +122,11 @@ test('missing product evidence returns to the agent for research without making 
  const calculate=async()=>{if(++calls===1)throw Object.assign(new Error('Reference missing'),{code:'NUTRITION_REFERENCE_REQUIRED',foods:['4 oz Eckrich Original sausage']});return {perServingMacros:{calories:380}}}
  const input=JSON.stringify({ingredients:['4 oz Eckrich Original sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]})
  const runner={run:async agent=>{
-  const result=JSON.parse(await agent.tools[1].invoke({},input))
+  const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input))
   assert.deepEqual(result.referenceRequired,['4 oz Eckrich Original sausage'])
   assert.equal(result.estimateId,null)
   assert.match(result.notice,/Use web_search/)
-  const researched=JSON.parse(await agent.tools[1].invoke({},input))
+  const researched=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input))
   assert.ok(researched.estimateId)
   return {finalOutput:{message:'Ready for review',proposal:null}}
  }}
@@ -140,7 +140,7 @@ test('completed estimate with an omitted review gets one bounded proposal repair
  let calls=0
  const runner={run:async(agent,input,options)=>{
   if(++calls===1){
-   await agent.tools[1].invoke({},JSON.stringify({ingredients:['2 eggs'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]}))
+   await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['2 eggs'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]}))
    return {history:[{role:'user',content:'Prepare my meal review.'}],finalOutput:{message:'Review prepared',proposal:null}}
   }
   assert.equal(options.maxTurns,4)
@@ -173,7 +173,7 @@ test('agent can inspect real product evidence before calculation and reuse its p
  const read=JSON.parse(await reader.invoke({},JSON.stringify({urls:['https://example.com/product','https://example.com/missing']})))
  assert.equal(read.references.length,1)
  assert.equal(read.failures[0].reason,'No readable label')
- const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['1 Example shake'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[{url:'https://example.com/product',details:'invented'}]})))
+ const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['1 Example shake'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[{url:'https://example.com/product',details:'invented'}]})))
  assert.equal(fetches,2)
  assert.ok(result.estimateId)
  assert.equal(result.logged,false)
@@ -205,6 +205,16 @@ test('product source discovery has bounded research and filters invalid candidat
  assert.deepEqual(result,['https://example.com/product'])
 })
 
+test('product research cancels a stalled provider call instead of waiting indefinitely',async()=>{
+ const {findProductNutritionSources}=await import('../../netlify/lib/product-nutrition-research.mjs')
+ // Keep the test event loop alive while the SDK's unref'd timeout expires.
+ const keepAlive=setTimeout(()=>{},1000)
+ try{await assert.rejects(()=>findProductNutritionSources('Example chocolate shake',{model:'gpt-5.6-sol',timeoutMs:10,runner:{run:async(agent,input,{signal})=>{
+  assert.equal(agent.modelSettings.reasoning.effort,'low')
+  return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}))
+ }}}),{name:'TimeoutError'})}finally{clearTimeout(keepAlive)}
+})
+
 test('failed source discovery retries once with failed URLs before returning unavailable',async()=>{
  const queries=[],fetches=[],events=[]
  const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},onTool:event=>events.push(event),findSources:async(product,options)=>{
@@ -234,7 +244,7 @@ test('calculator recovers a mismatched product reference without another member 
   assert.equal(request.productReferences[0].url,'https://example.com/original')
   return {perServingMacros:{calories:570,proteinGrams:18}}
  },findSources:async(product,options)=>{research.push({product,options});return ['https://example.com/original']},referenceFetcher:async url=>({sourceUrl:url,html:'Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Total Fat 15g Total Carbohydrates 5g'})})
- const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify(input)))
+ const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify(input)))
  assert.equal(calls.length,2)
  assert.deepEqual(research[0].options.unavailableUrls,['https://example.com/other-variant'])
  assert.ok(result.estimateId)
@@ -290,4 +300,39 @@ test('consumed meal search preserves member ownership instead of returning an ow
  assert.equal(result.consumedMember,'Larry')
  assert.equal(result.matches[0].member,'Larry')
  assert.match(result.notice,/never another member/)
+})
+
+test('a rejected review payload is repaired once without asking the member to process IDs',async()=>{
+ const {normalizeActionProposal}=await import('../../netlify/lib/assistant-action-contract.mjs')
+ let calls=0
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},prompt:[{role:'user',content:'Create Preview Notes under Household Management.'}],logger:()=>{},validateOutput:output=>normalizeActionProposal(output.proposal,{member:'Larry',role:'admin'}),runner:{run:async(agent,input,options)=>{
+  calls+=1
+  const row={id:'custom-preview-notes',label:'Preview Notes',pillarId:'household',...(calls===1?{kind:'module'}:{})}
+  const proposal={summary:'Create Preview Notes',operations:[{type:'module.configuration.update',description:'Create Preview Notes',targetId:'household-modules',targetDate:'',payloadJson:JSON.stringify({modules:[row]}),allowedScopes:['this-item'],defaultScope:'this-item'}]}
+  const review=JSON.parse(await agent.tools.find(tool=>tool.name==='prepare_action_review').invoke({},JSON.stringify(proposal)))
+  if(calls===1){assert.equal(review.validForReview,false);assert.match(review.error,/Unsupported module field: kind/)}
+  else{assert.equal(options.maxTurns,4);assert.equal(review.validForReview,true)}
+  return {finalOutput:{message:calls===1?'Could not prepare review.':'Prepared for review.',proposal:null},history:[]}
+ }}})
+ assert.equal(calls,2);assert.equal(result.output.proposal.operations[0].type,'module.configuration.update')
+ assert.equal(result.diagnostics.toolCalls.review_tool_contract_repair,1)
+})
+
+test('preference recall is read-only and an unchanged remembered value produces no review',async()=>{
+ const reviews=[]
+ const agent=createBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry',memberPreferences:{communication:'Prefer short spoken answers'}},browser:{},preparedReviews:reviews})
+ const recall=JSON.parse(await agent.tools.find(tool=>tool.name==='get_member_preferences').invoke({},'{}'))
+ assert.equal(recall.preferences.communication,'Prefer short spoken answers')
+ const unchanged=JSON.parse(await agent.tools.find(tool=>tool.name==='remember_member_preference').invoke({},JSON.stringify({category:'communication',value:'Prefer short spoken answers'})))
+ assert.equal(unchanged.alreadySaved,true);assert.equal(reviews.length,0)
+})
+
+test('an incomplete offer gets one completion check while questions remain read-only',async()=>{
+ let calls=0
+ const result=await runBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},prompt:[{role:'user',content:'What preference did I save?'}],logger:()=>{},runner:{run:async(agent,input,options)=>{
+  calls+=1
+  if(calls===2){assert.equal(options.maxTurns,4);assert.match(JSON.stringify(input),/never manufacture a write/)}
+  return {finalOutput:{message:calls===1?'I can check.':'Your saved preference is short spoken answers.',proposal:null},history:[]}
+ }}})
+ assert.equal(calls,2);assert.equal(result.output.proposal,null);assert.equal(result.diagnostics.toolCalls.request_completion_check,1)
 })

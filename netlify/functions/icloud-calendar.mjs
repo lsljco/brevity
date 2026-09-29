@@ -1,5 +1,6 @@
+import releaseBuild from '../lib/release-build-context.mjs'
 import crypto from "node:crypto";
-import { getStore } from "@netlify/blobs";
+import { getStore } from "../lib/scoped-store.mjs";
 import householdAuth from "./household-auth.js";
 import { fetchCalendarList, fetchCalendarReport, firstDavPropertyHref, resolveAppleDavHref } from "../lib/icloud-calendar-report.mjs";
 import { productionAssistantActionRepository } from "../lib/assistant-action-repository.mjs";
@@ -538,6 +539,7 @@ export const createICloudCalendarHandler = ({
   if (!session) return json(401, { error: "Sign in to access the family calendar." });
   if (event.httpMethod === "POST" && event.queryStringParameters?.action === "login") return json(200, { ok: true, member: session.member });
 
+  if(releaseBuild.preview)return json(503,{error:"Apple Calendar is disconnected in isolated deploy previews. No live calendar records can be read or changed."});
   const trustedAction = isTrustedAction(event);
   if (["POST", "PUT", "DELETE"].includes(event.httpMethod) && !trustedAction) return json(423, {
     code:"ACTION_REVIEW_REQUIRED",
