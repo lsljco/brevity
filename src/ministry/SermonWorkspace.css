@@ -34,4 +34,5 @@
 .sw-photo-pending{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#25211b;color:var(--gold);font-size:12px}
 .sw-photo-item strong{font-size:13px;overflow-wrap:anywhere}.sw-photo-item small{color:#e6a99e}.sw-photo-item button{margin-top:auto}
 .sw-post-photo{max-width:540px;margin:12px 0}.sw-post-photo img{display:block}
+.sw-identity-manager{border:1px solid #454039;border-radius:9px;padding:12px;margin:16px 0}.sw-identity-manager summary{color:var(--gold);cursor:pointer}.sw-identity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sw-identity-grid label{display:grid;gap:6px;font-size:12px;color:var(--white)}.sw-identity-grid input{max-width:100%;font-size:11px}.sw-photo-item .sw-field{margin:4px 0}.sw-photo-item .sw-field select{width:100%}
 @media(max-width:600px){.sw-photo-grid{grid-template-columns:1fr}}
