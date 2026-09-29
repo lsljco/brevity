@@ -24,7 +24,9 @@ function installAuth(records) {
   try {
     require.cache[blobsPath] = { id:blobsPath, filename:blobsPath, loaded:true, exports:{ getStore:() => dataStore } }
     delete require.cache[authPath]
-    return { handler:require(authPath).handler, values }
+    const auth = require(authPath)
+    auth.setNativeStoreFactory(() => dataStore)
+    return { handler:auth.handler, values }
   } finally {
     delete require.cache[authPath]
     if (previous) require.cache[blobsPath] = previous
