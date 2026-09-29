@@ -271,3 +271,15 @@ test('saved household search locates improvement records by title without invent
  const absent=JSON.parse(await search.invoke({},JSON.stringify({query:'unrecorded request'})))
  assert.deepEqual(absent.matches,[])
 })
+
+test('explicit preference tool binds the authenticated member and retains review without applying it',async()=>{
+ const reviews=[],validations=[]
+ const agent=createBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{signedInMember:'Larry'},browser:{},preparedReviews:reviews,validateOutput:output=>validations.push(output)})
+ const result=JSON.parse(await agent.tools.find(tool=>tool.name==='remember_member_preference').invoke({},JSON.stringify({category:'communication',value:'Prefer brief spoken answers'})))
+ assert.equal(result.saved,false)
+ assert.equal(result.validForReview,true)
+ assert.equal(reviews.length,1)
+ assert.equal(validations.length,1)
+ assert.equal(reviews[0].operations[0].targetId,'Larry')
+ assert.equal(reviews[0].operations[0].type,'member.preference.set')
+})
