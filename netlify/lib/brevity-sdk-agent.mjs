@@ -56,6 +56,24 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
     async execute({pillar}) { onTool('get_pillar_records');return JSON.stringify(pillarRecords(pillar,canonical,browser)).slice(0,250000) },
   })
   const searchMeals=tool({name:'search_meal_records',description:'Find saved recipes, planned meals and recent consumed meals by natural-language name or ingredients. Returns exact ids and record kinds; search before asking a member to identify a saved record.',parameters:z.object({query:z.string().max(300)}),async execute({query}){onTool('search_meal_records');return JSON.stringify({matches:searchMealRecords(query,{library:canonical.mealLibrary||[],recentNutrition:canonical.recentNutrition||[],rollingMealPlan:canonical.rollingMealPlan}),recipeLibraryUnavailable:Boolean(canonical.mealLibraryUnavailable)})}})
+  async function calculateWithReferenceRecovery(input){
+    try{return await calculate(input,{referenceCache,referenceFetcher})}catch(error){
+      if(error?.code!=='NUTRITION_REFERENCE_REQUIRED')throw error
+      // A readable page may still be the wrong variant. Recover inside the tool
+      // instead of requiring the member to authorize another research turn.
+      onTool('nutrition_reference_recovery')
+      const references=[]
+      try{
+        for(const product of (error.foods||[]).slice(0,2)){
+          const urls=await findSources(product,{model,unavailableUrls:input.productReferences.map(item=>item.url)})
+          references.push(...await retrieveNutritionReferences(urls.map(url=>({url})),{referenceFetcher,referenceCache}))
+        }
+      }catch{onTool('find_product_nutrition_failed')}
+      if(!references.length)throw error
+      const byUrl=new Map([...references,...input.productReferences].map(reference=>[reference.url,reference]))
+      return calculate({...input,productReferences:[...byUrl.values()]},{referenceCache,referenceFetcher})
+    }
+  }
   const estimateMealNutrition=tool({
     name:'estimate_meal_nutrition',
     description:'Estimate nutrition from measured foods: use yieldQuantity 1 and yieldUnit meal for consumed food, or the saved recipe batch yield for recipe edits. Returns an estimateId for a reviewed nutrition.meal.log proposal; the estimate itself does not log consumption or change daily totals.',
@@ -64,7 +82,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
       onTool('estimate_meal_nutrition')
       if(clarifications.length)return JSON.stringify({questions:clarifications,estimateId:null,logged:false,notice:'Wait for the member to answer before calculating again.'})
       let estimate
-      try{estimate=await calculate({ingredients,yieldQuantity,yieldUnit,conversational:true,allowGenericEstimate,productReferences},{referenceCache,referenceFetcher})}
+      try{estimate=await calculateWithReferenceRecovery({ingredients,yieldQuantity,yieldUnit,conversational:true,allowGenericEstimate,productReferences})}
       catch(error){
         if(error?.code==='NUTRITION_REFERENCE_REQUIRED')return JSON.stringify({estimateId:null,logged:false,referenceRequired:error.foods,referenceFailures:error.referenceFailures||[],notice:'Use web_search or find_product_nutrition to retrieve the manufacturer nutrition reference yourself, then retry with the real URL and per-serving label details. Do not ask the member for a URL, label or macro values. Read the existing conversation for approximation consent before asking. If the member already allowed a clearly marked approximate estimate when exact evidence is unavailable, retry now with allowGenericEstimate true; do not request that consent again. Otherwise, if research cannot resolve the exact product, ask once whether an approximate estimate is acceptable and wait. Failed source details identify why a URL was unusable; try a relevant alternative source instead of repeating the same failed URL.'})
         if(['NUTRITION_CLARIFICATION_REQUIRED','NUTRITION_REVIEW_REQUIRED'].includes(error?.code)){
@@ -88,13 +106,13 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
   })
 }
 
-export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,calculate,requestInstructions='',requestId=randomUUID(),logger=console.info,onTool=()=>{},runner=new Runner({tracingDisabled:true})}) {
+export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,calculate,findSources,requestInstructions='',requestId=randomUUID(),logger=console.info,onTool=()=>{},runner=new Runner({tracingDisabled:true})}) {
   const started=Date.now(),estimates=new Map(),clarifications=[],toolCalls={}
   const recordTool=name=>{toolCalls[name]=(toolCalls[name]||0)+1;onTool(name)}
   const safeRequestId=/^[a-f0-9-]{36}$/.test(requestId)?requestId:randomUUID()
   let outcome='failed',errorCategory=null
   try{
-    const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,estimates,clarifications,onTool:recordTool,requestInstructions})
+    const agent=createBrevitySdkAgent({model,schema,canonical,browser,calculate,findSources,estimates,clarifications,onTool:recordTool,requestInstructions})
     const input=Array.isArray(prompt)?prompt.map(message=>typeof message.content==='string'&&(message.role==='user'||message.role==='assistant')?(message.role==='user'?user(message.content):assistant(message.content)):message):prompt
     let result=await runner.run(agent,input,{maxTurns:12})
     if(!clarifications.length&&estimates.size&&!result.finalOutput?.proposal&&Array.isArray(result.history)){

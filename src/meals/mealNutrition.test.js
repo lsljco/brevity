@@ -235,3 +235,9 @@ test('server reference cache reuses actual evidence and failures within one run'
  await retrieveNutritionReferences([{url:'https://example.com/product'}],{referenceFetcher})
  assert.equal(calls.length,3)
 })
+
+test('reference retrieval honors all ten supported sources instead of dropping foods after four',async()=>{
+ const refs=await retrieveNutritionReferences(Array.from({length:11},(_,i)=>({url:`https://example.com/product-${i}`})),{referenceFetcher:async url=>({sourceUrl:url,html:'Serving Size 1 slice Calories 70 Protein 3g Fat 0.5g Carbohydrate 14g'})})
+ assert.equal(refs.length,10)
+ assert.equal(refs[9].url,'https://example.com/product-9')
+})

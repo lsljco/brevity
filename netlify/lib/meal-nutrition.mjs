@@ -136,7 +136,7 @@ export function extractNutritionEvidence(html){
 }
 
 export async function retrieveNutritionReferences(references,{referenceFetcher=fetchRecipeHtml,onFailure=()=>{},referenceCache=new Map()}={}){
-  const urls=[...new Set(references.map(item=>item.url))].filter(value=>{try{return new URL(value).pathname.replace(/\//g,'').length>0}catch{return false}}).slice(0,4)
+  const urls=[...new Set(references.map(item=>item.url))].filter(value=>{try{return new URL(value).pathname.replace(/\//g,'').length>0}catch{return false}}).slice(0,10)
   const results=await Promise.allSettled(urls.map(async url=>{
     try{
       if(!referenceCache.has(url))referenceCache.set(url,(async()=>{

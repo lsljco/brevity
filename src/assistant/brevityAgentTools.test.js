@@ -129,7 +129,7 @@ test('missing product evidence returns to the agent for research without making 
   assert.ok(researched.estimateId)
   return {finalOutput:{message:'Ready for review',proposal:null}}
  }}
- const result=await runBrevitySdkAgent({prompt:'Calculate my sausage',model:'test',schema,canonical,browser:{},calculate,runner,logger:()=>{}})
+ const result=await runBrevitySdkAgent({prompt:'Calculate my sausage',model:'test',schema,canonical,browser:{},calculate,findSources:async()=>[],runner,logger:()=>{}})
  assert.equal(result.output.message,'Ready for review')
  assert.equal(result.estimates.size,1)
 })
@@ -221,4 +221,21 @@ test('failed source discovery retries once with failed URLs before returning una
  assert.equal(result.references.length,1)
  assert.equal(result.failures.length,1)
  assert.ok(events.includes('find_product_nutrition_retry'))
+})
+
+test('calculator recovers a mismatched product reference without another member turn',async()=>{
+ const calls=[],research=[]
+ const input={ingredients:['6 oz Example Original sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[{url:'https://example.com/other-variant',details:'Other variant'}]}
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},calculate:async request=>{
+  calls.push(request)
+  if(calls.length===1)throw Object.assign(Error('Wrong variant'),{code:'NUTRITION_REFERENCE_REQUIRED',foods:input.ingredients})
+  assert.equal(request.allowGenericEstimate,false)
+  assert.equal(request.productReferences[0].url,'https://example.com/original')
+  return {perServingMacros:{calories:570,proteinGrams:18}}
+ },findSources:async(product,options)=>{research.push({product,options});return ['https://example.com/original']},referenceFetcher:async url=>({sourceUrl:url,html:'Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Total Fat 15g Total Carbohydrates 5g'})})
+ const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify(input)))
+ assert.equal(calls.length,2)
+ assert.deepEqual(research[0].options.unavailableUrls,['https://example.com/other-variant'])
+ assert.ok(result.estimateId)
+ assert.equal(result.logged,false)
 })
