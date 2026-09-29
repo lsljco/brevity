@@ -1,7 +1,8 @@
+import {dailyHouseholdBriefing} from '../../netlify/lib/daily-household-briefing.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {releaseCheckAccess} from '../../netlify/lib/release-check-access.mjs'
-import {evaluateHouseholdCase,evaluationCases} from '../../netlify/lib/household-agent-evaluation.mjs'
+import {evaluateHouseholdCase,evaluationCases,evaluationFixture} from '../../netlify/lib/household-agent-evaluation.mjs'
 test('completed workout evaluation checks the requested record, not a redundant lookup',async()=>{
  const item=evaluationCases.find(item=>item.id==='actual-workout')
  const base={type:'activity.record',targetId:'Larry',targetDate:'2026-09-28',payload:{kind:'workout',title:'30-minute walk',durationMinutes:30,status:'complete'}}
@@ -80,4 +81,17 @@ test('separate staging main builds receive preview isolation and release origin 
  const oldPreview={preview:true,origin:'https://deploy-preview-233--brevityoflife.netlify.app'}
  assert.equal(allowedReleaseOrigin('deploy-preview-233--brevityoflife.netlify.app',undefined,oldPreview),true)
  assert.equal(releaseContext({URL:'https://brevity-architect-staging.netlify.app.evil.example'}).preview,false)
+})
+
+test('cross-pillar fixture exposes its dated saved plans through the daily briefing',async()=>{
+ const item=evaluationCases.find(item=>item.id==='cross-pillar')
+ const {canonical}=evaluationFixture(item),briefing=dailyHouseholdBriefing(canonical)
+ assert.equal(briefing.sources.dailyPlan,'available')
+ assert.equal(briefing.pillars.fitness.plan.focus,'Walk 30 minutes')
+ assert.equal(briefing.pillars.education.plan.focus,'Read for 20 minutes')
+ assert.equal(briefing.pillars.household.plan.focus,'Inspect garage')
+ for(const [tool,expected] of [['get_daily_household_briefing',true],['get_pillar_records',true],[null,false]]){
+  const result=await evaluateHouseholdCase(item,{run:async args=>{if(tool)args.onTool(tool);return {output:{message:'Balance the saved walk, reading and garage inspection.',proposal:null},estimates:new Map()}}})
+  assert.equal(result.checks.requiredTools,expected)
+ }
 })

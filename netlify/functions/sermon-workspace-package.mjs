@@ -1,5 +1,7 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { workspaceKey,packageKey,pointerKey,deckKey,safeId,sermonSourceHash,sermonJobId,applyPackage } from '../lib/sermon-workspace-package.mjs'
 const {readSession}=householdAuth
 const store=()=>getStore({name:'brevity-sermon-repository',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
@@ -36,4 +38,8 @@ export function createSermonWorkspacePackageHandler({authenticate=readSession,da
   return json(202,status)
  }catch(error){console.error('[sermon-workspace-package]',error);return json(500,{error:'Could not prepare sermon materials.'})}}
 }
-export const handler=createSermonWorkspacePackageHandler()
+const handler=createSermonWorkspacePackageHandler()
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

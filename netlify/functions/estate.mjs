@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionEstateRepository } from '../lib/estate-store.mjs'
 import { MALBEC_PROPERTY_ID } from '../../src/estate/estateModel.js'
 import { transformMalbecBackup } from '../../src/estate/malbecMigration.js'
@@ -52,4 +54,8 @@ export function createEstateHandler({
 }
 }
 
-export const handler = createEstateHandler()
+const handler = createEstateHandler()
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

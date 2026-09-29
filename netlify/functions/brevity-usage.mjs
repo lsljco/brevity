@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import {productionUsageRepository} from '../lib/usage-metrics.mjs'
 import {HOUSEHOLD_MEMBERS} from '../lib/assistant-action-contract.mjs'
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
@@ -18,4 +20,8 @@ export const createUsageHandler=({readSession=householdAuth.readSession,reposito
   return json(200,await repo.summary(members))
  }catch{return json(503,{error:'Usage measurements are temporarily unavailable.'})}
 }
-export const handler=createUsageHandler()
+const handler=createUsageHandler()
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

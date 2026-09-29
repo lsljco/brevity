@@ -3,10 +3,10 @@ import { createRequire } from 'node:module'
 import test from 'node:test'
 
 const require = createRequire(import.meta.url)
-const handlerPath = require.resolve('../../netlify/functions/plaid-accounts.js')
+const handlerPath = require.resolve('../../netlify/legacy-functions/plaid-accounts.js')
 const plaidPath = require.resolve('plaid')
-const storagePath = require.resolve('../../netlify/functions/storage.js')
-const householdAuthPath = require.resolve('../../netlify/functions/household-auth.js')
+const storagePath = require.resolve('../../netlify/legacy-functions/storage.js')
+const householdAuthPath = require.resolve('../../netlify/lib/household-auth.cjs')
 const {
   LIVE_BALANCE_MODE,
   LIVE_BALANCE_PROVENANCE,

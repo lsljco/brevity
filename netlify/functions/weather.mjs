@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import { fetchWeatherForecast } from '../lib/weather-forecast.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 
@@ -9,7 +11,7 @@ const store=()=>getStore({name:'brevity-household',consistency:'strong',siteID:p
 const cacheKey=date=>`${HOUSEHOLD_ID}/weather/${date}`
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'private, no-store'},body:JSON.stringify(body)})
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='GET')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to view household weather.'})
@@ -28,3 +30,7 @@ export const handler=async event=>{
 }
 
 export const config={path:'/.netlify/functions/weather'}
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

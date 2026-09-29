@@ -14,11 +14,11 @@ const {
   syncAndStageItem,
   syncItemTransactions,
   transactionRefreshCompleted,
-} = require('../../netlify/functions/plaid-transactions.js')
+} = require('../../netlify/legacy-functions/plaid-transactions.js')
 const {
   ackTransactionSyncBatch,
   verifyTransactionSyncReceipts,
-} = require('../../netlify/functions/storage.js')
+} = require('../../netlify/legacy-functions/storage.js')
 
 test('transaction refresh completion requires a successful Item update at or after the request', () => {
   const response={data:{item:{status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z'}}}}}
@@ -310,7 +310,7 @@ test('incremental responses never imply that an empty delta replaces cached hist
 })
 
 test('the handler uses transactionsSync and stages a durable outbox before exposing its receipt', () => {
-  const source = readFileSync(new URL('../../netlify/functions/plaid-transactions.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../../netlify/legacy-functions/plaid-transactions.js', import.meta.url), 'utf8')
   assert.match(source, /plaidClient\.transactionsSync|client\.transactionsSync/)
   assert.doesNotMatch(source, /transactionsGet/)
   assert.match(source, /const result = await syncItemTransactions[\s\S]*await writeState\(cursorIdentity, cursorState/)

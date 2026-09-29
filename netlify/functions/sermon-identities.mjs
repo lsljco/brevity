@@ -1,6 +1,8 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import { createHash } from 'node:crypto'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { SERMON_IDENTITY_STORE,SERMON_PHOTO_SUBJECTS,sermonIdentityKey,sermonIdentityMetaKey } from '../lib/sermon-cover.mjs'
 
 const {readSession}=householdAuth
@@ -28,4 +30,8 @@ export function createSermonIdentitiesHandler({authenticate=readSession,storeFac
   return json(200,{member,uploaded:true})
  }catch(error){console.error('[sermon-identities]',error);return json(500,{error:'Could not save the identity reference.'})}}
 }
-export const handler=createSermonIdentitiesHandler()
+const handler=createSermonIdentitiesHandler()
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

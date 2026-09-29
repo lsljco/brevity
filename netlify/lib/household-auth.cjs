@@ -1,5 +1,6 @@
 const crypto = require('node:crypto')
-const { getStore } = require('@netlify/blobs')
+let nativeStoreFactory = null
+exports.setNativeStoreFactory = factory => { nativeStoreFactory = factory }
 
 const MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 const STORE_NAME = 'brevity-household-auth'
@@ -7,6 +8,7 @@ const SESSION_COOKIE = 'brevity_household_session'
 const SESSION_DAYS = 30
 
 function store() {
+  const getStore = nativeStoreFactory || require('@netlify/blobs').getStore
   return getStore({
     name: STORE_NAME,
     consistency: 'strong',

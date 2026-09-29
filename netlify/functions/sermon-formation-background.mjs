@@ -1,4 +1,5 @@
-import householdAuth from './household-auth.js'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import { randomUUID } from 'node:crypto'
 import { analyzeSermonFormation } from './sermon-formation.mjs'
 import { productionSermonSourceRepository, SERMON_JOB_LEASE_MS } from '../lib/sermon-source-repository.mjs'

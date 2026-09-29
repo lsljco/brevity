@@ -19,7 +19,7 @@ export function dailyHouseholdBriefing(context){
    spiritual:{plan:plan?.spiritual||null,activeSermon:context.activeSermon||null,reportedStudy:byKind('study-note')},
    health:{plan:plan?.health||null,plannedMeals:context.rollingMealPlan?.days?.find(day=>day.date===date)?.meals||null,ownRecordedConsumption:context.nutritionUnavailable?null:context.dailyNutrition||null,notice:'Planned meals are not consumed meals. Missing consumption reports do not establish that no food was eaten.'},
    fitness:{plan:plan?.fitness||null,plannedWorkout,reportedWorkouts:byKind('workout')},
-   household:{schedule,openAssignments:schedule.assignments.filter(item=>!['complete','deferred'].includes(item.status)),decisions:plan?.decisions||[]},
+   household:{plan:plan?.household||null,schedule,openAssignments:schedule.assignments.filter(item=>!['complete','deferred'].includes(item.status)),decisions:plan?.decisions||[]},
    education:educationAllowed?{plan:plan?.education||null,recordedSessions:context.learningRecord?.sessions?.filter(item=>item.date===date)||[],source:context.supplementalSources?.['learning-record']||'unavailable'}:{access:'not-permitted'},
    finance:financeAllowed?{plan:plan?.finance||null,upcomingSchedule:context.actionRecords?.finance?.upcomingSchedule||{state:'unavailable'},reportedExpenses:byKind('expense'),notice:'These are saved plans and reported expenses, not live bank balances or proof of payment. Use the finance read tool for more detail; do not invent current cash or declare bills paid.'}:{access:'not-permitted'},
    ministry:{plan:plan?.ministry||null,reportedFollowups:byKind('ministry-followup')},

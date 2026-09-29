@@ -1,5 +1,7 @@
-import householdAuth from './household-auth.js'
-import storage from './storage.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
+import storage from '../legacy-functions/storage.js'
 import { getOneDriveRepositoryState, oneDriveConfigured } from '../lib/onedrive.mjs'
 const {getTokens}=storage,{readSession}=householdAuth
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
@@ -14,4 +16,8 @@ export async function buildSystemHealth(event={}){
   const healthy=Object.values(checks).every(check=>check.state==='ready')
   return{healthy,checks,checkedAt:new Date().toISOString()}
 }
-export const handler=async event=>{if(event.httpMethod!=='GET')return json(405,{error:'Method not allowed.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to view Brevity system health.'});return json(200,await buildSystemHealth(event))}
+const handler=async event=>{if(event.httpMethod!=='GET')return json(405,{error:'Method not allowed.'});const session=await readSession(event).catch(()=>null);if(!session)return json(401,{error:'Sign in to view Brevity system health.'});return json(200,await buildSystemHealth(event))}
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

@@ -1,5 +1,6 @@
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { workspaceKey,safeId } from '../lib/sermon-workspace-package.mjs'
 import { COVER_STORE,COVER_JOB_STORE,SERMON_IDENTITY_STORE,sermonIdentityMetaKey,postImageJobKey,postImageSourceHash,buildFacebookPhotoPrompt,sermonSubjectReference,generateSermonCover } from '../lib/sermon-cover.mjs'
 

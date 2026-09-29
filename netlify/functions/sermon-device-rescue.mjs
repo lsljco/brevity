@@ -1,6 +1,8 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { createHash } from 'node:crypto'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { inspectApostolicDeviceExport, mergeApostolicSermonIndex } from '../../src/household/sermonLegacyMigration.js'
 
 const { readSession } = householdAuth
@@ -101,4 +103,8 @@ export function createSermonDeviceRescueHandler({ authenticate = readSession, da
   }
 }
 
-export const handler = createSermonDeviceRescueHandler()
+const handler = createSermonDeviceRescueHandler()
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

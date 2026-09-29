@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe'
@@ -16,7 +18,7 @@ function extensionFor(mime = '') {
   return 'webm'
 }
 
-export const handler = async event => {
+const handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' })
   if (!process.env.OPENAI_API_KEY) return json(503, { error: 'Brevity transcription is not configured yet.' })
 
@@ -53,3 +55,7 @@ export const handler = async event => {
     transcribedAt: new Date().toISOString(),
   })
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

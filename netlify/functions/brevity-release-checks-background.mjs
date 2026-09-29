@@ -1,6 +1,7 @@
+import '../lib/native-runtime.mjs'
 import {getStore} from '../lib/scoped-store.mjs'
 import {verifyReleasePersistence} from '../lib/release-persistence-checks.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import {releaseCheckAccess} from '../lib/release-check-access.mjs'
 import {evaluationCases,evaluateHouseholdCase} from '../lib/household-agent-evaluation.mjs'
 import {releaseJobs} from './brevity-release-checks.mjs'

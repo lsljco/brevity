@@ -1,6 +1,7 @@
+import '../lib/native-runtime.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { generateMealImage, mealImageJobKey, MEAL_IMAGE_JOB_STORE, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'
 

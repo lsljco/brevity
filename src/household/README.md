@@ -23,7 +23,7 @@ Brevity is the household source of truth. Apple/iCloud Calendar is both the time
 - `TomorrowProposal.jsx` — human-approved AI proposal workflow.
 - `memberProfile.js` / `MemberSwitcher.jsx` — per-device household identity.
 - `householdApi.js` / `useDailyPlan.js` — shared plan client boundary.
-- `netlify/functions/household-data.js` — strong-consistency Netlify Blob persistence.
+- `netlify/legacy-functions/household-data.js` — strong-consistency Netlify Blob persistence.
 - `netlify/functions/icloud-calendar.mjs` — Brevity-owned iCloud CalDAV service migrated from Malbec Estate.
 - `src/family/calendarSync.js` — idempotent Brevity → iCloud reconciliation.
 - `src/family/calendarOverlay.js` — read-only iCloud → Today projection with date filtering and duplicate prevention.

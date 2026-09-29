@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
@@ -7,7 +9,7 @@ const json = (statusCode, body) => ({statusCode,headers:{'content-type':'applica
 const outputText = response => (response.output || []).flatMap(item => item.content || []).map(part => part.text || '').join('').trim()
 const stripFence = value => String(value||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/i,'').trim()
 
-export const handler = async event => {
+const handler = async event => {
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   if(!process.env.OPENAI_API_KEY)return json(503,{error:'Brevity alignment intelligence is not configured yet.'})
   const session=await readSession(event).catch(()=>null)
@@ -44,3 +46,7 @@ ${transcript}`
   try{parsed=JSON.parse(stripFence(outputText(payload)))}catch{return json(502,{error:'Brevity returned an invalid alignment reconciliation. Please try again.'})}
   return json(200,{...parsed,model:MODEL,member:session.member,analyzedAt:new Date().toISOString()})
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

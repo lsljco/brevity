@@ -1,7 +1,9 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import {createProductionActionResources} from '../lib/assistant-action-executor.mjs'
 import {householdDate} from '../lib/assistant-authoritative-context.mjs'
-export const handler=async event=>{
+const handler=async event=>{
  const reply=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json','cache-control':'no-store'},body:JSON.stringify(body)})
  const session=await householdAuth.readSession(event).catch(()=>null)
  if(!session)return reply(401,{error:'Sign in to view your activities.'})
@@ -10,3 +12,7 @@ export const handler=async event=>{
  const reads=await Promise.allSettled(dates.map(day=>resources.read(`activity:${session.member}:${day}`)))
  return reply(200,{member:session.member,through:date,entries:reads.flatMap(result=>result.status==='fulfilled'?result.value.value?.entries||[]:[]),unavailableDates:reads.flatMap((result,i)=>result.status==='rejected'?[dates[i]]:[])})
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

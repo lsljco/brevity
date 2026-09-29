@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const MODEL = process.env.BREVITY_AI_MODEL || 'gpt-5.6'
@@ -43,7 +45,7 @@ function normalizeResult(input = {}) {
   }
 }
 
-export const handler = async event => {
+const handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' })
   if (!process.env.OPENAI_API_KEY) return json(503, { error: 'Brevity meeting intelligence is not configured yet.' })
 
@@ -106,3 +108,7 @@ ${transcript}`
     analyzedAt: new Date().toISOString(),
   })
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

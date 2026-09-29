@@ -1,9 +1,11 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import {analyzeMealImage} from '../lib/meal-image-import.mjs'
 
 const headers={'content-type':'application/json; charset=utf-8','cache-control':'private, no-store','access-control-allow-origin':'*','access-control-allow-headers':'content-type','access-control-allow-methods':'POST,OPTIONS'}
 const json=(statusCode,body)=>({statusCode,headers,body:JSON.stringify(body)})
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod==='OPTIONS')return{statusCode:204,headers,body:''}
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   try{
@@ -13,3 +15,7 @@ export const handler=async event=>{
   }catch(error){console.error('[meal-image-import]',error);return json(Number(error.status)|| (error instanceof SyntaxError?400:500),{error:error.message||'Meal image import failed.'})}
 }
 export const config={path:'/.netlify/functions/meal-image-import'}
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

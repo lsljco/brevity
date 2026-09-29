@@ -1,5 +1,7 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 
 const { readSession } = householdAuth
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
@@ -76,4 +78,8 @@ export function createApostolicSermonsHandler({ authenticate=readSession, dataSt
   }
 }
 
-export const handler = createApostolicSermonsHandler()
+const handler = createApostolicSermonsHandler()
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

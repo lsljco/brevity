@@ -1,6 +1,7 @@
+import '../lib/native-runtime.mjs'
 import {recordUsage} from '../lib/usage-metrics.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { processAssistantRequest } from './brevity-assistant.mjs'
 
 const jobs=()=>getStore({name:'brevity-assistant-jobs',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})

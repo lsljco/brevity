@@ -293,7 +293,7 @@ test('all browser and scheduled daily-plan paths are proposal-only', () => {
   const today=read('./HouseholdToday.jsx'),dashboard=read('./TodayDashboard.jsx'),alignment=read('./MorningAlignment.jsx'),tomorrow=read('./TomorrowProposal.jsx')
   const api=read('./householdApi.js'),generator=read('../../netlify/lib/household-plan-generator.mjs')
   const background=read('../../netlify/functions/daily-household-plan-background.mjs'),scheduled=read('../../netlify/functions/daily-household-plan-scheduled.mjs')
-  const endpoint=read('../../netlify/functions/household-data.js')
+  const endpoint=read('../../netlify/legacy-functions/household-data.js')
   const draftEndpoint=read('../../netlify/functions/daily-household-plan-draft.mjs')
   assert.doesNotMatch(today,/persistAndSync|savePlan\(/)
   assert.doesNotMatch(alignment,/onSaveDraft|Draft autosave failed|saveDraftRef/)

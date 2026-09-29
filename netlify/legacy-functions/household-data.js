@@ -1,6 +1,6 @@
 const { getStore } = require('../lib/scoped-store.cjs')
 const { isDeepStrictEqual } = require('node:util')
-const { readSession } = require('./household-auth')
+const { readSession } = require('../lib/household-auth.cjs')
 const { sharedSpiritualValue } = require('../lib/spiritual-language.cjs')
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'

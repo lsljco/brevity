@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import { getStore } from '../lib/scoped-store.mjs'
 
 const { readSession }=householdAuth
@@ -22,7 +24,7 @@ async function gradeDirections(record,studentSummary){
 
 export const educationAiGradeInternals={directionsSchema,shortSchema,normalize}
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event)
   if(!session)return json(401,{error:'Sign in required.'})
@@ -62,3 +64,7 @@ export const handler=async event=>{
   const numeric=results.filter(item=>Number.isFinite(item.score)),earned=numeric.reduce((sum,item)=>sum+item.score,0),possible=numeric.reduce((sum,item)=>sum+item.possible,0)
   return json(200,{exerciseId,mode:'content',earned,possible,percent:possible?Math.round(earned/possible*100):null,items:results,reviewed:false,evidenceStatus:'draft-adult-review-required',note:'This grade is draft instructional evidence. Adult-reviewed session completion controls mastery promotion.'})
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

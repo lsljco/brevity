@@ -1,8 +1,10 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import {assertVoiceApproval} from '../../src/assistant/voiceActionReview.js'
 import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
 import {recordUsage} from '../lib/usage-metrics.mjs'
 import { createHash, randomUUID } from 'node:crypto'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../lib/assistant-action-contract.mjs'
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import { assertExactExpectedVersions, commitPreparedRecordOperations, createProductionActionResources, prepareRecordOperations, recordForOperation, resourceForOperation, resourceLastActionId, sameResourceValue } from '../lib/assistant-action-executor.mjs'
@@ -603,7 +605,7 @@ export async function undoActionWithJournal({repository,auditId,session,resource
   return{journal,audit:undoRecord}
 }
 
-export const handler=async event=>{
+const handler=async event=>{
   const session=await readSession(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to use Brevity Action Mode.'})
   const repository=productionAssistantActionRepository(),resources=createPermissionActionResources(repository,createProductionActionResources())
@@ -722,3 +724,7 @@ export const handler=async event=>{
     return json(500,{error:error.message||'Brevity Action Mode is temporarily unavailable.'})
   }
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

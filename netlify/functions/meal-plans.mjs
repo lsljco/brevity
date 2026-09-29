@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import { mealImageContentType, mealImageKey, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'
@@ -15,7 +17,7 @@ const headers = {
 
 const response = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) })
 
-export const handler = async event => {
+const handler = async event => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' }
 
   try {
@@ -69,3 +71,7 @@ export const handler = async event => {
     return response(status, { error: error.message || 'Meal-plan request failed.' })
   }
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

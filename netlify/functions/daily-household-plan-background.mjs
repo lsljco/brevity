@@ -1,7 +1,8 @@
+import '../lib/native-runtime.mjs'
 import crypto from 'node:crypto';
 import { generateDailyPlanDraft } from '../lib/household-plan-generator.mjs';
 import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs';
-import householdAuth from './household-auth.js';
+import householdAuth from '../lib/household-auth.cjs';
 
 const { readSession } = householdAuth;
 

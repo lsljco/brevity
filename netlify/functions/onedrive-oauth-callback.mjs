@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 const disabled=()=>new Response(JSON.stringify({
   code:'CONNECTION_MUTATIONS_DISABLED',
   error:'OneDrive authorization callbacks are disabled in this release. No repository credentials or connection state were changed.',

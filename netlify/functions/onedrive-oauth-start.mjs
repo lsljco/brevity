@@ -1,3 +1,4 @@
+import '../lib/native-runtime.mjs'
 const disabled=()=>new Response(JSON.stringify({
   code:'CONNECTION_MUTATIONS_DISABLED',
   error:'Connecting or changing the OneDrive repository is disabled in this release. Existing authorized publishing remains unchanged.',

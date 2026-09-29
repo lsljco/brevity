@@ -6,9 +6,9 @@ import oneDriveStart from '../../netlify/functions/onedrive-oauth-start.mjs'
 import oneDriveCallback from '../../netlify/functions/onedrive-oauth-callback.mjs'
 
 const require=createRequire(import.meta.url)
-const {handler:createPlaidLink}=require('../../netlify/functions/plaid-create-link-token.js')
-const {handler:exchangePlaidToken}=require('../../netlify/functions/plaid-exchange-token.js')
-const {handler:disconnectPlaid}=require('../../netlify/functions/plaid-disconnect.js')
+const {handler:createPlaidLink}=require('../../netlify/legacy-functions/plaid-create-link-token.js')
+const {handler:exchangePlaidToken}=require('../../netlify/legacy-functions/plaid-exchange-token.js')
+const {handler:disconnectPlaid}=require('../../netlify/legacy-functions/plaid-disconnect.js')
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 
 test('Plaid connection mutation endpoints reject before touching bank credentials or token storage',async()=>{
@@ -25,7 +25,7 @@ test('Plaid connection mutation endpoints reject before touching bank credential
     assert.equal(result.headers['Cache-Control'],'no-store')
     assert.equal(result.headers['set-cookie'],undefined)
   }
-  for(const file of ['../../netlify/functions/plaid-create-link-token.js','../../netlify/functions/plaid-exchange-token.js','../../netlify/functions/plaid-disconnect.js']){
+  for(const file of ['../../netlify/legacy-functions/plaid-create-link-token.js','../../netlify/legacy-functions/plaid-exchange-token.js','../../netlify/legacy-functions/plaid-disconnect.js']){
     const source=read(file)
     assert.doesNotMatch(source,/readSession|getTokens|setTokens|plaidClient|itemPublicTokenExchange|itemRemove|linkTokenCreate/)
   }
@@ -47,7 +47,7 @@ test('Plaid UI keeps existing-source sync but exposes no connection mutation pat
 })
 
 test('member-password mutation requires authenticated current-password verification and rotates account sessions',()=>{
-  const source=read('../../netlify/functions/household-auth.js')
+  const source=read('../../netlify/lib/household-auth.cjs')
   const handlerSource=source.slice(source.indexOf('exports.handler ='))
   assert.equal((handlerSource.match(/action === 'set-member-password'/g)||[]).length,1)
   assert.match(handlerSource,/const session = await readSession\(event\)/)

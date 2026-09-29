@@ -1,4 +1,6 @@
-import householdAuth from './household-auth.js'
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
+import householdAuth from '../lib/household-auth.cjs'
 import { getStore } from '../lib/scoped-store.mjs'
 
 const { readSession }=householdAuth
@@ -33,7 +35,7 @@ const outputText=response=>Array.isArray(response?.output)?response.output.flatM
 const publicQuestion=q=>({id:q.id,type:q.type,prompt:q.prompt,choices:q.choices,skill:q.skill})
 export const educationAiExerciseInternals={schema,publicQuestion,PROMPT_VERSION,allowedMinutes,safeDate}
 
-export const handler=async event=>{
+const handler=async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const session=await readSession(event)
   if(!session)return json(401,{error:'Sign in required.'})
@@ -56,3 +58,7 @@ export const handler=async event=>{
     return json(201,{exercise:{id,title:generated.title,intro:generated.intro,directions:generated.directions,passage:generated.passage,sectionMinutes:generated.sectionMinutes,difficultyNote:generated.difficultyNote,vocabulary:generated.vocabulary,questions:generated.questions.map(publicQuestion)},provenance:{model:MODEL,promptVersion:PROMPT_VERSION,standards,curriculum,createdBy:session.member}})
   }catch(error){console.error('[education-ai-exercise]',error);return json(502,{error:'Brevity could not generate the reading exercise.'})}
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

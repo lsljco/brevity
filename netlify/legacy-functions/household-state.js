@@ -1,6 +1,6 @@
 const { getStore } = require('../lib/scoped-store.cjs')
 const { isDeepStrictEqual } = require('node:util')
-const { readSession } = require('./household-auth')
+const { readSession } = require('../lib/household-auth.cjs')
 const { verifyTransactionSyncReceipts, ackTransactionSyncBatch } = require('./storage')
 const { verifyAccountSourceReceipt, mergeVerifiedPlaidBalances } = require('../lib/plaid-account-source.cjs')
 

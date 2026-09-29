@@ -1,10 +1,12 @@
+import {withLambda} from '@netlify/aws-lambda-compat'
+import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
 import {
   AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph,
   ShadingType, Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
 } from 'docx'
 import PDFDocument from 'pdfkit'
-import householdAuth from './household-auth.js'
+import householdAuth from '../lib/household-auth.cjs'
 import { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs } from '../lib/sermon-document-model.mjs'
 
 export { normalizeSermonSections, sermonGuideBaseName, sermonItemParagraphs }
@@ -137,7 +139,7 @@ export async function buildSermonPdf(notes, source) {
   return Buffer.concat(chunks)
 }
 
-export const handler = async event => {
+const handler = async event => {
   try {
     const session=await readSession(event).catch(()=>null)
     if(!session)return json(401,{error:'Sign in to access the sermon repository.'})
@@ -163,3 +165,7 @@ export const handler = async event => {
     return json(500,{error:'Brevity could not create or archive the sermon documents.'})
   }
 }
+
+export default withLambda(handler)
+
+export {handler as lambdaHandler}

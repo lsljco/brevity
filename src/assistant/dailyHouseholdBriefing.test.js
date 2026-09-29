@@ -30,3 +30,10 @@ test('briefing includes authorized upcoming obligations independently of a missi
  c.access.finance=false
  assert.ok(!JSON.stringify(dailyHouseholdBriefing(c)).includes('Electricity'))
 })
+
+test('briefing preserves saved household focus and excludes a mismatched dated plan',()=>{
+ const c=context();c.dailyPlan.household={focus:'Inspect garage'}
+ assert.deepEqual(dailyHouseholdBriefing(c).pillars.household.plan,{focus:'Inspect garage'})
+ c.dailyPlan.date='2026-09-28'
+ assert.equal(dailyHouseholdBriefing(c).pillars.household.plan,null)
+})
