@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.cjs'
 import householdAuth from './household-auth.js'
 import { productionMealPlanRepository } from '../lib/meal-plan-store.mjs'
 import { generateMealImage, mealImageJobKey, MEAL_IMAGE_JOB_STORE, MEAL_IMAGE_STORE } from '../lib/meal-image.mjs'

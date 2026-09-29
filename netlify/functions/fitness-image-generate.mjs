@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.cjs'
 import householdAuth from './household-auth.js'
 import { EXERCISE_BY_ID } from '../../src/fitness/fitnessWorkoutPlan.js'
 import { FITNESS_IMAGE_JOB_STORE, FITNESS_IMAGE_STORE, fitnessImageJobKey, generateFitnessImage } from '../lib/fitness-image.mjs'

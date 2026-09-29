@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.cjs'
 import householdAuth from './household-auth.js'
 import { FITNESS_IMAGE_STORE, fitnessImageKey } from '../lib/fitness-image.mjs'
 const {readSession}=householdAuth,safe=value=>String(value||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,180)

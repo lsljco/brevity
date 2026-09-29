@@ -9,7 +9,10 @@ export function editablePlanContract(pillar){
  return fields
 }
 export function pillarRecords(pillar, canonical, browser) {
-  const base={signedInMember:canonical.signedInMember,memberPreferences:canonical.memberPreferences,editablePlanFields:editablePlanContract(pillar),householdDate:canonical.householdDate,sources:canonical.sources,supplementalSources:canonical.supplementalSources}
+  if(canonical.access?.[pillar]===false)return {access:'not-permitted',notice:'This member cannot read this private module.'}
+  const activityKinds={fitness:['workout','progress'],household:['maintenance'],spiritual:['study-note'],ministry:['sermon-note','ministry-followup'],health:['sleep','hydration'],finance:['expense']}
+  const activities=(canonical.recentActivities||[]).flatMap(day=>day?.entries||[]).filter(item=>(activityKinds[pillar]||[]).includes(item.kind))
+  const base={customModuleNotes:(canonical.recentActivities||[]).flatMap(day=>day?.entries||[]).filter(item=>item.kind==='module-note'),recentActivities:activities,signedInMember:canonical.signedInMember,memberPreferences:canonical.memberPreferences,editablePlanFields:editablePlanContract(pillar),householdDate:canonical.householdDate,sources:canonical.sources,supplementalSources:canonical.supplementalSources}
   const records=canonical.actionRecords||{}
   switch(pillar){
     case 'spiritual':return {...base,activeSermon:canonical.activeSermon,dailyPlan:canonical.dailyPlan?.spiritual,analysis:browser.todayPillarAnalyses?.spiritual}
@@ -19,7 +22,7 @@ export function pillarRecords(pillar, canonical, browser) {
     }
     case 'fitness':return {...base,dailyPlan:canonical.dailyPlan?.fitness,analysis:browser.todayPillarAnalyses?.fitness}
     case 'household':return {...base,dailyPlan:canonical.dailyPlan?.household,assignments:canonical.dailyPlan?.assignments,decisions:canonical.dailyPlan?.decisions,familyCalendar:canonical.appleFamilyCalendar,projects:records.projects,improvementProposals:records.improvementProposals,analysis:browser.todayPillarAnalyses?.household}
-    case 'education':return {...base,dailyPlan:canonical.dailyPlan?.education,analysis:browser.todayPillarAnalyses?.education}
+    case 'education':return {...base,learningRecord:canonical.learningRecord,dailyPlan:canonical.dailyPlan?.education,analysis:browser.todayPillarAnalyses?.education}
     case 'finance':return {...base,finance:records.finance,browserFinance:browser.finance,analysis:browser.todayPillarAnalyses?.finance}
     case 'ministry':return {...base,activeSermon:canonical.activeSermon,dailyPlan:canonical.dailyPlan?.ministry,analysis:browser.todayPillarAnalyses?.ministry}
     default:throw Error('Unsupported pillar.')

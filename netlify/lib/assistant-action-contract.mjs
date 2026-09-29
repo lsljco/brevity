@@ -1,3 +1,6 @@
+import {normalizeModulePatch,MODULE_RESOURCE} from '../../src/modules/configuration.js'
+import {normalizeActivityPayload} from './member-activity.mjs'
+import {normalizeLearningObservation,learningReviewer,LEARNING_RESOURCE} from './learning-observation.mjs'
 import {normalizeMemberPreference} from './member-preferences.mjs'
 import {IMPROVEMENT_RESOURCE,normalizeImprovementPayload,improvementPermission} from './improvement-workflow.mjs'
 import { randomUUID } from 'node:crypto'
@@ -10,6 +13,8 @@ export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin',
 export const ACTION_DOMAINS = ['planning', 'calendar', 'projects', 'finance']
 export const ACTION_TYPES = {
   'member.preference.set':'planning',
+  'module.configuration.update':'planning',
+  'activity.record':'planning','activity.update':'planning','activity.remove':'planning','education.observation.record':'planning',
   'improvement.propose':'planning',
   'improvement.transition':'planning',
   'decision.create': 'planning',
@@ -78,7 +83,7 @@ export const SCOPES = ['this-item', 'this-and-future']
 const ACTION_PAYLOAD_FIELDS = {
   'member.preference.set':['category','value'],
   'improvement.propose':['title','problem','evidence','solution','benefit','risks','successMetric'],
-  'improvement.transition':['stage','notes','previewUrl','commitSha','evaluationSummary'],
+  'improvement.transition':['stage','notes','previewUrl','commitSha','evaluationSummary','requirements','userStories','dataChanges','permissionChanges','testPlan','rolloutPlan','rollbackPlan'],
   'decision.create': ['title', 'notes', 'owner', 'participants', 'status', 'date'],
   'decision.update': ['title', 'notes', 'owner', 'participants', 'status', 'date'],
   'assignment.create': ['title', 'notes', 'owner', 'participants', 'status', 'date', 'priority'],
@@ -177,10 +182,13 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if(operation.type==='module.configuration.update')return MODULE_RESOURCE
+  if(operation.type.startsWith('activity.'))return `activity:${operation.targetId}:${operation.targetDate}`
+  if(operation.type==='education.observation.record')return LEARNING_RESOURCE
   if(operation.type==='member.preference.set')return `member-context:${operation.targetId}`
   if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
@@ -282,6 +290,9 @@ function normalizeActionPayload(type, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`The ${type} action details must be an object.`)
   if (type.startsWith('plan.')) return normalizeDailyPlanActionPayload(type, input)
   const payload = input
+  if(type==='module.configuration.update')return normalizeModulePatch(payload)
+  if(type.startsWith('activity.'))return normalizeActivityPayload(type,payload)
+  if(type==='education.observation.record')return normalizeLearningObservation(payload)
   if(type==='member.preference.set')return normalizeMemberPreference(payload)
   if(type.startsWith('improvement.'))return normalizeImprovementPayload(type,payload)
   const allowed = new Set(ACTION_PAYLOAD_FIELDS[type])
@@ -311,7 +322,7 @@ function normalizeActionPayload(type, input) {
       try{estimate=JSON.parse(value)}catch{throw new Error('The meal estimate is invalid JSON.')}
       const macros=estimate?.perServingMacros
       if(!Array.isArray(estimate?.ingredients)||!estimate.ingredients.length||estimate.ingredients.length>30||!macros||['calories','proteinGrams','carbohydrateGrams','fatGrams'].every(key=>macros[key]===undefined)||['calories','proteinGrams','carbohydrateGrams','fatGrams'].some(key=>typeof macros[key]!=='number'||!Number.isFinite(macros[key])||macros[key]<0))throw new Error('The meal estimate requires measured ingredients and valid macros.')
-      if(estimate.perServingNutrients&&['fiberGrams','sugarGrams','sodiumMilligrams'].some(key=>estimate.perServingNutrients[key]!=null&&(typeof estimate.perServingNutrients[key]!=='number'||!Number.isFinite(estimate.perServingNutrients[key])||estimate.perServingNutrients[key]<0)))throw new Error('Optional nutrients must be non-negative values or unknown.')
+      if(estimate.perServingNutrients&&['fiberGrams','sugarGrams','sodiumMilligrams','potassiumMilligrams','calciumMilligrams','ironMilligrams'].some(key=>estimate.perServingNutrients[key]!=null&&(typeof estimate.perServingNutrients[key]!=='number'||!Number.isFinite(estimate.perServingNutrients[key])||estimate.perServingNutrients[key]<0)))throw new Error('Optional nutrients must be non-negative values or unknown.')
       normalized.estimateJson=JSON.stringify(estimate)
     } else if (type === 'sermon.activate' && (field === 'draftId' || field === 'sourceHash')) {
       assertString(type, field, value)
@@ -468,8 +479,11 @@ export function normalizeActionOperation(input = {}) {
     risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
-  if (((operation.domain === 'planning' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
+  if (((operation.domain === 'planning' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
+  if(type==='module.configuration.update'&&operation.targetId!=='household-modules')throw Error('Choose the household modules configuration.')
+  if(type.startsWith('activity.')&&!HOUSEHOLD_MEMBERS.includes(operation.targetId))throw Error('Choose the signed-in member for an activity.')
+  if(type==='education.observation.record'&&operation.targetId!=='Isaiah')throw Error('This learning record belongs to Isaiah.')
   if(type==='member.preference.set'&&!HOUSEHOLD_MEMBERS.includes(operation.targetId))throw Error('Choose the signed-in member for a preference.')
   if(type==='improvement.transition'&&!operation.targetId)throw new Error('Find the exact saved improvement proposal first.')
   if (type === 'plan.overview.update' && operation.targetId !== 'overview') throw new Error('A daily-plan overview action requires the exact overview record.')
@@ -644,6 +658,15 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type==='module.configuration.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Household module configuration requires administrator review.'}
+  if(operation.type.startsWith('activity.')){
+    if(operation.targetId!==member)return {allowed:false,reason:'Members can change only their own activity records.'}
+    if(operation.type!=='activity.record'&&currentRecord?.member!==member)return {allowed:false,reason:'Find the exact member-owned activity first.'}
+    if((operation.payload?.kind||currentRecord?.kind)==='expense'&&role!=='admin')return {allowed:false,reason:'Expense records require household administrator review.'}
+    return {allowed:true}
+  }
+  if(operation.type==='education.observation.record')return learningReviewer(member)&&(role==='admin'||permissions?.planning)?{allowed:true}:{allowed:false,reason:'Learning evidence requires review by Larry, Lorenzo or Terica with planning access.'}
+
   if(operation.type==='member.preference.set')return operation.targetId===member?{allowed:true}:{allowed:false,reason:'Members can change only their own preferences.'}
   if(operation.type.startsWith('improvement.'))return improvementPermission({operation,member,role,permissions,currentRecord})
   if(operation.type==='meal.recipe.update')return currentRecord&&(role==='admin'||permissions?.planning)?{allowed:true}:{allowed:false,reason:'Recipe changes require an existing recipe and household planning access.'}

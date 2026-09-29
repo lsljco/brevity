@@ -159,7 +159,7 @@ export function createEstateRepository({ store, householdId = 'lslj-family', now
 }
 
 export async function productionEstateRepository(options = {}) {
-  const { getStore } = await import('@netlify/blobs')
+  const { getStore } = await import('./scoped-store.cjs')
   const store = getStore({
     name: STORE_NAME,
     consistency: 'strong',

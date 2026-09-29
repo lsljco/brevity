@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs'
+import { getStore } from './scoped-store.cjs'
 const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',STORE_NAME='brevity-sermon-workflows'
 const store=()=>getStore({name:STORE_NAME,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
 const workflowKey=id=>`${HOUSEHOLD_ID}/workflows/${id}`

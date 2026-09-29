@@ -1,3 +1,4 @@
+import {recordUsage} from '../lib/usage-metrics.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import householdAuth from './household-auth.js'
 import { normalizeActionProposal, normalizePermissionMatrix, permissionForOperation, selectedOperation } from '../lib/assistant-action-contract.mjs'
@@ -422,6 +423,9 @@ const undoForbidden=message=>Object.assign(new Error(message),{code:'FORBIDDEN'}
 // or running version preflight. Administrators retain the same explicit
 // override used by normal Action Mode execution.
 export async function authorizeUndoOperations({event,audit,session,permissions,resources,calendarRequestFn=calendarRequest}) {
+  if((audit.changes||[]).some(change=>change.resource?.startsWith('activity:')&&!change.resource.startsWith(`activity:${session.member}:`)))throw undoForbidden('Members can undo only their own activity records.')
+  if((audit.operations||[]).some(operation=>operation.type==='education.observation.record')&&!['Larry','Lorenzo','Terica'].includes(session.member))throw undoForbidden('Learning evidence Undo requires an authorized adult.')
+
   if((audit.changes||[]).some(change=>change.resource?.startsWith('member-context:')&&change.resource!==`member-context:${session.member}`))throw undoForbidden('Members can undo only their own preference changes.')
   if((audit.operations||[]).some(operation=>operation.type==='improvement.transition')&&!['Larry','Lorenzo'].includes(session.member))throw undoForbidden('Only Larry or Lorenzo can undo improvement approval stages.')
   if(session.role==='admin')return
@@ -686,6 +690,7 @@ export const handler=async event=>{
           if(latest?.state!=='executed'||latest.auditId!==result.audit.id)throw Object.assign(new Error('The proposal state changed while Action Mode was finalizing it.'),{code:'JOURNAL_CONFLICT'})
         }
         await completeExecutionJournal({repository,journalId:result.journal.id,completedAt:result.audit.occurredAt})
+        await recordUsage(session.member,{id:result.audit.id,kind:'action',outcome:operations.some(op=>op.type==='nutrition.meal.update'||op.type==='activity.update')?'corrected':'completed'})
         return json(200,{ok:true,audit:publicAssistantAudit(result.audit),nutrition:await executedNutrition(operations,session,resources),reloadRequired:true})
       }catch(error){
         const journal=(await repository.getJournalEntry(actionId('execute',proposal.id))).journal
@@ -699,6 +704,7 @@ export const handler=async event=>{
     if(action==='undo'){
       if(body.confirmation!=='CONFIRM')return json(400,{error:'Type CONFIRM to undo this completed action.'})
       const result=await undoActionWithJournal({repository,auditId:body.auditId,session,resources,event})
+      await recordUsage(session.member,{id:result.audit.id,kind:'action',outcome:'undone'})
       return json(200,{ok:true,audit:publicAssistantAudit(result.audit),reloadRequired:true})
     }
     return json(404,{error:'Unknown Action Mode request.'})

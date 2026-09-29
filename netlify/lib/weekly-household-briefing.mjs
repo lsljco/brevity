@@ -1,0 +1,16 @@
+export function weeklyHouseholdBriefing(context){
+ const days=(context.recentDailyPlans||[]).filter(Boolean),activities=((context.recentActivities||[]).filter(Boolean)).flatMap(day=>day.entries||[]),nutrition=(context.recentNutrition||[]).filter(Boolean)
+ const byKind=kind=>activities.filter(item=>item.kind===kind)
+ const assignments=days.flatMap(day=>(day.assignments||[]).map(item=>({...item,date:day.date})))
+ const completed=assignments.filter(item=>item.status==='complete')
+ const dates=days.map(day=>day.date).concat(nutrition.map(day=>day.date)).sort()
+ return {member:context.signedInMember,through:context.householdDate,from:context.historyStartDate||dates[0],scope:'Shared household plans and tasks; only the signed-in member’s private activity and nutrition. Missing records do not mean an activity did not happen.',
+  nutrition:{daysLogged:nutrition.filter(day=>day.entries?.length).length,meals:nutrition.reduce((n,day)=>n+(day.entries?.length||0),0),days:nutrition.map(({date,totals})=>({date,totals})),targets:context.nutritionTargets},
+  fitness:{reportedWorkouts:byKind('workout').length,reportedMinutes:byKind('workout').reduce((n,item)=>n+(item.durationMinutes||0),0),progress:byKind('progress')},
+  household:{recordedAssignments:assignments.length,completedAssignments:completed.length,openAssignments:assignments.filter(item=>!['complete','deferred'].includes(item.status)),reportedMaintenance:byKind('maintenance')},
+  education:context.learningRecord?{sessions:(context.learningRecord.sessions||[]).filter(item=>item.date>=context.historyStartDate&&item.date<=context.householdDate).map(({date,responses,notes})=>({date,responses,notes})),skillMastery:context.learningRecord.skillMastery}:null,
+  spiritual:{studyNotes:byKind('study-note')},ministry:{sermonNotes:byKind('sermon-note'),followups:byKind('ministry-followup')},
+  finance:context.access?.finance===false?{access:'not-permitted'}:{reportedExpenses:byKind('expense'),currentSavedPlan:context.actionRecords?.finance,notice:'Reported expenses are separate from verified bank transactions; do not subtract them again from bank balances.'},
+  health:{sleep:byKind('sleep'),hydration:byKind('hydration')},unavailableSources:Object.entries(context.supplementalSources||{}).filter(([,state])=>state==='unavailable').map(([key])=>key),
+  nextActions:assignments.filter(item=>!['complete','deferred'].includes(item.status)).slice(0,5).map(item=>({title:item.title,owner:item.owner,date:item.date,reason:'Recorded unfinished assignment'}))}
+}

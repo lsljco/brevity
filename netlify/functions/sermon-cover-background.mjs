@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.cjs'
 import householdAuth from './household-auth.js'
 import { workspaceKey,safeId } from '../lib/sermon-workspace-package.mjs'
 import { COVER_STORE,COVER_JOB_STORE,coverJobKey,coverSourceHash,generateSermonCover } from '../lib/sermon-cover.mjs'

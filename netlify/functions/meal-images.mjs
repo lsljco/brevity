@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.cjs'
 import householdAuth from './household-auth.js'
 import { MEAL_IMAGE_STORE, mealImageContentType, mealImageKey } from '../lib/meal-image.mjs'
 

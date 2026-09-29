@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs';
+import { getStore } from './scoped-store.cjs';
 import { randomUUID } from 'node:crypto';
 import { productionMealPlanRepository } from './meal-plan-store.mjs';
 import {

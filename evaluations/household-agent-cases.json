@@ -742,5 +742,155 @@
     "review": [
       "Calculate and propose only steak and potato for lunch. Never include the earlier breakfast foods; do not correct or duplicate breakfast."
     ]
+  },
+  {
+    "id": "actual-workout",
+    "pillar": "fitness",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I finished a 30 minute walk today. Record that completed workout for me, not a plan."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "activity.record"
+    ],
+    "review": [
+      "Record member-reported completed walk with 30 minutes and today, no calories inferred."
+    ]
+  },
+  {
+    "id": "actual-hydration",
+    "pillar": "health",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I drank 16 fluid ounces of plain water today. Record my hydration."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "activity.record"
+    ],
+    "review": [
+      "Hydration has quantity 16 and explicit fluid-ounce units; do not create a planned task."
+    ]
+  },
+  {
+    "id": "actual-study-note",
+    "pillar": "spiritual",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Record my study note today: I reflected on patience and want to practice listening before answering."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "activity.record"
+    ],
+    "review": [
+      "Own dated study note, no claimed verified spiritual achievement."
+    ]
+  },
+  {
+    "id": "actual-maintenance",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "I replaced the garage air filter today. Record the completed maintenance."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "activity.record"
+    ],
+    "review": [
+      "Own reported maintenance, distinguish from scheduling or project completion."
+    ]
+  },
+  {
+    "id": "weekly-briefing",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Give me a seven-day household briefing from the saved evidence. Distinguish planned activities from things actually reported, and tell me which sources are missing."
+      }
+    ],
+    "requiredTools": [
+      "get_weekly_household_briefing"
+    ],
+    "allowedProposalTypes": [],
+    "review": [
+      "Use actual source gaps and own-member evidence, do not invent household adoption or completion."
+    ]
+  },
+  {
+    "id": "learning-observation",
+    "pillar": "education",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Record this observation for Isaiah today: skill decoding, activity reading, result prompted. He needed help; do not mark it independent."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "education.observation.record"
+    ],
+    "review": [
+      "Prompted evidence remains prompted; no manual GREEN mastery claim."
+    ]
+  },
+  {
+    "id": "module-customization",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Add a household module called Caregiving with a notes workspace and a short description: family care coordination. Prepare review."
+      }
+    ],
+    "requiredTools": [
+      "get_module_configuration"
+    ],
+    "allowedProposalTypes": [
+      "module.configuration.update"
+    ],
+    "review": [
+      "New custom-prefixed module under household; explain notes workspace scope, no fabricated specialized service."
+    ]
+  },
+  {
+    "id": "module-hide",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hide Meal Plan from navigation. Keep all saved meals and permissions intact. Prepare review."
+      }
+    ],
+    "requiredTools": [
+      "get_module_configuration"
+    ],
+    "allowedProposalTypes": [
+      "module.configuration.update"
+    ],
+    "review": [
+      "Disable meal-plan module only, no deletion or access change."
+    ]
   }
 ]

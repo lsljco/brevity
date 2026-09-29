@@ -9,12 +9,12 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_module_configuration','get_weekly_household_briefing','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
-  const health=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"health"}'))
+  const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
   assert.equal(health.consumedMeals,undefined)
-  const finance=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"finance"}'))
+  const finance=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"finance"}'))
   assert.equal(finance.finance.recurringRecords[0].id,'rent')
   assert.equal(finance.browserFinance.transactionSummary.count,3)
 })
@@ -22,7 +22,7 @@ test('SDK agent reads pillar records without claiming planned meals were consume
 test('SDK nutrition tool estimates but does not save consumption',async()=>{
   const calls=[]
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},calculate:async input=>{calls.push(input);return {perServingMacros:{proteinGrams:18}}}})
-  const result=JSON.parse(await agent.tools[1].invoke({},'{"ingredients":["3 eggs","1 apple"],"yieldQuantity":1,"yieldUnit":"meal","allowGenericEstimate":false,"productReferences":[]}'))
+  const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},'{"ingredients":["3 eggs","1 apple"],"yieldQuantity":1,"yieldUnit":"meal","allowGenericEstimate":false,"productReferences":[]}'))
   assert.deepEqual(calls[0],{ingredients:['3 eggs','1 apple'],yieldQuantity:1,yieldUnit:'meal',conversational:true,allowGenericEstimate:false,productReferences:[]})
   assert.equal(result.logged,false)
   assert.match(result.estimateId,/^[a-f0-9-]{36}$/)
@@ -48,10 +48,10 @@ test('clarification blocks estimates and proposals until a new conversational tu
   const calculate=async()=>{calls++;throw Object.assign(new Error('Which sausage brand did you have?'),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions:['Which sausage brand did you have?']})}
   const input=JSON.stringify({ingredients:['a smoked sausage','two pieces of toast'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]})
   const runner={run:async agent=>{
-    const first=JSON.parse(await agent.tools[1].invoke({},input))
+    const first=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input))
     assert.equal(first.estimateId,null)
     assert.equal(first.logged,false)
-    await agent.tools[1].invoke({},input)
+    await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input)
     return {finalOutput:{message:'Guessed meal',proposal:{summary:'Unsafe guess'}},interruptions:[]}
   }}
   const result=await runBrevitySdkAgent({prompt:'I ate a sausage and toast',model:'test',schema,canonical,browser:{},calculate,runner})
@@ -68,7 +68,7 @@ test('clarified foods and retrieved product references reach the calculator toge
     assert.equal(input.allowGenericEstimate,false)
     return {perServingMacros:{calories:570,proteinGrams:18,carbohydrateGrams:6,fatGrams:51}}
   }})
-  const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['6 oz Example Original smoked sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[reference]})))
+  const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['6 oz Example Original smoked sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[reference]})))
   assert.ok(result.estimateId)
   assert.equal(result.logged,false)
 })
@@ -88,7 +88,7 @@ test('recipe calculations preserve batch yield through the agent tool',async()=>
    assert.equal(request.yieldQuantity,6);assert.equal(request.yieldUnit,'servings')
    return {yieldQuantity:6,perServingMacros:{calories:200}}
  }})
- const output=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['12 eggs'],yieldQuantity:6,yieldUnit:'servings',allowGenericEstimate:false,productReferences:[]})))
+ const output=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['12 eggs'],yieldQuantity:6,yieldUnit:'servings',allowGenericEstimate:false,productReferences:[]})))
  assert.equal(output.estimate.yieldQuantity,6)
 })
 
@@ -122,11 +122,11 @@ test('missing product evidence returns to the agent for research without making 
  const calculate=async()=>{if(++calls===1)throw Object.assign(new Error('Reference missing'),{code:'NUTRITION_REFERENCE_REQUIRED',foods:['4 oz Eckrich Original sausage']});return {perServingMacros:{calories:380}}}
  const input=JSON.stringify({ingredients:['4 oz Eckrich Original sausage'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]})
  const runner={run:async agent=>{
-  const result=JSON.parse(await agent.tools[1].invoke({},input))
+  const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input))
   assert.deepEqual(result.referenceRequired,['4 oz Eckrich Original sausage'])
   assert.equal(result.estimateId,null)
   assert.match(result.notice,/Use web_search/)
-  const researched=JSON.parse(await agent.tools[1].invoke({},input))
+  const researched=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},input))
   assert.ok(researched.estimateId)
   return {finalOutput:{message:'Ready for review',proposal:null}}
  }}
@@ -140,7 +140,7 @@ test('completed estimate with an omitted review gets one bounded proposal repair
  let calls=0
  const runner={run:async(agent,input,options)=>{
   if(++calls===1){
-   await agent.tools[1].invoke({},JSON.stringify({ingredients:['2 eggs'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]}))
+   await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['2 eggs'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]}))
    return {history:[{role:'user',content:'Prepare my meal review.'}],finalOutput:{message:'Review prepared',proposal:null}}
   }
   assert.equal(options.maxTurns,4)
@@ -173,7 +173,7 @@ test('agent can inspect real product evidence before calculation and reuse its p
  const read=JSON.parse(await reader.invoke({},JSON.stringify({urls:['https://example.com/product','https://example.com/missing']})))
  assert.equal(read.references.length,1)
  assert.equal(read.failures[0].reason,'No readable label')
- const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify({ingredients:['1 Example shake'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[{url:'https://example.com/product',details:'invented'}]})))
+ const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify({ingredients:['1 Example shake'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[{url:'https://example.com/product',details:'invented'}]})))
  assert.equal(fetches,2)
  assert.ok(result.estimateId)
  assert.equal(result.logged,false)
@@ -234,7 +234,7 @@ test('calculator recovers a mismatched product reference without another member 
   assert.equal(request.productReferences[0].url,'https://example.com/original')
   return {perServingMacros:{calories:570,proteinGrams:18}}
  },findSources:async(product,options)=>{research.push({product,options});return ['https://example.com/original']},referenceFetcher:async url=>({sourceUrl:url,html:'Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Total Fat 15g Total Carbohydrates 5g'})})
- const result=JSON.parse(await agent.tools[1].invoke({},JSON.stringify(input)))
+ const result=JSON.parse(await agent.tools.find(t=>t.name==='estimate_meal_nutrition').invoke({},JSON.stringify(input)))
  assert.equal(calls.length,2)
  assert.deepEqual(research[0].options.unavailableUrls,['https://example.com/other-variant'])
  assert.ok(result.estimateId)

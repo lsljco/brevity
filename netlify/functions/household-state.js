@@ -1,4 +1,4 @@
-const { getStore } = require('@netlify/blobs')
+const { getStore } = require('../lib/scoped-store.cjs')
 const { isDeepStrictEqual } = require('node:util')
 const { readSession } = require('./household-auth')
 const { verifyTransactionSyncReceipts, ackTransactionSyncBatch } = require('./storage')

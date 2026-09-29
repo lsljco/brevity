@@ -26,10 +26,10 @@ test('optional label nutrients remain unknown unless every ingredient supplies a
     {...ingredients[1],fiberGrams:null,sugarGrams:null,sodiumMilligrams:null},
   ]
   const estimate=calculateNutritionResult(request,{ingredients:rows,warnings:[]})
-  assert.deepEqual(estimate.perServingNutrients,{fiberGrams:null,sugarGrams:null,sodiumMilligrams:null})
+  assert.deepEqual(estimate.perServingNutrients,{fiberGrams:null,sugarGrams:null,sodiumMilligrams:null,potassiumMilligrams:null,calciumMilligrams:null,ironMilligrams:null})
   rows[1]={...rows[1],fiberGrams:2,sugarGrams:4,sodiumMilligrams:180}
   const complete=calculateNutritionResult(request,{ingredients:rows,warnings:[]})
-  assert.deepEqual(complete.perServingNutrients,{fiberGrams:5,sugarGrams:5,sodiumMilligrams:430})
+  assert.deepEqual(complete.perServingNutrients,{fiberGrams:5,sugarGrams:5,sodiumMilligrams:430,potassiumMilligrams:null,calciumMilligrams:null,ironMilligrams:null})
   const record={member:'Larry',date:'2026-09-28',entries:[{member:'Larry',date:'2026-09-28',macros:complete.perServingMacros,nutrients:complete.perServingNutrients}]}
   assert.equal(dailyNutrition(record,'Larry','2026-09-28').optionalTotals.sodiumMilligrams,430)
   record.entries.push({member:'Larry',date:'2026-09-28',macros:estimate.perServingMacros,nutrients:estimate.perServingNutrients})

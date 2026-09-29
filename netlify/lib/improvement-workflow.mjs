@@ -1,7 +1,8 @@
 export const IMPROVEMENT_RESOURCE='shared:brevity_improvement_proposals_v1'
 const proposalFields=['title','problem','evidence','solution','benefit','risks','successMetric']
-const transitionFields=['stage','notes','previewUrl','commitSha','evaluationSummary']
-const transitions={proposed:['concept-approved','rejected'],'concept-approved':['prototype-ready','revision-requested'],'prototype-ready':['release-approved','revision-requested'],'release-approved':['measured','rollback-requested'],measured:['revision-requested','rollback-requested'],'revision-requested':['prototype-ready','rejected'],'rollback-requested':['prototype-ready','rejected']}
+const planningFields=['requirements','userStories','dataChanges','permissionChanges','testPlan','rolloutPlan','rollbackPlan']
+const transitionFields=['stage','notes','previewUrl','commitSha','evaluationSummary',...planningFields]
+const transitions={proposed:['concept-approved','rejected'],'concept-approved':['implementation-planned','prototype-ready','revision-requested'],'implementation-planned':['prototype-ready','revision-requested'],'prototype-ready':['release-approved','revision-requested'],'release-approved':['measured','rollback-requested'],measured:['revision-requested','rollback-requested'],'revision-requested':['prototype-ready','rejected'],'rollback-requested':['prototype-ready','rejected']}
 export function normalizeImprovementPayload(type,payload){
  if(!payload||typeof payload!=='object'||Array.isArray(payload))throw Error('Improvement details must be an object.')
  const fields=type==='improvement.propose'?proposalFields:transitionFields,result={}
@@ -12,6 +13,8 @@ export function normalizeImprovementPayload(type,payload){
  if(type==='improvement.propose'&&proposalFields.some(field=>!result[field]))throw Error('An improvement requires title, problem, evidence, solution, benefit, risks and successMetric. Distinguish reported evidence from verified measurements.')
  if(type==='improvement.transition'){
   if(!result.stage||!Object.values(transitions).flat().includes(result.stage)||!result.notes)throw Error('An improvement transition requires a recognized stage and review notes.')
+  if(result.stage==='implementation-planned'&&planningFields.some(field=>!result[field]))throw Error('An implementation plan needs requirements, user stories, data and permission changes, test plan, rollout and rollback plans.')
+  if(result.stage!=='implementation-planned'&&planningFields.some(field=>field in result))throw Error('Implementation details require an implementation-planned review.')
   if(result.stage!=='prototype-ready'&&['previewUrl','commitSha','evaluationSummary'].some(key=>key in result))throw Error('Prototype evidence can change only in a prototype-ready review.')
   if(result.stage==='prototype-ready'){
    if(!/^https:\/\//.test(result.previewUrl||'')||!/^[a-f0-9]{40}$/.test(result.commitSha||'')||!result.evaluationSummary)throw Error('A prototype requires its HTTPS previewUrl, exact commitSha and evaluationSummary.')

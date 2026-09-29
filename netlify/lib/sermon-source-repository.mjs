@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { getStore } from '@netlify/blobs'
+import { getStore } from './scoped-store.cjs'
 
 export const SERMON_HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 export const SERMON_STORE_NAME = 'brevity-household'

@@ -1,3 +1,5 @@
+import {createConversationRepository} from './assistant-conversation-store.mjs'
+import {createUsageRepository} from './usage-metrics.mjs'
 import assert from 'node:assert/strict'
 import {createAssistantActionRepository} from './assistant-action-repository.mjs'
 import {createProductionActionResources,captureExpectedVersions,executeRecordOperations} from './assistant-action-executor.mjs'
@@ -60,5 +62,29 @@ export async function verifyReleasePersistence({store,runId}){
  await undoActionWithJournal({repository,auditId:preferenceSaved.audit.id,session,resources,event:{}})
  assert.deepEqual((await makeResources().read('member-context:Larry')).value.preferences,{})
  checks.memberPreferenceSaveIsolationAndUndo=true
+
+ for(const spec of [
+  {name:'activitySaveAndUndo',type:'activity.record',targetId:'Larry',payload:{kind:'workout',title:'Fixture walk',durationMinutes:30},resource:`activity:Larry:${date}`,verify:value=>assert.equal(value.entries[0].durationMinutes,30)},
+  {name:'learningEvidenceSaveAndUndo',type:'education.observation.record',targetId:'Isaiah',payload:{observations:[{skillId:'fixture-skill',activityId:'fixture-reading',result:'prompted'}]},resource:'shared:brevity_education_isaiah_v1',verify:value=>assert.ok(value.sessions.length>0)},
+  {name:'moduleConfigurationSaveAndUndo',type:'module.configuration.update',targetId:'household-modules',payload:{modules:[{id:'custom-fixture',label:'Fixture notes',pillarId:'household'}]},resource:'shared:brevity_modules_v1',verify:value=>assert.equal(value[0].id,'custom-fixture')},
+ ]){
+  const proposal=await captureExpectedVersions(normalizeActionProposal({summary:'Isolated extension verification',operations:[{type:spec.type,targetId:spec.targetId,targetDate:date,payload:spec.payload}]},session),resources)
+  const before=(await resources.read(spec.resource)).value,applied=await execute(proposal)
+  spec.verify((await makeResources().read(spec.resource)).value)
+  await undoActionWithJournal({repository,auditId:applied.audit.id,session,resources,event:{}})
+  assert.deepEqual((await makeResources().read(spec.resource)).value,before);checks[spec.name]=true
+ }
+ const conversations=()=>createConversationRepository({store:scoped('conversations')})
+ await conversations().appendTurn('Larry',{version:0,turnId:'fixture-turn',user:{role:'user',content:'Fixture question'},assistant:{role:'assistant',content:'Fixture answer'}})
+ assert.equal((await conversations().read('Larry')).messages.length,2)
+ assert.equal((await conversations().read('Lorenzo')).messages.length,0)
+ await assert.rejects(()=>conversations().clear('Larry',0),error=>error.status===409)
+ const cleared=await conversations().clear('Larry',1);assert.equal(cleared.messages.length,0)
+ assert.equal((await conversations().restore('Larry',cleared.version)).messages.length,2);checks.conversationPersistenceConflictIsolationAndRestore=true
+ const usage=()=>createUsageRepository({store:scoped('usage')})
+ await usage().record('Larry',{id:'fixture-request',kind:'assistant',outcome:'answered'})
+ await usage().record('Larry',{id:'fixture-request',kind:'assistant',outcome:'answered'})
+ assert.equal((await usage().summary(['Larry'])).members[0].requests,1)
+ assert.equal((await usage().summary(['Lorenzo'])).members[0].requests,0);checks.usagePersistenceDeduplicationAndIsolation=true
  return{passed:true,checks,syntheticData:true,productionWrites:false,scope:'Real action executor and persistence; no browser confirmation interaction.'}
 }

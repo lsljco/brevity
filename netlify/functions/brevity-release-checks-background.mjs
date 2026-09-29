@@ -1,4 +1,4 @@
-import {getStore} from '@netlify/blobs'
+import {getStore} from '../lib/scoped-store.cjs'
 import {verifyReleasePersistence} from '../lib/release-persistence-checks.mjs'
 import householdAuth from './household-auth.js'
 import {releaseCheckAccess} from '../lib/release-check-access.mjs'

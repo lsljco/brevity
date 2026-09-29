@@ -270,7 +270,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
 }
 
 export async function productionMealPlanRepository(options = {}) {
-  const { getStore } = await import('@netlify/blobs')
+  const { getStore } = await import('./scoped-store.cjs')
   const store = getStore({
     name: STORE_NAME,
     consistency: 'strong',

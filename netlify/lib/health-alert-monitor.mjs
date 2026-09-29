@@ -1,4 +1,4 @@
-import {getStore} from '@netlify/blobs'
+import {getStore} from './scoped-store.cjs'
 
 const HOUSEHOLD_ID=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',STORE_NAME='brevity-household',MODEL=process.env.BREVITY_AI_MODEL||'gpt-5.6'
 export const HEALTH_ALERT_KEY=`${HOUSEHOLD_ID}/health/public-health-alerts`

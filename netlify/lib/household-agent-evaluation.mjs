@@ -1,3 +1,4 @@
+import {resolveModules} from '../../src/modules/configuration.js'
 import {validateAgentProposal} from './agent-proposal-validation.mjs'
 import cases from '../../evaluations/household-agent-cases.json' with {type:'json'}
 import {runBrevitySdkAgent} from './brevity-sdk-agent.mjs'
@@ -12,6 +13,7 @@ export function evaluationFixture(item){
  const member='Larry',date='2026-09-28'
  const recipe={id:'custom-dinner-test',name:'Smoked Turkey Breast + Garlic Kale',ingredients:['6 oz turkey','1 cup garlic kale','1 roasted sweet potato'],yieldQuantity:1,yieldUnit:'serving',macros:{calories:600,proteinGrams:45,carbohydrateGrams:50,fatGrams:15}}
  const canonical={householdDate:date,signedInMember:member,sources:[],mealLibrary:[recipe],dailyPlan:{fitness:{focus:'Walk 30 minutes'},education:{focus:'Read for 20 minutes'},household:{focus:'Inspect garage'},ministry:{focus:'Prepare Sunday welcome'}},activeSermon:{title:'Stewardship',summary:'Faithful care of entrusted resources.'},actionRecords:{projects:[{id:'kitchen',title:'Kitchen',status:'In Progress'}],finance:{recurringRecords:[{id:'electric',title:'Electric bill',amount:150,frequency:'monthly',date:'2026-10-01'}]}},dailyNutrition:{member,date,entries:[{id:'breakfast',member,date,name:'Breakfast',ingredients:[{input:'2 slices toast'}],macros:{calories:140,proteinGrams:4,carbohydrateGrams:26,fatGrams:2}}],totals:{calories:140,proteinGrams:4,carbohydrateGrams:26,fatGrams:2}},nutritionTargets:{proteinGrams:100},supplementalSources:{'apple-calendar':'unavailable'}}
+ canonical.moduleConfiguration=resolveModules([]);canonical.recentActivities=[];canonical.recentNutrition=[canonical.dailyNutrition];canonical.recentDailyPlans=[{...canonical.dailyPlan,date}];canonical.historyStartDate='2026-09-22';canonical.access={finance:true,education:true}
  canonical.actionRecords.improvementProposals=[{id:'voice-recovery-idea',title:'Voice recovery',stage:'proposed',problem:'Reported stalled voice after an error',evidence:'User report',solution:'Restart microphone after clearing busy state',benefit:'Hands-free continuation',risks:'Duplicate submissions',successMetric:'Recovery tests pass without duplicate sends'}]
  canonical.memberPreferences=item.id==='preference-remember'?{}:{communication:'Prefer short spoken answers'}
  canonical.recentNutrition=[canonical.dailyNutrition]

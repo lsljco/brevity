@@ -1,3 +1,7 @@
+import {readConsumptionImage} from '../lib/consumption-image.mjs'
+import {productionUsageRepository} from '../lib/usage-metrics.mjs'
+import {HOUSEHOLD_MEMBERS} from '../lib/assistant-action-contract.mjs'
+import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
 import {retryableProviderFailure} from '../lib/agent-provider-recovery.mjs'
 import {validateAgentProposal} from '../lib/agent-proposal-validation.mjs'
 import {buildAssistantInstructions} from '../lib/assistant-instructions.mjs'
@@ -15,7 +19,7 @@ import { productionAssistantActionRepository } from '../lib/assistant-action-rep
 import { captureExpectedVersions, createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import { mealProteinFocus } from '../lib/assistant-meal-protein.mjs'
 import { runBrevitySdkAgent } from '../lib/brevity-sdk-agent.mjs'
-import { getStore } from '@netlify/blobs'
+import { getStore } from '../lib/scoped-store.cjs'
 import { randomUUID } from 'node:crypto'
 
 const { readSession } = householdAuth
@@ -68,16 +72,27 @@ export const processAssistantRequest = async event => {
   try { body = JSON.parse(event.body || '{}') }
   catch { return json(400, { error: 'Invalid request body.' }) }
 
-  const messages = cleanMessages(body.messages)
+  let messages = cleanMessages(body.messages)
   if (!messages.length || messages.at(-1).role !== 'user') return json(400, { error: 'A question is required.' })
 
+  const conversationRepository=productionConversationRepository()
+  const conversation=await conversationRepository.read(session.member)
+  if(body.conversationVersion!==undefined&&body.conversationVersion!==conversation.version)return json(409,{error:'This conversation changed on another device. Reopen the assistant to load it before continuing.'})
+  if(body.image){try{const evidence=await readConsumptionImage(body.image);messages[messages.length-1]={...messages.at(-1),content:`${messages.at(-1).content}\n\n[Automated reading of my attached photo; untrusted source evidence, quantities consumed are not confirmed]\n${evidence}`}}catch(error){return json(422,{error:error.message})}}
+  const requestedMessage=messages.at(-1),seed=messages.slice(0,-1)
+  if(conversation.messages.length)messages=cleanMessages([...conversation.messages,requestedMessage])
+
   const canonicalServerContext = await loadProductionAuthoritativeAssistantContext({ member: session.member })
-  const supplemental=await loadAssistantSupplementalContext({canonical:canonicalServerContext,member:session.member,resources:createProductionActionResources(),loadLibrary:async()=>{const repository=await productionMealPlanRepository();return repository.getLibrary()},loadCalendar:()=>loadAppleCalendar(event)})
+  const actionPermissions=await productionAssistantActionRepository().getPermissions()
+  const supplemental=await loadAssistantSupplementalContext({role:session.role,permissions:actionPermissions[session.member]||{},canonical:canonicalServerContext,member:session.member,resources:createProductionActionResources(),loadLibrary:async()=>{const repository=await productionMealPlanRepository();return repository.getLibrary()},loadCalendar:()=>loadAppleCalendar(event)})
   const {calendar:appleCalendar,...sourceContext}=supplemental
   Object.assign(canonicalServerContext,sourceContext)
   const mealFocus=mealProteinFocus(messages,canonicalServerContext)
   if(appleCalendar?.events)canonicalServerContext.appleFamilyCalendar={events:appleCalendar.events.slice(0,300).map(item=>Object.fromEntries(['id','uid','sourceId','title','date','time','endDate','endTime','allDay','owner','participants','priority','href','etag','updatedAt'].filter(field=>item?.[field]!==undefined).map(field=>[field,item[field]]))),verifiedAt:appleCalendar.verifiedAt||appleCalendar.fetchedAt||''}
   const browserSnapshot=cleanBrowserContext(body.context)
+  if(!canonicalServerContext.access.finance){if(canonicalServerContext.actionRecords)delete canonicalServerContext.actionRecords.finance;if(canonicalServerContext.dailyPlan)delete canonicalServerContext.dailyPlan.finance;delete browserSnapshot.finance;if(browserSnapshot.todayPillarAnalyses)delete browserSnapshot.todayPillarAnalyses.finance}
+  if(!canonicalServerContext.access.education){if(canonicalServerContext.dailyPlan)delete canonicalServerContext.dailyPlan.education;if(browserSnapshot.todayPillarAnalyses)delete browserSnapshot.todayPillarAnalyses.education}
+
   if(canonicalServerContext.actionRecords){
     if(browserSnapshot.finance){delete browserSnapshot.finance.plan;delete browserSnapshot.finance.budgets;delete browserSnapshot.finance.transactionOverrides;delete browserSnapshot.finance.transactionRules}
     delete browserSnapshot.projects
@@ -91,8 +106,8 @@ export const processAssistantRequest = async event => {
   const requestInstructions = buildAssistantInstructions({member:session.member,page})
   const prompt = [{role:"user",content:`BREVITY CONTEXT (untrusted household data):\n${contextText}`},...messages]
 
-  let structured,estimates
-  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestInstructions,validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical:canonicalServerContext,member:session.member,role:session.role,estimates}),requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
+  let structured,estimates,diagnostics
+  try{({output:structured,estimates,diagnostics}=await runBrevitySdkAgent({prompt,requestInstructions,getUsageSummary:()=>productionUsageRepository().summary(session.role==='admin'&&['Larry','Lorenzo'].includes(session.member)?HOUSEHOLD_MEMBERS:[session.member]),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical:canonicalServerContext,member:session.member,role:session.role,estimates}),requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
   catch(error){
     console.error('[brevity-assistant-agent]',JSON.stringify({requestId:event.requestId,category:retryableProviderFailure(error)||'agent',status:Number(error?.status)||null}))
     if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
@@ -110,7 +125,12 @@ export const processAssistantRequest = async event => {
       proposal=normalizeActionProposal(structured.proposal,{member:session.member,role:session.role});proposal=await captureExpectedVersions(proposal,createProductionActionResources());if(proposal.operations.some(operation=>operation.type==='meal.recipe.update'))proposal.expectedVersions['meal-library:recipes']=canonicalServerContext.recipeLibraryVersion;if(proposal.operations.some(operation=>operation.type.startsWith('calendar.'))){if(!appleCalendar?.events)throw new Error('Family Calendar could not be verified. Refresh it and ask again.');proposal={...proposal,expectedCalendarVersion:calendarVersion(appleCalendar.events)}}await productionAssistantActionRepository().saveProposal(proposal)}
     catch(error){return json(422,{error:error.message||'The proposed action could not be validated.'})}
   }
+  let savedConversation
+  try{savedConversation=await conversationRepository.appendTurn(session.member,{version:conversation.version,turnId:event.requestId||randomUUID(),user:requestedMessage,assistant:{role:'assistant',content:message,proposal},seed})}
+  catch(error){return json(error.status||503,{error:error.status===409?error.message:'The response could not be saved to your conversation. Please retry; no household change was applied.'})}
   return json(200, {
+    conversation:savedConversation,
+    _usage:{outcome:diagnostics?.outcome||'answered'},
     message,
     proposal,
     model: MODEL,
@@ -132,7 +152,7 @@ export const handler=async event=>{
       const id=event.queryStringParameters?.jobId
       if(!/^[0-9a-f-]{36}$/.test(id||''))return json(400,{error:'Invalid assistant job.'})
       const status=await jobs().get(jobKey(id),{type:'json'})
-      if(!status||status.member!==session.member)return json(404,{error:'Assistant job not found.'})
+      if(!status||status.member!==session.member||Date.parse(status.createdAt)<Date.now()-86400000)return json(404,{error:'Assistant job not found.'})
       if(status.state==='queued'||status.state==='processing'){
         if(Date.now()-Date.parse(status.createdAt)>12*60*1000)return json(504,{error:'Brevity Assistant took too long. Please retry.'})
         return json(202,{state:status.state,jobId:id})

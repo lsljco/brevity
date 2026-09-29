@@ -74,7 +74,7 @@ Earlier signed-in full meal test on `dced88e` reached actual Action Mode review:
 
 ### September 29 release audit
 
-Current runtime candidate: `fdf8a6c1fd032dc0e46f6f7461523c2e824a4092` on deploy preview #230. Production is unchanged and PR #230 remains draft.
+Historical release candidate: `fdf8a6c1fd032dc0e46f6f7461523c2e824a4092` on deploy preview #230. PR #230 was subsequently merged and production-published as `1bd733e6ba9f01bb5644e2f5d2f088409bf09775`. See project-plan-completion-ledger.md for the current package and outstanding plan gates.
 
 - **Local and CI:** 1,133 local tests pass; production build passes. GitHub verification run 36509959812 and browser regression run 36509959825 both passed on this commit. Browser device emulation does not prove physical iOS microphone behavior.
 - **Live agent evaluations:** the previous 40-case run on `b754709` returned 38 structural passes. One failure was an evaluation that did not recognize the new household search tool; the other was a real missing durable-preference review. Both pass on `fdf8a6c` after evaluator correction and the explicit preference-review tool. The complete rerun on `fdf8a6c` subsequently passed all 40 structural checks; every response was also inspected.

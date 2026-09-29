@@ -1,6 +1,6 @@
 import householdAuth from './household-auth.js'
 import { fetchWeatherForecast } from '../lib/weather-forecast.mjs'
-import {getStore} from '@netlify/blobs'
+import {getStore} from '../lib/scoped-store.cjs'
 
 const {readSession}=householdAuth
 const FRESH_MS=15*60*1000
