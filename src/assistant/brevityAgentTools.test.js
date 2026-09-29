@@ -8,7 +8,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools[0].invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -176,4 +176,29 @@ test('agent can inspect real product evidence before calculation and reuse its p
  assert.equal(fetches,2)
  assert.ok(result.estimateId)
  assert.equal(result.logged,false)
+})
+
+test('focused product discovery verifies candidates and shares only its product query with research',async()=>{
+ const queries=[]
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},findSources:async(product,options)=>{
+  queries.push({product,options})
+  return ['https://example.com/exact-product']
+ },referenceFetcher:async url=>({sourceUrl:url,html:'Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Total Fat 15g Total Carbohydrates 5g'})})
+ const finder=agent.tools.find(item=>item.name==='find_product_nutrition')
+ const result=JSON.parse(await finder.invoke({},JSON.stringify({product:'Example Original sausage'})))
+ assert.deepEqual(queries,[{product:'Example Original sausage',options:{model:'test'}}])
+ assert.match(result.references[0].details,/Total Carbohydrates 5g/)
+ assert.deepEqual(result.failures,[])
+})
+
+test('product source discovery has bounded research and filters invalid candidate URLs',async()=>{
+ const {findProductNutritionSources}=await import('../../netlify/lib/product-nutrition-research.mjs')
+ const result=await findProductNutritionSources('Example Vanilla 11 fl oz',{model:'test',runner:{run:async(agent,input,options)=>{
+  assert.equal(options.maxTurns,4)
+  assert.equal(agent.modelSettings.store,false)
+  assert.deepEqual(agent.tools.map(tool=>tool.name),['web_search'])
+  assert.equal(input[0].content[0].text,'Example Vanilla 11 fl oz')
+  return {finalOutput:{urls:['https://example.com/product','https://example.com/product','http://example.com/other']}}
+ }}})
+ assert.deepEqual(result,['https://example.com/product'])
 })
