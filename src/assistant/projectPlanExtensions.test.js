@@ -39,10 +39,15 @@ test('packaged mineral amounts are scaled from the label; unknown remains unknow
 })
 test('unavailable weekly sources do not crash or turn into verified zero activity',()=>{
  const value=weeklyHouseholdBriefing({recentActivities:[null],recentNutrition:[null],recentDailyPlans:[null],supplementalSources:{'activity:2026-09-29':'unavailable'}})
- assert.deepEqual(value.unavailableSources,['activity:2026-09-29']);assert.match(value.scope,/Missing records/)
+ assert.equal(value.fitness.reportedWorkouts,null);assert.equal(value.fitness.reportedMinutes,null);assert.deepEqual(value.unavailableSources,['activity:2026-09-29']);assert.match(value.scope,/Missing records/)
 })
 test('trusted preview build scope cannot address production stores',()=>{
  assert.equal(scoped.scopedName('brevity-meals',{preview:false}),'brevity-meals')
  assert.equal(scoped.scopedName('brevity-meals',{preview:true,reviewId:'234'}),'preview-234-brevity-meals')
  assert.notEqual(scoped.scopedName('brevity-meals',{preview:true,reviewId:'235'}),scoped.scopedName('brevity-meals',{preview:true,reviewId:'234'}))
+})
+
+test("unavailable nutrition never becomes a zero-meal briefing",()=>{
+ const value=weeklyHouseholdBriefing({nutritionUnavailable:true,recentNutrition:[],supplementalSources:{"nutrition:2026-09-29":"unavailable"}})
+ assert.equal(value.nutrition.meals,null);assert.equal(value.nutrition.daysLogged,null);assert.equal(value.nutrition.coverage,"incomplete");assert.deepEqual(value.nutrition.unavailableDates,["2026-09-29"])
 })

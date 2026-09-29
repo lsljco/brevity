@@ -163,7 +163,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "Change the turkey recipe to use 12 oz turkey, 2 cups kale and 2 sweet potatoes for two servings."
+        "content": "Change the turkey recipe to use 12 oz cooked skinless turkey breast, 2 cups cooked kale and 2 medium baked sweet potatoes, with no added oil, for two servings. Use standard food estimates for these unbranded ingredients."
       }
     ],
     "requiredTools": [
