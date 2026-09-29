@@ -9,6 +9,10 @@ export function validateAgentProposal(output,{canonical,member,role,estimates}){
  const operations=output.proposal.operations.map(operation=>{
   if(operation.type==='member.preference.set'&&operation.targetId!==member)throw Error('Members can change only their own preferences.')
   assertActionSourcesAvailable(operation,canonical)
+  if(operation.type==='plan.pillar.update'){
+   const payload=operation.payload||JSON.parse(operation.payloadJson||'{}')
+   if(payload.pillar==='household'&&Object.hasOwn(payload.patch||{},'appointments'))throw Error('Appointments must use the Family Calendar action and an exact verified event. A household plan appointment is not a substitute for an unavailable calendar event. Explain the missing source or clarify the event; do not create a replacement in another record.')
+  }
   return bindRecipeOperation(bindNutritionOperation(operation,{member,date:canonical.householdDate,recentNutrition:canonical.recentNutrition,estimates}),{library:canonical.mealLibrary||[],estimates})
  })
  normalizeActionProposal({...output.proposal,operations},{member,role})

@@ -27,3 +27,8 @@ test('supplemental context loads only the authenticated member preference resour
  assert.deepEqual(result.memberPreferences,{food:'Prefer whole wheat'})
  assert.deepEqual(reads.filter(key=>key.startsWith('member-context:')),['member-context:Larry'])
 })
+
+test('agent cannot replace an unreadable calendar event with a made-up plan appointment',()=>{
+ const operation={type:'plan.pillar.update',targetId:'household',targetDate:'2026-09-29',payloadJson:JSON.stringify({pillar:'household',patch:{appointments:[{title:'appointment',startTime:'10:00',endTime:'10:30'}]}})}
+ assert.throws(()=>validateAgentProposal({proposal:{operations:[operation]}},{canonical:{householdDate:'2026-09-28',supplementalSources:{'apple-calendar':'unavailable'}},member:'Larry',estimates:new Map()}),/not a substitute/)
+})
