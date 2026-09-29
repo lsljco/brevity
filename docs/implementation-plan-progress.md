@@ -2,7 +2,9 @@
 
 Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This is an implementation inventory, not a claim of pilot acceptance. Validate each item with signed-in household use before production release.
 
-## Current state
+## Historical baseline
+
+The table below describes the earlier PR #230 milestone. For current implementation and verification, use [project-plan-completion-ledger.md](project-plan-completion-ledger.md) and [the PR #233 report](validation/2026-09-29-project-plan-package.md); completed continuity, module, activity and recovery work is recorded there.
 
 | Plan area | Current implementation | Remaining acceptance work |
 | --- | --- | --- |
