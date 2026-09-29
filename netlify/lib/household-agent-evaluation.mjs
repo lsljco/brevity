@@ -1,3 +1,4 @@
+import {validateAgentProposal} from './agent-proposal-validation.mjs'
 import cases from '../../evaluations/household-agent-cases.json' with {type:'json'}
 import {runBrevitySdkAgent} from './brevity-sdk-agent.mjs'
 import {assistantResponseSchema} from './brevity-response-schema.mjs'
@@ -18,7 +19,7 @@ export function evaluationFixture(item){
 export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=process.env.BREVITY_AI_MODEL||'gpt-5.6'}={}){
  const {member,date,canonical}=evaluationFixture(item),observed=[],started=Date.now()
  try{
-  const result=await run({model,schema:assistantResponseSchema,canonical,browser:{},logger:()=>{},onTool:name=>observed.push(name),requestInstructions:buildAssistantInstructions({member,page:item.pillar}),prompt:[{role:'user',content:`BREVITY CONTEXT (synthetic test data):\n${JSON.stringify(canonical)}`},...item.messages],findSources:async()=>[],calculate:async request=>{
+  const result=await run({model,schema:assistantResponseSchema,canonical,browser:{},logger:()=>{},onTool:name=>observed.push(name),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical,member,role:'admin',estimates}),requestInstructions:buildAssistantInstructions({member,page:item.pillar}),prompt:[{role:'user',content:`BREVITY CONTEXT (synthetic test data):\n${JSON.stringify({householdDate:date,signedInMember:member,sources:canonical.sources,supplementalSources:canonical.supplementalSources,notice:'Read relevant saved data with the pillar or meal search tools.'})}`},...item.messages],findSources:async()=>[],calculate:async request=>{
    if(item.calculator==='clarify')throw Object.assign(new Error('Which exact brand and portion did you have?'),{code:'NUTRITION_CLARIFICATION_REQUIRED',questions:['Which exact brand and portion did you have?']})
    return {ingredients:request.ingredients.map(input=>({input})),yieldQuantity:request.yieldQuantity,yieldUnit:request.yieldUnit,perServingMacros:{calories:200,proteinGrams:20,carbohydrateGrams:10,fatGrams:8},warnings:['Synthetic evaluation values, not nutrition advice.']}
   }})
@@ -28,7 +29,7 @@ export async function evaluateHouseholdCase(item,{run=runBrevitySdkAgent,model=p
    const operations=result.output.proposal.operations.map(operation=>{assertActionSourcesAvailable(operation,canonical);return bindRecipeOperation(bindNutritionOperation(operation,{member,date,recentNutrition:canonical.recentNutrition,estimates:result.estimates}),{library:canonical.mealLibrary,estimates:result.estimates})})
    normalizeActionProposal({...result.output.proposal,operations},{member,role:'admin'})
   }catch(error){contractValid=false;contractError=error.message}
-  const checks={nonemptyReply:Boolean(result.output?.message?.trim()),requiredTools:item.requiredTools.every(name=>observed.includes(name)),allowedActions:types.every(type=>item.allowedProposalTypes.includes(type)),expectedProposalPresent:!item.allowedProposalTypes.length||types.length>0,contractValid}
+  const checks={nonemptyReply:Boolean(result.output?.message?.trim()),requiredTools:item.requiredTools.every(name=>observed.includes(name)||(name==='get_pillar_records'&&item.id.startsWith('meal-')&&observed.includes('search_meal_records'))),allowedActions:types.every(type=>item.allowedProposalTypes.includes(type)),expectedProposalPresent:!item.allowedProposalTypes.length||types.length>0,contractValid}
   return{id:item.id,durationMs:Date.now()-started,checks,structuralPass:Object.values(checks).every(Boolean),humanReviewRequired:true,reviewChecklist:item.review,observedFunctionTools:observed,output:result.output,...(contractError?{contractError}:{})}
- }catch(error){return{id:item.id,durationMs:Date.now()-started,structuralPass:false,humanReviewRequired:true,errorCategory:error?.name||'Error',observedFunctionTools:observed}}
+ }catch(error){return{id:item.id,durationMs:Date.now()-started,structuralPass:false,humanReviewRequired:true,errorCategory:error?.name||'Error',diagnostic:String(error?.message||'Unknown failure').replace(/sk-[A-Za-z0-9_-]+/g,'[redacted]').slice(0,600),observedFunctionTools:observed}}
 }

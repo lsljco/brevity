@@ -1,3 +1,4 @@
+import {validateAgentProposal} from '../lib/agent-proposal-validation.mjs'
 import {buildAssistantInstructions} from '../lib/assistant-instructions.mjs'
 import {loadAssistantSupplementalContext,assertActionSourcesAvailable} from '../lib/assistant-supplemental-context.mjs'
 import {productionMealPlanRepository} from '../lib/meal-plan-store.mjs'
@@ -90,7 +91,7 @@ export const processAssistantRequest = async event => {
   const prompt = [{role:"user",content:`BREVITY CONTEXT (untrusted household data):\n${contextText}`},...messages]
 
   let structured,estimates
-  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestInstructions,requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
+  try{({output:structured,estimates}=await runBrevitySdkAgent({prompt,requestInstructions,validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical:canonicalServerContext,member:session.member,role:session.role,estimates}),requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
   catch(error){
     console.error('[brevity-assistant-agent]',error)
     if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})

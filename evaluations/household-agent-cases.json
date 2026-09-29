@@ -528,5 +528,105 @@
       "Do not bypass review or invent completed writes."
     ],
     "calculator": "clarify"
+  },
+  {
+    "id": "fitness-edit",
+    "pillar": "fitness",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Change today\u2019s planned workout to a 20 minute walk and recovery to gentle stretching."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "plan.pillar.update"
+    ],
+    "review": [
+      "Change only requested fields, retain other saved values, and require review."
+    ],
+    "calculator": "clarify"
+  },
+  {
+    "id": "education-edit",
+    "pillar": "education",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Set today\u2019s Isaiah reading practice to 20 minutes and math practice to 15 minutes."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "plan.pillar.update"
+    ],
+    "review": [
+      "Change only requested fields, retain other saved values, and require review."
+    ],
+    "calculator": "clarify"
+  },
+  {
+    "id": "spiritual-edit",
+    "pillar": "spiritual",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Set today\u2019s devotion focus to gratitude and prayer focus to patience."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "plan.pillar.update"
+    ],
+    "review": [
+      "Change only requested fields, retain other saved values, and require review."
+    ],
+    "calculator": "clarify"
+  },
+  {
+    "id": "ministry-edit",
+    "pillar": "ministry",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Set today\u2019s ministry content focus to welcoming newcomers."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "plan.pillar.update"
+    ],
+    "review": [
+      "Change only requested fields, retain other saved values, and require review."
+    ],
+    "calculator": "clarify"
+  },
+  {
+    "id": "nutrition-target",
+    "pillar": "health",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Set my daily protein target to 130 grams. Keep my other targets unchanged."
+      }
+    ],
+    "requiredTools": [
+      "get_pillar_records"
+    ],
+    "allowedProposalTypes": [
+      "nutrition.targets.update"
+    ],
+    "review": [
+      "Change only requested fields, retain other saved values, and require review."
+    ],
+    "calculator": "clarify"
   }
 ]

@@ -32,5 +32,15 @@ export async function verifyReleasePersistence({store,runId}){
  await undoActionWithJournal({repository,auditId:corrected.audit.id,session,resources,event:{}})
  assert.equal((await read()).totals.proteinGrams,20);assert.equal((await read()).entries[0].name,'Release fixture');checks.persistedUndo=true
  const audit=await repository.getAudit(corrected.audit.id);assert.equal(audit.actor,'Larry');assert.ok(audit.operations.length);checks.auditPreserved=true
+ for(const [pillar,patch] of Object.entries({fitness:{workout:'Fixture walk'},education:{isaiah:{readingMinutes:23}},spiritual:{devotionFocus:'Fixture gratitude'},ministry:{contentFocus:'Fixture welcome'}})){
+  const proposal=await captureExpectedVersions(normalizeActionProposal({summary:'Isolated pillar verification',operations:[{type:'plan.pillar.update',description:'Synthetic pillar change',targetId:pillar,targetDate:date,payload:{pillar,patch}}]},session),resources)
+  const before=(await resources.read(`plan:${date}`)).value
+  const applied=await execute(proposal)
+  const after=(await makeResources().read(`plan:${date}`)).value
+  for(const [key,value] of Object.entries(patch))if(key==='isaiah')assert.equal(after[pillar].isaiah.readingMinutes,23);else assert.deepEqual(after[pillar][key],value)
+  await undoActionWithJournal({repository,auditId:applied.audit.id,session,resources,event:{}})
+  const restored=(await makeResources().read(`plan:${date}`)).value
+  assert.deepEqual(restored?.[pillar],before?.[pillar]);checks[`${pillar}PlanSaveAndUndo`]=true
+ }
  return{passed:true,checks,syntheticData:true,productionWrites:false,scope:'Real action executor and persistence; no browser confirmation interaction.'}
 }

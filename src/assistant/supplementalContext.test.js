@@ -25,3 +25,9 @@ test('a stalled optional source has a bounded read window',async()=>{
  assert.equal(result.supplementalSources['apple-calendar'],'unavailable')
  assert.equal(result.supplementalSources['recipe-library'],'available')
 })
+
+test('unavailable canonical plan or shared records block dependent proposals, not unrelated advice',()=>{
+ const context={sources:[{id:'daily-plan',state:'unavailable'},{id:'shared-action-records',state:'unavailable'}]}
+ for(const type of ['plan.pillar.update','assignment.create','project.update','budget.update'])assert.throws(()=>assertActionSourcesAvailable({type},context),/temporarily unavailable/)
+ assert.doesNotThrow(()=>assertActionSourcesAvailable({type:'meal.recipe.update'},context))
+})

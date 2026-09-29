@@ -1,3 +1,4 @@
+import {ACTION_REPAIR_GUIDANCE} from './agent-proposal-validation.mjs'
 import {findProductNutritionSources} from './product-nutrition-research.mjs'
 import {HOUSEHOLD_AGENT_GUIDANCE} from './household-agent-guidance.mjs'
 import {searchMealRecords} from './recipe-library-actions.mjs'
@@ -106,7 +107,7 @@ export function createBrevitySdkAgent({model,schema,canonical,browser,calculate=
   })
 }
 
-export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,calculate,findSources,requestInstructions='',requestId=randomUUID(),logger=console.info,onTool=()=>{},runner=new Runner({tracingDisabled:true})}) {
+export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,calculate,findSources,requestInstructions='',validateOutput,requestId=randomUUID(),logger=console.info,onTool=()=>{},runner=new Runner({tracingDisabled:true})}) {
   const started=Date.now(),estimates=new Map(),clarifications=[],toolCalls={}
   const recordTool=name=>{toolCalls[name]=(toolCalls[name]||0)+1;onTool(name)}
   const safeRequestId=/^[a-f0-9-]{36}$/.test(requestId)?requestId:randomUUID()
@@ -117,6 +118,13 @@ export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,
     let result=await runner.run(agent,input,{maxTurns:12})
     if(!clarifications.length&&estimates.size&&!result.finalOutput?.proposal&&Array.isArray(result.history)){
       result=await runner.run(agent,[...result.history,system('Before finalizing, check the original member request. You successfully calculated nutrition and have valid estimate IDs: '+JSON.stringify([...estimates.keys()])+'. If the member requested a meal log, correction or review, return the actual Action Mode proposal now using the correct estimate ID and original intent. Preparing review is not saving; do not ask permission to prepare a review already requested. If the member asked only for information, answer without a proposal. Never say a review is prepared or ready when proposal is null. Do not recalculate unchanged food or ask for macros, labels or record IDs.')],{maxTurns:4})
+    }
+    if(!clarifications.length&&result.finalOutput?.proposal&&validateOutput){
+      try{validateOutput(result.finalOutput,{estimates})}catch{
+        recordTool('proposal_contract_repair')
+        result=await runner.run(agent,[...(result.history||(Array.isArray(input)?input:[user(input)])),system(ACTION_REPAIR_GUIDANCE)],{maxTurns:4})
+        validateOutput(result.finalOutput,{estimates})
+      }
     }
     if(result.interruptions?.length)throw Error('Brevity requires a separate Action Mode review for this request.')
     const output=clarifications.length?{message:clarifications[0],proposal:null}:result.finalOutput

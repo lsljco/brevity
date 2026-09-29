@@ -239,3 +239,13 @@ test('calculator recovers a mismatched product reference without another member 
  assert.ok(result.estimateId)
  assert.equal(result.logged,false)
 })
+
+test('invalid proposal gets one production-contract repair before leaving the agent',async()=>{
+ let calls=0,validations=0
+ const result=await runBrevitySdkAgent({model:'test',schema,canonical:{supplementalSources:{}},browser:{},prompt:'Correct my breakfast',logger:()=>{},validateOutput:()=>{if(++validations===1)throw Error('Wrong member target')},runner:{run:async(_agent,input)=>{
+  calls++
+  if(calls===2)assert.match(JSON.stringify(input),/targetId MUST be the signed-in MEMBER/)
+  return {finalOutput:{message:'Review',proposal:{operations:[]}}}
+ }}})
+ assert.equal(calls,2);assert.equal(validations,2);assert.ok(result.output.proposal)
+})

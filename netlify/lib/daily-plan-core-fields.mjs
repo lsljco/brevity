@@ -93,7 +93,7 @@ function isaiah(value) {
   return result
 }
 
-const PILLAR_FIELDS = {
+export const PILLAR_FIELDS = {
   spiritual: { text:['devotionFocus', 'obedienceAction', 'requiredOutput'], strings:['scripture', 'prayerFocus', 'discussionPrompts'] },
   health: { text:['breakfast', 'lunch', 'dinner', 'snacks', 'hydration', 'nextDayPrep', 'discussionPrompt'], strings:['groceries'] },
   fitness: { text:['location', 'workout', 'objective', 'goal', 'departureTime', 'returnTime', 'recovery', 'discussionPrompt'], strings:['exerciseIds', 'exerciseImages'], members:['participants'], numbers:['stepGoal'], booleans:['requiresDecision'] },

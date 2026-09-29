@@ -184,9 +184,9 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
     member,
     date,
     now,
-    loadDailyPlan: targetDate => dataStore.get(`${HOUSEHOLD_ID}/daily-plans/${targetDate}`, { type: 'json' }).catch(() => null),
+    loadDailyPlan: targetDate => readOptionalAuthoritativeRecord(dataStore,`${HOUSEHOLD_ID}/daily-plans/${targetDate}`),
     loadMealWindow: startDate => meals.getWindowReadOnly({ startDate, count: 7 }),
     loadActiveSermon: () => readOptionalAuthoritativeRecord(dataStore, ACTIVE_SERMON_KEY),
-    loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await sharedStore.get(`${HOUSEHOLD_ID}/records/${key}`,{type:'json'}).catch(()=>null)]))),
+    loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await readOptionalAuthoritativeRecord(sharedStore,`${HOUSEHOLD_ID}/records/${key}`)]))),
   })
 }
