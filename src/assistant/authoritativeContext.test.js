@@ -66,3 +66,11 @@ test('Assistant treats only a missing active sermon as absent and fails closed o
     loadSharedRecords:async()=>({}),
   }), /active sermon storage unavailable/)
 })
+
+test('finance schedule is computed from all stored rows before context compaction',async()=>{
+ const rows=Array.from({length:310},(_,i)=>({id:`bill-${i}`,name:'Bill',type:'expense',amount:1,freq:'once',start:'2026-09-30'}))
+ const c=await buildAuthoritativeAssistantContext({member:'Larry',date:'2026-09-29',loadDailyPlan:async()=>null,loadMealWindow:async()=>null,loadActiveSermon:async()=>null,loadSharedRecords:async()=>({lslj_finance_v9:{updatedAt:'2026-09-29T12:00:00Z',value:JSON.stringify({transactions:rows})}})})
+ assert.equal(c.actionRecords.finance.upcomingSchedule.sevenDays.expenses.amount,310)
+ assert.equal(c.actionRecords.finance.upcomingSchedule.items.length,40)
+ assert.equal(c.actionRecords.finance.upcomingSchedule.updatedAt,'2026-09-29T12:00:00Z')
+})

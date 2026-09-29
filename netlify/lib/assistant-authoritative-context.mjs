@@ -1,3 +1,4 @@
+import {householdFinanceSchedule} from './household-finance-schedule.mjs'
 import { getStore } from './scoped-store.mjs'
 import { productionMealPlanRepository } from './meal-plan-store.mjs'
 import { canonicalizeCalendarReadEvent } from '../../src/family/calendarNames.js'
@@ -172,6 +173,8 @@ export async function buildAuthoritativeAssistantContext({
   // Keep complete calendar records on the server; date-scoped tools select the
   // relevant events before exposing them to the model. Array caps lose dates.
   context.actionRecords.familyCalendarEvents=(parseSharedValue(sharedRecords?.family_calendar_events_v1)||[]).map(item=>sanitizeAuthoritativeContext(compactCalendarEvent(item)))
+  const financeRecord=sharedRecords?.lslj_finance_v9
+  context.actionRecords.finance.upcomingSchedule=sanitizeAuthoritativeContext(householdFinanceSchedule(parseSharedValue(financeRecord),date,{updatedAt:financeRecord?.updatedAt||'',state:sharedResult.status==='rejected'?'unavailable':financeRecord?.value==null?'missing':'available'}))
   return context
 }
 
