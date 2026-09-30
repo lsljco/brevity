@@ -403,7 +403,7 @@ for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt wh
   expect(requests.length).toBe(2)
 })
 
-for(const outcome of ['approve','update','activity','cancel','interim','interrupted'])test(`routine spoken review ${outcome} stays bound to the reviewed proposal`,async({page})=>{
+for(const outcome of ['approve','update','activity','cancel','interim','interrupted','blocked'])test(`routine spoken review ${outcome} stays bound to the reviewed proposal`,async({page})=>{
   let executions=0,saved=false
   const messages=[]
   const proposal={id:'voice-proposal',actor:'Larry',actorRole:'admin',state:'pending',risk:'confirmation',expiresAt:new Date(Date.now()+1800000).toISOString(),summary:'Create household priorities',operations:[{id:'voice-op',type:'household.schedule.block.create',domain:'planning',risk:'confirmation',description:'Create priorities work block',targetDate:today(),targetId:'Larry',payload:{title:'Voice approval verification',date:today(),owner:'Larry',startTime:'18:00',endTime:'18:15'},allowedScopes:['this-item'],defaultScope:'this-item'}]}
@@ -421,12 +421,12 @@ for(const outcome of ['approve','update','activity','cancel','interim','interrup
   })
   await page.route('**/elevenlabs-voices',route=>route.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test voice'}]}}))
   await page.route('**/elevenlabs-tts',route=>route.fulfill({contentType:'audio/mpeg',body:'test-audio'}))
-  await page.addInitScript(()=>{
+  await page.addInitScript(({outcome})=>{
     localStorage.setItem('brevity_el_voice_v1','test-voice')
     window.voiceTest={starts:0,plays:0,current:null,audio:null}
     window.SpeechRecognition=class {start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.()}stop(){this.onend?.()}abort(){this.onend?.()}}
-    window.Audio=class {constructor(){window.voiceTest.audio=this}async play(){if(!this.src?.startsWith('data:'))window.voiceTest.plays++}pause(){}}
-  })
+    window.Audio=class {constructor(){window.voiceTest.audio=this}async play(){if(!this.src?.startsWith('data:')){window.voiceTest.plays++;if(outcome==='blocked'&&window.voiceTest.plays===1)throw new DOMException('Tap required','NotAllowedError')}}pause(){}}
+  },{outcome})
   await page.reload();await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
@@ -435,6 +435,12 @@ for(const outcome of ['approve','update','activity','cancel','interim','interrup
   const review=page.getByRole('dialog',{name:'Review proposed Brevity changes',exact:true})
   await expect(review).toBeVisible();await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(1)
   expect(executions).toBe(0)
+  if(outcome==='blocked'){
+    await expect(review.getByRole('status')).toContainText('Hear the full review')
+    await review.getByRole('button',{name:'Play response',exact:true}).click()
+    await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(2)
+    expect(executions).toBe(0)
+  }
   if(outcome==='update')await expect(review.getByText('School follow-up',{exact:true})).toBeVisible()
   if(outcome==='interrupted'){
     await page.evaluate(()=>{window.lateReviewEnd=window.voiceTest.audio.onended})
@@ -446,7 +452,7 @@ for(const outcome of ['approve','update','activity','cancel','interim','interrup
   await expect(review.getByRole('status')).toContainText('Say “Apply this change”')
   await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(2)
   await page.evaluate(({outcome})=>{const result=[{transcript:outcome==='cancel'?'Cancel this change':'Apply this change'}];result.isFinal=outcome!=='interim';window.voiceTest.current.onresult({results:[result]})},{outcome})
-  if(outcome==='approve'||outcome==='update'||outcome==='activity'){
+  if(outcome==='approve'||outcome==='update'||outcome==='activity'||outcome==='blocked'){
     await expect.poll(()=>executions,{timeout:10000}).toBe(1)
     await expect(review).toHaveCount(0)
     await expect(dialog.getByText('Completed: Voice approval verification.',{exact:true})).toBeVisible()
