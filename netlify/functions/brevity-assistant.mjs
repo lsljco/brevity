@@ -1,3 +1,4 @@
+import {assistantHealthContext} from '../lib/member-health.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import {compactAssistantCalendar} from '../lib/household-schedule.mjs'
@@ -91,7 +92,7 @@ export const processAssistantRequest = async event => {
     loadProductionAuthoritativeAssistantContext({ member: session.member }),
     productionAssistantActionRepository().getPermissions(),
   ])
-  const supplemental=await loadAssistantSupplementalContext({role:session.role,permissions:actionPermissions[session.member]||{},canonical:canonicalServerContext,member:session.member,resources:createProductionActionResources(),loadLibrary:async()=>{const repository=await productionMealPlanRepository();return repository.getLibrary()},loadCalendar:()=>loadAppleCalendar(event)})
+  const supplemental=await loadAssistantSupplementalContext({loadHealth:()=>assistantHealthContext(session.member),role:session.role,permissions:actionPermissions[session.member]||{},canonical:canonicalServerContext,member:session.member,resources:createProductionActionResources(),loadLibrary:async()=>{const repository=await productionMealPlanRepository();return repository.getLibrary()},loadCalendar:()=>loadAppleCalendar(event)})
   const {calendar:appleCalendar,...sourceContext}=supplemental
   Object.assign(canonicalServerContext,sourceContext)
   const mealFocus=mealProteinFocus(messages,canonicalServerContext)

@@ -14,6 +14,7 @@ import { popNavigationLocation, pushNavigationLocation } from './navigationHisto
 import './household/Readability.css'
 import './AppDeferred.css'
 
+const HealthConnections = lazy(() => import('./health/HealthConnections.jsx'))
 const HouseholdToday = lazy(() => import('./household/HouseholdToday.jsx'))
 const FamilyCalendar = lazy(() => import('./family/FamilyCalendar.jsx'))
 const PillarAnalysis = lazy(() => import('./household/PillarAnalysis.jsx'))
@@ -285,6 +286,7 @@ export default function App() {
 
     if(activeView==='today')return <Suspense fallback={<div className="app-view-loading">Loading Today…</div>}><HouseholdToday currentMember={currentMember} canEditPlanning={canEditPlanning} planningAccessStatus={planningAccessStatus} isAdministrator={auth.role==='admin'} onOpenPillar={pillarId=>pillarId==='health'?navigateTo('health','meal-plan'):openPillar(pillarId)} onOpenMealPlan={()=>navigateTo('health','meal-plan')} onOpenCalendar={()=>navigateTo('household','family-calendar')} onOpenIntelligence={()=>navigateTo('household','household-intelligence')} onOpenPractices={openPractices} onNavigatePracticeArea={navigatePracticeArea}/></Suspense>
     if(activeView==='household-practices')return <Suspense fallback={<div className="app-view-loading">Loading Policies &amp; Practices…</div>}><OperatingPracticesWorkspace currentMember={currentMember} canEditPlanning={canEditPlanning} initialDate={practiceLocation.date} initialTab={practiceLocation.tab} onNavigate={navigatePracticeArea}/></Suspense>
+    if(activeView==='health-connections')return <Suspense fallback={<div className="app-view-loading">Loading health connections…</div>}><HealthConnections key={currentMember} currentMember={currentMember}/></Suspense>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role} theme={theme} onThemeChange={()=>setTheme(value=>value==='dark'?'light':'dark')} onSignOut={auth.logout}/>
     if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ readOnly={!canEditProjects} canDelete={auth.role==='admin'} currentMember={currentMember}/></Suspense>
     if(activeView==='household-maintenance')return <Suspense fallback={<div className="app-view-loading">Loading Household Operations…</div>}><HouseholdMaintenance currentMember={currentMember} canEdit={canEditPlanning} isAdmin={auth.role==='admin'} initialWorkspace={operationsWorkspace}/></Suspense>
