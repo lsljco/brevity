@@ -103,3 +103,11 @@ Requested extension: every member uses an iPhone; connect personal steps and wor
 Local verification: 1,244 unit/server tests pass; production web build passes. Initial Mac CI passed date/overlap tests, simulator compilation and unsigned iPhone archive creation. Final branch CI and browser checks are release gates. Source and signing instructions: `ios/BrevityHealth/README.md`; member privacy notice: `/health-privacy.html`.
 
 **Not yet complete:** Apple Developer team/signing and distribution, installation on household iPhones, each member’s own consent, and real-device foreground/background sync acceptance. An unsigned archive cannot be installed. No health connection or consent has been created on any member’s behalf. This feature does not import personal ChatGPT history and does not implement clinical monitoring or additional nutrition-data synchronization.
+
+### 2026-09-30 — connected vendor workspace (PR 254)
+
+The Apple Health release (PR 253) is merged and its Health Connections page was verified in the signed-in production app. Final health CI passed 1,244 unit/server tests, 266 browser checks (22 skipped), Swift tests, simulator compilation and an unsigned iPhone archive. Signing, distribution and physical-device acceptance remain outstanding as described above.
+
+PR 254 adds canonical vendor IDs across posted expenses, recurring expenses, debts and projects; a Finance → Vendors workspace; vendor list/report sorting; encrypted protected login/account details; and vendor documents/images. Contact/access edits, assignments and opaque attachment references use Action Mode's reviewed, versioned writes and Undo. No real vendor, login, access grant or expense assignment was fabricated in production. Existing expenses require explicit assignment. Vendor connection coverage and remaining gaps are tracked in `docs/vendor-connections.md`.
+
+Local validation: 1,258 unit/server tests pass, production build and source/bundle budgets pass, and vendor metadata, protected staging and sorting/assignment workflows pass on all four browser layouts (12 checks). Full branch CI and production verification remain release gates. Universal cross-module reconciliation is not claimed; atomic project/calendar publication remains outstanding.

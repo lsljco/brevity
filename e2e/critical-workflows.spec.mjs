@@ -34,7 +34,7 @@ const intelligenceRecords=()=>{const updatedAt=new Date().toISOString(),today=da
   brevity_household_intelligence_v1:{key:'brevity_household_intelligence_v1',value:JSON.stringify({schemaVersion:1,targets:[{id:'larry-finance',member:'Larry',pillarId:'finance',label:'Finance review',targetCount:2,frequency:'period',weight:1,active:true}],rules:[],overrides:{},privacy:{Larry:{details:true}}}),version:1,updatedAt},
   family_calendar_events_v1:{key:'family_calendar_events_v1',value:JSON.stringify([{id:'finance-done',title:'Daily finance review',date:today,owner:'Larry',pillar:'finance',completed:true,minutes:30},{id:'finance-open',title:'Weekly finance review',date:today,owner:'Larry',pillar:'finance',minutes:60}]),version:1,updatedAt},
 }}
-const projectRecords=()=>({homehq_items_v1:{key:'homehq_items_v1',value:JSON.stringify([{id:'kitchen-1',title:'Kitchen refresh',type:'Renovation',room:'Kitchen',roomCustom:'',status:'In Progress',priority:'High',startDate:'2026-09-10',due:'2026-10-15',estcost:'12000.00',actcost:'1400.00',notes:'Preserve the stone.',raci:{responsible:['Larry'],accountable:[],consulted:[],informed:[]},cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,photos:[],files:[]}]),version:0,updatedAt:new Date().toISOString()}})
+const projectRecords=()=>({homehq_items_v1:{key:'homehq_items_v1',value:JSON.stringify([{id:'kitchen-1',vendorId:'project-vendor',title:'Kitchen refresh',type:'Renovation',room:'Kitchen',roomCustom:'',status:'In Progress',priority:'High',startDate:'2026-09-10',due:'2026-10-15',estcost:'12000.00',actcost:'1400.00',notes:'Preserve the stone.',raci:{responsible:['Larry'],accountable:[],consulted:[],informed:[]},cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,photos:[],files:[]}]),version:0,updatedAt:new Date().toISOString()}})
 const debtPaymentRecords=()=>{
   const records=cashForecastRecords(),actuals=JSON.parse(records.plaid_actuals_cache.value)
   actuals.push({id:'bank-mortgage',accountId:'plaid-operating',name:'Mortgage payment',originalStatement:'MONTHLY MORTGAGE PAYMENT',category:'MORTGAGE',amount:3000,date:dateKey(),pending:false})
@@ -883,10 +883,22 @@ test('Vendor sorting and planned expense assignment preserve canonical record re
   await expect(directory.getByRole('button').first()).toContainText('Zeta Insurance')
   await page.getByLabel('Finance vendor sort').selectOption('asc')
   await expect(directory.getByRole('button').first()).toContainText('Alpha Utility')
-  await page.getByLabel('Show',{exact:true}).selectOption('planned')
+  await page.getByLabel('Expense assignment view').selectOption('planned')
   await page.getByLabel('Vendor for Planned groceries').selectOption('alpha')
   await page.getByRole('button',{name:'Review link',exact:true}).click()
   await expect(page.locator('.brevity-action-review')).toContainText('Alpha Utility')
   expect(prepared).toHaveLength(1)
   expect(prepared[0].operation).toMatchObject({type:'recurring.update',targetId:'planned-grocery',payload:{vendorId:'alpha'}})
+})
+
+test('Vendor link from a project opens the canonical finance record',async({page},testInfo)=>{
+  await mockBackend(page,{projectFixture:true})
+  await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,isAdmin:true,vendors:[{id:'project-vendor',name:'Current Contractor Name',phone:'555-0123',accessMembers:[],documents:[]}],links:{}})}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByText('Kitchen refresh',{exact:true}).click()
+  await page.getByRole('button',{name:'Vendor: Current Contractor Name',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Vendors',exact:true})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Current Contractor Name',exact:true})).toBeVisible()
+  await expect(page.getByText('555-0123',{exact:true})).toBeVisible()
 })
