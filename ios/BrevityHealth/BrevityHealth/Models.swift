@@ -1,5 +1,5 @@
 import Foundation
-struct Connection: Codable {
+struct Connection: Codable, Equatable {
     var deviceId: String
     var enabled = true
     var steps = true

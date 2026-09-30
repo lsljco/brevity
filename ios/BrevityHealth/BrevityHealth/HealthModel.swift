@@ -24,13 +24,13 @@ import SwiftUI
         do { try await api.login(member: member, password: password); accept(try await api.summary()); configureObservers() } catch { handle(error) }
         busy = false
     }
-    private func accept(_ value: HealthSummary) { summary = value; draft = value.connection ?? Connection(deviceId: deviceId) }
+    private func accept(_ value: HealthSummary) { let editing = summary != nil && draft != summary?.connection; summary = value; if !editing { draft = value.connection ?? Connection(deviceId: deviceId) } }
     func connect() async {
         guard !busy, let current = summary else { return }; busy = true; error = ""
         do {
             var proposed = draft; proposed.deviceId = deviceId; proposed.enabled = true
             try await reader.authorize(proposed)
-            accept(try await api.settings(proposed, version: current.version)); observedRevision = nil; configureObservers()
+            let saved = try await api.settings(proposed, version: current.version); accept(saved); draft = saved.connection ?? Connection(deviceId: deviceId); observedRevision = nil; configureObservers()
             busy = false; await sync()
         } catch { handle(error); busy = false }
     }

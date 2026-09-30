@@ -5,7 +5,7 @@ export const HEALTH_ZONE='America/New_York'
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status})}
 const exact=(value,keys)=>{if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!keys.includes(key)))fail('Unsupported health request fields.')}
 const bool=value=>{if(typeof value!=='boolean')fail('Health choices must be true or false.');return value}
-const uuid=value=>{if(typeof value!=='string'||!/^[a-f0-9-]{36}$/i.test(value))fail('A valid device identifier is required.');return value}
+const uuid=value=>{if(typeof value!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value))fail('A valid device identifier is required.');return value}
 const dateValid=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value
 export const emptyHealth=()=>({version:0,consentRevision:0,connection:null,days:[],audit:[]})
 export function healthSettings(value,payload,now=new Date()){
