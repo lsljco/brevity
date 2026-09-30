@@ -1,3 +1,6 @@
+import {useVendorDirectory} from './vendorApi.js'
+import {decorateVendorTransactions} from './vendorModel.js'
+import VendorSelector from './VendorSelector.jsx'
 import { Fragment, lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Line, Doughnut } from 'react-chartjs-2'
 import {
@@ -43,6 +46,7 @@ import { USER_SIDEPANEL_IMAGE } from './financeAssets.js'
 import { DEBT_STORAGE_KEY, normalizeDebts } from './debtModel.js'
 
 const ActualTxModal=lazy(()=>import('./ActualTxModal.jsx'))
+const VendorWorkspace=lazy(()=>import('./VendorWorkspace.jsx'))
 const DebtWorkspace=lazy(()=>import('./DebtWorkspace.jsx'))
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, ArcElement, DoughnutController)
@@ -1044,6 +1048,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
   const [customCatMode, setCustomCatMode] = useState(() => !!(tx?.cat && !CATS.includes(tx.cat)))
 
   const save = async () => {
+    if (form.type === 'expense' && !form.vendorId) { alert('Choose a vendor for this expense. Add vendors under Finance → Vendors.'); return }
     if (!form.name || !form.amount) { alert('Name and amount are required.'); return }
     if (form.type === 'transfer' && !form.transferTo) { alert('Please select a destination account.'); return }
     if (!form.start) { alert('A transaction date is required.'); return }
@@ -1087,6 +1092,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
             <input type="number" min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" style={{ width: '100%' }} />
           </div>
         </div>
+        {form.type === 'expense' && <VendorSelector value={form.vendorId||''} onChange={value=>set('vendorId',value)}/>}
         {form.type === 'transfer' && (
           <div style={{ padding: '12px 14px', background: 'rgba(144,170,222,0.07)', border: '1px solid rgba(144,170,222,0.20)', borderRadius: 10 }}>
             <label className="field-label" style={{ color: '#90AADE' }}>Transfer to account</label>
@@ -1175,7 +1181,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
 // ── Main Component ──────────────────────────────────────────────────────────────
 function TransactionListControls({ options, onChange, showDateFilters = true, compact = false }) {
   const set = (key, value) => onChange(current => ({ ...current, [key]: value }))
-  const directionLabels = options.sortBy === 'description'
+  const directionLabels = ['description','vendor'].includes(options.sortBy)
     ? [['asc', 'A to Z'], ['desc', 'Z to A']]
     : options.sortBy === 'date'
       ? [['desc', 'Newest first'], ['asc', 'Oldest first']]
@@ -1184,18 +1190,23 @@ function TransactionListControls({ options, onChange, showDateFilters = true, co
   return (
     <section className={`transaction-list-controls${compact ? ' is-compact' : ''}`} aria-label="Sort and filter transactions">
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Description</span><input aria-label="Filter by description" type="search" placeholder="Search description" value={options.description} onChange={event => set('description', event.target.value)} style={inputStyle}/></label>
+      <label style={{display:'grid',gap:4}}><span className="field-label">Vendor</span><input aria-label="Filter by vendor" placeholder="Vendor or Unassigned" value={options.vendor||''} onChange={event=>set('vendor',event.target.value)} style={inputStyle}/></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Minimum amount</span><input aria-label="Minimum amount" type="number" min="0" step="0.01" placeholder="$0" value={options.minAmount} onChange={event => set('minAmount', event.target.value)} style={inputStyle}/></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Maximum amount</span><input aria-label="Maximum amount" type="number" min="0" step="0.01" placeholder="Any" value={options.maxAmount} onChange={event => set('maxAmount', event.target.value)} style={inputStyle}/></label>
       {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">From date</span><input aria-label="Filter from date" type="date" value={options.dateFrom} onChange={event => set('dateFrom', event.target.value)} style={inputStyle}/></label>}
       {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">To date</span><input aria-label="Filter to date" type="date" value={options.dateTo} onChange={event => set('dateTo', event.target.value)} style={inputStyle}/></label>}
-      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="amount">Amount</option><option value="date">Date</option></select></label>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="vendor">Vendor</option><option value="amount">Amount</option><option value="date">Date</option></select></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Order</span><select aria-label="Transaction sort order" value={options.sortDirection} onChange={event => set('sortDirection', event.target.value)} style={inputStyle}>{directionLabels.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <button type="button" onClick={()=>onChange({ ...DEFAULT_TRANSACTION_LIST_OPTIONS })} style={{ ...inputStyle, cursor: 'pointer', color: 'var(--gold)', whiteSpace: 'nowrap' }}>Reset</button>
     </section>
   )
 }
 
-export default function FinancePlanner({ view: extView, setView: setExtView, currentMember = 'Household member', readOnly = false, meetingPlanningReadOnly = readOnly }) {
+export default function FinancePlanner({ initialVendorId='', view: extView, setView: setExtView, currentMember = 'Household member', readOnly = false, meetingPlanningReadOnly = readOnly }) {
+  const {directory:vendorDirectory,error:vendorDirectoryError}=useVendorDirectory()
+  const [vendorOrder,setVendorOrder]=useState('')
+  const [vendorFocus,setVendorFocus]=useState(initialVendorId)
+  useEffect(()=>{setVendorFocus(initialVendorId)},[initialVendorId])
   const [data, setData]         = useState(loadData)
   const dataRef                 = useRef(data)
   dataRef.current               = data
@@ -1353,8 +1364,8 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
 
   const fd = useMemo(() => ({
     accounts:     data.accounts.filter(a => activeAcctIds.has(a.id)),
-    transactions: data.transactions.filter(tx => activeAcctIds.has(tx.acct) || (tx.type === 'transfer' && tx.transferTo && activeAcctIds.has(tx.transferTo))),
-  }), [data, activeAcctIds])
+    transactions: decorateVendorTransactions(data.transactions.filter(tx => activeAcctIds.has(tx.acct) || (tx.type === 'transfer' && tx.transferTo && activeAcctIds.has(tx.transferTo))),vendorDirectory,'planned',vendorOrder),
+  }), [data, activeAcctIds, vendorDirectory, vendorOrder])
   const forecastScope = useMemo(() => cashForecastScope(fd.accounts, fd.transactions), [fd.accounts, fd.transactions])
 
   // Keep a separate operating-account view for household alignment and
@@ -1496,19 +1507,19 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
 
   // Actuals filtered by selected accounts, with user overrides applied
   const filteredActuals = useMemo(() => {
-    return actualAccountScope.included
+    return decorateVendorTransactions(actualAccountScope.included
       .map(tx => applyTransactionRules(tx, txRules, data.accounts))
       .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
-      .filter(tx => !tx._deleted)
-  }, [actualAccountScope, data.accounts, txOverrides, txRules])
+      .filter(tx => !tx._deleted),vendorDirectory,'posted',vendorOrder)
+  }, [actualAccountScope, data.accounts, txOverrides, txRules,vendorDirectory,vendorOrder])
   const balanceActuals = useMemo(
     () => mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal).filter(transaction => !transaction.pending),
     [actualAccountScope.included, plaidIdToLocal],
   )
   const cashForecastActuals = useMemo(
-    () => mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal)
-      .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),
-    [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal],
+    () => decorateVendorTransactions(mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal)
+      .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),vendorDirectory,'posted',vendorOrder),
+    [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder],
   )
   const cashForecastPostedActuals = useMemo(
     () => balanceActuals.filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),
@@ -1522,7 +1533,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   }, [filteredActuals, timeframeActuals, transactionFilter])
   const transactionViewActuals = useMemo(
     () => sortAndFilterTransactions(filteredTransactionViewActuals, transactionListOptions),
-    [filteredTransactionViewActuals, transactionListOptions],
+    [filteredTransactionViewActuals, transactionListOptions,vendorOrder],
   )
   const transactionViewStats = useMemo(() => transactionViewActuals.reduce((stats, tx) => {
     const amount = Math.abs(Number(tx.amount) || 0)
@@ -1539,7 +1550,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
   }, {})).sort(([a], [b]) => b.localeCompare(a)), [transactionViewActuals])
   const scheduledViewTransactions = useMemo(
     () => buildScheduledTransactionRows(fd.transactions, financeRange, transactionFilter, transactionListOptions),
-    [fd.transactions, financeRange, transactionFilter, transactionListOptions],
+    [fd.transactions, financeRange, transactionFilter, transactionListOptions,vendorOrder],
   )
   const scheduledViewStats = useMemo(() => scheduledViewTransactions.reduce((stats, tx) => {
     const amount = Math.abs(Number(tx.rangeAmount ?? tx.amount) || 0)
@@ -2399,6 +2410,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
       {view !== 'scenario-modeling' && AccountFilterBar}
+      {!isForm&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
       {!formView && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
         <div role="status" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10, margin:'10px 28px 0', padding:'10px 13px', borderRadius:10, border:'1px solid rgba(232,150,122,.30)', background:'rgba(232,150,122,.08)', color:'var(--soft-white)', fontSize:11, lineHeight:1.45 }}>
@@ -2987,7 +2999,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       {/* ══════════ CALENDAR ══════════ */}
       {view === 'calendar' && (
         <div className="finance-inner">
-          <CalendarView proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
+          <CalendarView vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
             readOnly={readOnly}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
@@ -3038,7 +3050,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
             </div>
           )}
 
-          <TransactionListControls options={transactionListOptions} onChange={setTransactionListOptions}/>
+          <TransactionListControls options={transactionListOptions} onChange={options=>{setTransactionListOptions(options);setVendorOrder(options.sortBy==='vendor'?options.sortDirection:'')}}/>
 
           {/* ── Monthly totals summary ── */}
           <div className="finance-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
@@ -3094,7 +3106,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                           <i className={`ti ti-${activityKind === 'transfer' ? 'arrows-exchange' : cashIn ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: activityColor }} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p><button type="button" onClick={event=>{event.stopPropagation();setVendorFocus(tx.vendorId||'');setView('vendors')}} style={{border:0,background:'transparent',color:'var(--gold)',padding:'4px 0'}}>Vendor: {tx.vendorName||'Unassigned'}</button>
                           <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
                             {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             {' · '}{tx.category}
@@ -3119,7 +3131,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
                         <i className={`ti ti-${tx.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }} aria-hidden="true" />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p><button type="button" onClick={event=>{event.stopPropagation();setVendorFocus(tx.vendorId||'');setView('vendors')}} style={{border:0,background:'transparent',color:'var(--gold)',padding:'4px 0'}}>Vendor: {tx.vendorName||'Unassigned'}</button>
                         <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{tx.cat} · {freqLabel}{tx.occurrenceCount ? ` · ${tx.occurrenceCount} occurrence${tx.occurrenceCount === 1 ? '' : 's'} in timeframe` : tx.start ? ` · Starts ${new Date(`${tx.start}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
                       </div>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>
@@ -3205,14 +3217,14 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       {/* ══════════ DEBTS ══════════ */}
       {view === 'debts' && (
         <div className="finance-inner">
-          <Suspense fallback={<div className="loading-screen">Loading debts…</div>}><DebtWorkspace debts={debts} transactions={filteredActuals} scheduledMonthlyNet={calculateScheduledTotalsForMonth(data.transactions,getHouseholdCalendarDate()).net} readOnly={readOnly} onReview={reviewDebtChange}/></Suspense>
+          <Suspense fallback={<div className="loading-screen">Loading debts…</div>}><DebtWorkspace vendorOrder={vendorOrder} debts={debts} transactions={filteredActuals} scheduledMonthlyNet={calculateScheduledTotalsForMonth(data.transactions,getHouseholdCalendarDate()).net} readOnly={readOnly} onReview={reviewDebtChange}/></Suspense>
         </div>
       )}
 
       {/* ══════════ BUDGET ══════════ */}
       {view === 'budget' && (
         <div className="finance-inner">
-          <BudgetView
+          <BudgetView vendorOrder={vendorOrder}
             data={fd}
             plaidActuals={filteredActuals}
             legacyAccountId={data.accounts.find(account => /\boperating\s+account\b/i.test(String(account?.name || '')))?.id || data.accounts.find(account => account.id === 'a1')?.id || ''}
@@ -3228,19 +3240,19 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
       {/* ══════════ RECURRING ══════════ */}
       {view === 'recurring' && (
         <div className="finance-inner">
-          <RecurringFinance scheduled={fd.transactions} actuals={timeframeActuals} range={financeRange} onOpenScheduled={openScheduledTransactions} />
+          <RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={timeframeActuals} range={financeRange} onOpenScheduled={openScheduledTransactions} />
         </div>
       )}
 
       {/* ══════════ REPORTING ══════════ */}
       {view === 'reporting' && (
         <div className="finance-inner">
-          <MonarchReports transactions={timeframeActuals} range={financeRange} onOpenTransactions={openFilteredTransactions} />
+          <MonarchReports vendorOrder={vendorOrder} transactions={timeframeActuals} range={financeRange} onOpenTransactions={openFilteredTransactions} />
           <div style={{ margin: '34px 0 18px', borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 26 }}>
             <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 500 }}>Business Statements</h2>
             <p style={{ margin: '5px 0 0', color: 'var(--muted)', fontSize: 12 }}>Profitability, liquidity, budget, and vendor analysis</p>
           </div>
-          <ReportingView
+          <ReportingView vendorOrder={vendorOrder}
             data={fd}
             proj={proj}
             plaidActuals={filteredActuals}
@@ -3251,6 +3263,7 @@ export default function FinancePlanner({ view: extView, setView: setExtView, cur
         </div>
       )}
 
+      {view === 'vendors' && <Suspense fallback={<p>Loading vendors…</p>}><VendorWorkspace vendorOrder={vendorOrder} initialVendorId={vendorFocus} financeVersion={(()=>{try{return captureFinanceReviewVersion()}catch{return undefined}})()} currentMember={currentMember} readOnly={readOnly} planned={data.transactions} actuals={(plaidActuals||[]).map(tx=>({...applyTransactionRules(tx,txRules,data.accounts),...(txOverrides[tx.id]||{})}))}/></Suspense>}
       {/* ══════════ FORMS ══════════ */}
       {!readOnly && view === 'tx-form'   && <div className="finance-inner"><TxForm   tx={editTx}   accounts={data.accounts} onSave={updateTx}   onCancel={() => setView('transactions')} /></div>}
 
@@ -3315,7 +3328,7 @@ function loadBudget() {
   try { return JSON.parse(localStorage.getItem(BUDGET_LS_KEY)) || {} } catch { return {} }
 }
 
-function BudgetView({ data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, readOnly = false }) {
+function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, readOnly = false }) {
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
@@ -3347,8 +3360,8 @@ function BudgetView({ data, plaidActuals = [], legacyAccountId = '', initialMont
   const legacyYear = getHouseholdCalendarDate().getFullYear()
   const budgetAccountIds = useMemo(() => new Set(data.accounts.map(account => String(account.id))), [data.accounts])
   const BUDGET_CATS = useMemo(
-    () => buildBudgetCategoryLines(data.transactions, budget, { accountIds:budgetAccountIds }),
-    [data.transactions, budget, budgetAccountIds],
+    () => buildBudgetCategoryLines(data.transactions, budget, { accountIds:budgetAccountIds, vendorOrder }),
+    [data.transactions, budget, budgetAccountIds,vendorOrder],
   )
   const budgetLines = useMemo(() => Object.values(BUDGET_CATS).flat(), [BUDGET_CATS])
   const legacyOwners = useMemo(() => buildLegacyBudgetOwners(budgetLines), [budgetLines])
@@ -3501,7 +3514,7 @@ function BudgetView({ data, plaidActuals = [], legacyAccountId = '', initialMont
                       const ov = a > b && b > 0
                       return (
                         <div className="finance-budget-line" key={line.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px 10px 40px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-                          <span className="finance-budget-line-name" style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{line.name}{data.accounts.length > 1 ? <small style={{ display:'block', opacity:.7 }}>{data.accounts.find(account => String(account.id) === line.accountId)?.name || line.accountId}</small> : null}</span>
+                          <span className="finance-budget-line-name" style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{line.name}<small style={{display:'block'}}>Vendor: {line.vendorName||'Unassigned'}</small>{data.accounts.length > 1 ? <small style={{ display:'block', opacity:.7 }}>{data.accounts.find(account => String(account.id) === line.accountId)?.name || line.accountId}</small> : null}</span>
                           <div className="finance-budget-line-meter" style={{ width: 80, height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                             <div style={{ height: '100%', width: `${p}%`, background: ov ? 'var(--expense-color)' : p > 80 ? '#fbbf24' : 'var(--gold)', borderRadius: 99 }} />
                           </div>
@@ -3637,7 +3650,7 @@ function BudgetView({ data, plaidActuals = [], legacyAccountId = '', initialMont
                   {isOpen && lines.map(line => (
                     <tr key={line.id} style={{ borderTop: '1px solid rgba(255,255,255,0.03)' }}>
                       <td style={{ padding: '7px 16px 7px 36px', fontSize: 12, color: 'var(--muted)' }}>
-                        {line.name}{data.accounts.length > 1 ? <small style={{ display:'block', opacity:.7 }}>{data.accounts.find(account => String(account.id) === line.accountId)?.name || line.accountId}</small> : null}
+                        {line.name}<small style={{display:'block'}}>Vendor: {line.vendorName||'Unassigned'}</small>{data.accounts.length > 1 ? <small style={{ display:'block', opacity:.7 }}>{data.accounts.find(account => String(account.id) === line.accountId)?.name || line.accountId}</small> : null}
                       </td>
                       {period === 'monthly'
                         ? MONTHS.map((_, mi) => (
@@ -4045,7 +4058,7 @@ const REPORT_TABS = [
   { id: 'vendor-spend',     label: 'Vendor Spend',     icon: 'ti-building-store'  },
 ]
 
-function ReportingView({ data, proj, plaidActuals = [], legacyAccountId = '', onOpenTransactions, onOpenAccounts }) {
+function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAccountId = '', onOpenTransactions, onOpenAccounts }) {
   const [tab, setTab] = useState('overview')
   const now = getHouseholdCalendarDate()
   const yr = now.getFullYear()
@@ -4054,8 +4067,8 @@ function ReportingView({ data, proj, plaidActuals = [], legacyAccountId = '', on
   const budget = loadBudget()
   const budgetAccountIds = useMemo(() => new Set(data.accounts.map(account => String(account.id))), [data.accounts])
   const BUDGET_CATS = useMemo(
-    () => buildBudgetCategoryLines(data.transactions, budget, { accountIds:budgetAccountIds }),
-    [data.transactions, budget, budgetAccountIds],
+    () => buildBudgetCategoryLines(data.transactions, budget, { accountIds:budgetAccountIds, vendorOrder }),
+    [data.transactions, budget, budgetAccountIds,vendorOrder],
   )
   const budgetLines = useMemo(() => Object.values(BUDGET_CATS).flat(), [BUDGET_CATS])
   const legacyOwners = useMemo(() => buildLegacyBudgetOwners(budgetLines), [budgetLines])
@@ -4066,7 +4079,7 @@ function ReportingView({ data, proj, plaidActuals = [], legacyAccountId = '', on
   const totalIncome = plannedCurrentMonth.income
   const totalExpenses = plannedCurrentMonth.expenses
   const netIncome = plannedCurrentMonth.net
-  const actualReport = useMemo(() => summarizeActuals(plaidActuals, yr), [plaidActuals, yr])
+  const actualReport = useMemo(() => {const report=summarizeActuals(plaidActuals,yr);if(vendorOrder)report.vendorSpend.sort((a,b)=>a[0].localeCompare(b[0])*(vendorOrder==='desc'?-1:1));return report}, [plaidActuals, yr,vendorOrder])
   const currentYearActuals = useMemo(() => plaidActuals.filter(tx => String(tx.date || '').startsWith(`${yr}-`)), [plaidActuals, yr])
   const normalizedActuals = useMemo(() => summarizeBudgetActuals(currentYearActuals), [currentYearActuals])
   const reportActuals = useMemo(
@@ -4178,7 +4191,7 @@ function ReportingView({ data, proj, plaidActuals = [], legacyAccountId = '', on
             {statRow('Profitability', (hasActuals ? actualReport.net : netIncome) >= 0 ? 'Profitable' : 'Operating at a loss', (hasActuals ? actualReport.net : netIncome) >= 0 ? 'var(--gold)' : 'var(--expense-color)', false, true)}
             {statRow('Cash coverage', balanceSheet.totalLiabilities > 0 ? `${(balanceSheet.totalAssets / balanceSheet.totalLiabilities).toFixed(1)}×` : 'No modeled liabilities', 'var(--soft-white)')}
             {statRow('Largest expense category', actualReport.expensesByCategory[0]?.[0] || expByCategory[0]?.[0] || 'No data', 'var(--soft-white)')}
-            {statRow('Largest vendor', actualReport.vendorSpend[0]?.[0] || 'No actual vendor data', 'var(--soft-white)')}
+            {statRow('Largest vendor', [...actualReport.vendorSpend].sort((a,b)=>b[1]-a[1])[0]?.[0] || 'No actual vendor data', 'var(--soft-white)')}
           </div>
         </div>
       )}
@@ -4346,7 +4359,7 @@ function ReportingView({ data, proj, plaidActuals = [], legacyAccountId = '', on
         <div>
           <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Vendor Spend</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Actual payments by merchant · {yr}</p></div>
           {!hasActuals?<div className="finance-card" style={{padding:'42px 20px',textAlign:'center',color:'var(--muted)'}}>Connect or sync an account to analyze actual vendor spending.</div>:
-          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', postedOnly:true, displayBy:'merchant', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
+          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', postedOnly:true, displayBy:'vendor', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
         </div>
       )}
 
@@ -4372,7 +4385,7 @@ function plaidCatToLocal(plaidCats = []) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
+function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
@@ -4585,7 +4598,7 @@ function CalendarView({ proj, calYear, calMonth, setCalYear, setCalMonth, selDay
         </button>
       </div>
 
-      <CashForecastAgenda
+      <CashForecastAgenda vendorOrder={vendorOrder}
         cells={cells}
         projection={proj}
         actualsByDate={actualsByDate}

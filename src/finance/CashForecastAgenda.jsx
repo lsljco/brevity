@@ -38,6 +38,7 @@ export function CashForecastIntro({ monthName, showBankActivity, error, freshnes
 }
 
 export default function CashForecastAgenda({
+  vendorOrder='',
   cells,
   projection,
   actualsByDate,
@@ -55,13 +56,14 @@ export default function CashForecastAgenda({
   const agendaRef = useRef(null)
   const pendingDetailFocusRef = useRef(false)
   const detailId = `cash-forecast-day-detail-${useId().replace(/:/g, '')}`
+  const orderRows=rows=>vendorOrder?[...rows].sort((a,b)=>String(a.vendorName||'Unassigned').localeCompare(String(b.vendorName||'Unassigned'))*(vendorOrder==='desc'?-1:1)):rows
   const days = cells
     .filter(cell => cell.cur)
     .map(cell => {
       const key = `${cell.year}-${String(cell.month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`
       const point = projection.get(key)
-      const planned = point?.txns || []
-      const bank = showBankActivity && key <= todayKey ? (actualsByDate?.[key] || []) : []
+      const planned = orderRows(point?.txns || [])
+      const bank = orderRows(showBankActivity && key <= todayKey ? (actualsByDate?.[key] || []) : [])
       const postedBank = bank.filter(transaction => !transaction?.pending)
       const pendingBank = bank.filter(transaction => transaction?.pending)
       const reconstructedBalance = key <= todayKey ? historicalBalances[key] : undefined
@@ -109,9 +111,9 @@ export default function CashForecastAgenda({
   return (
     <div ref={agendaRef} className="finance-calendar-mobile-agenda" aria-label={`${monthName} cash forecast agenda`}>
       {days.length > 0 ? days.map(day => {
-        const plannedPreview = day.planned.map(transactionDescription).filter(Boolean).slice(0, 2)
+        const plannedPreview = day.planned.map(tx=>`${tx.vendorName||'Unassigned'} · ${transactionDescription(tx)}`).filter(Boolean).slice(0, 2)
         const namedBankTransactions = day.bank.filter(transaction => transactionDescription(transaction))
-        const bankPreview = bankActivityPreview(namedBankTransactions).map(transaction => {
+        const bankPreview = (vendorOrder?namedBankTransactions.slice(0,2):bankActivityPreview(namedBankTransactions)).map(transaction => {
           const label = transactionDescription(transaction)
           const tags = [transaction?.pending ? 'Pending' : 'Posted', isTransferTransaction(transaction) ? 'Transfer' : ''].filter(Boolean)
           return label ? `${tags.join(' · ')} · ${label}` : ''

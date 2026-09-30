@@ -22,6 +22,7 @@ export const PILLARS = [
     { id:'transactions', label:'Transactions', icon:'ti-list' },
     { id:'calendar', label:'Cash Forecast', icon:'ti-calendar-dollar' },
     { id:'accounts', label:'Accounts', icon:'ti-building-bank' },
+    { id:'vendors', label:'Vendors', icon:'ti-building-store' },
     { id:'debts', label:'Debts', icon:'ti-receipt-2' },
     { id:'budget', label:'Budget', icon:'ti-chart-bar' },
     { id:'recurring', label:'Recurring', icon:'ti-repeat' },

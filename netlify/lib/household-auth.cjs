@@ -209,3 +209,6 @@ exports.handler = async event => {
     return json(500, { error: 'Household sign-in is temporarily unavailable.' })
   }
 }
+
+// Used only by protected vendor-secret reveal, after session authentication.
+exports.verifyMemberPassword = async (member, password) => MEMBERS.includes(member) && typeof password === 'string' && password.length <= 512 && validPassword(password, await store().get(userKey(member), {type:'json'}))

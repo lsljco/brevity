@@ -4,6 +4,7 @@ export const DEFAULT_TRANSACTION_LIST_OPTIONS = Object.freeze({
   sortBy: 'amount',
   sortDirection: 'desc',
   description: '',
+  vendor: '',
   minAmount: '',
   maxAmount: '',
   dateFrom: '',
@@ -30,6 +31,7 @@ export const transactionVisibleName = transaction => String(
 const transactionSearchText = transaction => [
   transactionVisibleName(transaction),
   transactionDescription(transaction),
+  transaction?.vendorName,
   transaction?.originalStatement,
   transaction?.original_description,
 ].filter(Boolean).join(' ').toLocaleLowerCase()
@@ -83,6 +85,7 @@ export function sortAndFilterTransactions(transactions = [], options = {}) {
       if (!transaction) return false
       const amount = transactionAmount(transaction)
       const date = transactionDate(transaction)
+      if(settings.vendor&&!String(transaction.vendorName||'Unassigned').toLocaleLowerCase().includes(String(settings.vendor).toLocaleLowerCase()))return false
       if (description && !transactionSearchText(transaction).includes(description)) return false
       if (minAmount !== null && amount < minAmount) return false
       if (maxAmount !== null && amount > maxAmount) return false
@@ -92,7 +95,8 @@ export function sortAndFilterTransactions(transactions = [], options = {}) {
     })
     .sort((left, right) => {
       let comparison = 0
-      if (settings.sortBy === 'description') comparison = transactionVisibleName(left).localeCompare(transactionVisibleName(right), undefined, { sensitivity: 'base' })
+      if(settings.sortBy==='vendor')comparison=String(left.vendorName||'Unassigned').localeCompare(String(right.vendorName||'Unassigned'),undefined,{sensitivity:'base'})
+      else if (settings.sortBy === 'description') comparison = transactionVisibleName(left).localeCompare(transactionVisibleName(right), undefined, { sensitivity: 'base' })
       else if (settings.sortBy === 'date') {
         const leftDates = transactionOccurrenceDates(left)
         const rightDates = transactionOccurrenceDates(right)

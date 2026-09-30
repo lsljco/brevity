@@ -1,3 +1,6 @@
+import {productionVendorVault,vendorVisible} from './vendor-vault.mjs'
+import {VENDOR_RESOURCE,applyVendorOperation} from '../../src/finance/vendorModel.js'
+import {productionVendorRepository} from './vendor-store.mjs'
 import {applyModulePatch,MODULE_RESOURCE} from '../../src/modules/configuration.js'
 import {applyActivity} from './member-activity.mjs'
 import {applyLearningObservation,LEARNING_RESOURCE} from './learning-observation.mjs'
@@ -36,6 +39,7 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
   if(operation.type==='module.configuration.update')return MODULE_RESOURCE
   if(operation.type.startsWith('activity.'))return `activity:${operation.targetId}:${operation.targetDate}`
   if(operation.type==='education.observation.record')return LEARNING_RESOURCE
@@ -64,6 +68,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type.startsWith('vendor.'))return value?.vendors?.find(v=>v.id===(operation.payload?.vendorId||operation.targetId))||null
   if(operation.type.startsWith('activity.'))return (value?.entries||[]).find(item=>item.id===operation.payload?.entryId)||null
   if(operation.type==='improvement.transition')return (Array.isArray(value)?value:[]).find(item=>item.id===operation.targetId)
   if(operation.type==='meal.recipe.update')return resolvedRecipes(value).find(meal=>meal.id===operation.targetId)||null
@@ -92,6 +97,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type.startsWith('vendor.'))return {before,after:applyVendorOperation(value,operation,createId)}
   if(operation.type==='module.configuration.update')return {before,after:applyModulePatch(value,operation.payload)}
   if(operation.type.startsWith('activity.'))return {before,after:applyActivity(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='education.observation.record')return {before,after:applyLearningObservation(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
@@ -359,6 +365,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       acct:payload.accountId,
       ...(payload.transactionType === 'transfer' ? { transferTo:payload.transferAccountId } : {}),
       ...(payload.notes ? { notes:payload.notes } : {}),
+      ...(payload.vendorId?{vendorId:payload.vendorId}:{}),
       skips:[],
     }
     return { before, after:{ ...(value || {}), transactions:[...transactions, item] }, createdId:item.id }
@@ -404,7 +411,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       throw new Error('Frequency and end-date changes must apply to this and future items.')
     }
     const recurringChanges = {}
-    for (const field of ['amount', 'notes']) if (payload[field] !== undefined) recurringChanges[field] = payload[field]
+    for (const field of ['amount', 'notes', 'vendorId']) if (payload[field] !== undefined) recurringChanges[field] = payload[field]
     if (payload.title !== undefined) recurringChanges.name = payload.title
     if (payload.category !== undefined) recurringChanges.cat = payload.category
     if (payload.frequency !== undefined) recurringChanges.freq = payload.frequency
@@ -472,11 +479,12 @@ const conditionalStoreJson=async(store,key,value,entry)=>{
   return result
 }
 
-export function createProductionActionResources({ now = () => new Date(), sharedStore, planStore, mealStore, sermonStore } = {}) {
+export function createProductionActionResources({ now = () => new Date(), sharedStore, planStore, mealStore, sermonStore, vendorRepository } = {}) {
   const shared = sharedStore || getStore({ name:SHARED_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
   const plans = planStore || getStore({ name:PLAN_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
   let meals = mealStore
   const mealStorage = () => meals || (meals=getStore({ name:MEAL_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN }))
+  const vendors = () => vendorRepository || (vendorRepository=productionVendorRepository())
   const sermons = sermonStore || plans
   const sharedKey = key => `${HOUSEHOLD_ID}/records/${key}`
   const planKey = date => `${HOUSEHOLD_ID}/daily-plans/${date}`
@@ -488,6 +496,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
   const activeSermonKey = `${HOUSEHOLD_ID}/spiritual/active-sermon`
   return {
     async read(resource) {
+      if(resource===VENDOR_RESOURCE)return vendors().read()
       if(resource.startsWith('activity:')){const [,member,date]=resource.split(':'),entry=await readStoreEntry(mealStorage(),activityKey(member,date)),value=entry?.data;return {value:value||{member,date,entries:[]},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}}
 
       if(resource.startsWith('member-context:')){
@@ -520,6 +529,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
       throw new Error(`Cannot read ${resource}.`)
     },
     async write(resource, value, expectedVersion, actor, mutationId = '') {
+      if(resource===VENDOR_RESOURCE)return vendors().write(value,expectedVersion,actor,mutationId)
       const occurredAt=nowIso(now)
       if(resource.startsWith('activity:')){
         const [,member,date]=resource.split(':'),store=mealStorage(),key=activityKey(member,date),entry=await readStoreEntry(store,key),version=Number(entry?.data?.version||0)
@@ -591,8 +601,8 @@ const withoutManagedMetadata = value => {
   return result
 }
 export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
-export const resourceLastWriter=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
-export const resourceLastActionId=(resource,current)=>resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
+export const resourceLastWriter=(resource,current)=>resource===VENDOR_RESOURCE||resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
+export const resourceLastActionId=(resource,current)=>resource===VENDOR_RESOURCE||resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
 
 export function assertExactExpectedVersions(proposal, operations = proposal?.operations || []) {
   const resources=new Set(operations.filter(operation=>!operation.type?.startsWith('calendar.')).map(resourceForOperation))
@@ -608,7 +618,7 @@ export function assertExactExpectedVersions(proposal, operations = proposal?.ope
 
 // Prepare every before/after image before the first mutation. The returned
 // plan is safe to persist in the Action Mode recovery journal.
-export async function prepareRecordOperations({ proposal, selections = {}, session, permissions, resources, now = () => new Date(), createId = randomUUID }) {
+export async function prepareRecordOperations({ proposal, selections = {}, session, permissions, resources, now = () => new Date(), createId = randomUUID, vendorVaultFactory=productionVendorVault }) {
   const operations = proposal.operations.map(operation => selectedOperation(operation, selections[operation.id]))
   assertExactExpectedVersions(proposal,operations)
   const grouped = new Map()
@@ -627,6 +637,21 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
       const record=recordForOperation(value,operation)
       const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:record})
       if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
+      if(['vendor.login.attach','vendor.document.attach'].includes(operation.type)){
+        const saved=await vendorVaultFactory().metadata(operation.targetId,operation.payload.blobId)
+        const kind=operation.type==='vendor.login.attach'?'login':'document'
+        if(saved.kind!==kind||saved.vendorId!==operation.targetId)throw new Error('This protected upload belongs to a different vendor or data type.')
+        if(kind==='document'&&['fileName','mimeType','size'].some(key=>saved.metadata[key]!==operation.payload[key]))throw new Error('The document metadata changed after upload.')
+      }
+      if(operation.type==='vendor.expense.link'){
+        const planned=operation.payload.expenseKind==='planned',source=await resources.read(planned?'shared:lslj_finance_v9':'shared:plaid_actuals_cache')
+        const items=planned?source.value?.transactions:source.value
+        if(!Array.isArray(items)||!items.some(item=>item.id===operation.payload.expenseId))throw new Error('That expense no longer exists. Refresh Finance.')
+      }
+      if(['recurring.create','recurring.update','debt.create','debt.update','project.create','project.update'].includes(operation.type)&&operation.payload?.vendorId){
+        const directory=await resources.read(VENDOR_RESOURCE)
+        if(!directory.value?.vendors?.some(v=>v.id===operation.payload.vendorId&&!v.archived&&vendorVisible(v,session)))throw new Error('Choose an available vendor you can access for this record.')
+      }
       const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version}); value=result.after
     }
     prepared.push({resource,before:current.value,after:value,beforeVersion:current.version,afterVersion:current.version+1})

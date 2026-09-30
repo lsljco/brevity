@@ -1,3 +1,4 @@
+import {VENDOR_RESOURCE,VENDOR_TYPES,normalizeVendorPayload} from '../../src/finance/vendorModel.js'
 import {normalizeModulePatch,MODULE_RESOURCE} from '../../src/modules/configuration.js'
 import {normalizeActivityPayload} from './member-activity.mjs'
 import {normalizeLearningObservation,learningReviewer,LEARNING_RESOURCE} from './learning-observation.mjs'
@@ -12,6 +13,7 @@ import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-pla
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 export const ACTION_DOMAINS = ['planning', 'calendar', 'projects', 'finance']
 export const ACTION_TYPES = {
+  ...Object.fromEntries(VENDOR_TYPES.map(type=>[type,'finance'])),
   'member.preference.set':'planning',
   'module.configuration.update':'planning',
   'activity.record':'planning','activity.update':'planning','activity.remove':'planning','education.observation.record':'planning',
@@ -111,8 +113,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.inventory.quantity.update': ['delta'],
   'household.inventory.waste.create': ['quantity', 'reason'],
   'household.intelligence.config.update': ['configJson'],
-  'project.create': ['title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
-  'project.update': ['title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
+  'project.create': ['vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
+  'project.update': ['vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.delete': [],
   'calendar.create': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
@@ -131,11 +133,11 @@ const ACTION_PAYLOAD_FIELDS = {
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
   'forecast.update': ['title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
-  'recurring.create': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
-  'recurring.update': ['title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
+  'recurring.create': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
+  'recurring.update': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.delete': [],
-  'debt.create': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
-  'debt.update': ['creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
+  'debt.create': ['vendorId', 'creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
+  'debt.update': ['vendorId', 'creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.delete': [],
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
   'meal.recipe.update':['name','estimateJson'],
@@ -186,6 +188,7 @@ const STRONG_TYPES = new Set(['activity.remove','education.observation.record','
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
   if(operation.type==='module.configuration.update')return MODULE_RESOURCE
   if(operation.type.startsWith('activity.'))return `activity:${operation.targetId}:${operation.targetDate}`
   if(operation.type==='education.observation.record')return LEARNING_RESOURCE
@@ -290,6 +293,7 @@ function normalizeActionPayload(type, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`The ${type} action details must be an object.`)
   if (type.startsWith('plan.')) return normalizeDailyPlanActionPayload(type, input)
   const payload = input
+  if(type.startsWith('vendor.'))return normalizeVendorPayload(type,payload)
   if(type==='module.configuration.update')return normalizeModulePatch(payload)
   if(type.startsWith('activity.'))return normalizeActivityPayload(type,payload)
   if(type==='education.observation.record')return normalizeLearningObservation(payload)
@@ -327,7 +331,7 @@ function normalizeActionPayload(type, input) {
     } else if (type === 'sermon.activate' && (field === 'draftId' || field === 'sourceHash')) {
       assertString(type, field, value)
       normalized[field] = clean(value, field === 'sourceHash' ? 64 : 160)
-    } else if (field === 'accountId' || field === 'transferAccountId' || field === 'legacyAccountId') {
+    } else if (field === 'vendorId' || field === 'accountId' || field === 'transferAccountId' || field === 'legacyAccountId') {
       assertString(type, field, value)
       normalized[field] = cleanId(value)
     } else if (field === 'plaidAccountId') {
@@ -434,7 +438,7 @@ export function normalizePermissionMatrix(input = {}) {
 }
 
 export function actionRisk(type, scope = 'this-item', count = 1) {
-  if (STRONG_TYPES.has(type) || scope === 'this-and-future' || count > 1) return 'strong-confirmation'
+  if (type.startsWith('vendor.') || STRONG_TYPES.has(type) || scope === 'this-and-future' || count > 1) return 'strong-confirmation'
   return 'confirmation'
 }
 

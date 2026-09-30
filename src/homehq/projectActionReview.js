@@ -5,7 +5,7 @@ import { normalizeProjectItem, PROJECT_STORAGE_KEY } from './projectData.js'
 
 const PROJECT_TEXT_FIELDS = [
   'title', 'type', 'room', 'roomCustom', 'status', 'priority',
-  'cname', 'cphone', 'cemail', 'caddress', 'notes',
+  'vendorId', 'cname', 'cphone', 'cemail', 'caddress', 'notes',
 ]
 const PROJECT_BOOLEAN_FIELDS = ['bizLicense', 'coi', 'workersComp']
 

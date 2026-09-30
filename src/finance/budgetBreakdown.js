@@ -31,6 +31,8 @@ function budgetLineFromTransaction(transaction) {
   return {
     id: budgetLineId(transaction),
     recordId: stringValue(transaction.id),
+    vendorId: stringValue(transaction.vendorId),
+    vendorName: stringValue(transaction.vendorName)||'Unassigned',
     accountId: accountIdFor(transaction),
     name: stringValue(transaction.name) || 'Unnamed budget line',
     category: direction === 'income' ? 'Income' : stringValue(transaction.cat) || 'Other',
@@ -58,7 +60,7 @@ function storedBudgetLines(budget = {}, accountIds = null) {
   })
 }
 
-export function buildBudgetLines(transactions = [], budget = {}, { accountIds = null } = {}) {
+export function buildBudgetLines(transactions = [], budget = {}, { accountIds = null, vendorOrder = '' } = {}) {
   const lines = new Map()
   const selected = accountIds ? new Set([...accountIds].map(String)) : null
   transactions
@@ -79,6 +81,7 @@ export function buildBudgetLines(transactions = [], budget = {}, { accountIds = 
   }
   return [...lines.values()].sort((left, right) => (
     left.category.localeCompare(right.category)
+    || (vendorOrder ? String(left.vendorName||'Unassigned').localeCompare(String(right.vendorName||'Unassigned'))*(vendorOrder==='desc'?-1:1) : 0)
     || left.name.localeCompare(right.name, undefined, { sensitivity:'base' })
     || left.id.localeCompare(right.id)
   ))
