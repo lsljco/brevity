@@ -9,6 +9,15 @@ function fixture(){
  return {values,store,repository:createConversationRepository({store,now:()=>time}),advance:days=>{time=new Date(time.getTime()+days*86400000)},now:()=>time}
 }
 const turn=(version=0,turnId='one')=>({version,turnId,user:{role:'user',content:'I had a meal'},assistant:{role:'assistant',content:'Which quantity?'}})
+test('saved-task links survive reload, clear/restore and receipt retry without leaking to another member',async()=>{
+ const f=fixture(),taskLinks=[{id:'task-1',date:'2026-10-01',title:'Inspect garage',owner:'Larry'}]
+ await f.repository.appendReceipt('Larry',{id:'receipt-task',content:'Saved task.',taskLinks})
+ await f.repository.appendReceipt('Larry',{id:'receipt-task',content:'Duplicate.',taskLinks})
+ let value=await f.repository.read('Larry');assert.equal(value.messages.length,1);assert.deepEqual(value.messages[0].taskLinks,taskLinks)
+ await f.repository.clear('Larry',value.version);value=await f.repository.read('Larry');await f.repository.restore('Larry',value.version)
+ assert.deepEqual((await f.repository.read('Larry')).messages[0].taskLinks,taskLinks)
+ assert.deepEqual((await f.repository.read('Lorenzo')).messages,[])
+})
 test('conversations persist across repository instances and isolate members and households',async()=>{
  const f=fixture();await f.repository.appendTurn('Larry',turn())
  assert.equal((await createConversationRepository({store:f.store,now:f.now}).read('Larry')).messages.length,2)
