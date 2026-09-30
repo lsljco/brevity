@@ -46,7 +46,7 @@ test('plan adherence stays separate from attainment and excludes cancelled work'
   assert.equal(model.activities.length,2)
 })
 
-test('elapsed calendar occurrences calculate as performed while future and explicitly missed events do not',()=>{
+test('elapsed calendar occurrences do not prove completion',()=>{
   const cfg=config(),activities=normalizePerformanceActivities({calendarEvents:[
     {id:'past',title:'Gym workout',start:{dateTime:'2026-09-08T09:00:00'},end:{dateTime:'2026-09-08T10:00:00'},owner:'A'},
     {id:'future',title:'Gym workout',startDate:'2026-09-12T09:00:00',endDate:'2026-09-12T10:00:00',owner:'A'},
@@ -54,10 +54,10 @@ test('elapsed calendar occurrences calculate as performed while future and expli
   ],members,config:cfg,now:new Date('2026-09-10T12:00:00')})
   const model=calculatePerformance({activities,config:cfg,members,period:week,viewer:'A'})
   const fitness=model.memberScores[0].pillars.find(item=>item.id==='fitness')
-  assert.equal(activities.find(item=>item.id==='past').completionEvidence,'elapsed-calendar')
-  assert.equal(fitness.completed,1)
+  assert.equal(activities.find(item=>item.id==='past').completionEvidence,'pending')
+  assert.equal(fitness.completed,0)
   assert.equal(fitness.planned,3)
-  assert.equal(fitness.attainment,33)
+  assert.equal(fitness.attainment,0)
 })
 
 test('a planned household-day calendar record is not completed by a browser time-zone rollover',()=>{
@@ -115,7 +115,8 @@ test('projection uses remaining target evidence, is status-labeled, and remains 
   const cfg=config({targets:[{id:'study',member:'A',pillarId:'education',label:'Study sessions',targetCount:2,frequency:'period',active:true}]}),activities=normalizePerformanceActivities({calendarEvents:[{id:'one',title:'Study',date:'2026-09-09',owner:'A',completed:true},{id:'two',title:'Study',date:'2026-09-12',owner:'A'}],members,config:cfg}),model=projectPerformance(calculatePerformance({activities,config:cfg,members,period:week,viewer:'A'}),{today:'2026-09-10'})
   const education=model.householdPillars.find(item=>item.id==='education')
   assert.equal(education.projected,100)
-  assert.equal(education.status,'Complete')
+  assert.equal(education.status,'Off Track')
+  assert.equal(education.attainment,50)
   assert.equal(model.memberScores[0].pillars.find(item=>item.id==='education').projected,100)
 })
 
@@ -137,4 +138,21 @@ test('AI calendar classifier requires household authentication and never writes 
   const response=await classifyHandler({httpMethod:'POST',headers:{},body:JSON.stringify({events:[{id:'1',title:'Gym'}],pillars:DEFAULT_PILLARS})})
   assert.equal(response.statusCode,401)
   assert.match(response.body,/Sign in/)
+})
+
+test('saved pending assignments can project full completion while actual attainment remains zero',()=>{
+ const cfg=config(),activities=normalizePerformanceActivities({dailyPlans:[{date:'2026-09-12',assignments:[{id:'saved',owner:'A',title:'Workout',pillar:'fitness',status:'pending'}]}],members,config:cfg})
+ const model=projectPerformance(calculatePerformance({activities,config:cfg,members,period:week,viewer:'A'}),{today:'2026-09-12'})
+ const fitness=model.householdPillars.find(item=>item.id==='fitness')
+ assert.equal(fitness.attainment,0);assert.equal(fitness.projected,100);assert.equal(fitness.status,'Off Track')
+})
+test('member reports contribute to targets without inventing duration or completing planned work',()=>{
+ const cfg=config({targets:[{id:'fitness',member:'A',pillarId:'fitness',label:'Workouts',targetCount:2,frequency:'period',active:true}]})
+ const activities=normalizePerformanceActivities({dailyPlans:[{date:'2026-09-12',assignments:[{id:'plan',owner:'A',title:'Workout',pillar:'fitness',status:'pending'}]}],reportedActivities:[{id:'reported',member:'A',date:'2026-09-12',kind:'workout',title:'Actual walk'},{id:'pending',member:'A',date:'2026-09-12',kind:'workout',title:'Not yet done',status:'pending'}],members,config:cfg})
+ const model=calculatePerformance({activities,config:cfg,members,period:week,viewer:'A'})
+ assert.equal(model.planAdherence,0)
+ assert.equal(model.memberScores[0].pillars.find(item=>item.id==='fitness').attainment,50)
+ assert.equal(activities.find(item=>item.id==='reported').minutes,0)
+ assert.equal(activities.find(item=>item.id==='reported').completionEvidence,'member-reported')
+ assert.equal(activities.find(item=>item.id==='pending').completed,false)
 })

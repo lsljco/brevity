@@ -70,6 +70,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
         body={conflict:false,record:{...payload,version:Number(payload.expectedVersion||0)+1,updatedAt:new Date().toISOString(),updatedBy:'Larry'}}
       }else body={records:intelligenceFixture?intelligenceRecords():projectFixture?projectRecords():householdTaskFixture?householdMaintenanceRecords():scenarioFixture?scenarioRecords():debtPaymentFixture?debtPaymentRecords():alreadyLinkedExtrasFixture?alreadyLinkedAccountRecords():(financeFixture||accountLinkFixture)?cashForecastRecords():{},serverTime:new Date().toISOString()}
     }else if(path.endsWith('/household-data'))body={householdId:'lslj-family',plan:plan(url.searchParams.get('date')||dateKey())}
+    else if(path.endsWith('/household-performance-evidence'))body={member:sessionMember,dailyPlans:intelligenceFixture?[{date:dateKey(),assignments:[{id:'fitness-saved',title:'Saved strength workout',owner:'Larry',pillar:'fitness',status:'pending'}],decisions:[]}]:[],reportedActivities:[],unavailable:[]}
     else if(path.endsWith('/meal-plans')){
       if(route.request().method()==='POST'){
         const payload=route.request().postDataJSON()
@@ -166,6 +167,13 @@ test('Household Intelligence dashboard separates metrics and opens an auditable 
   await expect(page.getByText('Plan Adherence',{exact:true}).first()).toBeVisible()
   await expect(page.getByText('Time Allocation',{exact:true}).first()).toBeVisible()
   await expect(page.getByRole('heading',{name:'Member Scorecard'})).toBeVisible()
+  const fitness=page.locator('.hpi-pillars article').filter({hasText:'Physical Fitness'})
+  await expect(fitness).toContainText('Potential 100% if remaining planned work is completed')
+  await expect(fitness.getByLabel('Actual attainment: Off Track')).toBeVisible()
+  await expect(fitness).not.toContainText('Complete')
+  await page.getByRole('button',{name:'Larry Physical Fitness: 0%',exact:true}).click()
+  await expect(page.getByRole('dialog',{name:'Score explanation'})).toContainText('Saved strength workout')
+  await page.getByRole('button',{name:'Close score explanation'}).click()
   await page.getByRole('button',{name:'Larry Finance & Stewardship'}).click()
   const drilldown=page.getByRole('dialog',{name:'Score explanation'})
   await expect(drilldown).toContainText('Finance review')
@@ -767,4 +775,19 @@ test('saved task opens its exact dated record after reload and detects Undo',asy
   removed=true
   await page.getByRole('button',{name:'Open task: Inspect garage',exact:true}).click()
   await expect(dialog.getByText('This task is no longer in the daily plan. It may have been undone or removed.')).toBeVisible()
+})
+
+
+test('Household Intelligence dashboard withholds scores when evidence is unavailable and retries',async({page},testInfo)=>{
+  let failed=true
+  await page.route('**/.netlify/functions/household-performance-evidence?**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({dailyPlans:[],reportedActivities:[],unavailable:failed?[{date:dateKey(),source:'daily-plan'}]:[]})}))
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
+  await page.getByRole('button',{name:'Household Intelligence',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await expect(page.getByRole('alert')).toContainText('Scores are withheld')
+  await expect(page.locator('.hpi-pillars')).toHaveCount(0)
+  failed=false
+  await page.getByRole('button',{name:'Retry evidence'}).click()
+  await expect(page.getByRole('heading',{name:'Pillar Balance'})).toBeVisible()
 })
