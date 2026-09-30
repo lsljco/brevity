@@ -637,6 +637,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
   const [toast,setToast]         = useState("");
   const [stagingAction,setStagingAction] = useState(false);
   const toastTmr  = useRef();
+  const openedProjectRef = useRef('');
 
   useEffect(()=>{
     if(!readOnly)return;
@@ -654,9 +655,10 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
   },[]);
 
   useEffect(()=>{
-    if(!initialProjectId)return
+    if(!initialProjectId||openedProjectRef.current===initialProjectId)return
     const project=items.find(item=>item.id===initialProjectId)
     if(!project){setToast('This project is no longer available.');return}
+    openedProjectRef.current=initialProjectId
     setTab('all');setSearch('');setFStatus('');setFRoom('');setFPriority('');setFAssignee('');setExpanded(project.id)
   },[initialProjectId,items])
 
