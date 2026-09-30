@@ -4,7 +4,7 @@ Source: Brevity_Project_Plan.pdf (nine pages, reviewed in full). This ledger dis
 
 ## Current checkpoint — September 30
 
-Earlier sections below are historical release evidence. The current production baseline includes PRs #233–#246, including cross-pillar daily briefing and schedule retrieval, lower-overhead conversation turns, spoken confirmation for routine task/work-block and own-member activity changes, native staging storage/authentication repair, finance packaging correction, tablet layout correction, same-element voice playback/recovery, formatted responses and elapsed progress. PR #247 corrects provider transaction-refresh status; publication and live acceptance are tracked below.
+Earlier sections below are historical release evidence. The current production baseline includes PRs #233–#246, including cross-pillar daily briefing and schedule retrieval, lower-overhead conversation turns, spoken confirmation for routine task/work-block and own-member activity changes, native staging storage/authentication repair, finance packaging correction, tablet layout correction, same-element voice playback/recovery, formatted responses and elapsed progress. PR #247 corrects provider transaction-refresh status and has passed CI and merged; its [release record](https://github.com/lsljco/brevity/pull/247) tracks publication and live acceptance. PR #248 tightens calendar ownership guidance after a real briefing exposed overconfident conflict wording; its [release record](https://github.com/lsljco/brevity/pull/248) tracks final acceptance.
 
 | Acceptance item | Current evidence |
 | --- | --- |
