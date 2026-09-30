@@ -4,7 +4,7 @@ Source: *Brevity Implementation Project Plan* (Family #1, September 2026). This 
 
 ## Historical baseline
 
-The table below describes the earlier PR #230 milestone. For current implementation and verification, use [project-plan-completion-ledger.md](project-plan-completion-ledger.md) and [the PR #233 report](validation/2026-09-29-project-plan-package.md); completed continuity, module, activity and recovery work is recorded there.
+The table below describes the earlier PR #230 milestone. For current implementation and verification, use [project-plan-completion-ledger.md](project-plan-completion-ledger.md) and [the September 30 acceptance report](validation/2026-09-30-final-technical-acceptance.md); completed continuity, module, activity and recovery work is recorded there.
 
 | Plan area | Current implementation | Remaining acceptance work |
 | --- | --- | --- |
@@ -88,4 +88,4 @@ Historical release candidate: `fdf8a6c1fd032dc0e46f6f7461523c2e824a4092` on depl
 
 Evidence: `validation/release-final-40-20260929.json`, `validation/release-40-20260929.json`, `validation/release-focused-20260929.json`, `validation/release-ownership-20260929.json` and the signed-in validation report. Synthetic model cases use fixture calculator values: they do not validate food labels. Bread formulation/source consistency and wider variant accuracy remain open.
 
-These are implementation and verification facts, not a declaration that every phase of the original project plan is complete. Physical voice, operational drills and real adoption cannot be certified from local tests or synthetic fixture passes. Remaining implementation areas are listed in the table above.
+These are implementation and verification facts, not a declaration that every phase of the original project plan is complete. Physical voice, operational drills and real adoption cannot be certified from local tests or synthetic fixture passes. The table above is historical; current remaining gates are in project-plan-completion-ledger.md.

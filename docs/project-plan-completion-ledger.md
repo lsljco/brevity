@@ -4,7 +4,7 @@ Source: Brevity_Project_Plan.pdf (nine pages, reviewed in full). This ledger dis
 
 ## Current checkpoint — September 30
 
-Earlier sections below are historical release evidence. The current production baseline includes PRs #233–#244, including cross-pillar daily briefing and schedule retrieval, lower-overhead conversation turns, spoken confirmation for routine task/work-block and own-member activity changes, native staging storage/authentication repair, finance packaging correction and tablet layout correction.
+Earlier sections below are historical release evidence. The current production baseline includes PRs #233–#246, including cross-pillar daily briefing and schedule retrieval, lower-overhead conversation turns, spoken confirmation for routine task/work-block and own-member activity changes, native staging storage/authentication repair, finance packaging correction, tablet layout correction, same-element voice playback/recovery, formatted responses and elapsed progress. PR #247 corrects provider transaction-refresh status and has passed CI and merged; its [release record](https://github.com/lsljco/brevity/pull/247) tracks publication and live acceptance. PR #248 tightens calendar ownership guidance after a real briefing exposed overconfident conflict wording; its [release record](https://github.com/lsljco/brevity/pull/248) tracks final acceptance.
 
 | Acceptance item | Current evidence |
 | --- | --- |
@@ -12,7 +12,9 @@ Earlier sections below are historical release evidence. The current production b
 | Separate staging | Authenticated task/workout acceptance passed; test records undone. No production bank/calendar/OneDrive credentials copied. |
 | Automatic recovery jobs | September 30 scheduled backup dispatched 08:10 UTC and completed 08:11:43 UTC; retention completed 08:35:18 UTC. |
 | Architect generation, review and draft preview | Synthetic workflow 36649137103 passed 1,220 tests/build, held at its reviewer gate, then created draft PR #245 and deployed isolated staging. |
-| Application-initiated Architect dispatch | Real approved proposal b597edef-4c1e-4750-962e-a0ed900dca28 returned dispatched receipt efedc4d69a987c76b94d3c530dcc44fd28fa4e9a, matched to GitHub workflow 36692176446. Generated feature acceptance is in progress. |
+| Application-initiated Architect dispatch | Real approved proposal b597edef-4c1e-4750-962e-a0ed900dca28 returned dispatched receipt efedc4d69a987c76b94d3c530dcc44fd28fa4e9a, matched to GitHub workflow 36692176446. The first generated candidate failed verification and was stopped. Corrected PR #246 passed normal CI and was published as a861242; the proposal records release approval. Post-release household measurement remains open. |
+| Response usability | PR #246 published in deployment 6abcd2b2ffa197000858ffe3; authenticated desktop response, formatting and playback exercised. Physical iPhone retest still required. |
+| Competitive learning | Official-source desk research completed and applied learning/pilot exercises prepared in [competitive-learning-and-pilot.md](competitive-learning-and-pilot.md); participant exercises and comparative outcomes are not yet observed. |
 | Household pilot / device acceptance | Open until actual device and family observations exist. |
 | Future households and specialists | Conditional later phases; require pilot evidence and, for other households, separate tenant review and consent. |
 
@@ -26,9 +28,9 @@ PR #230 was merged as `1bd733e6ba9f01bb5644e2f5d2f088409bf09775` and published i
 
 Runtime candidate `5b0dbcdefee4281be2ab002e91f05d2a2fe16a95`: 1,176 local tests, build, GitHub verification and browser regression passed. The full maintained live suite passed 48/48 on preceding runtime `7291f82`, with 20/20 actual persistence checks; the only subsequent runtime change explicitly distinguishes absent usage measurements and passed a focused deployed retest. See [the complete evidence](validation/2026-09-29-project-plan-package.md). Publication and production backup observations are tracked in [PR #233](https://github.com/lsljco/brevity/pull/233).
 
-## Current implementation package
+## Implementation package and evidence
 
-| Plan requirement | Implementation | Release evidence still required |
+| Plan requirement | Implementation | Evidence and remaining acceptance |
 | --- | --- | --- |
 | Household agent and open-ended questions | Existing Agents SDK reasoning, research and reviewed actions, plus explicit capability limits | 48/48 deployed cases passed; response contents inspected |
 | Conversation continuity | Member-bound server history, version conflicts, 60-message/30-day retention, seven-day clear recovery, legacy-cache migration | Verified authenticated preview reload, clear/restore, version conflicts and member isolation |
@@ -40,7 +42,7 @@ Runtime candidate `5b0dbcdefee4281be2ab002e91f05d2a2fe16a95`: 1,176 local tests,
 | Module configuration | Reviewed enable/disable/rename/reorder; custom modules provide member-note workspaces | Custom module reviewed/saved, present after reload and undone in live UI; specialized new apps still need implementation |
 | Usage-driven improvements | Content-free counts/latency/ratings, measured-evidence tool, concept approval, implementation packet, prototype/release evidence and measurement stages | Preview metrics retrieval passed with recorded/missing/failed date coverage; establish real baseline after deployment |
 | Staging | Build-bound per-preview stores, no production data fallback; Apple Calendar disconnected, bank linking and OneDrive publishing blocked | Deployed preview isolation and external-write guards verified by runtime/UI/persistence checks |
-| Recovery | Scheduled immutable per-record snapshots of shared state, plans, meals and action history; hash validation and conditional restore primitive | Real isolated Blob restore passed; manual preview scheduled dispatch completed in Netlify logs; verify production schedule after release |
+| Recovery | Scheduled immutable per-record snapshots of shared state, plans, meals and action history; hash validation and conditional restore primitive | Real isolated Blob restore passed; manual preview scheduled dispatch completed in Netlify logs; production automatic backup completed September 30 at 08:11:43 UTC and retention at 08:35:18 UTC |
 
 ## Operational boundaries
 
@@ -48,16 +50,17 @@ Preview authentication intentionally uses the existing household identity servic
 
 Usage measurements exclude message text, photo content, food values, bank values and student evidence. Member metrics are private; Larry/Lorenzo administrators can inspect household totals. Counts begin with deployment and are not historical adoption measurements or causal conversion rates. Metrics expire after 90 days. Assistant job payloads, including optional images, are pruned after one day. Scheduled cleanup runs in production; preview stores require explicit environment retirement because Netlify does not run preview schedules.
 
-Recovery snapshots contain sensitive household records and stay in the same protected Netlify project. They exclude authentication credentials, bank/OneDrive tokens, conversations and generated media. They are per-record captures, not an atomic cross-store snapshot. The restore primitive is operator-only and requires an exact content hash plus current destination version; it is not a public restore endpoint. Complete backup runs retire snapshots older than 30 days. A reviewed operator restore command records the before-image and rejects stale versions; deployed rehearsal and production schedule observation remain required.
+Recovery snapshots contain sensitive household records and stay in the same protected Netlify project. They exclude authentication credentials, bank/OneDrive tokens, conversations and generated media. They are per-record captures, not an atomic cross-store snapshot. The restore primitive is operator-only and requires an exact content hash plus current destination version; it is not a public restore endpoint. Complete backup runs retire snapshots older than 30 days. A reviewed operator restore command records the before-image and rejects stale versions; the isolated deployed restore rehearsal and September 30 automatic production schedule observations have passed. A full production disaster recovery exercise remains an operator exercise, not something to simulate by overwriting live records.
 
 ## Remaining gates — not completed by a build
 
-1. **Release candidate verified:** deployed assistant behavior, all 48 scenarios, all 20 isolated persistence checks and representative UI confirmation flows passed. Record publication and production smoke results in PR #233.
-2. **Recovery rehearsal verified:** the runbook, real isolated Blob restoration, stale-write rejection and preview scheduled dispatch passed. Production scheduler activation/execution must be observed after publication; a manual run is not proof of a future automatic run.
-3. The Architect implementation packet, guarded dispatch service and isolated coding workflow are prepared. They are not activated: scoped credentials, a protected review environment and separately credentialed staging must be configured and a synthetic full pipeline run verified. The workflow defaults to verified artifacts, with branch/PR creation disabled. It never merges or publishes production. See architect-and-recovery-operations.md.
-4. Actual household pilot: voice on Larry's physical device, useful daily use, correction/friction measurement and member feedback over time. Do not fabricate successful use or ask members to enter macros.
-5. Expand to additional voluntary households only after the pilot gate, tenant/auth/storage isolation review and explicit onboarding consent. The current identity system is one named household, not production multi-tenancy.
-6. The human learning and competitive-research workstream requires actual participation and evidence. Reading material and a learning sequence are preparation, not completed study or a proven commercial advantage.
+1. **Physical-device acceptance:** run the exact iPhone sequence in [competitive-learning-and-pilot.md](competitive-learning-and-pilot.md). Earlier screenshots demonstrated retrieval and continuity but blocked playback. PR #246 fixes the observed paths; actual-device success is not yet observed.
+2. **Household pilot:** measure usefulness, manual effort, abandonment, corrections and member feedback over actual use. Existing content-free metrics support the review but cannot establish a week of adoption on release day.
+3. **Nutrition sampling:** compare additional real package variants/portions with retrieved sources. Current arithmetic, persistence and sampled labels passed; universal nutrition accuracy is not claimed.
+4. **Applied learning:** the curriculum and exercises are prepared; Larry/Lorenzo and household participants must perform their exercises before their understanding is certified. Desk research is complete; comparative workflow testing remains observational work.
+5. **Conditional expansion:** additional households require successful pilot evidence, tenant/auth/storage isolation review and explicit onboarding consent. Further specialist agents require demonstrated need. These are later conditional phases, not enabled automatically to meet tonight's deadline.
+
+Closed technical gates include publication of PR #233, isolated recovery rehearsal, automatic production backup/retention, scoped Architect activation, protected synthetic pipeline and real application dispatch. See the dated technical report for exact evidence and the rejected first generated candidate. No synthetic draft is silently promoted to production.
 
 ## Learning sequence tied to this implementation
 
