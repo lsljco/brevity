@@ -2,6 +2,7 @@ import {configuredPillars,resolveModules} from './modules/configuration.js'
 import ModuleWorkspace from './modules/ModuleWorkspace.jsx'
 import {requestAssistantConversation} from './assistant/actionEvents.js'
 import {PILLARS} from './modules/catalog.js'
+import {VENDOR_OPEN_EVENT} from './finance/vendorApi.js'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
 import { initialsForMember } from './household/memberProfile.js'
@@ -30,7 +31,7 @@ const SermonWorkspace = lazy(() => import('./ministry/SermonWorkspace.jsx'))
 
 
 
-const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','debts','budget','recurring','reporting'])
+const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','debts','vendors','budget','recurring','reporting'])
 // Keep tablet navigation collapsed by default as well. Feature breakpoints are
 // based on the viewport, so an expanded 240px rail at 768px can otherwise leave
 // less usable content width than their phone layouts expect.
@@ -113,6 +114,7 @@ export default function App() {
   const [actionPermissionState,setActionPermissionState]=useState({status:'loading',member:'',permissions:null,error:''})
   const [actionPermissionRevision,setActionPermissionRevision]=useState(0)
   const [practiceLocation,setPracticeLocation]=useState({date:'',tab:'daily'})
+  const [vendorDestination,setVendorDestination]=useState('')
   const [operationsWorkspace,setOperationsWorkspace]=useState('operations')
 
   const clearRecoveredHouseholdSyncWarning=()=>setRefreshState(current=>{
@@ -219,6 +221,7 @@ export default function App() {
     return()=>{cancelled=true}
   },[auth.authenticated,auth.member,auth.role,sharedReady,actionPermissionRevision])
 
+  useEffect(()=>{if(!auth.authenticated||!sharedReady)return;const open=event=>{setVendorDestination(event.detail?.vendorId||'');navigateTo('finance','vendors')};window.addEventListener(VENDOR_OPEN_EVENT,open);return()=>window.removeEventListener(VENDOR_OPEN_EVENT,open)},[activePillar,activeView,auth.authenticated,sharedReady])
   if(auth.loading) return <AuthLoading/>
   if(!auth.authenticated) return <HouseholdLogin bootstrapRequired={auth.bootstrapRequired} onLogin={auth.login} onBootstrap={auth.bootstrap} error={auth.error}/>
   if(!sharedReady) return <AuthLoading/>
@@ -296,7 +299,7 @@ export default function App() {
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
     if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace currentMember={currentMember} role={auth.role}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember} onOpenWorkspace={()=>navigateTo('ministry','sermon-workspace')}/>
-    if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><div className="finance-access-shell">{auth.role!=='admin'&&<section className="finance-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Financial records are read-only for {currentMember}</strong><span>{canEditPlanning?'Your planning access still allows reviewed edits to Finance Meeting narrative, saved notes, transcripts, and ordinary commitments. ':''}Financial corrections, forecasts, budgets, transactions, financial-effect details, and bank administration require the household administrator; bank connection changes are disabled for every member in this release.</span></div></section>}<FinancePlanner view={activeView} setView={navigateFromFinance} currentMember={currentMember} readOnly={auth.role!=='admin'} meetingPlanningReadOnly={!canEditPlanning}/></div></Suspense>
+    if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><div className="finance-access-shell">{auth.role!=='admin'&&<section className="finance-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Financial records are read-only for {currentMember}</strong><span>{canEditPlanning?'Your planning access still allows reviewed edits to Finance Meeting narrative, saved notes, transcripts, and ordinary commitments. ':''}Financial corrections, forecasts, budgets, transactions, financial-effect details, and bank administration require the household administrator; bank connection changes are disabled for every member in this release.</span></div></section>}<FinancePlanner initialVendorId={vendorDestination} view={activeView} setView={navigateFromFinance} currentMember={currentMember} readOnly={auth.role!=='admin'} meetingPlanningReadOnly={!canEditPlanning}/></div></Suspense>
     const pillar=visiblePillars.find(p=>p.id===activePillar)
     return pillar?<Suspense fallback={<div className="app-view-loading">Loading {pillar.label} analysis…</div>}><PillarAnalysis pillar={pillar} currentMember={currentMember}/></Suspense>:null
   }

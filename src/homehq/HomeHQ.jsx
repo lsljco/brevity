@@ -1,3 +1,5 @@
+import VendorSelector from '../finance/VendorSelector.jsx'
+import {useVendorDirectory,requestVendorOpen} from '../finance/vendorApi.js'
 import { useState, useEffect, useRef } from 'react'
 import {
   HOUSEHOLD_MEMBERS as MEMBERS,
@@ -619,6 +621,7 @@ function CalendarView({items, onEdit, readOnly=false}){
 
 // ── MAIN APP ───────────────────────────────────────────────────────────────
 function App({readOnly=false,canDelete=false,currentMember=''}){
+  const {directory:vendorDirectory}=useVendorDirectory();
   const [items,setItems]         = useState(loadItems);
   const [tab,setTab]             = useState("all");
   const [search,setSearch]       = useState("");
@@ -782,6 +785,7 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
             )}
             <div className="hq-proj-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
               {filtered.map(item=>{
+                const linkedVendor=vendorDirectory?.vendors?.find(v=>v.id===item.vendorId);
                 const isExp=expanded===item.id;
                 const dueDate=item.due?parseProjectDate(item.due):null;
                 const todayStart=new Date();todayStart.setHours(0,0,0,0);
@@ -791,7 +795,7 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
                   <div key={item.id} className={`hq-card${isExp?' hq-card--expanded':''}`}>
 
                     {/* Card hero image */}
-                    <div style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
+                    <div role="button" tabIndex={0} aria-label={`${isExp?'Hide':'Show'} ${item.title} details`} aria-expanded={isExp} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setExpanded(isExp?null:item.id)}}} style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
                       <img
                         src={heroImg}
                         alt={roomLabel(item)}
@@ -849,7 +853,8 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
                             </div>
                           )}
                           {item.notes&&<div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px 12px",fontSize:13,color:W2,lineHeight:1.6,marginBottom:12,whiteSpace:"pre-wrap"}}>{item.notes}</div>}
-                          {item.cname&&(
+                          {item.vendorId&&<div style={{marginBottom:12}}><button type="button" onClick={()=>requestVendorOpen(item.vendorId)}>Vendor: {linkedVendor?.name||'Unavailable vendor'}</button><p>{linkedVendor?[linkedVendor.phone,linkedVendor.email,linkedVendor.address].filter(Boolean).join(' · '):'Vendor access may require administrator approval.'}</p><small>Open the vendor for current contact details, documents and permitted payment access.</small></div>}
+                          {item.cname&&!item.vendorId&&(
                             <div style={{marginBottom:12}}>
                               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10,marginBottom:8}}>
                                 {[["Contractor",item.cname,null],["Phone",item.cphone,item.cphone?"tel:"+item.cphone:null],["Email",item.cemail,item.cemail?"mailto:"+item.cemail:null],["Address",item.caddress,null]].filter(([,v])=>v).map(([l,v,href])=>(
@@ -993,6 +998,7 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
 
               <div style={{gridColumn:"1/-1",height:1,background:BORDER,margin:"4px 0"}}/>
 
+              <div style={{gridColumn:'1/-1'}}><VendorSelector label="Project vendor" value={form.vendorId||''} onChange={vendorId=>setForm(p=>({...p,vendorId}))}/></div>
               <FField label="Contractor / Company">
                 <input style={FI} value={form.cname} onChange={e=>setForm(p=>({...p,cname:e.target.value}))} placeholder="Company or Contractor"/>
               </FField>

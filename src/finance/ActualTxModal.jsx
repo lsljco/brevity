@@ -1,3 +1,4 @@
+import VendorSelector from './VendorSelector.jsx'
 import { useEffect, useId, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_TRANSACTION_CATEGORIES, loadStoredCategoryOptions, mergeCategoryOptions, saveStoredCategoryOptions, transactionCategories } from './categoryData.js'
@@ -587,6 +588,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
               <span style={{ fontSize: 10, color: '#888884' }}>Goal changes are unavailable in this reviewed metadata editor.</span>
             </div>
 
+            <VendorSelector expense={tx} kind="posted" onReviewed={onClose}/>
             {/* Split Transaction */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Split Transaction</label>

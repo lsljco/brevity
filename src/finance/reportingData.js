@@ -15,7 +15,7 @@ export function summarizeActuals(transactions = [], year = new Date().getFullYea
       bucket.expenses += amount
       const category = transaction.category || transaction.cat || 'Uncategorized'
       expensesByCategory[category] = (expensesByCategory[category] || 0) + amount
-      const vendor = transaction.merchant_name || transaction.name || 'Unknown vendor'
+      const vendor = transaction.vendorName || transaction.merchant_name || transaction.name || 'Unknown vendor'
       vendorSpend[vendor] = (vendorSpend[vendor] || 0) + amount
     }
     bucket.net = bucket.income - bucket.expenses
@@ -113,6 +113,7 @@ export function categoryGroup(category = '') {
 }
 
 export function reportKey(transaction, displayBy = 'category') {
+  if(displayBy==='vendor')return transaction.vendorName||'Unassigned'
   if (displayBy === 'merchant') return transaction.merchant_name || transaction.name || 'Unknown merchant'
   const category = String(transaction.category || transaction.cat || 'Uncategorized')
   return displayBy === 'group' ? categoryGroup(category) : category

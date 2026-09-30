@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { addDays, fmtMoney, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { groupCashInflows, groupReportTransactions, isRealizedIncomeTransaction, reportStats, summarizeActualCashActivity, transactionDirection } from './reportingData.js'
 import { timeframeLabel } from './financeTimeframe.js'
@@ -41,21 +41,25 @@ function Donut({ rows, total, direction, onOpen, title }) {
   </div>
 }
 
-export default function MonarchReports({ transactions = [], range, onOpenTransactions }) {
+export default function MonarchReports({ transactions:sourceTransactions = [], range, onOpenTransactions, vendorOrder='' }) {
   const [tab, setTab] = useState('cashflow')
   const [displayBy, setDisplayBy] = useState('category')
   const [chart, setChart] = useState('bar')
+  const [vendorFilter,setVendorFilter]=useState('')
+  const transactions=useMemo(()=>sourceTransactions.filter(tx=>!vendorFilter||String(tx.vendorName||'Unassigned').toLowerCase().includes(vendorFilter.toLowerCase())),[sourceTransactions,vendorFilter])
+  useEffect(()=>{if(vendorOrder)setDisplayBy('vendor')},[vendorOrder])
+  const ordered=rows=>vendorOrder?[...rows].sort((a,b)=>a.name.localeCompare(b.name)*(vendorOrder==='desc'?-1:1)):rows
   const income = useMemo(() => reportStats(transactions, 'income'), [transactions])
   const expense = useMemo(() => reportStats(transactions, 'expense'), [transactions])
   const postedCash = useMemo(() => summarizeActualCashActivity(transactions.filter(transaction => !transaction.pending)), [transactions])
   const direction = tab === 'income' ? 'income' : 'expense'
   const stats = direction === 'income' ? income : expense
-  const rows = useMemo(() => groupReportTransactions(transactions, direction, displayBy), [transactions, direction, displayBy])
-  const incomeRows = useMemo(() => groupReportTransactions(transactions, 'income', displayBy), [transactions, displayBy])
-  const cashInflowRows = useMemo(() => groupCashInflows(transactions, displayBy), [transactions, displayBy])
-  const expenseRows = useMemo(() => groupReportTransactions(transactions, 'expense', displayBy), [transactions, displayBy])
+  const rows = useMemo(() => ordered(groupReportTransactions(transactions, direction, displayBy)), [transactions, direction, displayBy,vendorOrder])
+  const incomeRows = useMemo(() => ordered(groupReportTransactions(transactions, 'income', displayBy)), [transactions, displayBy,vendorOrder])
+  const cashInflowRows = useMemo(() => ordered(groupCashInflows(transactions, displayBy)), [transactions, displayBy,vendorOrder])
+  const expenseRows = useMemo(() => ordered(groupReportTransactions(transactions, 'expense', displayBy)), [transactions, displayBy,vendorOrder])
   const open = (value, selectedDirection, ids, realizedIncomeOnly = false) => onOpenTransactions?.({
-    direction: selectedDirection || null, displayBy: value ? displayBy : null, value: value || null, ids: ids || null,
+    direction: selectedDirection || null, displayBy: value ? displayBy : null, value: value || null, ids: ids || (vendorFilter?transactions.map(tx=>tx.id):null),
     postedOnly:true, excludeTransfers:true, ...(realizedIncomeOnly ? { realizedIncomeOnly:true } : {}),
     label: value || (selectedDirection === 'income' ? realizedIncomeOnly ? 'Realized Income' : 'Cash Inflows' : selectedDirection === 'expense' ? 'Posted Expenses' : 'Posted Cash Flow'),
   })
@@ -67,9 +71,10 @@ export default function MonarchReports({ transactions = [], range, onOpenTransac
     </div>
     <div className="report-controls" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
       <label style={{ fontSize: 10, color: 'var(--muted)' }}>Chart<select aria-label="Report chart" value={chart} onChange={e => setChart(e.target.value)} style={{ width: '100%', display: 'block', marginTop: 5, padding: 10, borderRadius: 10, background: '#171613', color: 'var(--white)', border: '1px solid rgba(255,255,255,.12)' }}><option value="bar">Bar</option><option value="pie">Pie</option></select></label>
-      <label style={{ fontSize: 10, color: 'var(--muted)' }}>Display by<select aria-label="Report grouping" value={displayBy} onChange={e => setDisplayBy(e.target.value)} style={{ width: '100%', display: 'block', marginTop: 5, padding: 10, borderRadius: 10, background: '#171613', color: 'var(--white)', border: '1px solid rgba(255,255,255,.12)' }}><option value="category">Category</option><option value="group">Group</option><option value="merchant">Merchant</option></select></label>
+      <label style={{ fontSize: 10, color: 'var(--muted)' }}>Display by<select aria-label="Report grouping" value={displayBy} onChange={e => setDisplayBy(e.target.value)} style={{ width: '100%', display: 'block', marginTop: 5, padding: 10, borderRadius: 10, background: '#171613', color: 'var(--white)', border: '1px solid rgba(255,255,255,.12)' }}><option value="category">Category</option><option value="group">Group</option><option value="merchant">Merchant</option><option value="vendor">Vendor</option></select></label>
     </div>
-    <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px' }}>{timeframeLabel(range)}</p>
+<label>Filter report by vendor <input aria-label="Filter report by vendor" value={vendorFilter} onChange={e=>setVendorFilter(e.target.value)} placeholder="Vendor or Unassigned"/></label>
+    <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px' }}>{timeframeLabel(range)}{vendorFilter?` · Vendor filter: ${vendorFilter}`:''}</p>
     {tab === 'cashflow' ? <>
       <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}>
         <Stat label="Cash inflows" value={fmtMoney(postedCash.inflows)} color="var(--income-color)" onClick={() => open(null, 'income')} />
@@ -107,12 +112,12 @@ function recurringOccurrences(rows, range, tab, today) {
   }).filter(item => item.dates.length)
 }
 
-export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenScheduled }) {
+export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenScheduled, vendorOrder='' }) {
   const [tab, setTab] = useState('upcoming')
   const today = toISO(new Date())
   const recurring = useMemo(() => scheduled.filter(row => row.freq !== 'once' && row.type !== 'transfer'), [scheduled])
   const occurrences = useMemo(() => recurringOccurrences(recurring, range, tab, today), [recurring, range?.from, range?.to, tab, today])
-  const rows = useMemo(() => occurrences.map(item => ({ ...item.row, occurrenceDate: item.dates[0], occurrenceCount: item.dates.length })), [occurrences])
+  const rows = useMemo(() => {const list=occurrences.map(item => ({...item.row,occurrenceDate:item.dates[0],occurrenceCount:item.dates.length}));return vendorOrder?list.sort((a,b)=>String(a.vendorName||'Unassigned').localeCompare(String(b.vendorName||'Unassigned'))*(vendorOrder==='desc'?-1:1)):list}, [occurrences,vendorOrder])
   const totals = useMemo(() => occurrences.reduce((sum, item) => {
     const amount = Number(item.row.amount || 0) * item.dates.length
     if (item.row.type === 'income') sum.income += amount
@@ -124,6 +129,6 @@ export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenSc
     <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
     <div className="finance-card" style={{ padding: 20, marginBottom: 16 }}><h2 style={{ margin: '0 0 5px' }}>Recurring cash plan</h2><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{timeframeLabel(range)} · {actuals.length} posted transactions available for matching</p></div>
     <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(totals.income)} onClick={() => onOpenScheduled?.({ direction:'income', recurringOnly:true, label:'Recurring income' })} /><Stat label="Recurring expenses" value={fmtMoney(totals.expense)} onClick={() => onOpenScheduled?.({ direction:'expense', recurringOnly:true, label:'Recurring expenses' })} /><Stat label="Expected net" value={fmtMoney(totals.income-totals.expense)} onClick={() => onOpenScheduled?.({ recurringOnly:true, label:'Recurring cash plan' })} /></div>
-    <div className="finance-card" style={{ padding: 20 }}>{rows.length ? rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.cat || 'Uncategorized'} · {row.freq}{row.occurrenceCount > 1 ? ` · ${row.occurrenceCount} occurrences` : ''}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.occurrenceDate}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>) : <p style={{ color:'var(--muted)', margin:0 }}>No recurring transactions occur in this timeframe.</p>}</div>
+    <div className="finance-card" style={{ padding: 20 }}>{rows.length ? rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.vendorName||'Unassigned'} · {row.cat || 'Uncategorized'} · {row.freq}{row.occurrenceCount > 1 ? ` · ${row.occurrenceCount} occurrences` : ''}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.occurrenceDate}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>) : <p style={{ color:'var(--muted)', margin:0 }}>No recurring transactions occur in this timeframe.</p>}</div>
   </div>
 }

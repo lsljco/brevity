@@ -4,6 +4,7 @@ const amount = value => Number(value) || 0
 function normalizedScheduledFields(transaction, effectiveDate) {
   const transactionType = text(transaction?.type) || 'expense'
   return {
+    ...(transaction?.vendorId?{vendorId:text(transaction.vendorId)}:{}),
     title:text(transaction?.name),
     amount:Math.abs(amount(transaction?.amount)),
     transactionType,

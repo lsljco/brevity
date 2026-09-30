@@ -34,7 +34,7 @@ const intelligenceRecords=()=>{const updatedAt=new Date().toISOString(),today=da
   brevity_household_intelligence_v1:{key:'brevity_household_intelligence_v1',value:JSON.stringify({schemaVersion:1,targets:[{id:'larry-finance',member:'Larry',pillarId:'finance',label:'Finance review',targetCount:2,frequency:'period',weight:1,active:true}],rules:[],overrides:{},privacy:{Larry:{details:true}}}),version:1,updatedAt},
   family_calendar_events_v1:{key:'family_calendar_events_v1',value:JSON.stringify([{id:'finance-done',title:'Daily finance review',date:today,owner:'Larry',pillar:'finance',completed:true,minutes:30},{id:'finance-open',title:'Weekly finance review',date:today,owner:'Larry',pillar:'finance',minutes:60}]),version:1,updatedAt},
 }}
-const projectRecords=()=>({homehq_items_v1:{key:'homehq_items_v1',value:JSON.stringify([{id:'kitchen-1',title:'Kitchen refresh',type:'Renovation',room:'Kitchen',roomCustom:'',status:'In Progress',priority:'High',startDate:'2026-09-10',due:'2026-10-15',estcost:'12000.00',actcost:'1400.00',notes:'Preserve the stone.',raci:{responsible:['Larry'],accountable:[],consulted:[],informed:[]},cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,photos:[],files:[]}]),version:0,updatedAt:new Date().toISOString()}})
+const projectRecords=()=>({homehq_items_v1:{key:'homehq_items_v1',value:JSON.stringify([{id:'kitchen-1',vendorId:'project-vendor',title:'Kitchen refresh',type:'Renovation',room:'Kitchen',roomCustom:'',status:'In Progress',priority:'High',startDate:'2026-09-10',due:'2026-10-15',estcost:'12000.00',actcost:'1400.00',notes:'Preserve the stone.',raci:{responsible:['Larry'],accountable:[],consulted:[],informed:[]},cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,photos:[],files:[]}]),version:0,updatedAt:new Date().toISOString()}})
 const debtPaymentRecords=()=>{
   const records=cashForecastRecords(),actuals=JSON.parse(records.plaid_actuals_cache.value)
   actuals.push({id:'bank-mortgage',accountId:'plaid-operating',name:'Mortgage payment',originalStatement:'MONTHLY MORTGAGE PAYMENT',category:'MORTGAGE',amount:3000,date:dateKey(),pending:false})
@@ -826,4 +826,79 @@ test('Apple Health privacy choices require review and keep unknown totals explic
   await expect(review).toContainText('cannot be undone')
   await review.getByRole('button',{name:'Cancel',exact:true}).click()
   expect(writes).toHaveLength(1)
+})
+
+test('Vendor directory reviews edits without exposing saved login secrets',async({page},testInfo)=>{
+  const vendor={id:'vendor-fixture',name:'Fixture Insurance',address:'123 Sample Lane',phone:'555-0100',email:'billing@example.com',website:'https://example.com',paymentUrl:'https://example.com/pay',accessMembers:[],documents:[{blobId:'policy-fixture',fileName:'Policy.pdf',mimeType:'application/pdf',size:100}],loginBlobId:'login-fixture'}
+  await mockBackend(page,{financeFixture:true})
+  await page.route('**/.netlify/functions/finance-vendors**',async route=>{const action=new URL(route.request().url()).searchParams.get('action');if(action==='unlock')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Your Brevity password is incorrect.'})});await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:3,isAdmin:true,vendors:[vendor],links:{}})})})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await page.getByRole('button',{name:'Vendors',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await expect(page.getByRole('heading',{name:'Vendors',exact:true})).toBeVisible()
+  await page.getByRole('button',{name:/Fixture Insurance.*net posted spending/}).click()
+  await expect(page.getByRole('link',{name:'Open bill payment website ↗'})).toHaveAttribute('href','https://example.com/pay')
+  await expect(page.getByRole('link',{name:'Policy.pdf'})).toHaveAttribute('href',/finance-vendors\?action=download/)
+  await expect(page.getByRole('button',{name:'Unlock saved login'})).toBeVisible()
+  await expect(page.locator('.vendor-revealed')).toHaveCount(0)
+  await page.getByRole('button',{name:'Edit vendor',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Vendor details'})
+  await dialog.getByLabel('Phone',{exact:true}).fill('555-0199')
+  await dialog.getByRole('button',{name:'Review vendor changes'}).click()
+  await expect(page.locator('.brevity-action-review')).toContainText('555-0199')
+  await expect(page.locator('.brevity-action-review')).not.toContainText('fixture-secret')
+})
+
+test('Vendor credentials are staged separately and reviews contain only an opaque reference',async({page},testInfo)=>{
+  const prepared=[]
+  const vendor={id:'vendor-fixture',name:'Fixture Utility',accessMembers:[],documents:[]}
+  await page.route('**/.netlify/functions/finance-vendors**',async route=>{const action=new URL(route.request().url()).searchParams.get('action');await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(action==='stage-login'?{upload:{blobId:'encrypted-fixture'}}:{version:2,isAdmin:true,vendors:[vendor],links:{}})})})
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Vendors',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:/Fixture Utility.*net posted spending/}).click()
+  await page.getByRole('button',{name:'Add login / accounts'}).click()
+  const dialog=page.getByRole('dialog',{name:'Protected vendor login'})
+  await dialog.getByLabel('Username',{exact:true}).fill('fixture-user')
+  await dialog.getByLabel('Password',{exact:true}).fill('fixture-secret')
+  await dialog.getByLabel('Account numbers and labels',{exact:true}).fill('fixture-account')
+  await dialog.getByRole('button',{name:'Encrypt and review'}).click()
+  await expect(page.locator('.brevity-action-review')).toContainText('encrypted-fixture')
+  expect(prepared).toHaveLength(1)
+  expect(prepared[0].operation.payload).toEqual({blobId:'encrypted-fixture'})
+  expect(JSON.stringify(prepared)).not.toMatch(/fixture-secret|fixture-user|fixture-account/)
+  await expect(dialog).toHaveCount(0)
+})
+
+test('Vendor sorting and planned expense assignment preserve canonical record references',async({page},testInfo)=>{
+  const vendors=[{id:'zeta',name:'Zeta Insurance',accessMembers:[],documents:[]},{id:'alpha',name:'Alpha Utility',accessMembers:[],documents:[]}],prepared=[]
+  await mockBackend(page,{financeFixture:true})
+  await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:3,isAdmin:true,vendors,links:{'posted:bank-grocery':'zeta','posted:bank-pending':'alpha'}})}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Vendors',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const directory=page.getByRole('navigation',{name:'Vendor directory'})
+  await page.getByLabel('Finance vendor sort').selectOption('desc')
+  await expect(directory.getByRole('button').first()).toContainText('Zeta Insurance')
+  await page.getByLabel('Finance vendor sort').selectOption('asc')
+  await expect(directory.getByRole('button').first()).toContainText('Alpha Utility')
+  await page.getByLabel('Expense assignment view').selectOption('planned')
+  await page.getByLabel('Vendor for Planned groceries').selectOption('alpha')
+  await page.getByRole('button',{name:'Review link',exact:true}).click()
+  await expect(page.locator('.brevity-action-review')).toContainText('Alpha Utility')
+  expect(prepared).toHaveLength(1)
+  expect(prepared[0].operation).toMatchObject({type:'recurring.update',targetId:'planned-grocery',payload:{vendorId:'alpha'}})
+})
+
+test('Vendor link from a project opens the canonical finance record',async({page},testInfo)=>{
+  await mockBackend(page,{projectFixture:true})
+  await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,isAdmin:true,vendors:[{id:'project-vendor',name:'Current Contractor Name',phone:'555-0123',accessMembers:[],documents:[]}],links:{}})}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Show Kitchen refresh details',exact:true}).click()
+  await page.getByRole('button',{name:'Vendor: Current Contractor Name',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Vendors',exact:true})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Current Contractor Name',exact:true})).toBeVisible()
+  await expect(page.getByText('555-0123',{exact:true})).toBeVisible()
 })
