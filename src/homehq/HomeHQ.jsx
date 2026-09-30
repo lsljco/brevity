@@ -795,7 +795,7 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
                   <div key={item.id} className={`hq-card${isExp?' hq-card--expanded':''}`}>
 
                     {/* Card hero image */}
-                    <div style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
+                    <div role="button" tabIndex={0} aria-label={`${isExp?'Hide':'Show'} ${item.title} details`} aria-expanded={isExp} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setExpanded(isExp?null:item.id)}}} style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
                       <img
                         src={heroImg}
                         alt={roomLabel(item)}

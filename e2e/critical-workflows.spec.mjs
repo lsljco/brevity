@@ -896,7 +896,7 @@ test('Vendor link from a project opens the canonical finance record',async({page
   await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,isAdmin:true,vendors:[{id:'project-vendor',name:'Current Contractor Name',phone:'555-0123',accessMembers:[],documents:[]}],links:{}})}))
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
-  await page.getByText('Kitchen refresh',{exact:true}).click()
+  await page.getByRole('button',{name:'Show Kitchen refresh details',exact:true}).click()
   await page.getByRole('button',{name:'Vendor: Current Contractor Name',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Vendors',exact:true})).toBeVisible()
   await expect(page.getByRole('heading',{name:'Current Contractor Name',exact:true})).toBeVisible()
