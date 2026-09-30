@@ -178,7 +178,7 @@ export async function runBrevitySdkAgent({prompt,model,schema,canonical,browser,
     }
     if(result.interruptions?.length)throw Error('Brevity requires a separate Action Mode review for this request.')
     if(clarifications.length)output={message:clarifications[0],proposal:null}
-    outcome=clarifications.length?'clarification':output?.proposal?'proposal':'answered'
+    outcome=clarifications.length||output?.completionStatus==='needs_information'?'clarification':output?.proposal?'proposal':output?.completionStatus==='blocked'?'blocked':'answered'
     return {output,estimates,diagnostics:{outcome,toolCalls}}
   }catch(error){
     errorCategory=retryableProviderFailure(error)||(error?.name==='AbortError'?'timeout':error?.status>=500?'provider':'agent')

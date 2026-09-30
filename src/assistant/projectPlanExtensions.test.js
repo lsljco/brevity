@@ -63,3 +63,17 @@ test("unavailable nutrition never becomes a zero-meal briefing",()=>{
  const value=weeklyHouseholdBriefing({nutritionUnavailable:true,recentNutrition:[],supplementalSources:{"nutrition:2026-09-29":"unavailable"}})
  assert.equal(value.nutrition.meals,null);assert.equal(value.nutrition.daysLogged,null);assert.equal(value.nutrition.coverage,"incomplete");assert.deepEqual(value.nutrition.unavailableDates,["2026-09-29"])
 })
+
+test('usage separates clarifications and blocked requests from failures and flags legacy outcome coverage',async()=>{
+ const f=fixture(),repo=createUsageRepository({store:f.store,now:()=>new Date('2026-09-30T12:00Z')})
+ for(const outcome of ['answered','clarification','blocked','failed'])await repo.record('Larry',{id:outcome,kind:'assistant',outcome,durationMs:20})
+ const entry=[...f.values.values()][0]
+ entry.data.events.push({id:'legacy',kind:'assistant',outcome:'answered',durationMs:20,at:'2026-09-30T12:00:00Z'})
+ const summary=await repo.summary(['Larry']),member=summary.members[0]
+ assert.equal(member.requests,5)
+ assert.equal(member.clarifications,1)
+ assert.equal(member.blockedRequests,1)
+ assert.equal(member.failedRequests,1)
+ assert.equal(member.legacyOutcomeRequests,1)
+ assert.match(summary.notice,/not retrospectively reclassified/)
+})
