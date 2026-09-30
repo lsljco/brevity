@@ -85,30 +85,17 @@ const planned=record=>record.planned!==false&&!['cancelled','canceled','deleted'
 const membersFor=(record,members)=>unique([record.owner,...(record.owners||[]),...(record.members||[]),...(record.participants||[]),...(record.raci?.responsible||[])]).filter(member=>members.includes(member))
 const temporalValue=value=>value&&typeof value==='object'?(value.dateTime||value.date||''):value
 const activityDate=record=>clean(temporalValue(record.date||record.start||record.startDate||record.targetDate||record.due)).slice(0,10)
-const calendarOccurred=(record,date,now)=>{
-  if(explicitCompleted(record))return true
-  if(record.complete===false||record.completed===false||['missed','skipped','incomplete','not completed'].includes(statusOf(record)))return false
-  const today=getHouseholdDateKey(now)
-  if(date<today)return true
-  if(date>today||record.allDay)return false
-  const endValue=temporalValue(record.end||record.endDate||record.endAt)
-  const startValue=temporalValue(record.start||record.startDate||record.startAt)
-  const end=endValue?new Date(endValue):null
-  if(end&&!Number.isNaN(end.getTime()))return end.getTime()<=now.getTime()
-  const start=startValue?new Date(startValue):null
-  if(start&&!Number.isNaN(start.getTime()))return start.getTime()+Math.max(0,number(record.minutes)||60)*60000<=now.getTime()
-  return false
-}
-
-export function normalizePerformanceActivities({calendarEvents=[],projects=[],schedule={},maintenance={},dailyPlans=[],members=[],config,now=new Date()}){
+export function normalizePerformanceActivities({calendarEvents=[],projects=[],schedule={},maintenance={},dailyPlans=[],reportedActivities=[],members=[],config}){
   const activities=[]
-  const push=(record,kind,defaults={})=>{if(!record||!planned(record))return;const date=activityDate(record)||clean(defaults.date).slice(0,10);if(!date)return;const owners=membersFor(record,members);const classification=classifyActivity(record,config);const isExplicit=explicitCompleted(record),isCompleted=kind==='calendar'?calendarOccurred(record,date,now):isExplicit;activities.push({id:clean(record.id||record.sourceId||`${kind}-${activities.length}`),kind,title:clean(record.title||record.name)||kind,date,owners:owners.length?owners:['Family'],minutes:Math.max(0,number(record.minutes)||minutesBetween(record.startTime||record.time,record.endTime,defaults.minutes||60)),planned:true,completed:isCompleted,completionEvidence:isExplicit?'confirmed':isCompleted&&kind==='calendar'?'elapsed-calendar':'pending',private:Boolean(record.private||record.visibility==='private'),classification,source:clean(record.source)||kind,status:statusOf(record)})}
+  const push=(record,kind,defaults={})=>{if(!record||!planned(record))return;const date=activityDate(record)||clean(defaults.date).slice(0,10);if(!date)return;const owners=membersFor(record,members);const classification=classifyActivity(record,config);const isExplicit=explicitCompleted(record),isCompleted=isExplicit;activities.push({id:clean(record.id||record.sourceId||`${kind}-${activities.length}`),kind,title:clean(record.title||record.name)||kind,date,owners:owners.length?owners:['Family'],minutes:Math.max(0,number(record.minutes)||minutesBetween(record.startTime||record.time,record.endTime,defaults.minutes??60)),planned:kind!=='reported',completed:isCompleted,completionEvidence:isExplicit?(kind==='reported'?'member-reported':'confirmed'):'pending',private:Boolean(record.private||record.visibility==='private'),classification,source:clean(record.source)||kind,status:statusOf(record)})}
   calendarEvents.forEach(record=>push(record,'calendar',{minutes:record.allDay?0:60}))
   projects.forEach(record=>push(record,'project',{minutes:0}))
   ;(schedule.blocks||[]).forEach(record=>push(record,'schedule'))
   ;(schedule.routines||[]).forEach(routine=>{dailyPlans.forEach(plan=>{const date=parseDate(plan.date);if(date&&routine.enabled!==false&&(routine.days||[]).includes(date.getDay()))push({...routine,id:`${routine.id}:${plan.date}`,date:plan.date},'routine')})})
   Object.entries(maintenance.occurrences||{}).forEach(([id,record])=>push({...record,id,date:id.slice(0,10),title:record.title||'Household responsibility',pillar:'household'},'chore',{minutes:30}))
   dailyPlans.forEach(plan=>{(plan.assignments||[]).forEach(record=>push({...record,date:plan.date},'assignment',{minutes:30}));(plan.decisions||[]).forEach(record=>push({...record,date:plan.date},'decision',{minutes:15}))})
+  const activityPillars={workout:'fitness',hydration:'health',sleep:'health',maintenance:'household','study-note':'spiritual','sermon-note':'ministry','ministry-followup':'ministry',expense:'finance'}
+  reportedActivities.forEach(record=>{const pillar=activityPillars[record.kind];if(pillar)push({...record,pillar,owner:record.member||record.owner,private:true,completed:record.status!=='pending',minutes:record.durationMinutes||0},'reported',{minutes:0})})
   return activities
 }
 
@@ -131,19 +118,19 @@ export function calculatePerformance({activities=[],config,members=[],period,vie
       return{...pillar,attainment:round(attainment),adherence:round(adherence),minutes:Math.round(contributions.reduce((sum,item)=>sum+item.allocatedMinutes,0)),targetConfigured:targets.length>0,targets:targetParts,activities:contributions.map(item=>visible(item)?item:{...item,title:'Private activity',source:'restricted'}),completed:done.length,planned:qualifying.length}
     })
     const measurable=pillars.filter(item=>item.attainment!=null)
-    return{member,pillars,overall:measurable.length?round(measurable.reduce((sum,item)=>sum+item.attainment,0)/measurable.length):null,planAdherence:mine.length?round(mine.filter(item=>item.completed).length/mine.length*100):null,totalMinutes:pillars.reduce((sum,item)=>sum+item.minutes,0)}
+    return{member,pillars,overall:measurable.length?round(measurable.reduce((sum,item)=>sum+item.attainment,0)/measurable.length):null,planAdherence:mine.some(item=>item.planned)?round(mine.filter(item=>item.planned&&item.completed).length/mine.filter(item=>item.planned).length*100):null,totalMinutes:pillars.reduce((sum,item)=>sum+item.minutes,0)}
   })
   const householdPillars=config.pillars.map(pillar=>{const eligible=memberScores.map(member=>member.pillars.find(item=>item.id===pillar.id)).filter(item=>item?.attainment!=null);return{...pillar,attainment:eligible.length?round(eligible.reduce((sum,item)=>sum+item.attainment,0)/eligible.length):null,eligibleMembers:eligible.length,minutes:memberScores.reduce((sum,member)=>sum+(member.pillars.find(item=>item.id===pillar.id)?.minutes||0),0)}})
   const overallEligible=memberScores.filter(item=>item.overall!=null)
   const totalMinutes=householdPillars.reduce((sum,item)=>sum+item.minutes,0)
   householdPillars.forEach(item=>{item.timeAllocation=totalMinutes?round(item.minutes/totalMinutes*100):null})
-  return{period,memberScores,householdPillars,overall:overallEligible.length?round(overallEligible.reduce((sum,item)=>sum+item.overall,0)/overallEligible.length):null,planAdherence:inRange.length?round(inRange.filter(item=>item.completed).length/inRange.length*100):null,totalMinutes,unclassified:inRange.filter(item=>!item.classification.allocations.length),reviewQueue:inRange.filter(item=>['medium','low'].includes(item.classification.confidence)),activities:inRange}
+  return{period,memberScores,householdPillars,overall:overallEligible.length?round(overallEligible.reduce((sum,item)=>sum+item.overall,0)/overallEligible.length):null,planAdherence:inRange.some(item=>item.planned)?round(inRange.filter(item=>item.planned&&item.completed).length/inRange.filter(item=>item.planned).length*100):null,totalMinutes,unclassified:inRange.filter(item=>!item.classification.allocations.length),reviewQueue:inRange.filter(item=>['medium','low'].includes(item.classification.confidence)),activities:inRange}
 }
 
 const projectionStatus=value=>value==null?'No Data':value>=100?'Complete':value>=80?'On Track':value>=60?'At Risk':'Off Track'
 export function projectPerformance(model,{today=getHouseholdDateKey()}={}){
   const memberScores=model.memberScores.map(member=>({...member,pillars:member.pillars.map(pillar=>{
-    const remaining=pillar.activities.filter(activity=>activity.date>=today&&!activity.completed)
+    const remaining=pillar.activities.filter(activity=>activity.planned&&activity.date>=today&&!activity.completed)
     let projected=null
     if(pillar.targetConfigured){
       const remainingCount=remaining.length,remainingMinutes=remaining.reduce((sum,item)=>sum+item.allocatedMinutes,0)
@@ -152,12 +139,12 @@ export function projectPerformance(model,{today=getHouseholdDateKey()}={}){
       projected=(pillar.completed+remaining.length)/pillar.planned*100
     }
     projected=round(projected)
-    return{...pillar,projected,status:projectionStatus(projected)}
+    return{...pillar,projected,status:projectionStatus(pillar.attainment),projectionStatus:projected==null?'No projection':'If remaining planned work is completed'}
   })}))
   const householdPillars=model.householdPillars.map(pillar=>{
     const eligible=memberScores.map(member=>member.pillars.find(item=>item.id===pillar.id)).filter(item=>item?.projected!=null)
     const projected=eligible.length?round(eligible.reduce((sum,item)=>sum+item.projected,0)/eligible.length):null
-    return{...pillar,projected,status:projectionStatus(projected)}
+    return{...pillar,projected,status:projectionStatus(pillar.attainment),projectionStatus:projected==null?'No projection':'If remaining planned work is completed'}
   })
   return{...model,memberScores,householdPillars}
 }
