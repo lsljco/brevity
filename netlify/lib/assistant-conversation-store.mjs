@@ -7,7 +7,7 @@ export const CONVERSATION_RETENTION_DAYS=30
 const conflict=()=>Object.assign(Error('This conversation changed on another device. Refresh the conversation and try again.'),{status:409})
 export function createConversationRepository({store,householdId='lslj-family',now=()=>new Date()}){
   const key=member=>{if(!member||typeof member!=='string')throw Error('An authenticated member is required.');return `conversation/${createHash('sha256').update(JSON.stringify([householdId,member])).digest('hex')}`}
-  const clean=messages=>(Array.isArray(messages)?messages:[]).filter(m=>['user','assistant'].includes(m?.role)&&typeof m.content==='string'&&m.content.trim()).slice(-60).map(m=>({role:m.role,content:m.content.slice(0,6000),createdAt:m.createdAt||now().toISOString(),...(m.role==='assistant'&&m.proposal?{proposal:m.proposal}:{})}))
+  const clean=messages=>(Array.isArray(messages)?messages:[]).filter(m=>['user','assistant'].includes(m?.role)&&typeof m.content==='string'&&m.content.trim()).slice(-60).map(m=>({role:m.role,content:m.content.slice(0,6000),createdAt:m.createdAt||now().toISOString(),...(m.role==='assistant'&&m.proposal?{proposal:m.proposal}:{}),...(m.role==='assistant'&&Array.isArray(m.taskLinks)?{taskLinks:m.taskLinks.filter(t=>t&&typeof t.id==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)&&typeof t.title==='string'&&typeof t.owner==='string').slice(0,20).map(({id,date,title,owner})=>({id,date,title,owner}))}:{})}))
   const visible=value=>({...value,messages:clean(value?.messages).filter(m=>Date.parse(m.createdAt)>now().getTime()-30*DAY),version:value?.version||0,canRestore:Boolean(value?.archive&&Date.parse(value.archive.expiresAt)>now().getTime()),retentionDays:30})
   const readEntry=async member=>{const entry=await store.getWithMetadata(key(member),{type:'json'});return {entry,current:visible(entry?.data||{messages:[],version:0})}}
   const publicValue=value=>{const {archive,lastTurnId,receiptIds,...rest}=visible(value);return rest}
@@ -28,11 +28,11 @@ export function createConversationRepository({store,householdId='lslj-family',no
       if(!turnId||user?.role!=='user'||assistant?.role!=='assistant')throw Error('A completed conversation turn is required.')
       return mutate(member,version,value=>({...value,lastTurnId:turnId,messages:clean([...(value.messages.length?value.messages:version===0?clean(seed).map(({role,content,createdAt})=>({role,content,createdAt})):[]),user,assistant])}))
     },
-    async appendReceipt(member,{id,content}){
+    async appendReceipt(member,{id,content,taskLinks=[]}){
       for(let attempt=0;attempt<4;attempt++){
         const {current}=await readEntry(member)
         if(current.receiptIds?.includes(id))return publicValue(current)
-        try{return await mutate(member,current.version,value=>({...value,receiptIds:[...(value.receiptIds||[]),id].slice(-60),messages:clean([...value.messages,{role:'assistant',content}])}))}catch(error){if(error.status!==409||attempt===3)throw error}
+        try{return await mutate(member,current.version,value=>({...value,receiptIds:[...(value.receiptIds||[]),id].slice(-60),messages:clean([...value.messages,{role:'assistant',content,taskLinks}])}))}catch(error){if(error.status!==409||attempt===3)throw error}
       }
     },
     clear:(member,version)=>mutate(member,version,value=>({messages:[],archive:{messages:value.messages,expiresAt:new Date(now().getTime()+7*DAY).toISOString()}})),

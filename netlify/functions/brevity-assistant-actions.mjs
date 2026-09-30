@@ -1,3 +1,4 @@
+import {savedTaskLinks,taskReceiptText} from '../lib/task-receipt.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import {assertVoiceApproval} from '../../src/assistant/voiceActionReview.js'
@@ -27,7 +28,7 @@ const executedNutrition=async(operations,session,resources)=>{
   return{date,totals}
 }
 export const publicAssistantAudit=audit=>({
-  id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,
+  id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,taskLinks:savedTaskLinks(audit),
   action:audit.action,status:audit.status,occurredAt:audit.occurredAt,confirmationMode:audit.confirmationMode||'confirmation',
   undoAvailable:Boolean(audit.undoAvailable),undoneAt:audit.undoneAt||null,undoneBy:audit.undoneBy||null,
   affectedRecords:(audit.affectedRecords||audit.changes||[]).map(({resource,beforeVersion,afterVersion})=>({resource,beforeVersion,afterVersion})),
@@ -410,7 +411,7 @@ export async function executeActionWithJournal({repository,proposal,operations,s
   return{journal,audit}
 }
 
-async function conversationReceipt(member,audit){try{return await productionConversationRepository().appendReceipt(member,{id:audit.id,content:`${audit.action==='undo'?'Undone':'Completed'}: ${audit.summary||'Reviewed household action'}. Recorded in Action Mode history.`})}catch{return null}}
+async function conversationReceipt(member,audit){try{return await productionConversationRepository().appendReceipt(member,{id:audit.id,taskLinks:savedTaskLinks(audit),content:`${audit.action==='undo'?'Undone':'Completed'}: ${audit.summary||'Reviewed household action'}. Recorded in Action Mode history. ${taskReceiptText(savedTaskLinks(audit),member)}`})}catch{return null}}
 
 export async function completeExecutionJournal({repository,journalId,completedAt}) {
   return repository.updateJournal(journalId,current=>current.state==='completed'?current:{...current,state:'completed',completedAt})

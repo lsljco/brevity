@@ -745,3 +745,26 @@ test('iPad landscape Family Calendar keeps all seven columns inside its content 
 test('Settings remains operational when optional integration payloads are empty',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Settings'}).click();await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Recovery Mode');await expect(page.locator('body')).not.toContainText('Cannot read properties of undefined')})
 
 test('iPhone alignment keeps Next Pillar above fixed bottom navigation',async({page},testInfo)=>{test.skip(testInfo.project.name!=='iphone','iPhone layout contract');await page.getByRole('button',{name:/Start Today’s Alignment/}).click();const next=page.getByRole('button',{name:'Next Pillar'}),bottomNav=page.locator('.mobile-app-nav'),main=page.locator('.app-main');await expect(next).toBeVisible();await expect(bottomNav).toBeVisible();await main.evaluate(element=>{element.scrollTop=element.scrollHeight});await expect.poll(async()=>{const nextBox=await next.boundingBox(),navBox=await bottomNav.boundingBox();return nextBox&&navBox?Math.round(navBox.y-(nextBox.y+nextBox.height)):-999},{timeout:5000}).toBeGreaterThanOrEqual(0)})
+
+test('saved task opens its exact dated record after reload and detects Undo',async({page})=>{
+  await mockBackend(page)
+  const task={id:'saved-task-1',date:'2026-10-02',title:'Inspect garage',owner:'Larry',status:'pending',notes:'Check the hinge'}
+  let removed=false
+  await page.route('**/.netlify/functions/brevity-conversation',route=>route.fulfill({json:{version:1,messages:[{role:'assistant',content:'Saved task for October 2. This task was not added to the calendar.',taskLinks:[task]}]}}))
+  await page.route('**/.netlify/functions/household-data?*',route=>{
+    const date=new URL(route.request().url()).searchParams.get('date')
+    return route.fulfill({json:{plan:{...plan(date),assignments:date===task.date&&!removed?[task]:[]}}})
+  })
+  await page.goto('/')
+  await page.reload()
+  await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+  await page.getByRole('button',{name:'Open task: Inspect garage',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Saved task',exact:true})
+  await expect(dialog.getByRole('heading',{name:'Inspect garage'})).toBeVisible()
+  await expect(dialog.getByText('Check the hinge',{exact:true})).toBeVisible()
+  await expect(dialog.getByText('2026-10-02',{exact:true})).toBeVisible()
+  await dialog.getByRole('button',{name:'Close saved task'}).click()
+  removed=true
+  await page.getByRole('button',{name:'Open task: Inspect garage',exact:true}).click()
+  await expect(dialog.getByText('This task is no longer in the daily plan. It may have been undone or removed.')).toBeVisible()
+})
