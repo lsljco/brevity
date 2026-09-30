@@ -246,7 +246,10 @@ function responseBody(overrides = {}) {
 }
 
 function lastSuccessfulTransactionUpdate(itemResponse) {
-  return String(itemResponse?.data?.item?.status?.transactions?.last_successful_update || '')
+  // /item/get returns status beside item, not inside item.
+  // See https://plaid.com/docs/api/items/#itemget (ItemGetResponse).
+  const value = itemResponse?.data?.status?.transactions?.last_successful_update
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : ''
 }
 
 function transactionRefreshCompleted(lastSuccessfulUpdate, requestedAt) {
