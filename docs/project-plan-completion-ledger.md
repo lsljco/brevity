@@ -1,6 +1,22 @@
-# Project plan delivery ledger — 29 September 2026
+# Project plan delivery ledger — updated 30 September 2026
 
 Source: Brevity_Project_Plan.pdf (nine pages, reviewed in full). This ledger distinguishes implementation, verification and real-world adoption. It does not certify the entire plan complete.
+
+## Current checkpoint — September 30
+
+Earlier sections below are historical release evidence. The current production baseline includes PRs #233–#244, including cross-pillar daily briefing and schedule retrieval, lower-overhead conversation turns, spoken confirmation for routine task/work-block and own-member activity changes, native staging storage/authentication repair, finance packaging correction and tablet layout correction.
+
+| Acceptance item | Current evidence |
+| --- | --- |
+| Household conversation and reviewed actions | Deployed evaluations and representative persistence/readback/Undo flows passed; physical-device voice remains a separate gate. |
+| Separate staging | Authenticated task/workout acceptance passed; test records undone. No production bank/calendar/OneDrive credentials copied. |
+| Automatic recovery jobs | September 30 scheduled backup dispatched 08:10 UTC and completed 08:11:43 UTC; retention completed 08:35:18 UTC. |
+| Architect generation, review and draft preview | Synthetic workflow 36649137103 passed 1,220 tests/build, held at its reviewer gate, then created draft PR #245 and deployed isolated staging. |
+| Application-initiated Architect dispatch | Real approved proposal b597edef-4c1e-4750-962e-a0ed900dca28 returned dispatched receipt efedc4d69a987c76b94d3c530dcc44fd28fa4e9a, matched to GitHub workflow 36692176446. Generated feature acceptance is in progress. |
+| Household pilot / device acceptance | Open until actual device and family observations exist. |
+| Future households and specialists | Conditional later phases; require pilot evidence and, for other households, separate tenant review and consent. |
+
+See [current technical acceptance](validation/2026-09-30-final-technical-acceptance.md) for exact identifiers and limits. Automated test counts do not establish family adoption or complete the human learning workstream.
 
 ## Production baseline
 
