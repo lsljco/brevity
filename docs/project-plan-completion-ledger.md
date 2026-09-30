@@ -69,3 +69,9 @@ Closed technical gates include publication of PR #233, isolated recovery rehears
 - Review a failed evaluation response and write an acceptance criterion based on behavior, not tool count alone.
 - Use real pilot metrics to prepare one improvement problem statement. Review requirements, data access, tests, staged rollout and rollback before implementing it.
 - Compare alternative household workflows using the same real tasks and consented observations: time, correction rate, burden, usefulness and data controls. Do not infer product superiority from a feature checklist.
+
+## Conversational feedback completion — September 30
+
+The plan audit found that ratings required interface buttons. The Household Agent now has a server-bound conversational feedback tool for an explicit request to save feedback. It stores only helpful/friction plus a fixed category (voice, latency, accuracy, missing context, too many steps, missing capability, reliability, other). No feedback transcript enters usage metrics. Member identity and event ID come from the server; retries cannot double-count or replace a different rating. Category summaries are available to the existing Architect usage reader. Historical button ratings remain uncategorized; no old content is mined. Ratings do not create or approve improvement proposals.
+
+Automated repository and SDK checks cover persistence, identity isolation, content scrubbing, duplicate/replayed turns, storage failures and absent recorder capability. The maintained model suite includes explicit feedback and hypothetical/no-write cases; listing these cases is not a claim of a live model pass. Release and production acceptance evidence are recorded in the associated pull request. Physical-device voice, longitudinal adoption and participant learning remain observational gates.
