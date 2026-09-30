@@ -2,6 +2,7 @@ export const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
   { id:'health', label:'Health & Nutrition', icon:'ti-heart', layer:2, description:'Stewardship of the body — nourishment and whole-family wellness.', items:[
     { id:'meal-plan', label:'Meal Plan', icon:'ti-tools-kitchen-2' },
+    { id:'health-connections', label:'Health Connections', icon:'ti-heart-handshake' },
   ] },
   { id:'fitness', label:'Physical Fitness', icon:'ti-run', layer:2, description:'Strength, discipline, and physical stewardship.', items:[] },
   { id:'household', label:'Household Management', icon:'ti-home', layer:3, description:'The heartbeat of the home — operations, property, and daily life.', items:[
