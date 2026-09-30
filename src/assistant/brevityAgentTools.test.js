@@ -343,6 +343,7 @@ for(const completionStatus of ['answered','needs_information','blocked'])test(`$
   calls++;return {finalOutput:{completionStatus,message:'The verified answer or specific missing information.',proposal:null},history:[]}
  }}})
  assert.equal(calls,1);assert.equal(result.output.proposal,null)
+ assert.equal(result.diagnostics.outcome,completionStatus==='needs_information'?'clarification':completionStatus)
  assert.equal(result.diagnostics.toolCalls.request_completion_check,undefined)
 })
 
