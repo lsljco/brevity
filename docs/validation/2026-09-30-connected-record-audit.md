@@ -12,6 +12,7 @@ Baseline: main a23611e2fbfb334de88f4dcdc84d1a029b0236c3, PR #254, production 6ab
 | Project dates and status | Start/end dates follow the source on all displayed days. Undated/impossible/reversed visible project windows are rejected. Project windows are not appointment attendance or evidence of task completion. |
 | Permissions / audit / Undo | Existing owner/RACI/project permissions remain. A non-administrator changing a visible project also needs calendar permission. Existing journal, idempotency, conditional writes and conflict-aware Undo cover the single source. |
 | Vendors / Finance | Existing exact vendor links, protected uploads, sorting, planned vs posted spending, debt application controls and canonical project→vendor navigation retained. No vendor/expense name matching or bulk production assignment. |
+| Mobile command lane | A wrapped collapsed refresh banner could grow above its reserved lane and intercept calendar links. Its height now stays inside the lane; expanded details retain their separate scrollable panel. |
 | Accessibility | Project edit controls now have named accessible labels; calendar project links expose exact named buttons. |
 
 ## Verification scope
