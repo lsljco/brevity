@@ -21,11 +21,25 @@ const {
 } = require('../../netlify/legacy-functions/storage.js')
 
 test('transaction refresh completion requires a successful Item update at or after the request', () => {
-  const response={data:{item:{status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z'}}}}}
+  // Match Plaid's documented /item/get response, not an invented nested shape.
+  const response={data:{item:{item_id:'fixture-item',error:null},status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z',last_failed_update:null}},request_id:'fixture-request'}}
   assert.equal(lastSuccessfulTransactionUpdate(response),'2026-09-08T23:00:05.000Z')
   assert.equal(transactionRefreshCompleted(lastSuccessfulTransactionUpdate(response),'2026-09-08T23:00:00.000Z'),true)
   assert.equal(transactionRefreshCompleted('2026-09-08T22:59:59.000Z','2026-09-08T23:00:00.000Z'),false)
   assert.equal(transactionRefreshCompleted('','2026-09-08T23:00:00.000Z'),false)
+})
+
+test('missing, invalid, or unrelated bank timestamps never certify transaction freshness', () => {
+  for (const response of [
+    undefined, {data:{status:null}},
+    {data:{status:{transactions:{last_successful_update:null}}}},
+    {data:{status:{transactions:{last_successful_update:'not-a-date'}}}},
+    {data:{status:{investments:{last_successful_update:'2026-09-08T23:00:05.000Z'}}}},
+    {data:{item:{status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z'}}}}},
+  ]) {
+    assert.equal(lastSuccessfulTransactionUpdate(response),'')
+    assert.equal(transactionRefreshCompleted(lastSuccessfulTransactionUpdate(response),'2026-09-08T23:00:00.000Z'),false)
+  }
 })
 
 test('Plaid transaction sync consumes every page and returns one complete cursor advancement', async () => {
