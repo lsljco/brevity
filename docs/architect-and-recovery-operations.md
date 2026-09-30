@@ -14,9 +14,10 @@ Prepared workflow: `.github/workflows/architect-prototype.yml`.
 4. The verification job installs trusted dependencies before applying the patch, then runs tests/build inside a container without network, app secrets or persisted GitHub credentials. The later branch/PR job never executes generated source.
 5. **Do not enable automatic prototype PRs while Netlify previews carry production-capable credentials.** Store prefixes prevent accidental crossover; they are not a sandbox against arbitrary generated code. Establish a separate staging site/account credential scope with synthetic data, restricted provider keys and no production storage/calendar/bank/OneDrive credentials. Configure the `architect-prototype-review` GitHub environment with required reviewers.
 6. Only after those controls are verified may an administrator set repository variable `BREVITY_ARCHITECT_STAGING_APPROVED=true`. Without it, the workflow stops at verified artifacts. With it, the protected job creates a draft PR; it never merges or publishes production.
-7. Verify one synthetic packet through generation, isolated tests, reviewed draft PR and isolated staging. Record exact commit, preview and behavior evidence before `prototype-ready`. Release still requires explicit Larry/Lorenzo authorization and normal release gates.
+7. The repository Actions setting must permit PR creation; GitHub combines create/approve capability in one switch. Larry approved enabling it; default token permissions remain read-only. The protected proposal job explicitly requests write permission and never approves, merges or publishes production.
+8. Verify one synthetic packet through generation, isolated tests, reviewed draft PR and isolated staging. Record exact commit, preview and behavior evidence before `prototype-ready`. Release still requires explicit Larry/Lorenzo authorization and normal release gates.
 
-This package prepares the integration. Keys, protected-environment rules and a separately credentialed coding staging site have not been configured or claimed verified.
+September 30 checkpoint: scoped credentials, required-reviewer environment, and separately credentialed staging are configured. The synthetic generation → isolated verification → reviewed draft PR → staging flow passed. Real production-app dispatch is matched to workflow 36692176446. See validation/2026-09-30-final-technical-acceptance.md for current evidence and remaining feature acceptance.
 
 ## Recovery and retention
 
@@ -36,6 +37,6 @@ Use the existing authorized Netlify project credential through environment confi
 4. Apply only that reviewed record using `node scripts/restore-household-record.mjs apply <local-review-file> <confirmed-content-hash>`. A changed ETag or hash rejects the restore. Pre-restore bytes and outcome are retained under a recovery audit ID.
 5. Verify the affected app record and normal permissions. For rollback, use the retained before-image and current-version conditional write under the same operator review process; never overwrite a newer edit blindly. Remove the local sensitive review copy according to the operator's approved retention policy.
 
-The release harness rehearses actual Blob capture, hash verification, fresh-store restoration and stale-overwrite rejection using synthetic records only. Production scheduler completion must be observed after any eventual release. Passing a unit test does not prove backups are running.
+The release harness rehearses actual Blob capture, hash verification, fresh-store restoration and stale-overwrite rejection using synthetic records only. Production scheduled backup and retention completion were observed September 30; exact job IDs and UTC times are recorded in the current technical acceptance report. Passing a unit test alone does not prove these jobs are running.
 
 Platform references: [Netlify scheduled functions](https://docs.netlify.com/build/functions/scheduled-functions/) and [Functions API](https://docs.netlify.com/build/functions/api/).

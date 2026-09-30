@@ -44,3 +44,8 @@
 .brevity-action-review footer>p{flex:0 0 100%;margin:0;color:var(--muted);font-size:13px;line-height:1.5}
 .brevity-action-review footer>p+button{flex:0 0 100%}
 .brevity-action-review footer>button{min-height:44px;white-space:normal}
+.brevity-assistant-message-body ul,.brevity-assistant-message-body ol{margin:8px 0;padding-left:22px}
+.brevity-assistant-message-body li{margin:5px 0}
+.brevity-assistant-message-body strong{font-weight:650;color:var(--white)}
+.brevity-progress,.brevity-progress-elapsed{margin:3px 0;color:var(--muted);font-size:13px}
+.brevity-play-response{min-height:44px;padding:10px 16px;border:1px solid var(--gold);border-radius:10px;background:rgba(197,164,109,.12);color:var(--gold);font:inherit;cursor:pointer}
