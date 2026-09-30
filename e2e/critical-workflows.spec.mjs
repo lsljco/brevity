@@ -929,3 +929,23 @@ test('Family Calendar opens the exact authoritative project and preserves unrela
   expect(prepared).toHaveLength(1)
   expect(prepared[0].operation).toMatchObject({type:'project.update',targetId:'kitchen-1',payload:{pushToFamilyCalendar:false}})
 })
+
+test('Project Apple publication prepares an exact source review without writing the calendar',async({page},testInfo)=>{
+  await mockBackend(page,{projectFixture:true})
+  const records=projectRecords(),projects=JSON.parse(records.homehq_items_v1.value)
+  projects[0]={...projects[0],startDate:dateKey(),due:dateKey(),pushToFamilyCalendar:true}
+  records.homehq_items_v1.value=JSON.stringify(projects)
+  await page.route('**/.netlify/functions/household-state**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records,serverTime:new Date().toISOString()})}))
+  const prepared=[],calendarWrites=[]
+  page.on('request',request=>{if(request.url().includes('/icloud-calendar')&&request.method()!=='GET')calendarWrites.push(request.method())})
+  await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-project-calendar',route=>{
+    const input=route.request().postDataJSON();prepared.push(input)
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({proposal:{id:'apple-project-review',summary:'Publish saved Kitchen refresh to Apple Calendar. Later changes require republishing.',risk:'confirmation',operations:[{id:'apple-project-op',type:'calendar.create',domain:'calendar',description:'Publish the saved project dates and RACI members to Apple Calendar',targetId:'project-kitchen-1',payload:{title:'Kitchen refresh',date:dateKey(),allDay:true},allowedScopes:['this-item'],defaultScope:'this-item',risk:'confirmation'}]}})})
+  })
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Publish project Kitchen refresh to Apple Calendar',exact:true}).click()
+  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+  expect(prepared).toEqual([{projectId:'kitchen-1',intent:'publish',expectedVersion:records.homehq_items_v1.version}])
+  expect(calendarWrites).toEqual([])
+})

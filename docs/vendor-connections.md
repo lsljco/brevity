@@ -27,5 +27,5 @@ Review/commit uses version checks and conditional writes. Undo restores referenc
 - Explicitly assign existing unassigned expenses; no production data has been mass-matched.
 - A bank pending item that receives a different posted transaction ID needs a new assignment until upstream pending-to-posted lineage is available.
 - This release connects vendors to expenses, debts, projects and vendor documents. It does not assert that every historical cross-module record has been reconciled.
-- Brevity project/calendar visibility now uses one canonical reviewed project record. Bulk external Apple publication remains unavailable; this release does not claim a cross-provider atomic transaction.
+- Brevity project/calendar visibility now uses one canonical reviewed project record. Apple publication can be reviewed per project by an administrator. Each review reads the exact source ID/version and changes one Apple snapshot with provider version checks, audit and Undo. Later source edits require republishing; removal is separately reviewed. Bulk publication and automatic cross-provider transactions remain unavailable.
 - Apple Health web/server and the unsigned iPhone companion are implemented separately. Apple Developer signing/distribution and real-device consent/sync verification are still required.

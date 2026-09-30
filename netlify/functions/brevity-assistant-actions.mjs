@@ -1,3 +1,4 @@
+import {projectCalendarEvent} from '../../src/homehq/projectData.js'
 import {VENDOR_TYPES} from '../../src/finance/vendorModel.js'
 import {savedTaskLinks,taskReceiptText} from '../lib/task-receipt.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
@@ -64,7 +65,7 @@ const sameCalendarValue=(current,planned)=>calendarFields.every(field=>{
   if(field==='time')return calendarTime(current?.[field])===calendarTime(planned[field])
   return JSON.stringify(current?.[field]??(Array.isArray(planned[field])?[]:''))===JSON.stringify(planned[field])
 })
-const calendarCreateSourceId=operation=>`assistant-${operation.targetId||operation.id}`
+const calendarCreateSourceId=operation=>operation.projectSource ? `project-${operation.projectSource.id}` : `assistant-${operation.targetId||operation.id}`
 const sourceManagedCalendarEvent=event=>/^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(String(event?.sourceId||''))
 const calendarCreateCandidate=(operation,member)=>{
   const payload=operation.payload||{},optional=['endDate','endTime','location','url','recurrenceFrequency','recurrenceInterval','recurrenceDays','recurrenceEndDate','alert1Minutes','alert2Minutes']
@@ -73,6 +74,37 @@ const calendarCreateCandidate=(operation,member)=>{
 export const reviewedExecutionSession=(requestSession,proposal)=>{
   if(!proposal?.startedBy||!['admin','member'].includes(proposal.startedRole))throw Object.assign(new Error('This in-progress proposal does not retain the reviewed actor role. Prepare and review a new proposal.'),{code:'VERSION_CONFLICT'})
   return{...requestSession,member:proposal.startedBy,role:proposal.startedRole}
+}
+
+// Publication changes only the external snapshot. The canonical project is
+// read at review and again immediately before a new Apple write; recovery of
+// an already completed write remains possible after a later source edit.
+export async function assertProjectPublicationSource({source,session,resources}) {
+  if(session.role!=='admin')throw Object.assign(new Error('Apple project publication requires household-administrator review.'),{code:'FORBIDDEN'})
+  const record=await resources.read('shared:homehq_items_v1')
+  if(!source?.id||!Number.isInteger(source.version)||record.version!==source.version)throw Object.assign(new Error('Projects changed after this Apple publication review. Prepare a new review.'),{code:'VERSION_CONFLICT'})
+  return (Array.isArray(record.value)?record.value:[]).find(item=>item.id===source.id)||null
+}
+
+export async function prepareProjectCalendarProposal({input,session,events,repository,resources,now=new Date(),id}) {
+  const source={id:String(input?.projectId||''),version:input?.expectedVersion}
+  const project=await assertProjectPublicationSource({source,session,resources})
+  if(!['publish','remove'].includes(input?.intent))throw Object.assign(new Error('Choose publish or remove for this project.'),{code:'INVALID_ACTION'})
+  const matches=(events||[]).filter(item=>item.sourceId===`project-${source.id}`)
+  if(matches.length>1)throw Object.assign(new Error('Multiple Apple events claim this project ID. Resolve the duplicate source references before publishing.'),{code:'VERSION_CONFLICT'})
+  const current=matches[0]||null
+  if(current&&(!eventToken(current)||current.recurring))throw Object.assign(new Error('This project publication has no safe Apple version or is recurring. Review it in Apple Calendar.'),{code:'VERSION_CONFLICT'})
+  if(input.intent==='remove'&&!current)throw Object.assign(new Error('No Apple publication exists for this exact project ID.'),{code:'INVALID_ACTION'})
+  const projected=project?.pushToFamilyCalendar&&projectCalendarEvent(project)
+  if(input.intent==='publish'&&!projected)throw Object.assign(new Error('Save valid project dates and enable Family Calendar visibility before publishing to Apple.'),{code:'INVALID_ACTION'})
+  const type=input.intent==='remove'?'calendar.delete':current?'calendar.update':'calendar.create'
+  const payload=input.intent==='remove'?{}:{title:projected.title,date:projected.date,endDate:projected.endDate,time:'',endTime:'',allDay:true,owner:projected.owner,participants:projected.participants,notes:projected.notes,priority:projected.priority==='High'?'high':'normal'}
+  const title=project?.title||current?.title||source.id
+  const description=input.intent==='remove'?`Remove the Apple Calendar publication of “${title}”. The Brevity project is unchanged.`:`Publish the saved project “${title}” to Apple Calendar (${projected.date} through ${projected.endDate}). Later project changes require republishing; Undo affects this Apple snapshot only.`
+  let proposal=normalizeActionProposal({summary:description,operations:[{type,targetId:current?.id||`project-${source.id}`,description,payload}]},{member:session.member,role:session.role,now,id})
+  proposal={...proposal,operations:proposal.operations.map(operation=>({...operation,projectSource:source})),expectedCalendarVersion:calendarVersion(events)}
+  await repository.saveProposal(proposal)
+  return proposal
 }
 
 export async function prepareCalendarProposal({input,session,permissions,events,repository,now=new Date(),id}) {
@@ -217,14 +249,16 @@ export async function prepareDirectProposal({input,session,permissions,repositor
   return proposal
 }
 
-export async function prepareCalendarOperations({event,operations,session,permissions,expectedCalendarVersion,calendarRequestFn=calendarRequest}) {
+export async function prepareCalendarOperations({event,operations,session,permissions,expectedCalendarVersion,calendarRequestFn=calendarRequest,resources}) {
   const selected=operations.filter(operation=>operation.type.startsWith('calendar.'))
   if(!selected.length)return{prepared:[]}
   const remote=await calendarRequestFn(event,'GET')
   if(expectedCalendarVersion!==undefined&&calendarVersion(remote.events)!==expectedCalendarVersion)throw Object.assign(new Error('The Family Calendar changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
   const prepared=[]
   for(const operation of selected){
+    if(operation.projectSource)await assertProjectPublicationSource({source:operation.projectSource,session,resources})
     const current=(remote.events||[]).find(item=>[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
+    if(current?.sourceId?.startsWith('project-')&&!operation.projectSource)throw Object.assign(new Error('Review Apple project publications from Projects.'),{code:'FORBIDDEN'})
     const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:current})
     if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
     if(operation.type!=='calendar.create'&&!current)throw new Error('That Family Calendar event no longer exists. Refresh and ask again.')
@@ -233,12 +267,12 @@ export async function prepareCalendarOperations({event,operations,session,permis
       const candidate=calendarCreateCandidate(operation,session.member)
       const duplicate=calendarRecord(remote.events,candidate.sourceId)
       if(duplicate)throw Object.assign(new Error('A Family Calendar event already uses this Action Mode identifier. Refresh before trying again.'),{code:'VERSION_CONFLICT'})
-      prepared.push({resource:'calendar:apple-family',operationType:operation.type,before:null,after:candidate})
+      prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:null,after:candidate})
     }else if(operation.type==='calendar.update'){
-      const candidate={...current,...operation.payload,id:current.uid||current.id,href:current.href,etag:current.etag}
-      prepared.push({resource:'calendar:apple-family',operationType:operation.type,before:current,after:candidate})
+      const candidate={...current,...operation.payload,...(operation.projectSource?{priority:operation.payload.priority==='high'}:{}),id:current.uid||current.id,href:current.href,etag:current.etag}
+      prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:current,after:candidate})
     }else{
-      prepared.push({resource:'calendar:apple-family',operationType:operation.type,before:current,after:null})
+      prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:current,after:null})
     }
   }
   return{prepared}
@@ -247,7 +281,7 @@ export async function prepareCalendarOperations({event,operations,session,permis
 // Calendar writes are also recoverable after an uncertain network response.
 // Brevity-created source ids are deterministic, while update/delete recovery
 // verifies the exact reviewed Apple version before it performs a new write.
-export async function commitPreparedCalendarOperations({event,prepared=[],calendarRequestFn=calendarRequest,mutationId=''}) {
+export async function commitPreparedCalendarOperations({event,prepared=[],calendarRequestFn=calendarRequest,mutationId='',beforeWrite=async()=>{}}) {
   const changes=[]
   for(const change of prepared){
     const remote=await calendarRequestFn(event,'GET')
@@ -259,6 +293,7 @@ export async function commitPreparedCalendarOperations({event,prepared=[],calend
         changes.push({...change,after:current});continue
       }
       const candidate={...change.after,...(mutationId?{actionId:mutationId}:{})}
+      await beforeWrite(change)
       const created=await calendarRequestFn(event,'POST',candidate)
       changes.push({...change,after:{...candidate,...created}});continue
     }
@@ -266,6 +301,7 @@ export async function commitPreparedCalendarOperations({event,prepared=[],calend
       if(!current)throw Object.assign(new Error('The Family Calendar event disappeared while Action Mode was recovering.'),{code:'VERSION_CONFLICT'})
       if(eventToken(current)===eventToken(change.before)){
         const candidate={...change.after,href:current.href,etag:current.etag,...(mutationId?{actionId:mutationId}:{})}
+        await beforeWrite(change)
         const updated=await calendarRequestFn(event,'PUT',candidate)
         changes.push({...change,after:{...candidate,...updated}});continue
       }
@@ -278,6 +314,7 @@ export async function commitPreparedCalendarOperations({event,prepared=[],calend
       changes.push({...change,after:null});continue
     }
     if(eventToken(current)!==eventToken(change.before))throw Object.assign(new Error('A newer Family Calendar edit exists, so Action Mode recovery stopped.'),{code:'VERSION_CONFLICT'})
+    await beforeWrite(change)
     await calendarRequestFn(event,'DELETE',{...current,...(mutationId?{actionId:mutationId}:{})})
     changes.push({...change,after:null})
   }
@@ -372,7 +409,7 @@ export async function executeActionWithJournal({repository,proposal,operations,s
   let {journal}=await repository.getJournalEntry(journalId)
   if(!journal){
     const recordPlan=await prepareRecordOperations({proposal:{...proposal,operations},session,permissions,resources,now})
-    const calendarPlan=await prepareCalendarOperations({event,operations,session,permissions,expectedCalendarVersion:proposal.expectedCalendarVersion,calendarRequestFn})
+    const calendarPlan=await prepareCalendarOperations({event,operations,session,permissions,expectedCalendarVersion:proposal.expectedCalendarVersion,calendarRequestFn,resources})
     journal=await repository.ensureJournal({
       id:journalId,kind:'execute',subjectId:proposal.id,proposalId:proposal.id,auditId,requestHash,
       state:'prepared',actor:session.member,actorRole:session.role,summary:proposal.summary,operations,confirmationMode:proposal.confirmationMode||'confirmation',
@@ -387,7 +424,7 @@ export async function executeActionWithJournal({repository,proposal,operations,s
     if(journal.state==='mutating'&&journal.mutationAttempt!==attemptId)throw journalInProgress()
     const journalSession={...session,member:journal.actor}
     const recordChanges=await commitPreparedRecordOperations({prepared:journal.recordPrepared,session:journalSession,resources,mutationId:journal.id})
-    const calendarChanges=await commitPreparedCalendarOperations({event,prepared:journal.calendarPrepared,calendarRequestFn,mutationId:journal.id})
+    const calendarChanges=await commitPreparedCalendarOperations({event,prepared:journal.calendarPrepared,calendarRequestFn,mutationId:journal.id,beforeWrite:change=>change.projectSource?assertProjectPublicationSource({source:change.projectSource,session,resources}):undefined})
     const changes=[...recordChanges,...calendarChanges]
     const mutatedAt=dateFromNow(now).toISOString()
     journal=await repository.updateJournal(journalId,current=>{
@@ -628,6 +665,12 @@ const handler=async event=>{
       return json(200,{permissions:result.permissions,permissionVersion:result.permissionVersion,conversation:await conversationReceipt(session.member,result.audit),audit:publicAssistantAudit(result.audit)})
     }
     if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
+    if(action==='prepare-project-calendar'){
+      if(session.role!=='admin')return json(403,{error:'Apple project publication requires household-administrator review.'})
+      const remote=await calendarRequest(event,'GET')
+      const proposal=await prepareProjectCalendarProposal({input:body,session,events:remote.events,repository,resources})
+      return json(200,{proposal})
+    }
     if(action==='prepare-calendar'){
       const matrix=await repository.getPermissions()
       const remote=await calendarRequest(event,'GET')

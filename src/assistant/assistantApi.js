@@ -19,3 +19,5 @@ export async function conversationRequest(action,version){
  if(!response.ok)throw Error(data.error||'Your conversation could not be loaded.')
  return data
 }
+
+export function prepareProjectCalendarAction({projectId,intent,expectedVersion}){return actionRequest('POST','prepare-project-calendar',{projectId,intent,expectedVersion})}

@@ -1,3 +1,4 @@
+import {requestProjectCalendarReview} from './projectActionReview.js'
 import VendorSelector from '../finance/VendorSelector.jsx'
 import {useVendorDirectory,requestVendorOpen} from '../finance/vendorApi.js'
 import { useState, useEffect, useRef } from 'react'
@@ -700,6 +701,14 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
     finally{setStagingAction(false);}
   }
 
+  async function reviewApple(item,intent){
+    if(!canDelete){showToast('Apple project publication requires household-administrator review.');return;}
+    setStagingAction(true);
+    try{await requestProjectCalendarReview(item.id,intent);showToast('Apple publication review opened. No calendar changes yet.');}
+    catch(error){showToast(error.message||'Apple publication review unavailable.');}
+    finally{setStagingAction(false);}
+  }
+
   function exportData(){
     const blob=new Blob([JSON.stringify(items,null,2)],{type:"application/json"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
@@ -740,7 +749,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
         <div className="hq-topbar-actions" style={{display:"flex",gap:8,alignItems:"center"}}>
           <button type="button" disabled title="Project import is unavailable until a reviewed, auditable batch-restore workflow is supported." style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:GLASS,color:W3}}>Import unavailable</button>
           <button onClick={exportData} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer",fontSize:12,fontWeight:600,background:GLASS,color:W2}}>Export</button>
-          {!readOnly&&<><button type="button" disabled title="Bulk Apple Calendar publication is unavailable. Set each project’s Brevity calendar visibility in its reviewed edit." style={{padding:"8px 14px",borderRadius:8,border:`1px solid rgba(197,164,109,0.2)`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:"rgba(197,164,109,0.05)",color:W3}}>Apple push unavailable</button>
+          {!readOnly&&<><span style={{fontSize:12,color:W3}}>Apple publication: review each project below</span>
           <button onClick={openAdd} style={{padding:"9px 20px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G,letterSpacing:.3}}>+ Add Item</button></>}
         </div>
       </div>
@@ -843,6 +852,12 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
                           <button disabled={!canDelete||stagingAction} onClick={e=>{e.stopPropagation();deleteItem(item);}} style={{width:28,height:28,border:`1px solid rgba(248,113,113,0.2)`,background:"rgba(248,113,113,0.08)",cursor:!canDelete?"not-allowed":stagingAction?"wait":"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:!canDelete?W3:RED}} title={canDelete?"Delete through Action Mode":"Only a household administrator can delete projects"}>×</button>
                         </div>}
                       </div>
+
+                      {canDelete&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
+                        <button disabled={stagingAction||!item.pushToFamilyCalendar} onClick={e=>{e.stopPropagation();reviewApple(item,'publish')}} aria-label={`Publish project ${item.title} to Apple Calendar`}>Review Apple publication</button>
+                        <button disabled={stagingAction} onClick={e=>{e.stopPropagation();reviewApple(item,'remove')}} aria-label={`Remove project ${item.title} from Apple Calendar`}>Review Apple removal</button>
+                        <small style={{color:W3}}>Apple keeps the last reviewed snapshot. Republish after edits; remove before deleting a published project.</small>
+                      </div>}
 
                       {/* Costs */}
                       <div className="hq-project-costs" style={{display:"flex",gap:12,paddingTop:10,borderTop:`1px solid ${BORDER}`}}>
