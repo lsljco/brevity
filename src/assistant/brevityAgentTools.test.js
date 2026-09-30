@@ -363,3 +363,24 @@ test('household schedule and chore review types are expressible in the response 
  const review=normalizeActionProposal({summary:'Review priorities',operations:[{type:'household.schedule.block.create',targetDate:'2026-09-29',payload:{title:'Priorities review',date:'2026-09-29',startTime:'18:00',endTime:'18:15',owner:'Larry',participants:[],pillar:'household',notes:''}}]},{member:'Larry',role:'admin'})
  assert.equal(review.operations[0].payload.startTime,'18:00')
 })
+
+test('SDK exposes conversational feedback only with a server-bound recorder and returns its receipt',async()=>{
+ const seen=[]
+ const result=await runBrevitySdkAgent({prompt:'Save my feedback: voice is difficult to use.',model:'test',schema,canonical,browser:{},recordFeedback:async input=>{seen.push(input);return{recorded:true,...input}},runner:{run:async agent=>{
+  const feedback=agent.tools.find(t=>t.name==='record_usage_feedback')
+  assert.match(feedback.description,/Never record hypothetical/)
+  const receipt=JSON.parse(await feedback.invoke({},JSON.stringify({outcome:'friction',category:'voice'})))
+  assert.equal(receipt.recorded,true)
+  return{finalOutput:{completionStatus:'answered',message:'Voice feedback saved.',proposal:null}}
+ }}})
+ assert.deepEqual(seen,[{outcome:'friction',category:'voice'}])
+ assert.equal(result.diagnostics.toolCalls.record_usage_feedback,1)
+ assert.equal(result.output.proposal,null)
+ assert.ok(!createBrevitySdkAgent({model:'test',schema,canonical,browser:{}}).tools.some(t=>t.name==='record_usage_feedback'))
+})
+test('feedback tool reports storage failure without exposing private errors',async()=>{
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},recordFeedback:async()=>{throw Error('secret storage detail')}})
+ const result=JSON.parse(await agent.tools.find(t=>t.name==='record_usage_feedback').invoke({},JSON.stringify({outcome:'helpful',category:'accuracy'})))
+ assert.equal(result.recorded,false)
+ assert.doesNotMatch(JSON.stringify(result),/secret storage detail/)
+})

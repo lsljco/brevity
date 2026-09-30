@@ -895,5 +895,44 @@
     "review": [
       "Disable meal-plan module only, no deletion or access change."
     ]
+  },
+  {
+    "id": "feedback-record",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Save my feedback about Brevity: waiting for answers takes too long. Record this as needs improvement for response speed."
+      }
+    ],
+    "requiredTools": [
+      "record_usage_feedback"
+    ],
+    "allowedProposalTypes": [],
+    "expectedFeedback": {
+      "outcome": "friction",
+      "category": "latency"
+    },
+    "review": [
+      "Confirms rating/category only; no improvement proposal, deployment or household record change."
+    ]
+  },
+  {
+    "id": "feedback-hypothetical",
+    "pillar": "household",
+    "messages": [
+      {
+        "role": "user",
+        "content": "If I said the microphone was frustrating, how would I give feedback? This is hypothetical. Do not save feedback or prepare a change."
+      }
+    ],
+    "requiredTools": [],
+    "forbiddenTools": [
+      "record_usage_feedback"
+    ],
+    "allowedProposalTypes": [],
+    "review": [
+      "Explains conversational feedback without recording the hypothetical complaint or claiming it was saved."
+    ]
   }
 ]

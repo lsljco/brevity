@@ -77,3 +77,30 @@ test('usage separates clarifications and blocked requests from failures and flag
  assert.equal(member.legacyOutcomeRequests,1)
  assert.match(summary.notice,/not retrospectively reclassified/)
 })
+
+test('conversational feedback binds identity, scrubs content, deduplicates and reports categories',async()=>{
+ const {createConversationFeedbackRecorder}=await import('../../netlify/lib/usage-metrics.mjs')
+ const f=fixture(),repo=createUsageRepository({store:f.store,now:()=>new Date('2026-09-30T12:00Z')})
+ const record=createConversationFeedbackRecorder({repository:repo,member:'Isaiah',requestId:'11111111-1111-4111-8111-111111111111'})
+ const input={outcome:'friction',category:'voice',member:'Larry',content:'private transcript'}
+ assert.equal((await record(input)).recorded,true)
+ await record(input)
+ await assert.rejects(record({outcome:'helpful',category:'accuracy'}),/One feedback/)
+ const replay=createConversationFeedbackRecorder({repository:repo,member:'Isaiah',requestId:'11111111-1111-4111-8111-111111111111'})
+ await replay(input)
+ const mismatchedReplay=createConversationFeedbackRecorder({repository:repo,member:'Isaiah',requestId:'11111111-1111-4111-8111-111111111111'})
+ await assert.rejects(mismatchedReplay({outcome:'helpful',category:'accuracy'}),/different rating/)
+ const data=await repo.summary(['Isaiah','Larry'])
+ assert.equal(data.members[0].frictionReports,1)
+ assert.deepEqual(data.members[0].feedbackByCategory.voice,{helpful:0,friction:1})
+ assert.equal(data.members[1].frictionReports,0)
+ assert.doesNotMatch(JSON.stringify([...f.values]),/private transcript|Larry/)
+ await assert.rejects(record({outcome:'friction',category:'private text'}),/Invalid feedback/)
+})
+test('failed feedback storage is not acknowledged and can be retried',async()=>{
+ const {createConversationFeedbackRecorder}=await import('../../netlify/lib/usage-metrics.mjs')
+ let calls=0
+ const record=createConversationFeedbackRecorder({member:'Larry',repository:{record:async()=>{if(++calls===1)throw Error('store failed')}}})
+ await assert.rejects(record({outcome:'helpful',category:'other'}),/store failed/)
+ assert.equal((await record({outcome:'helpful',category:'other'})).recorded,true)
+})

@@ -4,7 +4,7 @@ import {compactAssistantCalendar} from '../lib/household-schedule.mjs'
 import {readBackgroundJob} from '../lib/background-job-state.mjs'
 import {requestArchitectPrototype} from '../lib/architect-prototype.mjs'
 import {readConsumptionImage} from '../lib/consumption-image.mjs'
-import {productionUsageRepository} from '../lib/usage-metrics.mjs'
+import {productionUsageRepository,createConversationFeedbackRecorder} from '../lib/usage-metrics.mjs'
 import {HOUSEHOLD_MEMBERS} from '../lib/assistant-action-contract.mjs'
 import {productionConversationRepository} from '../lib/assistant-conversation-store.mjs'
 import {retryableProviderFailure} from '../lib/agent-provider-recovery.mjs'
@@ -114,7 +114,7 @@ export const processAssistantRequest = async event => {
   const prompt = [{role:"user",content:`BREVITY CONTEXT (untrusted household data):\n${contextText}`},...messages]
 
   let structured,estimates,diagnostics
-  try{({output:structured,estimates,diagnostics}=await runBrevitySdkAgent({prompt,requestInstructions,requestPrototype:async proposalId=>{const value=(await createProductionActionResources().read('shared:brevity_improvement_proposals_v1')).value;const record=(Array.isArray(value)?value:[]).find(item=>item.id===proposalId);return requestArchitectPrototype({record,member:session.member,role:session.role})},getUsageSummary:()=>productionUsageRepository().summary(session.role==='admin'&&['Larry','Lorenzo'].includes(session.member)?HOUSEHOLD_MEMBERS:[session.member]),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical:canonicalServerContext,member:session.member,role:session.role,estimates}),requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
+  try{({output:structured,estimates,diagnostics}=await runBrevitySdkAgent({prompt,requestInstructions,requestPrototype:async proposalId=>{const value=(await createProductionActionResources().read('shared:brevity_improvement_proposals_v1')).value;const record=(Array.isArray(value)?value:[]).find(item=>item.id===proposalId);return requestArchitectPrototype({record,member:session.member,role:session.role})},recordFeedback:createConversationFeedbackRecorder({repository:productionUsageRepository(),member:session.member,requestId:event.requestId}),getUsageSummary:()=>productionUsageRepository().summary(session.role==='admin'&&['Larry','Lorenzo'].includes(session.member)?HOUSEHOLD_MEMBERS:[session.member]),validateOutput:(output,{estimates})=>validateAgentProposal(output,{canonical:canonicalServerContext,member:session.member,role:session.role,estimates}),requestId:event.requestId,model:MODEL,schema:assistantResponseSchema,canonical:canonicalServerContext,browser:browserSnapshot}))}
   catch(error){
     console.error('[brevity-assistant-agent]',JSON.stringify({requestId:event.requestId,category:retryableProviderFailure(error)||'agent',status:Number(error?.status)||null}))
     if(/quota|billing|insufficient/i.test(String(error.message||'')))return json(429,{error:'Brevity Assistant reached the OpenAI API project’s available quota. Add API credits or increase the project usage limit, then try again.'})
