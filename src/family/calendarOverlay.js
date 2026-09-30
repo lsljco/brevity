@@ -1,6 +1,5 @@
 const arrayOrEmpty = value => Array.isArray(value) ? value : []
 const clean = value => String(value || '').trim()
-const normalizeText = value => clean(value).toLocaleLowerCase().replace(/\s+/g, ' ')
 
 const timeMinutes = value => {
   const match = clean(value).match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i)
@@ -23,29 +22,26 @@ export function compareCalendarEventsChronologically(left, right) {
   return clean(left?.title).localeCompare(clean(right?.title))
 }
 
-const appointmentSignature = (item, fallbackDate = '') => [
-  normalizeText(item?.title),
-  clean(item?.date || fallbackDate),
-  timeMinutes(item?.startTime || item?.time),
-].join('|')
+// An explicit sourceId is lineage, not a resemblance match. Occurrence dates
+// distinguish instances of recurring series. Provider IDs never join sources.
+export function calendarRecordIdentity(event, fallbackDate = '') {
+  const date = clean(event?.date || event?.start || fallbackDate)
+  const recurring = event?.recurring || event?.recurrenceId || event?.originalStart || clean(event?.id).includes('::')
+  const occurrence = recurring ? clean(event?.recurrenceId || event?.originalStart || date) : ''
+  if (clean(event?.sourceId)) return JSON.stringify(['source', clean(event.sourceId), occurrence])
+  const id = clean(event?.id || event?.uid || event?.href)
+  if (!id) return ''
+  const apple = event?.source === 'icloud' || event?.calendarSource === 'icloud'
+  return JSON.stringify([apple ? 'apple' : 'source', id, occurrence])
+}
 
-const calendarEventSignature = event => [
-  normalizeText(event?.title),
-  clean(event?.date || event?.start),
-  timeMinutes(event?.startTime || event?.time),
-  normalizeText(event?.owner || 'Family'),
-].join('|')
-
-const eventAuthority = event => (
-  (event?.source === 'icloud' ? 2 : 0)
-  + (clean(event?.sourceId) ? 1 : 0)
-)
+const eventAuthority = event => event?.source === 'project' ? 3 : event?.source === 'icloud' ? 2 : 1
 
 export function dedupeCalendarEvents(events) {
   const unique = new Map()
-  arrayOrEmpty(events).forEach(event => {
+  arrayOrEmpty(events).forEach((event, index) => {
     if (!clean(event?.title) || !clean(event?.date || event?.start)) return
-    const signature = calendarEventSignature(event)
+    const signature = calendarRecordIdentity(event) || `unlinked:${index}`
     const current = unique.get(signature)
     if (!current || eventAuthority(event) > eventAuthority(current)) unique.set(signature, event)
   })
@@ -53,19 +49,20 @@ export function dedupeCalendarEvents(events) {
 }
 
 export function calendarEventsForDate(events, date) {
-  return dedupeCalendarEvents(events).filter(event => clean(event?.date) === date)
+  return dedupeCalendarEvents(events).filter(event => clean(event?.date || event?.start) <= date && clean(event?.endDate || event?.end || event?.date || event?.start) >= date)
 }
 
 export function calendarAppointmentFromEvent(event) {
   return {
-    id: `icloud-${clean(event.id || event.uid || event.href)}`,
+    id: `${event.source || 'icloud'}-${clean(event.id || event.uid || event.href)}`,
     calendarEventId: clean(event.id || event.uid),
     calendarSourceId: clean(event.sourceId),
     calendarHref: clean(event.href),
-    calendarSource: 'icloud',
+    calendarSource: event.source || 'icloud',
+    projectId: event.projectId || '',
     readOnly: true,
     title: clean(event.title) || 'Untitled event',
-    notes: 'Synced from the Apple Family Calendar.',
+    notes: event.source === 'project' ? 'Managed in Projects. Open the project to review changes.' : 'Synced from the Apple Family Calendar.',
     date: clean(event.date),
     startTime: clean(event.time),
     endTime: '',
@@ -83,16 +80,28 @@ export function calendarAppointmentsForPlan(plan, events) {
   const date = clean(plan?.date)
   const existing = arrayOrEmpty(plan?.household?.appointments)
     .filter(item => !item?.date || item.date === date)
-  const existingIds = new Set(existing.map(item => clean(item?.id)).filter(Boolean))
-  const signatures = new Set(existing.map(item => appointmentSignature(item, date)))
+  const identities = new Set(existing.flatMap(item => {
+    const linkedId = clean(item.calendarSourceId)
+    const providerId = clean(item.calendarEventId)
+    return [
+      calendarRecordIdentity({id:item.id, date:item.date || date}),
+      ...(item.calendarSync && item.id ? [
+        calendarRecordIdentity({sourceId:`daily-${date}-${item.id}`}),
+        calendarRecordIdentity({sourceId:`assistant-daily-${date}-${item.id}`}),
+      ] : []),
+      linkedId ? calendarRecordIdentity({sourceId:linkedId, date:item.date || date}) : '',
+      providerId ? calendarRecordIdentity({id:providerId, source:item.calendarSource || 'icloud', date:item.date || date}) : '',
+    ].filter(Boolean)
+  }))
   const additions = []
 
-  calendarEventsForDate(events, date).forEach(event => {
-    if (event.sourceId && existingIds.has(clean(event.sourceId))) return
-    const signature = appointmentSignature(event, date)
-    if (signatures.has(signature)) return
-    signatures.add(signature)
-    additions.push(calendarAppointmentFromEvent(event))
+  calendarEventsForDate(events, date).forEach((event, index) => {
+    const identity = calendarRecordIdentity(event)
+    if (identity && identities.has(identity)) return
+    if (identity) identities.add(identity)
+    const appointment = calendarAppointmentFromEvent(event)
+    if (!clean(event.id || event.uid || event.href)) appointment.id = `unlinked-calendar-${date}-${index}`
+    additions.push(appointment)
   })
 
   return [...existing, ...additions].sort(compareCalendarEventsChronologically)

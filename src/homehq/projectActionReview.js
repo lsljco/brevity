@@ -7,7 +7,7 @@ const PROJECT_TEXT_FIELDS = [
   'title', 'type', 'room', 'roomCustom', 'status', 'priority',
   'vendorId', 'cname', 'cphone', 'cemail', 'caddress', 'notes',
 ]
-const PROJECT_BOOLEAN_FIELDS = ['bizLicense', 'coi', 'workersComp']
+const PROJECT_BOOLEAN_FIELDS = ['bizLicense', 'coi', 'workersComp', 'pushToFamilyCalendar']
 
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right)
 const quote = value => {

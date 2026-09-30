@@ -280,3 +280,13 @@
     border-bottom:1px solid rgba(197,164,109,.18);
   }
 }
+
+/* Keep a wrapped collapsed refresh message inside its reserved command lane.
+   Expanded details have their own scrollable panel above the lane. */
+@media (max-width:720px) {
+  .app-main .app-refresh-status:not(.is-expanded),
+  .app-sidebar.is-expanded~.app-main .app-refresh-status:not(.is-expanded) {
+    height:var(--brevity-command-dock-height)!important;
+    max-height:var(--brevity-command-dock-height)!important;
+  }
+}
