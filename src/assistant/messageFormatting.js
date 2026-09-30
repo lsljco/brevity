@@ -37,3 +37,10 @@ export function messageBlocks(content) {
   }
   return blocks
 }
+
+export function messageSpeech(content) {
+  const plain = text => text.replace(/!?\[([^\]\n]+)\]\([^\s)]+\)/g, '$1').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1')
+  return messageBlocks(content).flatMap(block => block.type === 'table'
+    ? block.rows.map(row => row.map((cell,i) => `${plain(block.header[i])}: ${plain(cell)}`).join('. ') + '.')
+    : block.type === 'p' ? [plain(block.text)] : block.items.map(plain)).join('\n')
+}

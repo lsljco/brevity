@@ -20,10 +20,12 @@ The correct comparison appeared as literal Markdown table rows, and source links
 
 The renderer now uses semantic table headers/cells in a bounded, keyboard-focusable horizontal scroll region. HTTP(S) source links are clickable with separate-tab/no-opener behavior. It continues rendering HTML and unsupported schemes as inert text; no remote images are loaded from the response. Existing paragraph, bold, code and list behavior is retained. Malformed table rows remain visible rather than being dropped.
 
-Validation: 1,220 tests and production build passed locally. Eight focused browser checks passed across desktop, phone, tablet and landscape tablet, checking semantic cells, links, inert HTML/images/executable destinations and viewport containment. The initial run exposed a pre-existing clock-test race (real time advanced while the test expected exactly 21 seconds); pausing the mock clock makes that exact requirement deterministic. CI, preview and publication evidence are recorded in the corresponding release PR.
+Validation: 1,221 tests and production build passed locally. Eight focused browser checks passed across desktop, phone, tablet and landscape tablet, checking semantic cells, links, inert HTML/images/executable destinations and viewport containment. The initial run exposed a pre-existing clock-test race (real time advanced while the test expected exactly 21 seconds); pausing the mock clock makes that exact requirement deterministic. CI, preview and publication evidence are recorded in the corresponding release PR.
 
 ## Outcome measurement defect
 
 The read-only seven-day usage query correctly separated recorded dates, missing measurements and failed reads. It also reported zero clarifications immediately after a real clarification. Code inspection confirmed that diagnostics counted only calculator-produced clarification questions, ignoring the agent's explicit `needs_information` completion status. `blocked` responses were also labeled answered.
 
 Classification now respects these explicit statuses. Blocked requests have a separate counter from technical failures. New events record classification version 2, and the summary reports legacy requests whose old answered outcomes cannot be retrospectively corrected. No historical message content is mined or rewritten. Regression checks exercise actual SDK-run results for answered, needs-information and blocked statuses plus persisted mixed-version metric summaries.
+
+Comparison read-aloud uses the same parsed rows and speaks each column label and value. Markdown source links are spoken by their label; plain action-review text is preserved.
