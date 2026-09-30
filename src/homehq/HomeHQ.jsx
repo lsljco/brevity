@@ -620,7 +620,7 @@ function CalendarView({items, onEdit, readOnly=false}){
 }
 
 // ── MAIN APP ───────────────────────────────────────────────────────────────
-function App({readOnly=false,canDelete=false,currentMember=''}){
+function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='',canPublishCalendar=false}){
   const {directory:vendorDirectory}=useVendorDirectory();
   const [items,setItems]         = useState(loadItems);
   const [tab,setTab]             = useState("all");
@@ -652,6 +652,13 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
     window.addEventListener(SHARED_STATE_EVENT,receiveSharedUpdate);
     return()=>window.removeEventListener(SHARED_STATE_EVENT,receiveSharedUpdate);
   },[]);
+
+  useEffect(()=>{
+    if(!initialProjectId)return
+    const project=items.find(item=>item.id===initialProjectId)
+    if(!project){setToast('This project is no longer available.');return}
+    setTab('all');setSearch('');setFStatus('');setFRoom('');setFPriority('');setFAssignee('');setExpanded(project.id)
+  },[initialProjectId,items])
 
   function showToast(msg){ setToast(msg); clearTimeout(toastTmr.current); toastTmr.current=setTimeout(()=>setToast(""),3000); }
   function denyWrite(){ showToast("Projects are read-only for this household member"); }
@@ -731,13 +738,13 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
         <div className="hq-topbar-actions" style={{display:"flex",gap:8,alignItems:"center"}}>
           <button type="button" disabled title="Project import is unavailable until a reviewed, auditable batch-restore workflow is supported." style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:GLASS,color:W3}}>Import unavailable</button>
           <button onClick={exportData} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${BORDER}`,cursor:"pointer",fontSize:12,fontWeight:600,background:GLASS,color:W2}}>Export</button>
-          {!readOnly&&<><button type="button" disabled title="Multi-project calendar publishing is unavailable until Projects and Family Calendar can be reviewed and applied atomically." style={{padding:"8px 14px",borderRadius:8,border:`1px solid rgba(197,164,109,0.2)`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:"rgba(197,164,109,0.05)",color:W3}}>Calendar push unavailable</button>
+          {!readOnly&&<><button type="button" disabled title="Bulk Apple Calendar publication is unavailable. Set each project’s Brevity calendar visibility in its reviewed edit." style={{padding:"8px 14px",borderRadius:8,border:`1px solid rgba(197,164,109,0.2)`,cursor:"not-allowed",fontSize:12,fontWeight:600,background:"rgba(197,164,109,0.05)",color:W3}}>Apple push unavailable</button>
           <button onClick={openAdd} style={{padding:"9px 20px",borderRadius:8,border:`1px solid rgba(197,164,109,0.4)`,cursor:"pointer",fontSize:13,fontWeight:600,background:"rgba(197,164,109,0.15)",color:G,letterSpacing:.3}}>+ Add Item</button></>}
         </div>
       </div>
 
       {readOnly&&<div role="note" className="hq-read-only-notice" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.35)`,borderRadius:10,background:"rgba(197,164,109,0.08)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Projects are read-only.</strong> You can review, filter, navigate, preview attachments, and export project information. A household administrator can restore project editing access.</div>}
-      {!readOnly&&<div role="note" className="hq-action-safety-note" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.25)`,borderRadius:10,background:"rgba(197,164,109,0.06)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Review required.</strong> Creating, editing, or deleting a project opens Action Mode before anything changes. Project import, file and image changes, and multi-project calendar publishing remain unavailable until Brevity can audit and safely undo them.</div>}
+      {!readOnly&&<div role="note" className="hq-action-safety-note" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.25)`,borderRadius:10,background:"rgba(197,164,109,0.06)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Review required.</strong> Creating, editing, or deleting a project opens Action Mode before anything changes. Project calendar visibility is reviewed with the project and follows safe Undo. Project import, file and image changes remain unavailable until Brevity can audit and safely undo them.</div>}
 
       {/* TABS */}
       <div className="hq-tabs" style={{display:"flex",background:"rgba(0,0,0,0.6)",borderBottom:`1px solid ${BORDER}`,padding:"0 28px",overflowX:"auto",backdropFilter:"blur(10px)"}}>
@@ -830,7 +837,7 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
                           </div>
                         </div>
                         {!readOnly&&<div className="hq-project-card-actions" style={{display:"flex",gap:4,flexShrink:0}}>
-                          <button disabled={stagingAction} onClick={e=>{e.stopPropagation();openEdit(item);}} style={{width:28,height:28,border:`1px solid ${BORDER}`,background:GLASS,cursor:stagingAction?"wait":"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:W2}} title="Edit through Action Mode">✎</button>
+                          <button disabled={stagingAction} onClick={e=>{e.stopPropagation();openEdit(item);}} style={{width:28,height:28,border:`1px solid ${BORDER}`,background:GLASS,cursor:stagingAction?"wait":"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:W2}} aria-label={`Edit project ${item.title}`} title="Edit through Action Mode">✎</button>
                           <button disabled={!canDelete||stagingAction} onClick={e=>{e.stopPropagation();deleteItem(item);}} style={{width:28,height:28,border:`1px solid rgba(248,113,113,0.2)`,background:"rgba(248,113,113,0.08)",cursor:!canDelete?"not-allowed":stagingAction?"wait":"pointer",borderRadius:6,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:!canDelete?W3:RED}} title={canDelete?"Delete through Action Mode":"Only a household administrator can delete projects"}>×</button>
                         </div>}
                       </div>
@@ -990,9 +997,9 @@ function App({readOnly=false,canDelete=false,currentMember=''}){
               ].map(([label,role,key])=><MemberMultiSelect key={key} label={label} role={role} value={form.raci?.[key]||[]} onChange={value=>setForm(p=>({...p,raci:{...p.raci,[key]:value}}))}/>)}
 
               <FField label="Family Calendar" full>
-                <label title="Project and Family Calendar records cannot yet be changed in one atomic reviewed action." style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 14px",background:GLASS,borderRadius:8,border:`1.5px solid ${form.pushToFamilyCalendar?'rgba(197,164,109,0.4)':BORDER}`,cursor:"not-allowed"}}>
-                  <input type="checkbox" disabled checked={form.pushToFamilyCalendar||false} style={{width:17,height:17,accentColor:G,marginTop:1}}/>
-                  <span><span style={{display:"block",fontSize:13,fontWeight:600,color:W2}}>Family Calendar publication unavailable</span><span style={{display:"block",fontSize:11,color:W3,marginTop:3}}>The current setting is preserved. Use a separate reviewed Family Calendar action until project and calendar changes can be applied atomically.</span></span>
+                <label title="Family Calendar displays this authoritative project after Action Mode approval." style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 14px",background:GLASS,borderRadius:8,border:`1.5px solid ${form.pushToFamilyCalendar?'rgba(197,164,109,0.4)':BORDER}`,cursor:canPublishCalendar?"pointer":"not-allowed"}}>
+                  <input type="checkbox" disabled={!canPublishCalendar} onChange={e=>setForm(p=>({...p,pushToFamilyCalendar:e.target.checked}))} checked={form.pushToFamilyCalendar||false} style={{width:17,height:17,accentColor:G,marginTop:1}}/>
+                  <span><span style={{display:"block",fontSize:13,fontWeight:600,color:W2}}>Show project on Family Calendar</span><span style={{display:"block",fontSize:11,color:W3,marginTop:3}}>Dates, title and RACI members stay connected to this project. Changes require Action Mode review. This displays the project in Brevity; Apple Calendar publishing is separate.</span></span>
                 </label>
               </FField>
 

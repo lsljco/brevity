@@ -39,3 +39,17 @@ test('project dates remain local calendar dates instead of shifting through UTC'
   assert.equal(date.getDate(), 21)
   assert.equal(projectDateKey(date), '2026-08-21')
 })
+
+test('project projection follows exact IDs, removes stale published copies, and preserves unrelated similar events',()=>{
+  const projects=[{id:'p1',title:'Renamed inspection',due:'2026-09-30',pushToFamilyCalendar:true}]
+  const before=JSON.stringify(projects)
+  const events=syncProjectCalendarEvents(projects,[{id:'old-copy',sourceId:'project-p1',source:'icloud',title:'Old title',date:'2026-09-29'},{id:'unrelated',source:'icloud',title:'Renamed inspection',date:'2026-09-30'}])
+  assert.deepEqual(events.map(event=>event.id),['unrelated','project-p1'])
+  assert.equal(events[1].projectId,'p1')
+  assert.equal(JSON.stringify(projects),before)
+  assert.equal(syncProjectCalendarEvents([],events).length,1)
+})
+
+test('project projections reject missing IDs, impossible dates and reversed date windows',()=>{
+  for(const project of [{due:'2026-09-30'},{id:'p',due:'2026-02-30'},{id:'p',due:'2026-13-01'},{id:'p',startDate:'2026-10-01',due:'2026-09-30'}])assert.equal(projectCalendarEvent(project),null)
+})

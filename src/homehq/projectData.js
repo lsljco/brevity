@@ -31,19 +31,20 @@ export function normalizeProjectItem(item = {}) {
 export function projectCalendarEvent(item) {
   const project = normalizeProjectItem(item)
   const start = project.startDate || project.due
-  if (!start) return null
+  const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'')&&!Number.isNaN(new Date(`${value}T12:00:00Z`).getTime())&&new Date(`${value}T12:00:00Z`).toISOString().slice(0,10)===value
+  if (!project.id || !validDate(start) || (project.due && (!validDate(project.due)||project.due < start))) return null
   const members = uniqueMembers(RACI_KEYS.flatMap(key => project.raci[key]))
   return {
     id:`project-${project.id}`, sourceId:`project-${project.id}`, projectId:project.id, source:'project', title:project.title,
-    date:start, start, end:project.due || start, allDay:true, members:members.length ? members : ['Family'], participants:members,
-    owner:members.length === 1 ? members[0] : 'Family', calendarName:'Family', calendarSyncEnabled:true,
-    status:project.status, priority:project.priority, notes:project.notes || '', updatedAt:project.updatedAt || new Date().toISOString(),
+    date:start, start, end:project.due || start, endDate:project.due || start, allDay:true, members:members.length ? members : ['Family'], participants:members,
+    owner:members.length === 1 ? members[0] : 'Family', calendarName:'Family', calendarSyncEnabled:false, readOnly:true,
+    status:project.status, priority:project.priority, notes:project.notes || '', updatedAt:project.updatedAt || '',
   }
 }
 
 export function syncProjectCalendarEvents(items, existingEvents = []) {
-  const nonProjectEvents = existingEvents.filter(event => event.source !== 'project')
-  const projectEvents = items.filter(item => item.pushToFamilyCalendar).map(projectCalendarEvent).filter(Boolean)
+  const nonProjectEvents = existingEvents.filter(event => event.source !== 'project' && !String(event.sourceId || '').startsWith('project-'))
+  const projectEvents = (Array.isArray(items)?items:[]).filter(item => item.pushToFamilyCalendar).map(projectCalendarEvent).filter(Boolean)
   return [...nonProjectEvents, ...projectEvents]
 }
 

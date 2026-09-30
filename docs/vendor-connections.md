@@ -12,7 +12,7 @@ Finance → Vendors is the canonical directory. Vendor names are labels; `vendor
 | Vendor policies / images | Immutable protected blob ID attached to vendor through Action Mode. PDF/JPEG/PNG/GIF/WebP, 3 MB each. Download access follows current vendor membership. |
 | Vendor login / accounts | Encrypted blob reference, not plaintext credentials, appears in Action Mode records. Member password required for reveal. |
 | Tasks / calendar | Existing task/operation occurrence and calendar source IDs remain authoritative. Vendor assignment does not fabricate a calendar appointment. |
-| Project / Family Calendar | Existing `projectId` and source IDs exist, but new publication remains disabled pending a safe atomic reviewed project/calendar action. Separate reviewed calendar actions remain available. |
+| Project / Family Calendar | Calendar visibility is an Action Mode-reviewed project field. Family Calendar, Today, Next 7 Days and assistant schedule reads project the same canonical project ID. Dates, title, RACI and removal follow project edits and Undo. No copied calendar record or Apple write is created. Family Calendar opens the exact project. |
 
 ## Access and security
 
@@ -27,5 +27,5 @@ Review/commit uses version checks and conditional writes. Undo restores referenc
 - Explicitly assign existing unassigned expenses; no production data has been mass-matched.
 - A bank pending item that receives a different posted transaction ID needs a new assignment until upstream pending-to-posted lineage is available.
 - This release connects vendors to expenses, debts, projects and vendor documents. It does not assert that every historical cross-module record has been reconciled.
-- Atomic project/calendar publication is still outstanding.
+- Brevity project/calendar visibility now uses one canonical reviewed project record. Bulk external Apple publication remains unavailable; this release does not claim a cross-provider atomic transaction.
 - Apple Health web/server and the unsigned iPhone companion are implemented separately. Apple Developer signing/distribution and real-device consent/sync verification are still required.

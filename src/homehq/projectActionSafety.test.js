@@ -1,3 +1,4 @@
+import {syncProjectCalendarEvents} from './projectData.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -54,12 +55,12 @@ const fullProject={
   dashboardImage:'data:image/png;base64,legacy-dashboard',createdAt:'2026-08-01T12:00:00.000Z',updatedAt:'2026-09-01T12:00:00.000Z',
 }
 
-test('project form operations review all scalar fields and RACI but never binary or calendar mutations',()=>{
+test('project form operations review all scalar fields and RACI including calendar visibility but never binary mutations',()=>{
   const create=projectCreateOperation(fullProject)
   assert.equal(create.type,'project.create')
   assert.deepEqual(create.payload.raci,fullProject.raci)
   assert.equal(create.payload.estcost,'12000.00')
-  for(const blocked of ['photos','files','dashboardImage','pushToFamilyCalendar'])assert.equal(blocked in create.payload,false)
+  for(const blocked of ['photos','files','dashboardImage'])assert.equal(blocked in create.payload,false)
 
   const update=projectUpdateOperation(fullProject,{...fullProject,title:'Kitchen completion',actcost:'1750',raci:{...fullProject.raci,responsible:['Nyla','Larry']}})
   assert.deepEqual(update.payload,{title:'Kitchen completion',actcost:'1750.00',raci:{...fullProject.raci,responsible:['Nyla','Larry']}})
@@ -97,7 +98,7 @@ test('an assigned member can review, create, audit, and safely undo a project',a
   assert.deepEqual(created.raci,fullProject.raci)
   assert.deepEqual(created.photos,[])
   assert.deepEqual(created.files,[])
-  assert.equal(created.pushToFamilyCalendar,false)
+  assert.equal(created.pushToFamilyCalendar,true)
   assert.equal(applied.audit.actor,'Nyla')
   assert.deepEqual(applied.audit.changes[0].before,[])
 
@@ -158,7 +159,7 @@ test('Projects UI has no direct project, image, attachment, import, or recovery-
   const review=readFileSync(new URL('./projectActionReview.js',import.meta.url),'utf8')
 
   assert.match(home,/Review in Action Mode/)
-  assert.match(home,/Project import, file and image changes, and multi-project calendar publishing remain unavailable/)
+  assert.match(home,/Project import, file and image changes remain unavailable/)
   assert.doesNotMatch(home,/saveItems|publishProjectEvents|FileReader|window\.confirm|type="file"/)
   assert.match(review,/getAcknowledgedSharedStateVersion\(storage, PROJECT_STORAGE_KEY\)/)
   assert.match(review,/error\?\.code!=='SHARED_STATE_VERSION_UNAVAILABLE'/)
@@ -172,4 +173,27 @@ test('Projects UI has no direct project, image, attachment, import, or recovery-
   assert.match(app,/<button type="button" disabled title="Recovery restore is unavailable/)
   assert.doesNotMatch(app,/handleImport|restorableKeys|new FileReader\(\)|localStorage\.setItem\(key/)
   assert.match(app,/HomeHQ readOnly=\{!canEditProjects\} canDelete=\{auth\.role==='admin'\} currentMember=\{currentMember\}/)
+})
+
+
+test('calendar visibility is a single reviewed project write that reprojects after edits, deletion and Undo',async()=>{
+  const now=()=>new Date('2026-09-30T18:00:00Z'),repository=memoryRepository(),resources=versionedProjects([{...fullProject,pushToFamilyCalendar:false}],4)
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+  const operation=projectUpdateOperation(resources.snapshot().value[0],{...fullProject,pushToFamilyCalendar:true,title:'Renamed kitchen'})
+  const proposal=await prepareDirectProposal({input:{summary:'Show project on calendar',operation,expectedVersion:4},session,permissions,repository,resources,now:now(),id:'calendar-project'})
+  assert.equal(syncProjectCalendarEvents(resources.snapshot().value).length,0)
+  const applied=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},now,createAttemptId:()=> 'calendar-project-attempt'})
+  const projected=syncProjectCalendarEvents(resources.snapshot().value)
+  assert.equal(projected.length,1)
+  assert.equal(projected[0].projectId,fullProject.id)
+  assert.equal(projected[0].title,'Renamed kitchen')
+  assert.equal(applied.audit.changes.length,1)
+  await undoActionWithJournal({repository,auditId:applied.audit.id,session,resources,event:{},now,createAttemptId:()=> 'calendar-project-undo'})
+  assert.equal(syncProjectCalendarEvents(resources.snapshot().value).length,0)
+})
+
+test('calendar-visible project edits fail closed when member lacks calendar permission',async()=>{
+  const repository=memoryRepository(),resources=versionedProjects([fullProject],4)
+  await assert.rejects(()=>prepareDirectProposal({input:{summary:'Change calendar project',operation:projectUpdateOperation(fullProject,{...fullProject,title:'Changed'}),expectedVersion:4},session:{member:'Nyla',role:'member'},permissions:{...defaultActionPermissions('member'),calendar:false},repository,resources,now:new Date(),id:'denied-calendar-project'}),error=>error.code==='FORBIDDEN')
+  assert.deepEqual(resources.snapshot().value,[fullProject])
 })

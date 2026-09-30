@@ -1,3 +1,5 @@
+import {useProjectCalendar} from '../homehq/useProjectCalendar.js'
+import {requestProjectOpen} from '../homehq/projectNavigation.js'
 import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
@@ -119,6 +121,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [member,setMember]=useState(currentMember || 'Family')
   const [range,setRange]=useState(()=>calendarRange(resolveTimeframe('this-month')))
   const [viewMode,setViewMode]=useState('month')
+  const projectEvents=useProjectCalendar()
   const [legacyEvents,setLegacyEvents]=useState(readLegacyEvents)
   const [meetingEvents,setMeetingEvents]=useState(readMeetingEvents)
   const [scheduleState,setScheduleState]=useState(readScheduleState)
@@ -264,24 +267,30 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   },[scheduleState,maintenanceState,range])
   const allEvents=useMemo(()=>{
     const cloudSources=new Set(icloudEvents.map(event=>event.sourceId).filter(Boolean))
-    return dedupeCalendarEvents([...legacyEvents.filter(event=>!cloudSources.has(event.id)),...meetingEvents,...householdDerivedEvents,...icloudEvents])
-  },[legacyEvents,meetingEvents,householdDerivedEvents,icloudEvents])
+    return dedupeCalendarEvents([...legacyEvents.filter(event=>event.source!=='project'&&!String(event.sourceId||'').startsWith('project-')&&!cloudSources.has(event.id)),...meetingEvents,...householdDerivedEvents,...icloudEvents.filter(event=>!String(event.sourceId||'').startsWith('project-')),...projectEvents])
+  },[legacyEvents,meetingEvents,householdDerivedEvents,icloudEvents,projectEvents])
   const filtered=useMemo(()=>allEvents.filter(event=>{
     const eventDate=event.date||event.start
     const sharedFamilyEvent=includeFamily&&(event.owner||'Family')==='Family'
     const memberMatches=member==='Family'||sharedFamilyEvent||event.members?.includes(member)||event.participants?.includes(member)||event.owner===member
-    return memberMatches&&eventDate>=range.from&&eventDate<=range.to
+    return memberMatches&&(event.endDate||event.end||eventDate)>=range.from&&eventDate<=range.to
   }),[allEvents,member,range])
   const byDate=useMemo(()=>{
     const map={}
     filtered.forEach(event=>{
-      const key=event.date||event.start
-      if(!key)return
-      ;(map[key]??=[]).push(event)
+      const start=event.date||event.start
+      if(!start)return
+      const end=event.endDate||event.end||start
+      const cursor=new Date(`${start<range.from?range.from:start}T12:00:00`)
+      while(iso(cursor)<=end&&iso(cursor)<=range.to){
+        const key=iso(cursor)
+        ;(map[key]??=[]).push(event)
+        cursor.setDate(cursor.getDate()+1)
+      }
     })
     Object.values(map).forEach(items=>items.sort(compareCalendarEventsChronologically))
     return map
-  },[filtered])
+  },[filtered,range])
   const agendaDays=useMemo(()=>Object.entries(byDate).sort(([left],[right])=>left.localeCompare(right)),[byDate])
   const upcomingAgendaDays=useMemo(()=>{
     const upcoming=agendaDays.filter(([date])=>date>=todayKey)
@@ -332,7 +341,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
         return <div className="family-calendar-day" key={key} style={{minHeight:108,padding:8,borderRadius:9,border:`1px solid ${isToday?'rgba(197,164,109,.48)':border}`,background:isToday?'rgba(197,164,109,.08)':'rgba(255,255,255,.035)'}}>
           <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
           {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
-            <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
+            <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}><i className="ti ti-external-link" aria-hidden="true"/></button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
             <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
@@ -344,7 +353,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>
           <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
-          {canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" className="family-calendar-agenda-edit" onClick={()=>openEdit(event)}><i className="ti ti-edit" aria-hidden="true"/> Edit</button>}
+          {event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}>Open project</button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" className="family-calendar-agenda-edit" onClick={()=>openEdit(event)}><i className="ti ti-edit" aria-hidden="true"/> Edit</button>}
         </article>)}
       </section>)}
     </div>

@@ -113,8 +113,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.inventory.quantity.update': ['delta'],
   'household.inventory.waste.create': ['quantity', 'reason'],
   'household.intelligence.config.update': ['configJson'],
-  'project.create': ['vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
-  'project.update': ['vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
+  'project.create': ['pushToFamilyCalendar', 'vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
+  'project.update': ['pushToFamilyCalendar', 'vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.delete': [],
   'calendar.create': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
@@ -686,6 +686,7 @@ export function permissionForOperation({ operation, member, role, permissions, c
     if (role !== 'admin' && !responsibilityLifecycle && !permissions?.[operation.domain]) return { allowed:false, reason:`${operation.domain} actions are not enabled for ${member}.` }
     return householdPermissionForOperation({ operation, member, role, currentRecord })
   }
+  if (operation.domain === 'projects' && role !== 'admin' && (operation.payload?.pushToFamilyCalendar === true || currentRecord?.pushToFamilyCalendar === true) && !permissions?.calendar) return {allowed:false,reason:'Changing a calendar-visible project requires Family Calendar permission.'}
   if (role === 'admin') return { allowed:true }
   if (['meeting.action.create','meeting.action.update','meeting.session.create','meeting.history.update'].includes(operation.type)) {
     if (!permissions?.planning) return { allowed:false, reason:`planning actions are not enabled for ${member}.` }

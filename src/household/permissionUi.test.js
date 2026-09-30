@@ -7,7 +7,7 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 test('Projects remains viewable while every supported mutation requires reviewed Action Mode permission checks', () => {
   const source = read('../homehq/HomeHQ.jsx')
 
-  assert.match(source, /function App\(\{readOnly=false,canDelete=false,currentMember=''\}\)/)
+  assert.match(source, /function App\(\{readOnly=false,canDelete=false,currentMember='',initialProjectId='',canPublishCalendar=false\}\)/)
   assert.match(source, /setForm\(newProjectForm\(currentMember\)\)/)
   assert.match(source, /function openAdd\(\)\{ if\(readOnly\)/)
   assert.match(source, /function openEdit\(item\)\{\s*if\(readOnly\)/)
@@ -19,7 +19,7 @@ test('Projects remains viewable while every supported mutation requires reviewed
   assert.match(source, /operation:projectDeleteOperation\(item\)/)
   assert.match(source, /\{readOnly&&<div role="note" className="hq-read-only-notice"/)
   assert.match(source, /<button onClick=\{exportData\}[^>]*>Export<\/button>/, 'export remains available in read-only mode')
-  assert.match(source, /Project import, file and image changes, and multi-project calendar publishing remain unavailable/)
+  assert.match(source, /Project import, file and image changes remain unavailable/)
   assert.match(source, /Project images are view-only|Photo changes are temporarily unavailable/)
   assert.match(source, /\{modal&&!readOnly&&\(/)
   assert.match(source, /<GanttView items=\{items\} onEdit=\{openEdit\} readOnly=\{readOnly\}/)

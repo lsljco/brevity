@@ -19,3 +19,17 @@ test('authoritative Brevity calendar retains late records without exposing sensi
 })
 
 test('schedule reads real household blocks and chores separately and does not fabricate them on source failure',()=>{const c=context();c.supplementalSources['household-schedule']='available';c.supplementalSources['household-maintenance']='available';c.householdScheduleState={blocks:[{id:'block-1',title:'Review priorities',date:'2026-09-29',startTime:'18:00',endTime:'18:15',owner:'Larry',participants:[]}]};c.householdMaintenanceState={};const r=householdSchedule(c);assert.equal(r.timeBlocks.length,1);assert.equal(r.timeBlocks[0].title,'Review priorities');assert.ok(r.chores.length>0);assert.ok(r.chores.every(chore=>chore.occurrenceId.startsWith('2026-09-29:')&&chore.status==='Scheduled'));c.supplementalSources['household-maintenance']='unavailable';assert.deepEqual(householdSchedule(c).chores,[]);assert.equal(householdSchedule(c).sources.householdChores,'unavailable')})
+
+test('project windows replace only explicit project copies and never imply appointment attendance',()=>{
+  const c=context()
+  c.actionRecords.familyCalendarEvents.push({id:'project-p',sourceId:'project-p',projectId:'p',title:'Current kitchen',date:'2026-09-28',endDate:'2026-10-02',members:['Larry'],allDay:true})
+  c.appleFamilyCalendar.events.push({id:'old-apple-project',sourceId:'project-p',title:'Old kitchen',date:'2026-09-29'},{id:'unrelated-kitchen',title:'Current kitchen',date:'2026-09-29',owner:'Larry'})
+  const result=householdSchedule(c)
+  assert.equal(result.projectWindows[0].projectId,'p')
+  assert.equal(result.events.some(event=>event.id==='old-apple-project'),false)
+  assert.equal(result.personalAppointments.some(event=>event.id==='unrelated-kitchen'),true)
+  assert.equal(result.personalAppointments.some(event=>event.projectId),false)
+  c.sources[0].state='unavailable'
+  const unavailable=householdSchedule(c)
+  assert.equal(unavailable.events.some(event=>event.id==='old-apple-project'),true)
+})

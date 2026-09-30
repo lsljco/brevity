@@ -51,3 +51,13 @@
     }
   }
 }
+
+.family-calendar-project-open {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid rgba(197,164,109,.35);
+  border-radius: 8px;
+  background: rgba(197,164,109,.08);
+  color: #c5a46d;
+  cursor: pointer;
+}

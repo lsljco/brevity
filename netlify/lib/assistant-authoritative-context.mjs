@@ -1,3 +1,4 @@
+import {syncProjectCalendarEvents} from '../../src/homehq/projectData.js'
 import {householdFinanceSchedule} from './household-finance-schedule.mjs'
 import { getStore } from './scoped-store.mjs'
 import { productionMealPlanRepository } from './meal-plan-store.mjs'
@@ -92,7 +93,7 @@ const sourceStatus = (id, label, result, asOf = '') => ({
 const parseSharedValue=record=>{try{return record?.value==null?null:JSON.parse(record.value)}catch{return null}}
 const pick=(value,fields)=>Object.fromEntries(fields.filter(field=>value?.[field]!==undefined).map(field=>[field,value[field]]))
 const compactProject=item=>pick(item,['id','title','notes','status','priority','startDate','due','raci','pushToFamilyCalendar','updatedAt'])
-const compactCalendarEvent=item=>pick(canonicalizeCalendarReadEvent(item),['id','uid','sourceId','title','description','notes','date','time','endDate','endTime','allDay','owner','participants','members','priority','href','etag','updatedAt'])
+const compactCalendarEvent=item=>pick(canonicalizeCalendarReadEvent(item),['id','uid','sourceId','projectId','source','title','description','notes','date','time','endDate','endTime','allDay','owner','participants','members','priority','href','etag','updatedAt'])
 const compactRecurring=item=>({
   ...pick(item,['id','name','title','notes','amount','type','cat','category','acct','accountId','freq','start','end','skips','owner','updatedAt']),
   budgetLineId:budgetLineId(item),
@@ -102,7 +103,7 @@ const compactSharedRecords=records=>{
   const finance=parseSharedValue(records?.lslj_finance_v9)
   return {
     projects:(parseSharedValue(records?.homehq_items_v1)||[]).slice(0,250).map(compactProject),
-    familyCalendarEvents:(parseSharedValue(records?.family_calendar_events_v1)||[]).slice(0,300).map(compactCalendarEvent),
+    familyCalendarEvents:syncProjectCalendarEvents(parseSharedValue(records?.homehq_items_v1)||[],parseSharedValue(records?.family_calendar_events_v1)||[]).map(compactCalendarEvent),
     finance:{
       recurringRecords:(finance?.transactions||[]).filter(item=>item?.freq&&item.freq!=='once').slice(0,300).map(compactRecurring),
       budgets:parseSharedValue(records?.lslj_budget_v1)||{},

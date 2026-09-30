@@ -1,3 +1,4 @@
+import {PROJECT_OPEN_EVENT} from './homehq/projectNavigation.js'
 import {configuredPillars,resolveModules} from './modules/configuration.js'
 import ModuleWorkspace from './modules/ModuleWorkspace.jsx'
 import {requestAssistantConversation} from './assistant/actionEvents.js'
@@ -115,6 +116,7 @@ export default function App() {
   const [actionPermissionRevision,setActionPermissionRevision]=useState(0)
   const [practiceLocation,setPracticeLocation]=useState({date:'',tab:'daily'})
   const [vendorDestination,setVendorDestination]=useState('')
+  const [projectDestination,setProjectDestination]=useState('')
   const [operationsWorkspace,setOperationsWorkspace]=useState('operations')
 
   const clearRecoveredHouseholdSyncWarning=()=>setRefreshState(current=>{
@@ -222,6 +224,7 @@ export default function App() {
   },[auth.authenticated,auth.member,auth.role,sharedReady,actionPermissionRevision])
 
   useEffect(()=>{if(!auth.authenticated||!sharedReady)return;const open=event=>{setVendorDestination(event.detail?.vendorId||'');navigateTo('finance','vendors')};window.addEventListener(VENDOR_OPEN_EVENT,open);return()=>window.removeEventListener(VENDOR_OPEN_EVENT,open)},[activePillar,activeView,auth.authenticated,sharedReady])
+  useEffect(()=>{if(!auth.authenticated||!sharedReady)return;const open=event=>{setProjectDestination(event.detail?.projectId||'');navigateTo('household','property')};window.addEventListener(PROJECT_OPEN_EVENT,open);return()=>window.removeEventListener(PROJECT_OPEN_EVENT,open)},[activePillar,activeView,auth.authenticated,sharedReady])
   if(auth.loading) return <AuthLoading/>
   if(!auth.authenticated) return <HouseholdLogin bootstrapRequired={auth.bootstrapRequired} onLogin={auth.login} onBootstrap={auth.bootstrap} error={auth.error}/>
   if(!sharedReady) return <AuthLoading/>
@@ -291,7 +294,7 @@ export default function App() {
     if(activeView==='household-practices')return <Suspense fallback={<div className="app-view-loading">Loading Policies &amp; Practices…</div>}><OperatingPracticesWorkspace currentMember={currentMember} canEditPlanning={canEditPlanning} initialDate={practiceLocation.date} initialTab={practiceLocation.tab} onNavigate={navigatePracticeArea}/></Suspense>
     if(activeView==='health-connections')return <Suspense fallback={<div className="app-view-loading">Loading health connections…</div>}><HealthConnections key={currentMember} currentMember={currentMember}/></Suspense>
     if(activeView==='settings')return <SettingsPage currentMember={currentMember} role={auth.role} theme={theme} onThemeChange={()=>setTheme(value=>value==='dark'?'light':'dark')} onSignOut={auth.logout}/>
-    if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ readOnly={!canEditProjects} canDelete={auth.role==='admin'} currentMember={currentMember}/></Suspense>
+    if(activeView==='property')return <Suspense fallback={<div className="app-view-loading">Loading Projects…</div>}><HomeHQ readOnly={!canEditProjects} canDelete={auth.role==='admin'} currentMember={currentMember} initialProjectId={projectDestination} canPublishCalendar={auth.role==='admin'||(actionPermissionState.status==='ready'&&actionPermissionState.permissions?.calendar===true)}/></Suspense>
     if(activeView==='household-maintenance')return <Suspense fallback={<div className="app-view-loading">Loading Household Operations…</div>}><HouseholdMaintenance currentMember={currentMember} canEdit={canEditPlanning} isAdmin={auth.role==='admin'} initialWorkspace={operationsWorkspace}/></Suspense>
     if(activeView==='household-intelligence')return <Suspense fallback={<div className="app-view-loading">Loading Household Intelligence…</div>}><HouseholdPerformanceIntelligence currentMember={currentMember} isAdministrator={auth.role==='admin'}/></Suspense>
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>

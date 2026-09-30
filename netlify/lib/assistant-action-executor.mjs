@@ -1,3 +1,4 @@
+import {projectCalendarEvent} from '../../src/homehq/projectData.js'
 import {productionVendorVault,vendorVisible} from './vendor-vault.mjs'
 import {VENDOR_RESOURCE,applyVendorOperation} from '../../src/finance/vendorModel.js'
 import {productionVendorRepository} from './vendor-store.mjs'
@@ -248,6 +249,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       pushToFamilyCalendar:false,cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,
       photos:[],files:[],...projectFields,createdAt:changedAt,updatedAt:changedAt,updatedBy:context.actor||'Household member',
     }
+    if(item.pushToFamilyCalendar && !projectCalendarEvent(item))throw new Error('A calendar-visible project requires a valid start or due date and an end on or after its start.')
     return { before, after:[...(Array.isArray(value) ? value : []), item], createdId:item.id }
   }
   if (operation.type === 'project.update') {
@@ -258,6 +260,8 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const changedAt=nowIso(context.now||(()=>new Date()))
     const after = (Array.isArray(value) ? value : []).map(item => { if (item.id !== operation.targetId) return item; found = true; return {...item,...clone(projectChanges),updatedAt:changedAt,updatedBy:context.actor||'Household member'} })
     if (!found) throw new Error('That project no longer exists. Refresh Brevity and ask again.')
+    const updated=after.find(item=>item.id===operation.targetId)
+    if(updated.pushToFamilyCalendar && !projectCalendarEvent(updated))throw new Error('A calendar-visible project requires a valid start or due date and an end on or after its start.')
     return { before, after }
   }
   if (operation.type === 'project.delete') {
