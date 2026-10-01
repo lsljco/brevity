@@ -27,7 +27,7 @@ test('repository persists and returns a seven-day household plan', async () => {
   const second = await repository.getWindow()
 
   assert.equal(first.days.length, 7)
-  assert.equal(first.library.length, 117)
+  assert.equal(first.library.length, 119)
   assert.equal(store.records.size, 7)
   assert.deepEqual(second.days, first.days)
 })
@@ -54,8 +54,8 @@ test('custom meals persist in the shared household library and count by meal typ
   const plan = await repository.getWindowReadOnly({ startDate:'2026-09-10' })
 
   assert.equal(created.id, 'custom-dinner-meal-123')
-  assert.equal(plan.library.length, 118)
-  assert.equal(plan.librarySummary.total, 118)
+  assert.equal(plan.library.length, 120)
+  assert.equal(plan.librarySummary.total, 120)
   assert.equal(plan.librarySummary.counts.dinner, 41)
   const storedMeal = plan.library.find(meal => meal.id === created.id)
   assert.equal(storedMeal.name, 'Steak and Loaded Mashed Potatoes')
@@ -163,7 +163,7 @@ test('read-only meal windows never create missing records', async () => {
   const plan = await repository.getWindowReadOnly({ startDate: '2026-08-24' })
 
   assert.equal(plan.days.length, 7)
-  assert.equal(plan.library.length, 117)
+  assert.equal(plan.library.length, 119)
   assert.equal(memory.size, 0)
 })
 

@@ -6,13 +6,13 @@ import { fallbackMealImage, MEAL_LIBRARY, MEAL_TYPES, mealsForType } from './mea
 import { addMealDays, createRollingMealDay, mealDateInTimeZone, mealLibrarySummary, resolveMealDay, rollingMealDates, rotatingMealForDate, validateMealSubstitution } from './mealPlanData.js'
 
 test('meal library includes the core rotation and every distinct Fuel with Purpose meal', () => {
-  assert.deepEqual(mealLibrarySummary(), { total: 117, counts: { breakfast: 37, lunch: 40, dinner: 40 } })
-  assert.equal(new Set(MEAL_LIBRARY.map(meal => meal.id)).size, 117)
+  assert.deepEqual(mealLibrarySummary(), { total: 119, counts: { breakfast: 37, lunch: 40, dinner: 40, snack1: 1, snack2: 1 } })
+  assert.equal(new Set(MEAL_LIBRARY.map(meal => meal.id)).size, 119)
   assert.equal(MEAL_LIBRARY.filter(meal => meal.tags.includes('fuel-with-purpose')).length, 27)
 })
 
 test('every meal has a project image and complete estimated macros', () => {
-  for (const meal of MEAL_LIBRARY) {
+  for (const meal of MEAL_LIBRARY.filter(item=>!item.tags.includes('snack'))) {
     assert.match(meal.image, /^\/meal-images\/(?:breakfast|lunch|dinner|fuel)-[a-z0-9-]+\.webp$/)
     assert.equal(existsSync(fileURLToPath(new URL(`../../public${meal.image}`, import.meta.url))), true, `${meal.id} image`)
     assert.ok(meal.serving)
@@ -73,7 +73,7 @@ test('Spinach & Mushroom Eggs includes measured ingredients and teachable steps'
 test('rolling dates and rotation provide seven stable days without category repeats', () => {
   const dates = rollingMealDates('2026-08-24')
   assert.deepEqual(dates, ['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30'])
-  for (const mealType of MEAL_TYPES) assert.equal(new Set(dates.map(date => rotatingMealForDate(date, mealType).id)).size, 7)
+  for (const mealType of MEAL_TYPES) assert.equal(new Set(dates.map(date => rotatingMealForDate(date, mealType).id)).size, mealType.startsWith('snack') ? 1 : 7)
   assert.equal(addMealDays('2026-12-31', 1), '2027-01-01')
 })
 

@@ -103,7 +103,7 @@ async function apiFetch(path, { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   }
 }
 
-const TRANSACTION_FINGERPRINT_FIELDS = ['id','accountId','itemId','name','originalStatement','amount','date','category','type','institution','pending']
+const TRANSACTION_FINGERPRINT_FIELDS = ['id','accountId','itemId','name','originalStatement','amount','date','category','type','institution','pending','pendingTransactionId']
 
 // This is a compact, deterministic 128-bit mutation detector, not an
 // authentication primitive. Length-framed parts keep field and row boundaries

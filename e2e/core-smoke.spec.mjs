@@ -1,3 +1,4 @@
+import { SNACK_LIBRARY } from '../src/meals/snackLibrary.js'
 import { test, expect } from '@playwright/test'
 
 const today = () => {
@@ -34,8 +35,8 @@ const mealPlanResponse = (startDate = today()) => {
   return {
     householdId:'lslj-family',
     startDate,
-    days:[{ id:`meal-plan-${startDate}`, date:startDate, version:1, meals:{ breakfast:meals[0].id, lunch:meals[1].id, dinner:meals[2].id }, substitutions:{}, resolvedMeals:{ breakfast:meals[0], lunch:meals[1], dinner:meals[2] } }],
-    library:meals,
+    days:[{ id:`meal-plan-${startDate}`, date:startDate, version:1, meals:{ breakfast:meals[0].id, lunch:meals[1].id, dinner:meals[2].id,snack1:SNACK_LIBRARY[0].id,snack2:SNACK_LIBRARY[1].id }, substitutions:{}, resolvedMeals:{ breakfast:meals[0], lunch:meals[1], dinner:meals[2],snack1:SNACK_LIBRARY[0],snack2:SNACK_LIBRARY[1] } }],
+    library:[...meals,...SNACK_LIBRARY],
   }
 }
 
@@ -46,6 +47,7 @@ async function mockBackend(page) {
     const action = url.searchParams.get('action')
     let body = {}
     if (path.endsWith('/household-auth') && action === 'session') body = { authenticated:true, member:'Larry', role:'admin', bootstrapRequired:false }
+    else if (path.endsWith('/nutrition-records')) body = {member:'Larry',targets:{proteinGrams:160,calories:2200,carbohydrateGrams:220,fatGrams:80}}
     else if (path.endsWith('/household-auth') && action === 'members') body = { members:[] }
     else if (path.endsWith('/household-state')) {
       if (route.request().method() === 'PUT') {
@@ -278,9 +280,9 @@ test('Today Pillar 4 lists every calendar commitment and today’s Household Ope
 
 test('Today meal cards show calories and all three macros',async({page})=>{
   const cards=page.locator('.today-meal-card')
-  await expect(cards).toHaveCount(3)
+  await expect(cards).toHaveCount(5)
   const macros=page.locator('.today-meal-macros')
-  await expect(macros).toHaveCount(3)
+  await expect(macros).toHaveCount(5)
   for(const summary of await macros.all()){
     await expect(summary).toContainText('cal')
     await expect(summary).toContainText('protein')
@@ -556,3 +558,30 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
   await page.evaluate(()=>window.voiceTest.audio.onended())
   await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(2)
 })
+
+ test('Today shows planned targets, two snacks and reviewed swaps',async({page})=>{
+   const summary=page.getByRole('region',{name:'Planned daily macros compared with goals'})
+   await expect(summary).toContainText('160 g')
+   await expect(summary).toContainText('not logged consumption')
+   await expect(page.locator('.today-snack-card')).toHaveCount(2)
+   await page.getByRole('button',{name:'Swap Snack 2',exact:true}).click()
+   const dialog=page.getByRole('dialog',{name:'Swap Snack 2'})
+   await expect(dialog).toContainText('Action Mode')
+   await expect(dialog.getByRole('button',{name:'Review swap'})).toBeDisabled()
+   await dialog.getByRole('combobox').selectOption('snack-premier-chocolate')
+   await expect(dialog.getByRole('button',{name:'Review swap'})).toBeEnabled()
+   await dialog.getByRole('button',{name:'Cancel'}).click()
+ })
+ test('Today calendar supports multi-member, church, Family and All selection',async({page})=>{
+   const filter=page.getByRole('group',{name:'Calendars to show'})
+   await expect(filter.getByRole('button',{name:'Larry',exact:true})).toHaveAttribute('aria-pressed','true')
+   await filter.getByRole('button',{name:'Lorenzo',exact:true}).click()
+   await expect(filter.getByRole('button',{name:'Larry',exact:true})).toHaveAttribute('aria-pressed','true')
+   await expect(filter.getByRole('button',{name:'Lorenzo',exact:true})).toHaveAttribute('aria-pressed','true')
+   await filter.getByRole('button',{name:'Church Triumphant',exact:true}).click()
+   await expect(filter.getByRole('button',{name:'Church Triumphant',exact:true})).toHaveAttribute('aria-pressed','true')
+   await filter.getByRole('button',{name:'Family',exact:true}).click()
+   await expect(filter.getByRole('button',{name:'Church Triumphant',exact:true})).toHaveAttribute('aria-pressed','false')
+   await filter.getByRole('button',{name:'All',exact:true}).click()
+   await expect(filter.getByRole('button',{name:'All',exact:true})).toHaveAttribute('aria-pressed','true')
+ })

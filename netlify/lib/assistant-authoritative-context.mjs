@@ -58,7 +58,9 @@ const compactMealDay = day => ({
     name: meal?.name,
     description: meal?.description,
     macros: meal?.macros,
-    macroBasis: meal?.macroBasis,
+    macroBasis: meal?.nutritionBasis || meal?.macroBasis,
+    serving: meal?.serving,
+    ingredients: meal?.ingredients,
   }])),
 })
 

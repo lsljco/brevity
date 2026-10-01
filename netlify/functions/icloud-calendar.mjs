@@ -296,6 +296,7 @@ export function parseEvent(ics, href, etag, forceOccurrenceId = false) {
     pillar: unescapeIcs(icsValue(ics, "CATEGORIES")).toLowerCase() || "household",
     priority: icsValue(ics, "PRIORITY") === "1" || icsValue(ics, "X-BREVITY-PRIORITY") === "TRUE",
     owner: unescapeIcs(icsValue(ics, "X-BREVITY-OWNER")) || "Family",
+    ownershipKnown: Boolean(icsValue(ics, "X-BREVITY-OWNER")),
     participants: unescapeIcs(icsValue(ics, "X-BREVITY-PARTICIPANTS")).split("|").filter(Boolean),
     notes: unescapeIcs(icsValue(ics, "DESCRIPTION")),
     location:unescapeIcs(icsValue(ics,"LOCATION")),
@@ -404,6 +405,7 @@ export function patchNativeCalendarIcs(ics, item, current) {
   eventIcs=replaceEventProperty(eventIcs,"RRULE",recurrence,{remove:!recurrence});
   eventIcs=replaceEventProperty(eventIcs,"X-BREVITY-ACTION-ID",`X-BREVITY-ACTION-ID:${escapeIcs(item.actionId||"")}`);
   eventIcs=replaceEventProperty(eventIcs,"X-BREVITY-OWNER",`X-BREVITY-OWNER:${escapeIcs(item.owner||"Family")}`);
+  if(item.pillar && item.pillar!==current.pillar)eventIcs=replaceEventProperty(eventIcs,"CATEGORIES",`CATEGORIES:${escapeIcs(item.pillar)}`);
   eventIcs=replaceEventProperty(eventIcs,"X-BREVITY-PARTICIPANTS",`X-BREVITY-PARTICIPANTS:${escapeIcs((item.participants||[]).join("|"))}`);
   eventIcs=eventIcs.replace(/\r?\nBEGIN:VALARM[\s\S]*?END:VALARM/gi,"");
   const alerts=[...alertBlock(item.alert1Minutes),...alertBlock(item.alert2Minutes)];

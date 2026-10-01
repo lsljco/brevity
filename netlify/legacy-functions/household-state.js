@@ -49,7 +49,7 @@ const PLAID_ACCOUNT_FIELDS = new Set([
   'institution', 'mask', 'plaidCurrentBalance', 'plaidAvailableBalance',
 ])
 const PLAID_TRANSACTION_FIELDS = new Set([
-  'id', 'accountId', 'itemId', 'name', 'originalStatement', 'amount', 'date', 'category', 'type', 'institution', 'pending',
+  'id', 'accountId', 'itemId', 'name', 'originalStatement', 'amount', 'date', 'category', 'type', 'institution', 'pending', 'pendingTransactionId',
 ])
 const headers = {
   'content-type':'application/json; charset=utf-8',
@@ -107,6 +107,7 @@ function validatePlaidTransactions(candidate, existing) {
     }
     if (transaction.type !== 'income' && transaction.type !== 'expense') return `Plaid transaction ${transaction.id} has an invalid direction.`
     if (typeof transaction.pending !== 'boolean') return `Plaid transaction ${transaction.id} is missing its pending status.`
+    if (transaction.pendingTransactionId != null && (!boundedString(transaction.pendingTransactionId, 512, { required:true }) || transaction.pending || transaction.pendingTransactionId === transaction.id)) return `Plaid transaction ${transaction.id} has an invalid pending source id.`
 
     // Older verified source rows may carry now-retired source fields. They may
     // be retained during a partial-institution merge, but a browser may not

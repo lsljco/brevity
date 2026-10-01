@@ -1,3 +1,5 @@
+import CalendarScopeFilter from './CalendarScopeFilter.jsx'
+import { matchesCalendarScopes } from './calendarScopes.js'
 import {useProjectCalendar} from '../homehq/useProjectCalendar.js'
 import {requestProjectOpen} from '../homehq/projectNavigation.js'
 import { useEffect, useMemo, useState } from 'react'
@@ -119,6 +121,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [month,setMonth]=useState(today.getMonth())
   const [year,setYear]=useState(today.getFullYear())
   const [member,setMember]=useState(currentMember || 'Family')
+  const [selectedCalendars,setSelectedCalendars]=useState([currentMember || 'Family'])
+  useEffect(()=>{setSelectedCalendars([currentMember || 'Family']);setMember(currentMember || 'Family')},[currentMember])
   const [range,setRange]=useState(()=>calendarRange(resolveTimeframe('this-month')))
   const [viewMode,setViewMode]=useState('month')
   const projectEvents=useProjectCalendar()
@@ -140,7 +144,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
 
   const openCreate = () => {
     setEditorError('')
-    setEditor({ mode:'create', step:'edit', form:emptyForm(todayKey,calendarAccess.member || 'Family'), record:null, expectedEventToken:'', proposal:null })
+    setEditor({ mode:'create', step:'edit', form:emptyForm(todayKey,calendarAccess.role==='admin'&&selectedCalendars.length===1&&selectedCalendars[0]==='Church Triumphant'?'Church Triumphant':calendarAccess.member || 'Family'), record:null, expectedEventToken:'', proposal:null })
   }
   const openEdit = event => {
     if (!canEditBrevityCalendarEvent(event,calendarAccess)) return
@@ -272,9 +276,9 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const filtered=useMemo(()=>allEvents.filter(event=>{
     const eventDate=event.date||event.start
     const sharedFamilyEvent=includeFamily&&(event.owner||'Family')==='Family'
-    const memberMatches=member==='Family'||sharedFamilyEvent||event.members?.includes(member)||event.participants?.includes(member)||event.owner===member
+    const memberMatches=matchesCalendarScopes(event,lockMember?[member]:selectedCalendars)||sharedFamilyEvent
     return memberMatches&&(event.endDate||event.end||eventDate)>=range.from&&eventDate<=range.to
-  }),[allEvents,member,range])
+  }),[allEvents,member,selectedCalendars,lockMember,includeFamily,range])
   const byDate=useMemo(()=>{
     const map={}
     filtered.forEach(event=>{
@@ -315,7 +319,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:18,flexWrap:'wrap',marginBottom:18}}>
       <div><h1 className="family-calendar-title" style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:500,color:'rgba(247,243,234,.92)'}}>{title}</h1><p className="family-calendar-subtitle" style={{margin:'5px 0 0',fontSize:12,color:muted}}>{subtitle}</p>{calendarAccess.state!=='loading'&&!calendarAccess.allowed&&<p className="family-calendar-permission-note"><i className="ti ti-lock" aria-hidden="true"/> {calendarAccess.reason}</p>}</div>
       <div className="family-calendar-header-actions">{calendarAccess.allowed&&<button type="button" className="family-calendar-add" onClick={openCreate}><i className="ti ti-plus" aria-hidden="true"/> Add event</button>}{!lockMember&&<div className="family-calendar-filters" style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-        {['Family',...HOUSEHOLD_MEMBERS].map(name=><button key={name} onClick={()=>setMember(name)} style={{padding:'7px 12px',borderRadius:20,border:`1px solid ${member===name?gold:border}`,background:member===name?'rgba(197,164,109,.16)':'rgba(255,255,255,.04)',color:member===name?gold:muted,cursor:'pointer',fontSize:12}}>{name==='Family'?'All / Family':name}</button>)}
+        <CalendarScopeFilter selected={selectedCalendars} onChange={setSelectedCalendars}/>
       </div>}</div>
     </div>
     {feedback&&<div className="family-calendar-feedback" role="status"><span>{feedback}</span><button type="button" onClick={()=>setFeedback('')} aria-label="Dismiss calendar message"><i className="ti ti-x" aria-hidden="true"/></button></div>}
@@ -361,6 +365,6 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       <p>{icloudState==='error'||icloudState==='locked'||icloudState==='unconfigured'?'Apple events cannot appear until the Family Calendar connection above is restored. You can still add a Brevity calendar event now.':'No calendar commitments for this view yet.'}</p>
       {calendarAccess.allowed&&<button type="button" className="family-calendar-add" onClick={openCreate}><i className="ti ti-plus" aria-hidden="true"/> Add an event</button>}
     </div>}
-    {editor&&<CalendarEditor editor={editor} ownerOptions={calendarAccess.role==='admin'?['Family',...HOUSEHOLD_MEMBERS]:[...new Set(['Family',calendarAccess.member,editor.form.owner].filter(Boolean))]} onChange={updateEditor} onReview={reviewEditor} onCancel={()=>setEditor(null)} onApply={applyEditor} busy={editorBusy} error={editorError}/>}
+    {editor&&<CalendarEditor editor={editor} ownerOptions={calendarAccess.role==='admin'?['Family','Church Triumphant',...HOUSEHOLD_MEMBERS]:[...new Set(['Family',calendarAccess.member,editor.form.owner].filter(Boolean))]} onChange={updateEditor} onReview={reviewEditor} onCancel={()=>setEditor(null)} onApply={applyEditor} busy={editorBusy} error={editorError}/>}
   </div>
 }

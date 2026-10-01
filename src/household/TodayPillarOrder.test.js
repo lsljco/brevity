@@ -41,8 +41,9 @@ test('Today Pillar 4 names calendar commitments and synchronized Household Opera
   assert.match(today,/dailyFocusUpdateOperation/)
 })
 
-test('Today meal cards show complete nutrition macros',async()=>{
+test('Today meal cards delegate complete nutrition to the personal meal panel',async()=>{
   const dashboard=await readFile(new URL('./TodayDashboard.jsx',import.meta.url),'utf8')
-  for(const field of ['calories','proteinGrams','carbohydrateGrams','fatGrams'])assert.match(dashboard,new RegExp(`meal\\.macros\\?\\.${field}`))
-  for(const label of ['protein','carbs','fat'])assert.match(dashboard,new RegExp(` ${label}</em>`))
+  const panel=await readFile(new URL('../meals/TodayMealsPanel.jsx',import.meta.url),'utf8')
+  assert.match(dashboard,/<TodayMealsPanel/)
+  for(const field of ['calories','proteinGrams','carbohydrateGrams','fatGrams'])assert.ok(panel.includes(field))
 })

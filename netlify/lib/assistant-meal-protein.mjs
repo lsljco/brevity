@@ -1,3 +1,4 @@
+import {personalMealPlan} from '../../src/meals/personalMealPlan.js'
 const proteinQuestion = query => /\bprotein\b/i.test(query) && /\b(meals?|breakfast|lunch|dinner|eat|eating)\b/i.test(query) && /\b(today|daily|day)\b/i.test(query)
 const followup = query => /\b(goal|target|protein|meals?|additional|additionally|difference|short|more|answer|respond)\b/i.test(query)
 const statedGoal = query => {
@@ -16,13 +17,14 @@ export function mealProteinFocus(messages, context) {
   const date = context.householdDate
   const source = context.sources?.find(item => item.id === 'rolling-meals')
   const day = context.rollingMealPlan?.days?.find(item => item.date === date)
-  const meals = ['breakfast','lunch','dinner'].map(type => {
+  const meals = ['breakfast','lunch','dinner',...['snack1','snack2'].filter(type=>day?.meals?.[type])].map(type => {
     const meal = day?.meals?.[type]
     return {type,scheduled:Boolean(meal),name:meal?.name || null,proteinGrams:meal?.macros?.proteinGrams ?? null,macroBasis:meal?.macroBasis || null}
   })
   const complete = meals.every(meal => meal.scheduled && meal.proteinGrams != null && Number.isFinite(Number(meal.proteinGrams)))
   const recordedTotalGrams = meals.reduce((sum,meal) => sum + (meal.proteinGrams == null ? 0 : Number(meal.proteinGrams)),0)
   return {
+    personalizedPlan:day?personalMealPlan(day.meals,context.nutritionTargets||{}):null,
     topic:'today-meal-protein',date,mealSourceState:source?.state || 'missing',mealSourceAsOf:source?.asOf || null,
     meals:source?.state === 'available' ? meals : [],complete,
     recordedTotalGrams:source?.state === 'available' ? recordedTotalGrams : null,

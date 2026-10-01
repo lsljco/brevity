@@ -1,0 +1,13 @@
+.today-macro-summary{padding:20px;margin-bottom:22px;border:1px solid #74613b;border-radius:18px;background:rgba(197,164,109,.07);color:var(--text-primary,#f5f1e9)}
+.today-macro-summary h3{margin:0 0 8px}.today-macro-summary p,.today-macro-summary small{line-height:1.5}
+.today-macro-goals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.today-macro-goals progress{width:100%;accent-color:#c5a46d}
+.today-meals .today-meal-card:has(details){min-height:340px;height:auto}.today-meals .today-meal-card-copy details{font-size:13px;line-height:1.5;margin-top:10px}.today-meals .today-meal-card-copy details[open]{background:#171612;padding:10px;border-radius:8px}.today-meals .today-meal-card-copy a{color:#e5c68f}
+.today-meals button{cursor:pointer}.today-macro-summary button,.today-meal-card-copy button,.today-snack-swap button{padding:10px 14px;border:1px solid #88734e;border-radius:9px;background:#29251d;color:#f5e8d0;margin-top:10px}
+.today-meals .today-snack-card{background:linear-gradient(130deg,#332b1c,#151412);min-height:260px}
+.today-snack-swap{max-width:600px;width:90%;padding:24px;background:#191815;color:#f5f1e9;border:1px solid #c5a46d;border-radius:16px}.today-snack-swap select{display:block;max-width:100%;width:100%;padding:12px}.today-snack-swap button{margin-right:10px}
+@media(max-width:700px){.today-macro-goals{grid-template-columns:repeat(2,minmax(0,1fr))}.today-macro-summary{padding:15px}}
+
+.today-meals .today-meal-card:has(details) img{position:absolute;inset:0;height:100%;min-height:0}.today-meals .today-meal-card:has(details) .today-meal-card-copy{position:relative;padding-top:180px}.today-meals .today-snack-card .today-meal-card-copy{padding-top:24px!important}
+
+@media(min-width:901px){.today-meals .today-meal-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.today-meals .today-meal-card{grid-column:span 2}.today-meals .today-snack-card{grid-column:span 3}}
+.today-meals .meal-dialog-backdrop{position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.76)}.today-snack-swap{max-height:85vh;overflow:auto}.today-snack-swap label{display:block}.today-snack-swap select{background:#24211b;color:#f5f1e9;border:1px solid #88734e;border-radius:8px}.today-snack-swap button:disabled{opacity:.5;cursor:default}
