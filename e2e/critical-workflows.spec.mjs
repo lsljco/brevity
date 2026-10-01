@@ -1164,3 +1164,31 @@ test('Finance combines Operating and Savings while excluding Renovation across v
   await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
   await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
 })
+
+test('Calendar income editor reviews payer changes without applying them',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),prepared=[]
+  finance.transactions=[{id:'payroll',name:'Genesco payroll fixture',type:'income',amount:721.9,acct:'a1',freq:'weekly',start:dateKey(),end:'',cat:'Income'}]
+  records.lslj_finance_v9.value=JSON.stringify(finance);records.plaid_actuals_cache.value='[]'
+  let writes=0
+  await page.route('**/.netlify/functions/household-state*',route=>{if(route.request().method()!=='GET')writes++;return route.fulfill({json:{records,serverTime:new Date().toISOString()}})})
+  await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[{id:'genesco',name:'Genesco',accessMembers:[],documents:[]}],links:{}}}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes++})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const todayCell=page.locator('.cal-cell.is-today')
+  if(!(await todayCell.getAttribute('class')||'').includes('is-selected'))await todayCell.locator('.finance-calendar-day-number').click()
+  await page.locator('.finance-card').filter({has:page.locator('.finance-calendar-day-header')}).getByText('Genesco payroll fixture',{exact:true}).click()
+  const editor=page.locator('.finance-calendar-editor-dialog')
+  await expect(editor.getByLabel('Income payer')).toBeVisible()
+  await editor.getByLabel('Income payer').selectOption('genesco')
+  await expect(editor.getByRole('button',{name:'Review move and reconcile'})).toBeDisabled()
+  await expect(editor).toContainText('Choose a different bank posting date')
+  const datesFit=await editor.locator('input[type="date"]').evaluateAll(inputs=>inputs.every(input=>input.getBoundingClientRect().right<=input.parentElement.getBoundingClientRect().right+1))
+  expect(datesFit).toBe(true)
+  await editor.getByRole('button',{name:'Review scheduled change'}).click()
+  await page.getByRole('button',{name:/This item only/}).click()
+  await expect.poll(()=>prepared.length).toBe(1)
+  expect(prepared[0].operation.payload.vendorId).toBe('genesco')
+  expect(prepared[0].operation.targetId).toBe('payroll')
+  expect(writes).toBe(0)
+})

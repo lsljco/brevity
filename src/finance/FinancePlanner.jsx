@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
 import AutoReconciliationReport from './AutoReconciliationReport.jsx'
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
@@ -1096,7 +1097,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
             <input type="number" min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" style={{ width: '100%' }} />
           </div>
         </div>
-        {form.type === 'expense' && <VendorSelector value={form.vendorId||''} onChange={value=>set('vendorId',value)}/>}
+        {form.type !== 'transfer' && <VendorSelector fieldLabel={form.type === 'income' ? 'Payer' : 'Vendor'} label={form.type === 'income' ? 'Income payer' : 'Expense vendor'} value={form.vendorId||''} onChange={value=>set('vendorId',value)}/>}
         {form.type === 'transfer' && (
           <div style={{ padding: '12px 14px', background: 'rgba(144,170,222,0.07)', border: '1px solid rgba(144,170,222,0.20)', borderRadius: 10 }}>
             <label className="field-label" style={{ color: '#90AADE' }}>Transfer to account</label>
@@ -4511,6 +4512,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
   // ── Calendar grid ────────────────────────────────────────────────────────
   return (
     <div>
+      {!readOnly && (selTx || pendingScope || pendingMove) && createPortal(<div className="finance-root finance-calendar-portal">
       {/* ── Edit transaction modal (overlay — stays above calendar) ── */}
       {!readOnly && selTx && (
         <div className="finance-calendar-editor-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 1100,
@@ -4536,9 +4538,10 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
               <label style={{ display:'grid', gap:6 }}>Move this occurrence to bank posting date
                 <input type="date" aria-label="Bank posting date" value={moveDate} onChange={event => setMoveDate(event.target.value)} />
               </label>
-              <button type="button" disabled={!moveDate || moveDate === (selTx._occurrenceDate || selTx.start)} onClick={async () => {
+              <button type="button" className="finance-calendar-review-move" aria-describedby="calendar-move-date-help" disabled={!moveDate || moveDate === (selTx._occurrenceDate || selTx.start)} onClick={async () => {
                 if (await onMove({ tx:selTx, fromDate:selTx._occurrenceDate || selTx.start, toDate:moveDate, scope:'one' })) setSelTx(null)
               }} style={{ marginTop:8 }}>Review move and reconcile</button>
+              <p id="calendar-move-date-help" style={{ margin:'6px 0 0', fontSize:11, color:'var(--muted)' }}>{!moveDate || moveDate === (selTx._occurrenceDate || selTx.start) ? 'Choose a different bank posting date to review this move.' : 'The selected date will be reviewed before any change is applied.'}</p>
               <p style={{ margin:'6px 0 0', fontSize:11, color:'var(--muted)' }}>Only this occurrence moves. A unique same-account bank match clears after the move is applied; pending charges and differences stay in review.</p>
             </div>}
             <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
@@ -4594,6 +4597,8 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           </div>
         </div>
       )}
+
+      </div>, document.body)}
 
       <CashForecastIntro
         monthName={monthName}
