@@ -366,7 +366,7 @@ for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt wh
     localStorage.setItem('brevity_el_voice_v1','test-voice')
     window.voiceTest={starts:0,plays:0,current:null,audio:null}
     window.SpeechRecognition=class {
-      start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.()}
+      start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.();this.onaudiostart?.()}
       stop(){this.onend?.()}
       abort(){this.onend?.()}
     }
@@ -426,7 +426,7 @@ for(const outcome of ['approve','update','activity','cancel','interim','interrup
   await page.addInitScript(({outcome})=>{
     localStorage.setItem('brevity_el_voice_v1','test-voice')
     window.voiceTest={starts:0,plays:0,current:null,audio:null}
-    window.SpeechRecognition=class {start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.()}stop(){this.onend?.()}abort(){this.onend?.()}}
+    window.SpeechRecognition=class {start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.();this.onaudiostart?.()}stop(){this.onend?.()}abort(){this.onend?.()}}
     window.Audio=class {constructor(){window.voiceTest.audio=this}async play(){if(!this.src?.startsWith('data:')){window.voiceTest.plays++;if(outcome==='blocked'&&window.voiceTest.plays===1)throw new DOMException('Tap required','NotAllowedError')}}pause(){}}
   },{outcome})
   await page.reload();await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
@@ -532,7 +532,7 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
   await page.addInitScript(()=>{
     localStorage.setItem('brevity_el_voice_v1','test-voice')
     window.voiceTest={starts:0,created:0,attempts:0,primed:false}
-    window.SpeechRecognition=class{start(){window.voiceTest.starts++;this.onstart?.()}stop(){this.onend?.()}abort(){this.onend?.()}}
+    window.SpeechRecognition=class{start(){window.voiceTest.starts++;this.onstart?.();this.onaudiostart?.()}stop(){this.onend?.()}abort(){this.onend?.()}}
     window.Audio=class{
       constructor(){window.voiceTest.created++;window.voiceTest.audio=this}
       async play(){
@@ -697,3 +697,56 @@ test('Next 7 Days refreshes shared chores and ages calendar verification while o
    member='Larry';date='2000-01-01';await refresh();await expect(section).toContainText('Consumed calories could not be verified for today')
    failed=true;await refresh();await expect(section).toContainText('Not verified');await expect(section.getByRole('progressbar')).toHaveCount(0)
  })
+
+test('voice recovers a stalled microphone after read aloud and preserves a draft on manual restart',async({page})=>{
+  await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:0,messages:[{role:'assistant',content:'Ready for your next question.'}]}}))
+  await page.route('**/elevenlabs-voices',r=>r.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test voice'}]}}))
+  await page.route('**/elevenlabs-tts',r=>r.fulfill({contentType:'audio/mpeg',body:'test-audio'}))
+  await page.addInitScript(()=>{
+    localStorage.setItem('brevity_el_voice_v1','test-voice')
+    window.voiceTest={starts:0,loads:0,current:null,audio:null}
+    window.SpeechRecognition=class {
+      start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.();if(window.voiceTest.starts===1)this.onaudiostart?.()}
+      stop(){this.onend?.()}
+      abort(){this.onend?.()}
+    }
+    window.Audio=class {
+      constructor(){window.voiceTest.audio=this}
+      async play(){}
+      pause(){}
+      removeAttribute(){this.src=''}
+      load(){window.voiceTest.loads++}
+    }
+  })
+  await page.reload()
+  await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+  await expect(dialog.getByText('Ready for your next question.',{exact:true})).toBeVisible()
+  await page.clock.install()
+  await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+  await dialog.getByRole('button',{name:'Read response aloud',exact:true}).click()
+  await expect.poll(()=>page.evaluate(()=>Boolean(window.voiceTest.audio.onended))).toBe(true)
+  await page.evaluate(()=>window.voiceTest.audio.onended())
+  expect(await page.evaluate(()=>window.voiceTest.loads)).toBe(1)
+  await page.clock.fastForward(300)
+  await expect(dialog.getByText(/Voice conversation on · Starting microphone/)).toBeVisible()
+  await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toHaveCount(0)
+  await page.clock.fastForward(4000)
+  await page.clock.fastForward(300)
+  expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(3)
+  // Capture starts but the browser never returns speech or an end/error callback.
+  await page.evaluate(()=>{window.voiceTest.current.onaudiostart();window.voiceTest.current.onstart()})
+  await page.clock.fastForward(5000)
+  await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toBeVisible()
+  await page.clock.fastForward(15000)
+  await expect(dialog.getByRole('alert')).toContainText('microphone stopped returning speech')
+  await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toHaveCount(0)
+  await dialog.locator('textarea').fill('Keep this draft')
+  await dialog.getByRole('button',{name:'Restart microphone',exact:true}).click()
+  await page.evaluate(()=>{window.voiceTest.current.onaudiostart();window.voiceTest.current.onresult({results:[[{transcript:'and this new question'}]]})})
+  await expect(dialog.locator('textarea')).toHaveValue('Keep this draft and this new question')
+  await dialog.getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+  const starts=await page.evaluate(()=>window.voiceTest.starts)
+  await page.clock.fastForward(30000)
+  expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(starts)
+})

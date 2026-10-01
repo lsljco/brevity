@@ -22,3 +22,14 @@ test('normal end cancels fallback and stop cancellation prevents submission',()=
  cancel();callback();recognition.onend()
  assert.equal(submissions,0)
 })
+
+test('startup and missing-result watchdogs are bounded and retirement cancels recovery',async()=>{
+ const {watchRecognition}=await import('./voiceRecognition.js')
+ let callback,delay,stalls=0,cleared=0
+ const recognition={abort(){}},ref={current:recognition}
+ const pulse=watchRecognition({recognition,ref,onStall:()=>stalls++,setTimer:(fn,ms)=>{callback=fn;delay=ms;return 1},clearTimer:()=>cleared++})
+ assert.equal(delay,4000);callback();assert.equal(stalls,1)
+ pulse();assert.equal(delay,20000)
+ const stale=callback
+ retireRecognition(ref);stale();assert.equal(stalls,1);assert.ok(cleared>0)
+})

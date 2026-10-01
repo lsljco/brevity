@@ -3,8 +3,23 @@ export function retireRecognition(ref) {
  const recognition=ref.current
  ref.current=null
  if(!recognition)return
- recognition.onstart=null;recognition.onresult=null;recognition.onend=null;recognition.onerror=null
+ recognition.cancelWatch?.()
+ recognition.onstart=null;recognition.onaudiostart=null;recognition.onaudioend=null;recognition.onresult=null;recognition.onend=null;recognition.onerror=null
  try{recognition.abort()}catch{}
+}
+
+// A service can start without capturing audio, or stop returning results without
+// delivering end/error. Bound both states; never leave a zombie recognizer active.
+export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,clearTimer=clearTimeout}) {
+ let timer,closed=false
+ const arm=(delay=20000)=>{
+  clearTimer(timer)
+  if(closed)return
+  timer=setTimer(()=>{if(!closed&&ref.current===recognition)onStall()},delay)
+ }
+ recognition.cancelWatch=()=>{closed=true;clearTimer(timer)}
+ arm(4000)
+ return arm
 }
 
 // Some mobile implementations do not emit `end` promptly after stop(). The
