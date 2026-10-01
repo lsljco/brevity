@@ -70,7 +70,7 @@ const calendarCreateSourceId=operation=>operation.projectSource ? `project-${ope
 const sourceManagedCalendarEvent=event=>/^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(String(event?.sourceId||''))
 const calendarCreateCandidate=(operation,member)=>{
   const payload=operation.payload||{},optional=['endDate','endTime','location','url','recurrenceFrequency','recurrenceInterval','recurrenceDays','recurrenceEndDate','alert1Minutes','alert2Minutes']
-  return{sourceId:calendarCreateSourceId(operation),title:payload.title||operation.description,date:payload.date||operation.targetDate,time:payload.time||'',allDay:payload.allDay!==false,pillar:'household',owner:payload.owner||member,participants:payload.participants||[],notes:payload.notes||'',priority:payload.priority==='high',...Object.fromEntries(optional.filter(field=>field in payload).map(field=>[field,payload[field]]))}
+  return{sourceId:calendarCreateSourceId(operation),title:payload.title||operation.description,date:payload.date||operation.targetDate,time:payload.time||'',allDay:payload.allDay!==false,pillar:payload.owner==='Church Triumphant'?'ministry':'household',owner:payload.owner||member,participants:payload.participants||[],notes:payload.notes||'',priority:payload.priority==='high',...Object.fromEntries(optional.filter(field=>field in payload).map(field=>[field,payload[field]]))}
 }
 export const reviewedExecutionSession=(requestSession,proposal)=>{
   if(!proposal?.startedBy||!['admin','member'].includes(proposal.startedRole))throw Object.assign(new Error('This in-progress proposal does not retain the reviewed actor role. Prepare and review a new proposal.'),{code:'VERSION_CONFLICT'})
@@ -270,7 +270,7 @@ export async function prepareCalendarOperations({event,operations,session,permis
       if(duplicate)throw Object.assign(new Error('A Family Calendar event already uses this Action Mode identifier. Refresh before trying again.'),{code:'VERSION_CONFLICT'})
       prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:null,after:candidate})
     }else if(operation.type==='calendar.update'){
-      const candidate={...current,...operation.payload,...(operation.projectSource?{priority:operation.payload.priority==='high'}:{}),id:current.uid||current.id,href:current.href,etag:current.etag}
+      const candidate={...current,...operation.payload,...(operation.payload.owner==='Church Triumphant'?{pillar:'ministry'}:{}),...(operation.projectSource?{priority:operation.payload.priority==='high'}:{}),id:current.uid||current.id,href:current.href,etag:current.etag}
       prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:current,after:candidate})
     }else{
       prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:current,after:null})
