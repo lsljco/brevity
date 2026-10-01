@@ -1259,3 +1259,20 @@ test('spoken own-member activity persists once, audits and undoes',async()=>{
  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
  assert.equal((await resources.read(`activity:Larry:${date}`)).value.entries.length,0)
 })
+
+test('Apple source mappings require admin review, exact versions and safe Undo',async()=>{
+  const store=versionedBlobStore(),actionStore=versionedBlobStore()
+  const resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store})
+  const repository=createAssistantActionRepository({store:actionStore})
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+  const resource='shared:brevity_apple_calendar_sources_v1'
+  const input={summary:'Connect personal calendar',expectedVersion:0,operation:{type:'apple.sources.update',targetId:'apple-sources',payload:{sources:[{id:`apple-${'a'.repeat(64)}`,name:'Personal',owner:'Larry'}]}}}
+  await assert.rejects(()=>prepareDirectProposal({input,session:{member:'Lorenzo',role:'member'},permissions:defaultActionPermissions('member'),repository,resources}),/administrator/)
+  const proposal=await prepareDirectProposal({input,session,permissions,repository,resources})
+  assert.deepEqual((await resources.read(resource)).value,[])
+  const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+  assert.equal((await resources.read(resource)).value[0].owner,'Larry')
+  await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),/changed after your review/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.deepEqual((await resources.read(resource)).value,[])
+})

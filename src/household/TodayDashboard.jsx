@@ -57,7 +57,7 @@ function TodayCalendarAgenda({ filters, commitments, nextCommitment, health, onO
     <div className={`today-calendar-health today-calendar-health--${healthState}`}><i className={`ti ${healthState === 'ready' ? 'ti-cloud-check' : 'ti-cloud-exclamation'}`} /><span><strong>{healthLabel}</strong> · {health?.message || 'Checking the Apple Family Calendar.'}</span></div>
     {commitments.length ? <div className="today-calendar-list">{commitments.map(item => <article className={`today-calendar-item${!browsingDate && item.id === nextCommitment?.id ? ' today-calendar-item--next' : ''}`} key={item.id}>
       <time>{formatStart(item.startsAt)}</time>
-      <div><strong>{item.title}</strong><span>{item.owner} · {item.source.system === 'apple-calendar' ? 'Apple Family Calendar' : 'Brevity'}</span></div>
+      <div><strong>{item.title}</strong><span>{item.owner} · {item.source.system === 'apple-calendar' ? (item.source.calendarName || 'Apple Family Calendar') : 'Brevity'}</span></div>
       {!browsingDate && item.id === nextCommitment?.id ? <em>Next</em> : item.priority === 'high' || item.priority === 'critical' ? <em>Priority</em> : null}
     </article>)}</div> : <div className="today-calendar-empty"><i className={`ti ${health?.usable ? 'ti-calendar-check' : 'ti-calendar-off'}`} aria-hidden="true" /><div><strong>{health?.usable ? 'No commitments are visible for today' : 'Today’s calendar is not verified'}</strong><span>{health?.usable ? 'Open Family Calendar if you expected an appointment.' : 'Restore or refresh the calendar connection before relying on this schedule.'}</span></div></div>}
   </section>

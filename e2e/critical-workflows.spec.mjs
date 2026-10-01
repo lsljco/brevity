@@ -1192,3 +1192,28 @@ test('Calendar income editor reviews payer changes without applying them',async(
   expect(prepared[0].operation.targetId).toBe('payroll')
   expect(writes).toBe(0)
 })
+
+test('Apple calendar sources require explicit member selection and prepare review without applying',async({page},testInfo)=>{
+  await page.route('**/.netlify/functions/brevity-assistant-actions?action=history',route=>route.fulfill({json:{member:'Larry',role:'admin',permissions:{Larry:{planning:true,calendar:true}},history:[]}}))
+  const familyId=`apple-${'a'.repeat(64)}`,personalId=`apple-${'b'.repeat(64)}`,churchId=`apple-${'c'.repeat(64)}`
+  const prepared=[],executed=[]
+  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:route.request().url().includes('action=sources')?{version:5,selected:[],calendars:[{id:familyId,name:'Family',primary:true},{id:personalId,name:'Personal appointments',primary:false},{id:churchId,name:'Ministry',primary:false}]}:{events:[],calendar:'Family'}}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed.push(request)})
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Family Calendar',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Calendar sources',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Apple calendar sources',exact:true})
+  await expect(dialog).toContainText('visible to the whole household')
+  await expect(dialog.getByLabel('Assign Personal appointments (bbbbbbbb)')).toHaveValue('')
+  await dialog.getByLabel('Assign Personal appointments (bbbbbbbb)').selectOption('Larry')
+  await dialog.getByLabel('Assign Ministry (cccccccc)').selectOption('Church Triumphant')
+  await dialog.getByRole('button',{name:'Review connections'}).click()
+  await expect.poll(()=>prepared.length).toBe(1)
+  expect(prepared[0].expectedVersion).toBe(5)
+  expect(prepared[0].operation.type).toBe('apple.sources.update')
+  expect(prepared[0].operation.payload.sources).toEqual([{id:personalId,name:'Personal appointments',owner:'Larry'},{id:churchId,name:'Ministry',owner:'Church Triumphant'}])
+  expect(executed).toHaveLength(0)
+})
