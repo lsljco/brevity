@@ -33,6 +33,7 @@ export function isSourceManagedCalendarEvent(event) {
 
 export function isDirectlyEditableAppleEvent(event) {
   return isAppleCalendarEvent(event)
+    && !event?.sourceReadOnly
     && !isSourceManagedCalendarEvent(event)
     && (!event?.recurring || event?.recurrenceEditable)
 }

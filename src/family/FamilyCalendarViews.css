@@ -75,3 +75,7 @@
 .family-calendar-month-navigation button { min-height: 44px; min-width: 44px; }
 .family-calendar-month-navigation input[type="month"] { width: 220px; flex: 0 1 220px; }
 .family-calendar-month-navigation button { padding: 8px 12px; border: 1px solid rgba(197,164,109,.35); border-radius: 8px; background: #171613; color: #f7f3ea; font: inherit; white-space: nowrap; cursor: pointer; }
+
+.apple-calendar-sources > p { margin: 12px 22px; line-height: 1.5; color: rgba(247,243,234,.72); }
+.apple-calendar-sources fieldset > label { display: grid; width: 100%; }
+.apple-calendar-sources small { overflow-wrap: anywhere; }

@@ -1,3 +1,4 @@
+import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { normalizeReconciliationEvidence } from '../../src/finance/autoReconciliation.js'
 import {normalizeRecipeEdit} from '../../src/meals/recipeEdit.js'
 import {VENDOR_RESOURCE,VENDOR_TYPES,normalizeVendorPayload} from '../../src/finance/vendorModel.js'
@@ -18,6 +19,7 @@ export const ACTION_TYPES = {
   ...Object.fromEntries(VENDOR_TYPES.map(type=>[type,'finance'])),
   'member.preference.set':'planning',
   'module.configuration.update':'planning',
+  'apple.sources.update':'planning',
   'activity.record':'planning','activity.update':'planning','activity.remove':'planning','education.observation.record':'planning',
   'improvement.propose':'planning',
   'improvement.transition':'planning',
@@ -142,6 +144,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.update': ['vendorId', 'creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.delete': [],
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
+  'apple.sources.update':['sources'],
   'meal.recipe.update':['name','estimateJson','recipeJson'],
   'meal.substitute': ['mealType', 'mealId'],
   'nutrition.meal.log': ['name', 'estimateJson'],
@@ -186,11 +189,12 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['apple.sources.update','activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
   if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
+  if(operation.type==='apple.sources.update')return APPLE_SOURCES_RESOURCE
   if(operation.type==='module.configuration.update')return MODULE_RESOURCE
   if(operation.type.startsWith('activity.'))return `activity:${operation.targetId}:${operation.targetDate}`
   if(operation.type==='education.observation.record')return LEARNING_RESOURCE
@@ -296,6 +300,7 @@ function normalizeActionPayload(type, input) {
   if (type.startsWith('plan.')) return normalizeDailyPlanActionPayload(type, input)
   const payload = input
   if(type.startsWith('vendor.'))return normalizeVendorPayload(type,payload)
+  if(type==='apple.sources.update')return normalizeAppleSources(payload)
   if(type==='module.configuration.update')return normalizeModulePatch(payload)
   if(type.startsWith('activity.'))return normalizeActivityPayload(type,payload)
   if(type==='education.observation.record')return normalizeLearningObservation(payload)
@@ -492,8 +497,9 @@ export function normalizeActionOperation(input = {}) {
     risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
-  if (((operation.domain === 'planning' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
+  if (((operation.domain === 'planning' && type!=='apple.sources.update' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && type !== 'meal.recipe.update' && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
+  if(type==='apple.sources.update'&&operation.targetId!=='apple-sources')throw Error('Choose the Apple calendar sources configuration.')
   if(type==='module.configuration.update'&&operation.targetId!=='household-modules')throw Error('Choose the household modules configuration.')
   if(type.startsWith('activity.')&&!HOUSEHOLD_MEMBERS.includes(operation.targetId))throw Error('Choose the signed-in member for an activity.')
   if(type==='education.observation.record'&&operation.targetId!=='Isaiah')throw Error('This learning record belongs to Isaiah.')
@@ -671,6 +677,8 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type==='apple.sources.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Apple calendar connections require administrator review.'}
+  if(operation.type.startsWith('calendar.')&&currentRecord?.sourceReadOnly)return {allowed:false,reason:'Edit this connected calendar in Apple Calendar.'}
   if(operation.type==='module.configuration.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Household module configuration requires administrator review.'}
   if(operation.type.startsWith('activity.')){
     if(operation.targetId!==member)return {allowed:false,reason:'Members can change only their own activity records.'}

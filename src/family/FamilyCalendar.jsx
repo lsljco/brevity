@@ -1,3 +1,4 @@
+import AppleCalendarSourcesDialog from './AppleCalendarSourcesDialog.jsx'
 import CalendarScopeFilter from './CalendarScopeFilter.jsx'
 import { matchesCalendarScopes } from './calendarScopes.js'
 import {useProjectCalendar} from '../homehq/useProjectCalendar.js'
@@ -143,6 +144,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [icloudError,setIcloudError]=useState(cachedCalendar?.error||'')
   const [calendarName,setCalendarName]=useState(cachedCalendar?.calendar||'Apple/iCloud Calendar')
   const [calendarAccess,setCalendarAccess]=useState({ state:'loading', allowed:false, member:'', role:'', reason:'Verifying Family Calendar permissions…' })
+  const [sourcesOpen,setSourcesOpen]=useState(false)
   const [editor,setEditor]=useState(null)
   const [editorBusy,setEditorBusy]=useState(false)
   const [editorError,setEditorError]=useState('')
@@ -317,7 +319,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   return <div className="family-calendar" style={{minHeight:'100vh',background:'#000',padding:'28px 32px',color:soft,fontFamily:"'Inter',system-ui,sans-serif"}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:18,flexWrap:'wrap',marginBottom:18}}>
       <div><h1 className="family-calendar-title" style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:500,color:'rgba(247,243,234,.92)'}}>{title}</h1><p className="family-calendar-subtitle" style={{margin:'5px 0 0',fontSize:12,color:muted}}>{subtitle}</p>{calendarAccess.state!=='loading'&&!calendarAccess.allowed&&<p className="family-calendar-permission-note"><i className="ti ti-lock" aria-hidden="true"/> {calendarAccess.reason}</p>}</div>
-      <div className="family-calendar-header-actions">{calendarAccess.allowed&&<button type="button" className="family-calendar-add" onClick={openCreate}><i className="ti ti-plus" aria-hidden="true"/> Add event</button>}{!lockMember&&<div className="family-calendar-filters" style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+      {sourcesOpen&&<AppleCalendarSourcesDialog onClose={()=>setSourcesOpen(false)}/>}
+      <div className="family-calendar-header-actions">{calendarAccess.role==='admin'&&<button type="button" className="family-calendar-add" onClick={()=>setSourcesOpen(true)}>Calendar sources</button>}{calendarAccess.allowed&&<button type="button" className="family-calendar-add" onClick={openCreate}><i className="ti ti-plus" aria-hidden="true"/> Add event</button>}{!lockMember&&<div className="family-calendar-filters" style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         <CalendarScopeFilter selected={selectedCalendars} onChange={setSelectedCalendars}/>
       </div>}</div>
     </div>
@@ -347,7 +350,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
           <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
           {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
             <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}><i className="ti ti-external-link" aria-hidden="true"/></button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
-            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
+            <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.sourceReadOnly?`${event.appleCalendarName} · Edit in Apple Calendar`:event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
       })}
@@ -357,7 +360,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
         <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span></header>
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>
-          <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
+          <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.sourceReadOnly?`${event.appleCalendarName} · Edit in Apple Calendar`:event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
           {event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}>Open project</button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" className="family-calendar-agenda-edit" onClick={()=>openEdit(event)}><i className="ti ti-edit" aria-hidden="true"/> Edit</button>}
         </article>)}
       </section>)}

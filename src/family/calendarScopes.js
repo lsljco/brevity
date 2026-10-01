@@ -5,7 +5,7 @@ export const CALENDAR_SCOPES = ['All','Family',...HOUSEHOLD_MEMBERS,CHURCH_CALEN
 // determine which member or ministry an event belongs to.
 export function matchesCalendarScopes(event, selected) {
   if (selected.includes('All')) return true
-  const church = event?.owner === CHURCH_CALENDAR || event?.calendarScope === 'church-triumphant' || event?.pillar === 'ministry'
+  const church = event?.owner === CHURCH_CALENDAR || event?.calendarScope === 'church-triumphant' || (!event?.appleCalendarId && event?.pillar === 'ministry')
   if (church) return selected.includes(CHURCH_CALENDAR)
   if (selected.includes('Family')) return true
   const participants = [...(event?.participants || []),...(event?.members || [])]

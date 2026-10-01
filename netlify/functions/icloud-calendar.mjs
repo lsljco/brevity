@@ -1,3 +1,5 @@
+import { APPLE_SOURCES_RESOURCE, normalizeAppleSources, mapAppleSourceEvent } from '../../src/family/appleCalendarSources.js'
+import { createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import releaseBuild from '../lib/release-build-context.mjs'
@@ -205,6 +207,8 @@ async function caldav(url, method, body = "", extraHeaders = {}, operation = "ca
   return { response, text };
 }
 
+export const appleCalendarId = url => `apple-${crypto.createHash("sha256").update(new URL(url).href.replace(/\/$/, "")).digest("hex")}`;
+
 async function discoverCalendar() {
   const principalReq = `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
   const principalResult = await caldav(CALDAV_ROOT, "PROPFIND", principalReq, { depth: "0" }, "account discovery request");
@@ -234,12 +238,18 @@ async function discoverCalendar() {
   // display name explicitly when Apple localizes or renames it.
   const targetName = (process.env.ICLOUD_CALENDAR_NAME || "Family").trim();
   const wanted = targetName.toLocaleLowerCase();
-  const chosen = candidates.find(item => item.name.trim().toLocaleLowerCase() === wanted);
+  const matches = candidates.filter(item => item.name.trim().toLocaleLowerCase() === wanted);
+  if (matches.length > 1) throw new Error("More than one Apple calendar has the configured Family name. Give the shared calendar a unique name before syncing.");
+  const chosen = matches[0];
   if (!chosen) throw new Error(`The shared Apple calendar named “${targetName}” was not found. Set ICLOUD_CALENDAR_NAME to its exact name.`);
   return {
     url:resolveAppleDavHref(chosen.href, listResult.response.url || homeUrl),
     name:chosen.name || "iCloud Calendar",
     discoveryMode:listResult.discoveryMode,
+    sources:candidates.map(item => {
+      const url = resolveAppleDavHref(item.href, listResult.response.url || homeUrl);
+      return {id:appleCalendarId(url),url,name:item.name || "iCloud Calendar"};
+    }),
   };
 }
 
@@ -537,6 +547,7 @@ export const createICloudCalendarHandler = ({
   eventLister = listEvents,
   actionRepositoryFactory = productionAssistantActionRepository,
   calendarTransport = caldav,
+  sourceConfigReader = async () => createProductionActionResources().read(APPLE_SOURCES_RESOURCE),
 } = {}) => async event => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
   const session = await authenticate(event).catch(() => null);
@@ -550,11 +561,28 @@ export const createICloudCalendarHandler = ({
     error:"Direct Family Calendar changes are unavailable. Create, edit, or delete Brevity calendar records through Action Mode so the change receives review, permissions, audit history, safe Undo, and version-conflict protection. No Apple Calendar records were changed.",
   });
 
+  if(event.queryStringParameters?.action === "sources" && session.role !== "admin") return json(403,{error:"Only household administrators can configure Apple calendars."});
   try {
     const calendar = await calendarDiscovery();
     if (event.httpMethod === "GET") {
-      const result = await eventLister(calendar);
-      return json(200, { calendar:calendar.name, syncMode:"action-reviewed", discoveryMode:calendar.discoveryMode, recurrenceMode:result.recurrenceMode, events:result.events });
+      // Injected legacy single-calendar adapters need no new storage dependency.
+      const entry = calendar.sources ? await sourceConfigReader() : {value:[],version:0};
+      const selected = normalizeAppleSources({sources:Array.isArray(entry.value)?entry.value:[]}).sources;
+      if (event.queryStringParameters?.action === "sources") {
+        if (session.role !== "admin") return json(403,{error:"Only household administrators can configure Apple calendars."});
+        return json(200, {version:entry.version, selected, calendars:(calendar.sources || []).map(({id,name,url})=>({id,name,primary:url===calendar.url})), primaryName:calendar.name});
+      }
+      const primaryId = appleCalendarId(calendar.url);
+      const additional = selected.filter(source=>source.id!==primaryId).map(source=>{
+        const discovered=calendar.sources?.find(item=>item.id===source.id);
+        if(!discovered)throw new Error(`The connected calendar “${source.name}” is unavailable. Check its Apple sharing settings or review Calendar sources. Cached events remain available.`);
+        return {...source,url:discovered.url,name:discovered.name};
+      });
+      // Fail closed on any missing source. Do not publish a fresh but incomplete
+      // snapshot that silently removes someone's commitments.
+      const results = await Promise.all([eventLister(calendar), ...additional.map(source=>eventLister(source))]);
+      const events = [...results[0].events, ...additional.flatMap((source,index)=>results[index+1].events.map(item=>mapAppleSourceEvent(item,source)))];
+      return json(200, { calendar:[calendar.name,...additional.map(item=>item.name)].join(", "), syncMode:"action-reviewed", discoveryMode:calendar.discoveryMode, recurrenceMode:results[0].recurrenceMode, events });
     }
     if (!["POST", "PUT", "DELETE"].includes(event.httpMethod)) return json(405, { error:"Method not allowed." });
     let item = {};

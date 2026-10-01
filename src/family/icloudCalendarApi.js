@@ -28,6 +28,7 @@ async function request(method, body, query = '') {
 }
 
 export function loginFamilyCalendar(pin) { return request('POST', { pin }, '?action=login') }
+export function fetchAppleCalendarSources() { return request('GET', undefined, '?action=sources') }
 export function fetchICloudCalendarEvents() { return request('GET') }
 
 function reviewedActionRequired() {

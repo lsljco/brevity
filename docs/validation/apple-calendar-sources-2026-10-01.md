@@ -1,0 +1,13 @@
+# Explicit Apple calendar sources — October 1, 2026
+
+Continues the existing Family Calendar integration. An administrator can discover calendars visible to the configured Apple account, explicitly assign additional collection IDs to household members, Family, or Church Triumphant, and submit those mappings through Action Mode. The existing shared calendar and its event assignments remain intact. Newly discovered calendars are not automatically connected.
+
+Collection identity is a SHA-256 digest of the resolved CalDAV collection URL, independent of its display name. Additional imported event identities include that collection ID. Copied Brevity lineage from another collection does not merge unrelated source records. Personal and ministry sources are read-only in Brevity; existing Family edits continue through the existing reviewed Apple write workflow. No events are moved or deleted by configuration changes.
+
+Source discovery is administrator-only. Mapping changes require strong confirmation, exact resource versions, audit history, and version-protected Undo. If a selected source disappears or fails, the aggregate refresh fails closed and the existing snapshot remains visibly stale. Calendar names follow provider renames while ownership remains explicitly configured.
+
+Validation: 1,323 unit/server checks pass; four new browser checks pass across desktop, iPhone, tablet and tablet landscape. Existing month navigation and meal editing checks also pass (eight checks). Production build and source/bundle budgets pass. Full CI and production verification are recorded in the pull request.
+
+Finance investigation: the reported screenshot contains separate balance and transaction timeouts. The signed-in production refresh on October 1 recovered without either warning and reported the bank update as accepted. This observation does not establish the timeout's root cause or guarantee that the institution will never time out again. Existing timeout/cache preservation tests pass. No bank credentials, financial records, or freshness rules were changed to hide the issue.
+
+Operational setup: privately share desired calendars with the Apple account already connected to Brevity. Open Family Calendar → Calendar sources; explicitly choose each calendar's owner and review the connections. Do not infer ownership from titles or move existing shared events automatically. Health device acceptance and household pilot observation remain deferred.

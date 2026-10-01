@@ -1,3 +1,4 @@
+import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { getHouseholdDateKey } from '../../src/finance/financeTime.js'
 import { buildAutoReconciliationReport } from '../../src/finance/autoReconciliation.js'
 import { mealIdsForDay } from '../../src/meals/mealPlanData.js'
@@ -44,6 +45,7 @@ const hashValue = (value = '') => {
 
 export function resourceForOperation(operation) {
   if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
+  if(operation.type==='apple.sources.update')return APPLE_SOURCES_RESOURCE
   if(operation.type==='module.configuration.update')return MODULE_RESOURCE
   if(operation.type.startsWith('activity.'))return `activity:${operation.targetId}:${operation.targetDate}`
   if(operation.type==='education.observation.record')return LEARNING_RESOURCE
@@ -102,6 +104,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
   if(operation.type.startsWith('vendor.'))return {before,after:applyVendorOperation(value,operation,createId)}
+  if(operation.type==='apple.sources.update')return {before,after:normalizeAppleSources(operation.payload).sources}
   if(operation.type==='module.configuration.update')return {before,after:applyModulePatch(value,operation.payload)}
   if(operation.type.startsWith('activity.'))return {before,after:applyActivity(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='education.observation.record')return {before,after:applyLearningObservation(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
