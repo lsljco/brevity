@@ -698,7 +698,7 @@ test('Next 7 Days refreshes shared chores and ages calendar verification while o
    failed=true;await refresh();await expect(section).toContainText('Not verified');await expect(section.getByRole('progressbar')).toHaveCount(0)
  })
 
-test('voice recovers a stalled microphone after read aloud and preserves a draft on manual restart',async({page})=>{
+test('voice recovers a stalled microphone after read aloud and preserves a draft on manual restart',async({page},testInfo)=>{
   await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:0,messages:[{role:'assistant',content:'Ready for your next question.'}]}}))
   await page.route('**/elevenlabs-voices',r=>r.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test voice'}]}}))
   await page.route('**/elevenlabs-tts',r=>r.fulfill({contentType:'audio/mpeg',body:'test-audio'}))
@@ -742,7 +742,12 @@ test('voice recovers a stalled microphone after read aloud and preserves a draft
   await expect(dialog.getByRole('alert')).toContainText('microphone stopped returning speech')
   await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toHaveCount(0)
   await dialog.locator('textarea').fill('Keep this draft')
-  await dialog.getByRole('button',{name:'Restart microphone',exact:true}).click()
+  const restartButton=dialog.getByRole('button',{name:'Restart microphone',exact:true})
+  const restartBox=await restartButton.boundingBox()
+  expect(restartBox.width).toBeGreaterThan(140)
+  expect(restartBox.height).toBeGreaterThanOrEqual(44)
+  await page.screenshot({path:`test-results/voice-recovery-${testInfo.project.name}.png`})
+  await restartButton.click()
   await page.evaluate(()=>{window.voiceTest.current.onaudiostart();window.voiceTest.current.onresult({results:[[{transcript:'and this new question'}]]})})
   await expect(dialog.locator('textarea')).toHaveValue('Keep this draft and this new question')
   await dialog.getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
