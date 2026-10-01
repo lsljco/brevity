@@ -1042,6 +1042,7 @@ test('meal ingredient edits require fresh nutrition or explicit manual verificat
   await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeDisabled()
   await editor.getByRole('button',{name:'Recalculate from ingredients'}).click()
   await expect(editor.getByLabel('Calories',{exact:true})).toHaveValue('167.5')
+  await expect(editor.getByLabel('Serving size',{exact:true})).toHaveValue('1 pancake')
   await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeEnabled()
   await editor.getByLabel('Protein (g)',{exact:true}).fill('10')
   await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeDisabled()

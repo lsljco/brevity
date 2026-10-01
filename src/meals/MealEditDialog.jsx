@@ -15,7 +15,7 @@ export default function MealEditDialog({meal,version,onClose}) {
       const {nutrition:result}=await calculateMealNutrition(draft.ingredients,Number(draft.yieldQuantity),draft.yieldUnit)
       if(result.clarifications?.length)throw new Error(result.clarifications.map(item=>typeof item==='string'?item:item.question||item.message).filter(Boolean).join(' ')||'Clarify ingredient amounts before calculating.')
       if(!result.perServingMacros)throw new Error('Nutrition could not be calculated. Enter and verify the macros instead.')
-      setDraft(current=>({...current,macros:result.perServingMacros}));setNotes(result.warnings||[]);setDirty(false);setChecked(false)
+      setDraft(current=>({...current,serving:result.serving||current.serving,macros:result.perServingMacros}));setNotes(result.warnings||[]);setDirty(false);setChecked(false)
     }catch(cause){setError(cause.message)}finally{setBusy('')}
   }
   const resize=()=>{try{setDraft(resizeRecipeServing({...draft,yieldQuantity:Number(draft.yieldQuantity)},Number(factor)));setFactor(1);setError('')}catch(cause){setError(cause.message)}}
