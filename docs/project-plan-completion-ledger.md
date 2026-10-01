@@ -2,6 +2,39 @@
 
 Source: Brevity_Project_Plan.pdf (nine pages, reviewed in full). This ledger distinguishes implementation, verification and real-world adoption. It does not certify the entire plan complete.
 
+## Current production checkpoint — October 1, PR #277
+
+Production implementation baseline: `b4682e2c1bf4d694dc2f965b8d2bcc6e736e34e9`, serving `index-7_MlgAKb.js`. This checkpoint supersedes older implementation-status entries below, while preserving their historical acceptance evidence.
+
+| Requested work | Delivered release evidence |
+| --- | --- |
+| Planned daily macros, two swappable snacks, personal portions and personal/family/ministry calendar filters | PR #259 |
+| One authoritative calendar date scope | PR #263 |
+| Reviewed meal title, serving and nutrition edits; automatic missing-image generation | PR #264 |
+| Reviewed reconciliation, account multi-select, persistent tablet navigation and income payer fields | PRs #265–#267 |
+| Explicit Apple calendar source-to-member/group associations | PR #268; existing mixed Family events still require explicit ownership, never title-based guesses |
+| Mobile reconciliation and tablet intelligence layout | PRs #269–#270 |
+| Consumed calories compared with saved goals, separate from planned macros; alphabetized meal choices | PR #271 |
+| Voice restart/recovery and microphone-button layout | PRs #272–#273; automated coverage does not certify a physical iPhone microphone |
+| Searchable Vendor/Payer selection and reviewed creation | PR #274; typed text alone never assigns an existing record |
+| Monthly Budget includes scheduled one-time and recurring occurrences and posted cash activity | PR #275; pending entries and transfers excluded; unmapped posted rows included in All but excluded from specific-account views |
+| Assistant can prepare reusable meal-library creation, with image generation after approval | PR #276; no implicit meal consumption or dated scheduling |
+| Parallel product-nutrition research and removal of repeated spiritual fallback cards | PR #276; no universal model-latency guarantee |
+| Concurrent independent bank sources, bounded completion polling and prompt display of acknowledged transactions | PR #277; exact repeated item/token identities remain serial |
+
+### Latest verification
+
+PR #277 passed 1,333 unit/server tests and 384 browser checks, with 24 skipped. Production dependency audit, server bundles, application build and source/bundle budgets passed. These tests cover the maintained suite, not every possible device or external-provider condition.
+
+Signed in as Larry on production, automatic transaction refresh completed at 12:43 PM Eastern and manual Sync now completed with balances checked at 12:43 PM and transactions checked at 12:44 PM on October 1. The interface returned to Sync now and reported no source errors. Earlier partial snapshots remain historical observations, not the latest observed condition. Institution availability can still vary.
+
+### Remaining boundaries
+
+- Health Connection/device acceptance and household pilot observation remain deferred by Larry. No physical-device or longitudinal-use success is fabricated.
+- Existing vendor/account/calendar ownership relationships need explicit household evidence or reviewed selection. The software must not fill them by similar names, dates or amounts.
+- Broader physical-package nutrition sampling, participant learning, a full account-level disaster exercise and additional-household expansion remain observational/operator or conditional work. They are not unfinished features to enable automatically.
+- No further unblocked implementation item was identified in this ledger review. New reported defects remain actionable; this is not a claim that future provider requests or every household workflow cannot fail.
+
 ## Current scope — October 1 closeout (PR #257)
 
 The owner explicitly deferred **Health Connection** and **Household pilot** work. Their signing/device/consent and observation requirements are not completed and are not gates for this requested technical closeout. The earlier dated sections below remain historical evidence.
