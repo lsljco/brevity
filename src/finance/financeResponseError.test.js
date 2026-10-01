@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {fetchLatestPlaidTransactions, financeResponseError} from './financeRefresh.js'
+import {fetchLatestPlaidTransactions, financeResponseError, refreshFinanceData} from './financeRefresh.js'
 import {retryRefresh, isTransientRefreshError} from '../household/retry.js'
 
 test('all-institution failures preserve their status and safe cause so automatic retry actually runs', async () => {
@@ -26,4 +26,16 @@ test('finance failure includes institution cause but excludes credentials and ar
   assert.match(error.message,/PLAID_CURSOR_READ_FAILED/)
   assert.doesNotMatch(error.message,/secret|private/)
   assert.equal(isTransientRefreshError(financeResponseError({error:'Sign in required.'},401)),false)
+})
+
+
+test('HTTP-success partial refresh retains safe provider codes in both the banner and saved freshness', async()=>{
+  const detail=await refreshFinanceData({getItem:()=>null},{persist:false,
+    fetchAccounts:async()=>({connected:false,accounts:[]}),
+    fetchTransactions:async()=>({connected:true,transactions:[],errors:[],refresh:{requested:true,accepted:0,errors:[{institution:'Fixture Bank',code:'RATE_LIMIT_EXCEEDED',message:'Update unavailable.',access_token:'secret'}]}}),
+  })
+  assert.equal(detail.transactionDataStatus,'partial')
+  assert.ok(detail.errors.some(message=>message.includes('RATE_LIMIT_EXCEEDED')))
+  assert.ok(detail.transactionFreshness.errors.some(message=>message.includes('RATE_LIMIT_EXCEEDED')))
+  assert.doesNotMatch(JSON.stringify(detail.errors),/secret/)
 })
