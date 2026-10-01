@@ -14,8 +14,8 @@ const activitySummary = totals => {
 const signedMoney = amount => `${amount > 0 ? '+' : ''}${fmtMoney(amount)}`
 const possibleMatchCount = row => row.candidates?.length || row.expectedCandidates?.length || 0
 
-export default function FinanceReconciliation({ scheduled, actuals, date, actualsAvailable, onOpenActual, onOpenScheduled }) {
-  const result = useMemo(() => reconcileFinanceDay({ scheduled, actuals, date }), [scheduled, actuals, date])
+export default function FinanceReconciliation({ scheduled, actuals, date, accountMap, actualsAvailable, onOpenActual, onOpenScheduled }) {
+  const result = useMemo(() => reconcileFinanceDay({ scheduled, actuals, date, accountMap, exactAmounts:true }), [scheduled, actuals, date, accountMap])
   const [showAll, setShowAll] = useState(false)
   const orderedRows = [...result.needsReview, ...result.rows.filter(row => row.state === 'matched')]
   const visibleRows = showAll ? orderedRows : orderedRows.slice(0, 6)
