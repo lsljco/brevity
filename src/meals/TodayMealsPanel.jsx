@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ACTION_COMPLETED_EVENT, requestActionReview, requestAssistantConversation } from '../assistant/actionEvents.js'
 import { prepareMealSubstitution } from './mealPlanApi.js'
-import { personalMealPlan, scaledIngredient } from './personalMealPlan.js'
+import { personalMealPlan, portionIngredients } from './personalMealPlan.js'
 import './TodayMealsPanel.css'
 
 const LABELS = {breakfast:'Breakfast',lunch:'Lunch',dinner:'Dinner',snack1:'Snack 1',snack2:'Snack 2'}
@@ -57,7 +57,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
       return <article className={`today-meal-card${slot.startsWith('snack')?' today-snack-card':''}`} key={slot}>
         {meal.image&&<img src={meal.image} alt={`${label}: ${meal.name}`} loading="lazy"/>}
         <div className="today-meal-card-copy"><span>{label}</span><strong>{meal.name}</strong><small>{meal.portionMultiplier}× {meal.baseServing || 'recipe serving'}</small><div className="today-meal-macros" aria-label={`${label} nutrition`}>{FIELDS.map(([key,name,unit])=><em key={key}><b>{display(meal.macros[key])}{unit==='g'?'g':''}</b> {unit==='cal'?'cal':name.toLowerCase()}</em>)}</div>
-          <details><summary>My portion &amp; nutrition basis</summary><ul>{(meal.ingredients||[]).map((item,index)=><li key={index}>{meal.portionMultiplier===1?item:scaledIngredient(item,meal.portionMultiplier)}</li>)}</ul><small>{meal.nutritionBasis}</small>{meal.sourceUrl&&<a href={meal.sourceUrl} target="_blank" rel="noreferrer">Nutrition source</a>}</details>
+          <details><summary>My portion &amp; nutrition basis</summary><ul>{portionIngredients(meal).map((item,index)=><li key={index}>{item}</li>)}</ul><small>{meal.nutritionBasis}</small>{meal.sourceUrl&&<a href={meal.sourceUrl} target="_blank" rel="noreferrer">Nutrition source</a>}</details>
           {mealDay&&!readOnly&&<button aria-label={`Swap ${label}`} onClick={()=>{setSwap({slot,id:meal.id,date:mealDay.date,version:mealDay.version});setSwapError('')}}>Swap {label}</button>}
         </div>
       </article>

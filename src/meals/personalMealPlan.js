@@ -41,3 +41,10 @@ export function scaledIngredient(text, multiplier) {
   }, 0)
   return `${round(amount * multiplier)} ${match[2]}`
 }
+
+export function portionIngredients(meal) {
+  const yieldQuantity = Number(meal?.yieldQuantity)
+  const servings = Number.isFinite(yieldQuantity) && yieldQuantity > 0 ? yieldQuantity : 1
+  const factor = (meal?.portionMultiplier ?? 1) / servings
+  return (meal?.ingredients || []).map(item => factor === 1 ? item : scaledIngredient(item, factor))
+}

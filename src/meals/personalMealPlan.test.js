@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { personalMealPlan, mealTotals, scaledIngredient } from './personalMealPlan.js'
+import { personalMealPlan, mealTotals, scaledIngredient, portionIngredients } from './personalMealPlan.js'
 import { resolveMealDay } from './mealPlanData.js'
 import { applyRecordOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 const plate={id:'plate',serving:'1 plate',macros:{calories:400,proteinGrams:40,carbohydrateGrams:30,fatGrams:12}}
@@ -27,6 +27,10 @@ test('ingredient quantities scale fractions, decimals and mixed fractions accura
   assert.equal(scaledIngredient('6 oz chicken breast',1.07),'6.4 oz chicken breast')
   assert.equal(scaledIngredient('1/2 cup spinach',2),'1 cup spinach')
   assert.equal(scaledIngredient('1 1/2 cups rice',2),'3 cups rice')
+})
+test('batch recipe ingredients are divided by the recorded yield before member portion scaling',()=>{
+  assert.deepEqual(portionIngredients({yieldQuantity:4,portionMultiplier:1.07,ingredients:['24 oz chicken breast','4 cups broccoli']}),['6.4 oz chicken breast','1.1 cups broccoli'])
+  assert.deepEqual(portionIngredients({portionMultiplier:1,ingredients:['6 oz chicken breast']}),['6 oz chicken breast'])
 })
 test('existing three-slot days receive deterministic snacks without rewriting the source',()=>{
   const day={date:'2026-10-01',version:7,meals:{breakfast:'breakfast-01',lunch:'lunch-01',dinner:'dinner-01'}}
