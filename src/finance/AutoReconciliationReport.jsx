@@ -1,15 +1,21 @@
+import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
 import { useMemo, useState } from 'react'
 import { buildAutoReconciliationReport, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
 import { fmtMoney } from './projection.js'
 
-export default function AutoReconciliationReport({ scheduled, actuals, accounts, readOnly, onReview, freshnessMessage }) {
-  const report=useMemo(()=>buildAutoReconciliationReport({scheduled,actuals,accounts}),[scheduled,actuals,accounts])
+export default function AutoReconciliationReport({ scheduled, actuals, accounts, accountIds, readOnly, onReview, freshnessMessage }) {
+  const report=useMemo(()=>{
+    const assessed=buildAutoReconciliationReport({scheduled,actuals,accounts})
+    if (!accountIds) return assessed
+    const accountMap=buildUniquePlaidAccountMap(accounts)
+    return {...assessed,suggestions:assessed.suggestions.filter(row=>accountIds.has(row.plan.acct)),ambiguous:assessed.ambiguous.filter(row=>accountIds.has(row.plan.acct)),unresolved:assessed.unresolved.filter(actual=>accountIds.has(accountMap[actual.accountId]))}
+  },[scheduled,actuals,accounts,accountIds])
   const [excluded,setExcluded]=useState(new Set()),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
   const selected=report.suggestions.filter(row=>!excluded.has(row.id)).slice(0,RECONCILIATION_BATCH_LIMIT)
   const ambiguousCount=new Set(report.ambiguous.map(row=>row.actual.id)).size
   return <section className="dash-card" aria-label="Automatic reconciliation recommendations" style={{margin:'0 0 16px',padding:20}}>
     <h2 style={{margin:'0 0 8px',fontSize:20}}>Reconciliation recommendations</h2>
-    <p style={{fontSize:12,color:'var(--muted)'}}>Brevity analyzes the last 30 days of posted expenses across your linked accounts against your plan. Nothing changes until you approve the recommended matches in Action Mode.</p>
+    <p style={{fontSize:12,color:'var(--muted)'}}>Brevity analyzes the last 30 days of posted expenses across your selected linked accounts against your plan. Nothing changes until you approve the recommended matches in Action Mode.</p>
     <p style={{fontSize:12}}>{report.suggestions.length} suggested matches · {ambiguousCount} ambiguous charges · {report.unresolved.length} other charges without a confident match</p>
     {freshnessMessage && <p style={{fontSize:11,color:'var(--muted)'}}>{freshnessMessage}</p>}
     {!report.suggestions.length && <p>No unique matches are ready for approval. Pending charges are excluded.</p>}

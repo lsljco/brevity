@@ -58,7 +58,8 @@ test('daily commitments are summarized once and edited in one authoritative list
 test('finance defaults to the operating account and projected vision',()=>{
   assert.match(planner,/data\.accounts\.find\(account => account\.name === 'Operating Account'\)/)
   assert.match(planner,/return operating \? new Set\(\[operating\.id\]\) : null/)
-  assert.match(planner,/onClick=\{\(\) => setSelectedAccts\(new Set\(\[acct\.id\]\)\)\}/)
+  assert.match(planner,/toggleFinanceAccountSelection\(previous, acct\.id, data\.accounts\)/)
+  assert.match(planner,/aria-pressed=\{isOn\}/)
   assert.match(meetings,/\[visionMode,setVisionMode\]=useState\('projected'\)/)
 })
 

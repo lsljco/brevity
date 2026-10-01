@@ -1,3 +1,4 @@
+import { toggleFinanceAccountSelection } from './accountSelection.js'
 import AutoReconciliationReport from './AutoReconciliationReport.jsx'
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
 import {useVendorDirectory} from './vendorApi.js'
@@ -2346,12 +2347,13 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       borderBottom: '1px solid rgba(255,255,255,0.06)',
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts</span>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts · select multiple</span>
       <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>
 
       {/* All pill */}
       <button
         onClick={() => setSelectedAccts(null)}
+        aria-pressed={allSelected}
         style={{
           padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
           background: allSelected ? 'var(--brevity-gold)' : 'rgba(255,255,255,0.07)',
@@ -2367,7 +2369,9 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         return (
           <button
             key={acct.id}
-            onClick={() => setSelectedAccts(new Set([acct.id]))}
+            onClick={() => setSelectedAccts(previous => toggleFinanceAccountSelection(previous, acct.id, data.accounts))}
+            aria-pressed={isOn}
+            title={isOn ? 'Selected — click to remove; at least one account stays selected' : 'Click to include this account with your current selection'}
             style={{
               padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
               border: isOn && !allSelected ? '1px solid rgba(197,164,109,0.45)' : '1px solid rgba(255,255,255,0.10)',
@@ -2508,7 +2512,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             <span style={{ color: 'var(--gold)', fontSize: 11, whiteSpace: 'nowrap' }}>Open alignment <i className="ti ti-arrow-right" /></span>
           </button>
 
-          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
+          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
           <FinanceReconciliation
             scheduled={fd.transactions}
             accountMap={plaidIdToLocal}
@@ -3014,7 +3018,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ CALENDAR ══════════ */}
       {view === 'calendar' && (
         <div className="finance-inner">
-          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
+          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
           <CalendarView vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
             readOnly={readOnly}
             setCalYear={setCalYear} setCalMonth={setCalMonth}

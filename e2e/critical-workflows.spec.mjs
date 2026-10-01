@@ -1104,3 +1104,38 @@ test('Finance reconciliation recommends matches and opens approval without mutat
   expect(prepared.operations[0].payload.date).toBe(dateKey())
   expect(writes).toBe(0)
 })
+
+test('Finance combines Operating and Savings while excluding Renovation across views',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  finance.accounts.push(
+    {id:'savings',name:'Savings Account',type:'savings',balance:2000,plaidAccountId:'bank-savings',plaidType:'depository',plaidSubtype:'savings'},
+    {id:'renovation',name:'Renovation Account',type:'checking',balance:3000,plaidAccountId:'bank-renovation',plaidType:'depository',plaidSubtype:'checking'})
+  finance.transactions=finance.accounts.map((account,index)=>({id:`planned-${account.id}`,name:`${account.name} expense`,type:'expense',amount:(index+1)*10,acct:account.id,freq:'once',start:dateKey(),end:dateKey()}))
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value='[]'
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const filters=page.getByRole('navigation',{name:'Finance account filters'})
+  await filters.getByRole('button',{name:'Savings Account',exact:true}).click()
+  await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
+  for(const view of ['Transactions','Cash Forecast','Reporting']){
+    await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:view,exact:true}).click();await closeMenuIfMobile(page,testInfo)
+    await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
+    await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
+    await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
+    if(view==='Transactions'){
+      await expect(page.getByText('Operating Account expense',{exact:true})).toBeVisible()
+      await expect(page.getByText('Savings Account expense',{exact:true})).toBeVisible()
+      await expect(page.getByText('Renovation Account expense',{exact:true})).toHaveCount(0)
+    }
+  }
+  await filters.getByRole('button',{name:'All',exact:true}).click()
+  await expect(filters.getByRole('button',{name:'All',exact:true})).toHaveAttribute('aria-pressed','true')
+  await filters.getByRole('button',{name:'Renovation Account',exact:true}).click()
+  await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
+})
