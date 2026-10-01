@@ -75,7 +75,7 @@ test('realized income excludes transfers and merchant credits', () => {
 test('budget actuals normalize Plaid categories and exclude transfers', () => {
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'RENT_AND_UTILITIES' }), 'Utilities')
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'TRANSFER_OUT' }), null)
-  assert.equal(budgetCategoryForTransaction({ amount: -24, category: 'GENERAL_MERCHANDISE', name: 'Purchase refund' }), null)
+  assert.equal(budgetCategoryForTransaction({ amount: -24, category: 'GENERAL_MERCHANDISE', name: 'Purchase refund' }), 'Income')
   assert.equal(budgetCategoryForTransaction({ amount: -500, category: 'INCOME', name: 'Employer payroll', pending:true }), null)
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'RENT_AND_UTILITIES', pending:true }), null)
   assert.deepEqual(summarizeBudgetActuals([
@@ -86,7 +86,7 @@ test('budget actuals normalize Plaid categories and exclude transfers', () => {
     { amount: -500, category: 'INCOME', name: 'Employer payroll', pending:true },
     { amount: 90, category: 'RENT_AND_UTILITIES', pending:true },
     { amount: 200, category: 'TRANSFER_OUT' },
-  ]), { Utilities: 100, Income: 500 })
+  ]), { Utilities: 100, Income: 524 })
 })
 
 test('cash flow, spending, and income reports exclude account transfers and card payments', () => {

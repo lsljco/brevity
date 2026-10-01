@@ -2358,7 +2358,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts · select multiple</span>
-      <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>
+      {view !== 'budget' && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
 
       {/* All pill */}
       <button
@@ -2438,7 +2438,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       <LuxuryStyles />
       {view !== 'scenario-modeling' && AccountFilterBar}
       {!isForm&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
-      {!formView && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {!formView && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
         <div role="status" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10, margin:'10px 28px 0', padding:'10px 13px', borderRadius:10, border:'1px solid rgba(232,150,122,.30)', background:'rgba(232,150,122,.08)', color:'var(--soft-white)', fontSize:11, lineHeight:1.45 }}>
           <span><strong>Account-linkage status:</strong> {unmappedActuals.length} bank transaction{unmappedActuals.length === 1 ? '' : 's'} across all available history {unmappedActuals.length === 1 ? 'is' : 'are'} not linked to a unique Brevity account. {unmappedActuals.length === 1 ? 'It is' : 'They are'} excluded from account balances, reconstruction, and Cash Forecast totals; use the all-bank-activity ledger to review {unmappedActuals.length === 1 ? 'it' : 'them'}.</span>
@@ -3258,6 +3258,9 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           <BudgetView vendorOrder={vendorOrder}
             data={fd}
             plaidActuals={filteredActuals}
+            freshnessMessage={actualsFreshnessMessage}
+            unmappedActuals={unmappedActuals}
+            includesUnmapped={!selectedAccts || selectedAccts.size === data.accounts.length}
             legacyAccountId={data.accounts.find(account => /\boperating\s+account\b/i.test(String(account?.name || '')))?.id || data.accounts.find(account => account.id === 'a1')?.id || ''}
             initialMonth={transactionFilter?.budgetMonth}
             onOpenTransactions={openFilteredTransactions}
@@ -3359,7 +3362,7 @@ function loadBudget() {
   try { return JSON.parse(localStorage.getItem(BUDGET_LS_KEY)) || {} } catch { return {} }
 }
 
-function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, readOnly = false }) {
+function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], includesUnmapped=false, data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, readOnly = false }) {
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
@@ -3400,27 +3403,28 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
   const monthKey = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`
   const monthFrom = `${monthKey}-01`
   const monthTo = `${monthKey}-${String(new Date(selYear, selMonth + 1, 0).getDate()).padStart(2, '0')}`
+  const unmappedMonthCount = unmappedActuals.filter(tx => String(tx.date || '').startsWith(monthKey) && !tx.pending).length
   const selectedMonthActuals = useMemo(
     () => plaidActuals.filter(tx => String(tx.date || '').startsWith(monthKey)),
     [plaidActuals, monthKey],
   )
   const syncedActualsByCategory = useMemo(() => summarizeBudgetActuals(selectedMonthActuals), [selectedMonthActuals])
-  const actualAllocation = useMemo(() => allocateBudgetActuals(selectedMonthActuals, budgetLines), [selectedMonthActuals, budgetLines])
+  const actualAllocation = useMemo(() => allocateBudgetActuals(selectedMonthActuals, budgetLines, buildUniquePlaidAccountMap(data.accounts)), [selectedMonthActuals, budgetLines, data.accounts])
   const DISPLAY_BUDGET_CATS = useMemo(() => {
     const result = { ...BUDGET_CATS }
     Object.keys(syncedActualsByCategory).forEach(category => {
-      if (category !== 'Income' && !result[category]) result[category] = []
+      if (!result[category]) result[category] = []
     })
     return result
   }, [BUDGET_CATS, syncedActualsByCategory])
 
-  // Reviewed targets are scoped to one stable recurring record, account, and
-  // year. Until a target is reviewed, the scheduled amount remains the plan.
+  // Monthly view follows every scheduled occurrence. Separately reviewed
+  // targets remain scoped by stable record, account, and year in Plan Grid.
   const getBudgeted = (line, month = selMonth, year = selYear) => {
     const planVal = budgetTargetForLine({ budget, line, year, month, legacyYear, legacyAccountId, legacyOwners })
-    if (planVal !== undefined && planVal !== null && planVal !== '') return Number(planVal) || 0
+    if (mode === 'plan' && planVal !== undefined && planVal !== null && planVal !== '') return Number(planVal) || 0
     const monthDate = new Date(year, month, 1)
-    return line.transactions.reduce((total, transaction) => total + calculateTransactionAmountForMonth(transaction, monthDate, { recurringOnly:true }), 0)
+    return line.transactions.reduce((total, transaction) => total + calculateTransactionAmountForMonth(transaction, monthDate), 0)
   }
 
   const catBudgeted = (cat) => (BUDGET_CATS[cat] || []).reduce((sum, line) => sum + getBudgeted(line), 0)
@@ -3433,7 +3437,7 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
   const totalIncomeActual = catActual('Income')
   const openBudgetBreakdown = (direction) => {
     const month = new Date(selYear, selMonth, 1)
-    const breakdownLines = buildBudgetBreakdown({ transactions:data.transactions, budget, month, direction, legacyYear, legacyAccountId, accountIds:budgetAccountIds })
+    const breakdownLines = buildBudgetBreakdown({ transactions:data.transactions, budget, month, direction, legacyYear, legacyAccountId, accountIds:budgetAccountIds, useTargets:false })
     onOpenRecurring?.({
       direction,
       budgetLines:breakdownLines,
@@ -3445,14 +3449,14 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
   }
 
   if (mode === 'monthly-view') {
-    const expenseCats = Object.entries(DISPLAY_BUDGET_CATS).filter(([c]) => c !== 'Income')
+    const expenseCats = Object.entries(DISPLAY_BUDGET_CATS)
     return (
       <div>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Monthly Budget</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{readOnly ? 'Review budgeted vs actual spending · administrator changes only' : 'Track budgeted vs actual spending · click any actual to edit'}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>All scheduled income and expenses for this month, including one-time entries. Plan Grid preserves separately reviewed targets.</p>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Month nav */}
@@ -3483,7 +3487,7 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
             const actual = label.endsWith('Actual')
             const direction = label.startsWith('Income') ? 'income' : 'expense'
             const open = actual
-              ? () => onOpenTransactions?.({ direction, ...(direction === 'income' ? { realizedIncomeOnly:true } : { postedOnly:true }), dateFrom: monthFrom, dateTo: monthTo, budgetMonth: monthKey, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
+              ? () => onOpenTransactions?.({ direction, postedOnly:true, dateFrom: monthFrom, dateTo: monthTo, budgetMonth: monthKey, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
               : () => openBudgetBreakdown(direction)
             return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open budget lines'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
@@ -3491,6 +3495,10 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
             </div>
           })}
         </div>
+
+        <p role="status" style={{fontSize:12,color:'var(--muted)',lineHeight:1.6}}>{freshnessMessage}</p>
+        {unmappedMonthCount > 0 && <p role="status" style={{fontSize:12,color:'var(--gold)',lineHeight:1.6}}>{unmappedMonthCount} posted bank entries this month have no confirmed account mapping. {includesUnmapped ? 'All includes their non-transfer activity in these totals.' : 'They are excluded from this account selection; choose All to include their non-transfer activity.'} Review Finance → Accounts to map sources by their bank IDs.</p>}
+        <p style={{fontSize:12,color:'var(--muted)',lineHeight:1.6}}>Actuals include all posted non-transfer bank activity for the selected accounts and month. Income Actual includes credits, refunds, and uncategorized deposits. Pending activity and account transfers are excluded. Bank activity without a reviewed link to a scheduled record remains included in actual totals.</p>
 
         {/* Overall expense progress */}
         {totalBudget > 0 && (
@@ -3565,7 +3573,7 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
                     })}
                     {unallocated > 0 && (
                       <div className="finance-budget-line" style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 20px 10px 40px', borderTop:'1px solid rgba(255,255,255,0.03)' }}>
-                        <span className="finance-budget-line-name" style={{ fontSize:12, color:'var(--gold)', flex:1 }}>Unallocated bank activity <small style={{ display:'block', color:'var(--muted)', marginTop:2 }}>Review these transactions and assign a budget line if needed.</small></span>
+                        <span className="finance-budget-line-name" style={{ fontSize:12, color:'var(--gold)', flex:1 }}>Unallocated bank activity <small style={{ display:'block', color:'var(--muted)', marginTop:2 }}>Included in actual totals; no reviewed link to a scheduled record.</small></span>
                         <span className="finance-budget-line-meter" style={{ width:80 }} />
                         <span className="finance-budget-line-percent" style={{ minWidth:32 }} />
                         <span className="finance-budget-line-actual" data-label="Actual" title="Actual transactions that do not map uniquely to one budget line" style={{ width:80, textAlign:'right', fontSize:12, color:'var(--white)' }}>{fmtMoney(unallocated)}</span>
@@ -3583,7 +3591,7 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
             )
           })}
         </div>
-        <p style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)' }}>{readOnly ? 'Posted actual and budget amounts are visible here; the household administrator manages corrections and targets.' : 'Actuals are calculated from posted bank activity and cannot be overwritten manually · pending transactions are excluded · budgeted amounts auto-fill from recurring transactions · use Plan Grid for reviewed target changes'}</p>
+        <p style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)' }}>{readOnly ? 'Posted actual and budget amounts are visible here; the household administrator manages corrections and targets.' : 'Actuals are calculated from posted bank activity and cannot be overwritten manually · pending transactions are excluded · budgeted amounts reflect all scheduled occurrences in this month · use Plan Grid for reviewed target changes'}</p>
       </div>
     )
   }
@@ -3627,7 +3635,7 @@ function BudgetView({ vendorOrder='', data, plaidActuals = [], legacyAccountId =
       <div className="finance-budget-plan-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Budget Plan · {selYear}</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Review monthly targets by stable record · unreviewed values follow the recurring plan · annual totals update automatically</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Review monthly targets by stable record · unreviewed values follow all scheduled occurrences · annual totals update automatically</p>
         </div>
         <div className="finance-budget-plan-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button onClick={() => setMode('monthly-view')}

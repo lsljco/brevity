@@ -1,5 +1,6 @@
 import { calculateTransactionAmountForMonth } from './monthlyCashFlow.js'
 import { budgetCategoryForTransaction } from './reportingData.js'
+import { approvedReconciliationMatches } from './autoReconciliation.js'
 
 export const BUDGET_SCHEMA_VERSION = 2
 
@@ -65,8 +66,7 @@ export function buildBudgetLines(transactions = [], budget = {}, { accountIds = 
   const selected = accountIds ? new Set([...accountIds].map(String)) : null
   transactions
     .filter(transaction => (
-      transaction?.freq !== 'once'
-      && ['income', 'expense'].includes(transaction?.type)
+      ['income', 'expense'].includes(transaction?.type)
       && (!selected || selected.has(accountIdFor(transaction)))
     ))
     .forEach(transaction => {
@@ -193,32 +193,23 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
   return next
 }
 
-export function allocateBudgetActuals(actuals = [], lines = []) {
-  const byLine = {}
-  const unallocatedByCategory = {}
-  const normalize = value => stringValue(value).toLocaleLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-  const candidatesByCategory = lines.reduce((map, line) => {
-    if (!map.has(line.category)) map.set(line.category, [])
-    map.get(line.category).push({ line, name:normalize(line.name) })
-    return map
-  }, new Map())
-
+export function allocateBudgetActuals(actuals = [], lines = [], accountMap = {}) {
+  const byLine = {}, unallocatedByCategory = {}
   for (const transaction of actuals) {
     const category = budgetCategoryForTransaction(transaction)
     if (!category) continue
     const amount = Math.abs(Number(transaction.amount) || 0)
-    const actualName = normalize(transaction.merchant_name || transaction.merchant || transaction.name)
-    const candidates = candidatesByCategory.get(category) || []
-    const exact = actualName ? candidates.filter(candidate => candidate.name === actualName) : []
-    const contains = exact.length ? [] : candidates.filter(candidate => actualName && candidate.name && (actualName.includes(candidate.name) || candidate.name.includes(actualName)))
-    const matches = exact.length ? exact : contains
-    if (matches.length === 1) byLine[matches[0].line.id] = (byLine[matches[0].line.id] || 0) + amount
+    // Only reviewed bank-record links may assign actuals to a planned line.
+    // Similar names, dates, and amounts are never identity evidence.
+    const matches = lines.filter(line => line.category === category && line.transactions?.some(plan =>
+      approvedReconciliationMatches(plan, transaction, transaction.date, accountMap)))
+    if (matches.length === 1) byLine[matches[0].id] = (byLine[matches[0].id] || 0) + amount
     else unallocatedByCategory[category] = (unallocatedByCategory[category] || 0) + amount
   }
   return { byLine, unallocatedByCategory }
 }
 
-export function buildBudgetBreakdown({ transactions = [], budget = {}, month = new Date(), direction, legacyYear, legacyAccountId, accountIds = null }) {
+export function buildBudgetBreakdown({ transactions = [], budget = {}, month = new Date(), direction, legacyYear, legacyAccountId, accountIds = null, useTargets = true }) {
   const monthIndex = month.getMonth()
   const year = month.getFullYear()
   const monthDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`
@@ -226,11 +217,11 @@ export function buildBudgetBreakdown({ transactions = [], budget = {}, month = n
   const legacyOwners = buildLegacyBudgetOwners(lines)
 
   return lines.filter(line => line.direction === direction).map(line => {
-    const override = budgetTargetForLine({ budget, line, year, month:monthIndex, legacyYear, legacyAccountId, legacyOwners })
+    const override = useTargets ? budgetTargetForLine({ budget, line, year, month:monthIndex, legacyYear, legacyAccountId, legacyOwners }) : undefined
     const amount = override !== undefined
       ? override
       : line.transactions.reduce((sum, transaction) => (
-          sum + calculateTransactionAmountForMonth(transaction, month, { recurringOnly:true })
+          sum + calculateTransactionAmountForMonth(transaction, month)
         ), 0)
     return {
       id:`budget-${line.id}-${year}-${monthIndex + 1}`,

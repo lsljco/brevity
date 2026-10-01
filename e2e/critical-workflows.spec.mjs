@@ -1301,3 +1301,59 @@ test('Empty payer picker reviews creation and keeps the transaction draft',async
   expect(prepared[1].operation.targetId).toBe('payroll')
   expect(writes).toBe(0)
 })
+
+
+test('Budget includes every scheduled occurrence and posted cash entry for its own month',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  finance.accounts.push({id:'other',name:'Other account',type:'checking',balance:100,plaidAccountId:'other-bank',plaidType:'depository',plaidSubtype:'checking'})
+  const month=dateKey().slice(0,7),date=month+'-01',next=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),1)
+  const nextDate=`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-01`
+  finance.transactions=[
+    {id:'monthly-income',acct:'a1',name:'Regular payroll fixture',type:'income',freq:'monthly',start:date,amount:1000},
+    {id:'once-income',acct:'a1',name:'One-time bonus fixture',type:'income',freq:'once',start:date,amount:500},
+    {id:'monthly-expense',acct:'a1',name:'Recurring rent fixture',cat:'Housing',type:'expense',freq:'monthly',start:date,amount:200},
+    {id:'once-expense',acct:'a1',name:'One-time repair fixture',cat:'Housing',type:'expense',freq:'once',start:date,amount:100},
+    {id:'moved',acct:'a1',name:'Moved occurrence fixture',cat:'Food',type:'expense',freq:'once',start:date,amount:40},
+    {id:'next-month',acct:'a1',name:'Next month bonus fixture',type:'income',freq:'once',start:nextDate,amount:666},
+  ]
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.lslj_budget_v1={key:'lslj_budget_v1',version:1,updatedAt:new Date().toISOString(),value:JSON.stringify({schemaVersion:2,targets:{a1:{[month.slice(0,4)]:{'a1:monthly-expense':Array(12).fill(0)}}}})}
+  const actuals=[
+    {id:'expense',name:'Posted grocery fixture',category:'FOOD_AND_DRINK',amount:25},
+    {id:'payroll',name:'Posted payroll fixture',category:'INCOME',amount:-100},
+    {id:'deposit',name:'Uncategorized deposit fixture',category:'OTHER',amount:-50},
+    {id:'refund',name:'Purchase refund fixture',category:'GENERAL_MERCHANDISE',amount:-10},
+    {id:'pending',name:'Pending fixture',category:'INCOME',amount:-5000,pending:true},
+    {id:'transfer',name:'Transfer fixture',category:'TRANSFER_IN',amount:-700},
+    {id:'next',name:'Next month bank fixture',category:'INCOME',amount:-555,date:nextDate},
+    {id:'other-account',name:'Other account fixture',category:'INCOME',amount:-99,accountId:'other-bank'},
+  ].map(tx=>({date,accountId:'plaid-operating',pending:false,...tx}))
+  records.plaid_actuals_cache.value=JSON.stringify(actuals)
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+  await page.route('**/.netlify/functions/plaid-transactions*',route=>route.fulfill({json:{connected:true,transactions:actuals,errors:[],syncedAt:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await expect(page.getByRole('combobox',{name:'Select financial timeframe'})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'Income Budgeted $1,500.00',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Expenses Budgeted $340.00',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Income Actual $160.00',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Expenses Actual $25.00',exact:true})).toBeVisible()
+  const accountFilters=page.getByRole('navigation',{name:'Finance account filters'})
+  await accountFilters.getByRole('button',{name:'All',exact:true}).click()
+  await expect(page.getByRole('button',{name:'Income Actual $259.00',exact:true})).toBeVisible()
+  await accountFilters.getByRole('button',{name:'Other account',exact:true}).click()
+  await expect(page.getByRole('button',{name:'Income Actual $160.00',exact:true})).toBeVisible()
+  await expect(page.locator('.finance-budget-line').filter({hasText:'One-time repair fixture'})).toContainText('$100.00')
+  await page.getByRole('button',{name:'Expenses Budgeted $340.00',exact:true}).click()
+  await expect(page.getByText('One-time repair fixture',{exact:true})).toBeVisible()
+  await expect(page.getByText('Moved occurrence fixture',{exact:true})).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Income Actual $160.00',exact:true}).click()
+  for(const name of ['Posted payroll fixture','Uncategorized deposit fixture','Purchase refund fixture'])await expect(page.getByText(name,{exact:true})).toBeVisible()
+  await expect(page.getByText('Pending fixture',{exact:true})).toHaveCount(0)
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Next budget month'}).click()
+  await expect(page.getByRole('button',{name:'Income Budgeted $1,666.00',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Income Actual $555.00',exact:true})).toBeVisible()
+  await page.screenshot({path:`test-results/budget-monthly-${testInfo.project.name}.png`})
+})

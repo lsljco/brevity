@@ -176,7 +176,9 @@ export function matchesTransactionFilter(transaction, filter = {}) {
 
 export function budgetCategoryForTransaction(transaction) {
   if (transaction?.pending || isTransferTransaction(transaction)) return null
-  if (transactionDirection(transaction) === 'income') return isRealizedIncomeTransaction(transaction) ? 'Income' : null
+  // Cash budgeting includes every posted non-transfer credit, including refunds
+  // and deposits awaiting classification. Income reports keep stricter semantics.
+  if (transactionDirection(transaction) === 'income') return 'Income'
   const raw = String(transaction.category || transaction.cat || '').toLowerCase().replaceAll('_', ' ')
   if (/utilit|electric|water|internet|phone|cable/.test(raw)) return 'Utilities'
   if (/mortgage|rent|home|housing/.test(raw)) return 'Housing'
