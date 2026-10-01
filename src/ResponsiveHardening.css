@@ -667,3 +667,7 @@
   .calendar-scope-dialog,
   .finance-calendar-move-dialog { max-height: calc(100vh - 32px) !important; }
 }
+
+/* Reviewed payer creation keeps the transaction draft open beneath Action Mode. */
+body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevity-assistant-backdrop { z-index: 1790; }
+body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevity-assistant-drawer { z-index: 1800; }

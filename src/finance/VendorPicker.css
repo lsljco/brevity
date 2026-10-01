@@ -1,0 +1,8 @@
+.vendor-picker{position:relative;min-width:0;width:100%;text-transform:none;letter-spacing:normal}
+.vendor-picker input[role=combobox]{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid rgba(197,164,109,.4);border-radius:9px;background:#181714;color:#fff;font:inherit}
+.vendor-picker-menu{margin-top:6px;border:1px solid rgba(197,164,109,.4);border-radius:9px;background:#181714;padding:8px;color:#fff;overflow-wrap:anywhere}
+.vendor-picker [role=listbox]{max-height:220px;overflow-y:auto}
+.vendor-picker .vendor-picker-menu button{position:static;display:block;box-sizing:border-box;width:100%;height:auto;min-height:44px;margin:0;padding:10px 12px;text-align:left;white-space:normal;transform:none;background:transparent;color:#fff;border:0;border-radius:6px;font:inherit;cursor:pointer}
+.vendor-picker .vendor-picker-menu button:hover,.vendor-picker .vendor-picker-menu button.is-active,.vendor-picker [aria-selected=true]{background:rgba(197,164,109,.2)}
+.vendor-picker .vendor-picker-menu .vendor-picker-create{color:#e0c18b;border-top:1px solid rgba(197,164,109,.3);margin-top:6px}
+.vendor-picker small{display:block;font-size:12px;line-height:1.5;color:#bfb8ac;padding:5px}
