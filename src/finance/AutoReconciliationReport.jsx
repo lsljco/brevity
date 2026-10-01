@@ -1,3 +1,4 @@
+import './AutoReconciliationReport.css'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
 import { useMemo, useState } from 'react'
 import { buildAutoReconciliationReport, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
@@ -19,9 +20,9 @@ export default function AutoReconciliationReport({ scheduled, actuals, accounts,
     <p style={{fontSize:12}}>{report.suggestions.length} suggested matches · {ambiguousCount} ambiguous charges · {report.unresolved.length} other charges without a confident match</p>
     {freshnessMessage && <p style={{fontSize:11,color:'var(--muted)'}}>{freshnessMessage}</p>}
     {!report.suggestions.length && <p>No unique matches are ready for approval. Pending charges are excluded.</p>}
-    <div style={{display:'grid',gap:10}}>{report.suggestions.map(row=><label key={row.id} style={{display:'flex',gap:10,padding:12,border:'1px solid var(--glass-border)',borderRadius:10}}>
+    <div style={{display:'grid',gap:10}}>{report.suggestions.map(row=><label key={row.id} className="reconciliation-choice">
       <input type="checkbox" aria-label={`Review match for ${row.plan.name} on ${row.occurrenceDate}`} checked={!excluded.has(row.id)} disabled={readOnly||busy} onChange={event=>setExcluded(previous=>{const next=new Set(previous);event.target.checked?next.delete(row.id):next.add(row.id);return next})}/>
-      <span style={{minWidth:0,fontSize:12,overflowWrap:'anywhere'}}><strong>{row.plan.name}</strong><br/>
+      <span><strong>{row.plan.name}</strong><br/>
         Account: {accounts.find(account=>account.id===row.plan.acct)?.name || 'Linked account'}<br/>
         Projected: {row.occurrenceDate} · {fmtMoney(Number(row.plan.amount))}<br/>
         Posted: {row.actual.date} · {fmtMoney(Number(row.actual.amount))} · {row.actual.name}<br/>
@@ -30,9 +31,9 @@ export default function AutoReconciliationReport({ scheduled, actuals, accounts,
       </span>
     </label>)}</div>
     {ambiguousCount>0 && <details style={{marginTop:12}}><summary>Review ambiguous charges</summary>{[...new Map(report.ambiguous.map(row=>[row.actual.id,row.actual])).values()].map(actual=><p key={actual.id} style={{fontSize:12}}>{actual.name} · {actual.date} · {fmtMoney(actual.amount)} — more than one possible match; no automatic recommendation.</p>)}</details>}
-    {!readOnly && <button type="button" disabled={!selected.length||busy} onClick={async()=>{setBusy(true);setMessage('');try{if(await onReview(selected))setMessage('Report prepared. Review the exact changes and approve in Action Mode.')}catch(error){setMessage(error.message||'Unable to prepare the report.')}finally{setBusy(false)}}} style={{marginTop:12}}>{busy?'Preparing report…':`Review ${selected.length} recommended matches`}</button>}
+    {!readOnly && <button type="button" disabled={!selected.length||busy} onClick={async()=>{setBusy(true);setMessage('');try{if(await onReview(selected))setMessage('Report prepared. Review the exact changes and approve in Action Mode.')}catch(error){setMessage(error.code==='VERSION_CONFLICT'||error.status===409?'Household records changed while this review was being prepared. Select Review again to load the latest recommendations and prepare a new review. Nothing was applied.':error.message||'Unable to prepare the report.')}finally{setBusy(false)}}} style={{marginTop:12}}>{busy?'Preparing report…':`Review ${selected.length} recommended matches`}</button>}
     {report.suggestions.length>RECONCILIATION_BATCH_LIMIT && <p style={{fontSize:11}}>Review up to {RECONCILIATION_BATCH_LIMIT} matches at a time. Remaining recommendations stay available.</p>}
-    {message && <p role="status">{message}</p>}
+    {message && <p role="status" className="reconciliation-message">{message}</p>}
     <p style={{fontSize:11,color:'var(--muted)'}}>Matching window: 7 days either side of posting; amount difference up to 2%, capped at $25, with a $2 minimum tolerance. Recommendations are suggestions, not proof of payment. Approved links retain both source records and can be undone in Action Mode.</p>
   </section>
 }

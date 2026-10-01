@@ -1118,11 +1118,19 @@ test('Finance reconciliation recommends matches and opens approval without mutat
   await expect(report).toContainText('Difference: $6.00')
   await expect(report).toContainText('Nothing changes until you approve')
   expect(writes).toBe(0)
+  const choice=report.locator('.reconciliation-choice').first()
+  const checkbox=await choice.getByRole('checkbox').boundingBox(),text=await choice.locator('span').first().boundingBox()
+  expect(checkbox.width).toBeLessThanOrEqual(24)
+  expect(text.width).toBeGreaterThan(180)
+  // A bank balance update on another device changes the version, not the
+  // selected match. Preparation must fetch it without applying any change.
+  records.lslj_finance_v9={...records.lslj_finance_v9,version:7,updatedAt:new Date().toISOString()}
   await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
   const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Sawnee')
   await expect(review).toContainText('Future payments stay unchanged')
   await expect(review).toContainText('$1,204.00'.replace(',',''))
+  expect(prepared.expectedVersion).toBe(7)
   expect(prepared.operations).toHaveLength(1)
   expect(prepared.operations[0].payload.reconciliation.actualId).toBe('sawnee-posted')
   expect(prepared.operations[0].targetDate).toBe(projected)
@@ -1216,4 +1224,25 @@ test('Apple calendar sources require explicit member selection and prepare revie
   expect(prepared[0].operation.type).toBe('apple.sources.update')
   expect(prepared[0].operation.payload.sources).toEqual([{id:personalId,name:'Personal appointments',owner:'Larry'},{id:churchId,name:'Ministry',owner:'Church Triumphant'}])
   expect(executed).toHaveLength(0)
+})
+
+test('Finance reconciliation refresh rejects changed match evidence before preparing approval',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  finance.transactions=[{id:'utility-plan',name:'Sawnee EMC - Electric',type:'expense',amount:1204,acct:'a1',freq:'once',start:dateKey(),end:dateKey()}]
+  const actual={id:'utility-posted',accountId:'plaid-operating',name:'SAWNEE EMC BANK DRAFT',category:'UTILITIES',amount:1210,date:dateKey(),pending:false}
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value=JSON.stringify([actual])
+  const prepared=[]
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Dashboard',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const report=page.getByRole('region',{name:'Automatic reconciliation recommendations'})
+  await expect(report).toContainText('Difference: $6.00')
+  records.plaid_actuals_cache={...records.plaid_actuals_cache,value:JSON.stringify([{...actual,amount:1211}]),version:8,updatedAt:new Date().toISOString()}
+  await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
+  await expect(report.getByRole('status')).toContainText('report changed')
+  await expect(report).toContainText('Difference: $7.00')
+  expect(prepared).toHaveLength(0)
+  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toHaveCount(0)
 })

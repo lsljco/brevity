@@ -1,0 +1,27 @@
+.finance-root .reconciliation-choice {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+.finance-root .reconciliation-choice input[type="checkbox"] {
+  width: 22px;
+  min-width: 22px;
+  max-width: 22px;
+  height: 22px;
+  margin: 2px 0 0;
+  padding: 0 !important;
+  accent-color: var(--gold);
+}
+.finance-root .reconciliation-choice > span {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.reconciliation-message { padding: 12px; border: 1px solid var(--gold); border-radius: 10px; }

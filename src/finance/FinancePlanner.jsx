@@ -1857,7 +1857,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       showToast('Review this financial change in Action Mode')
       return true
     } catch (error) {
-      setStorageError(error.message || 'This financial change could not be prepared safely.')
+      if (!surfaceError) setStorageError(error.message || 'This financial change could not be prepared safely.')
       showToast('⚠ Financial change not prepared')
       if (surfaceError) throw error
       return false
@@ -1865,9 +1865,18 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   }
 
   const reviewReconciliationReport = async selected => {
-    // Rebuild from the current bank cache and saved plan; never submit stale UI rows.
-    const current = dataRef.current
-    const fresh = buildAutoReconciliationReport({scheduled:current.transactions,actuals:plaidActuals || [],accounts:current.accounts})
+    // Another device or a balance refresh may have advanced the shared version.
+    // Read authoritative records before creating a proposal, then compare the
+    // selected evidence again. This never rebases or applies an approved action.
+    await syncSharedState(localStorage)
+    const current = loadData()
+    const savedActuals = JSON.parse(localStorage.getItem(PLAID_ACTUALS_KEY) || '[]')
+    if (!Array.isArray(savedActuals)) throw new Error('Refresh Finance before reviewing bank matches.')
+    dataRef.current = current
+    setData(current)
+    setPlaidActuals(savedActuals)
+    setStorageError('')
+    const fresh = buildAutoReconciliationReport({scheduled:current.transactions,actuals:savedActuals,accounts:current.accounts})
     const rows = selected.map(row=>fresh.suggestions.find(candidate=>candidate.id===row.id && JSON.stringify(candidate.evidence)===JSON.stringify(row.evidence)))
     if (!rows.length || rows.length > RECONCILIATION_BATCH_LIMIT || rows.some(row=>!row)) throw new Error('The reconciliation report changed. Review the refreshed recommendations.')
     return stageDirectFinanceReview({summary:`Reconcile ${rows.length} projected expenses with posted bank charges`,operations:rows.map(reconciliationOperation),storageKey:LS_KEY,expectedVersion:captureFinanceReviewVersion(),surfaceError:true})
