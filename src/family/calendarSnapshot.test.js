@@ -50,3 +50,16 @@ test('legacy calendar caches are visible but never described as current', () => 
   assert.equal(health.usable, true)
   assert.match(health.message, /freshness cannot be verified/i)
 })
+
+test('a recovered persistent cache wins over an older temporary session copy on reload',()=>{
+  setLiveCalendarSnapshot(null)
+  const old=stampCalendarSuccess({events:[{id:'old'}]},'2026-10-01T08:00:00Z')
+  const current=stampCalendarSuccess({events:[{id:'current'}]},'2026-10-01T08:05:00Z')
+  assert.equal(readCurrentCalendarSnapshot({getItem:()=>JSON.stringify(current)},{getItem:()=>JSON.stringify(old)}).events[0].id,'current')
+})
+
+test('calendar verification uses household time and future clocks cannot certify freshness',()=>{
+  const snapshot=stampCalendarSuccess({events:[]},'2026-10-01T08:00:00Z')
+  assert.match(calendarSnapshotHealth(snapshot,{now:new Date('2026-10-01T08:01:00Z')}).message,/4:00 AM/)
+  assert.equal(calendarSnapshotHealth(snapshot,{now:new Date('2026-10-01T07:00:00Z')}).state,'stale')
+})

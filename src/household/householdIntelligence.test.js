@@ -38,3 +38,17 @@ test('Today intelligence is all clear when no operating exceptions exist', () =>
   assert.equal(model.signals.length, 0)
   assert.equal(model.allClear, true)
 })
+
+test('operating intelligence honors saved custom chores and deleted occurrences by their exact IDs',()=>{
+  const today=new Date(2026,9,1)
+  const defaults=buildHouseholdMaintenanceWeek(today)
+  const deletedOccurrences=Object.fromEntries(defaults.flatMap(day=>day.tasks.map(task=>[task.occurrenceId,true])))
+  const records={
+    [HOUSEHOLD_MAINTENANCE_STORAGE_KEY]:JSON.stringify({trackingStartedOn:'2026-09-28',deletedOccurrences,customChores:[{id:'custom-1',date:'2026-09-30',title:'Reviewed custom responsibility',owners:['Larry']}]}),
+    [HOUSEHOLD_INVENTORY_STORAGE_KEY]:JSON.stringify({items:[]}),
+  }
+  const model=buildUnifiedHouseholdIntelligence({storage:storage(records),today,currentMember:'Larry'})
+  assert.equal(model.metrics.householdOverdue,1)
+  assert.equal(model.signals.length,1)
+  assert.equal(model.signals[0].id,'overdue-2026-09-30:custom-custom-1')
+})

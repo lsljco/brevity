@@ -34,7 +34,7 @@ const formatStart = startsAt => startsAt
   ? new Date(startsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   : 'All day'
 
-function AttentionPanel({ items, onOpenCalendar }) {
+function AttentionPanel({ items, onOpenCalendar, onOpenPillar }) {
   if (!items.length) return <section className="today-attention today-attention--clear"><i className="ti ti-circle-check" aria-hidden="true" /><div><strong>No household items need attention</strong><span>Brevity has not identified an unresolved household priority or operational exception for today.</span></div></section>
 
   return <section className="today-attention" aria-labelledby="today-attention-title">
@@ -42,6 +42,7 @@ function AttentionPanel({ items, onOpenCalendar }) {
     <div className="today-attention-list">{items.map(item => <article key={item.id} className={`today-attention-item today-attention-item--${item.priority}`}>
       <i className={`ti ${item.source.system === 'integration' ? 'ti-plug-connected-x' : item.source.recordType === 'household-priority' ? 'ti-home-exclamation' : 'ti-alert-triangle'}`} aria-hidden="true" />
       <div><strong>{item.title}</strong>{item.detail && <span>{item.detail}</span>}<small>{item.source.recordType === 'household-priority' ? 'Household Management · Unresolved priority' : `${PILLAR_META[item.pillar]?.[0] || 'Household'} · Operational exception`}</small></div>
+      {item.source.system === 'household-operations' && <button type="button" onClick={() => onOpenPillar?.('household')}>Review Household Operations <i className="ti ti-arrow-right" /></button>}
       {item.source.recordType === 'calendar-health' && <button type="button" onClick={onOpenCalendar}>Review Calendar <i className="ti ti-arrow-right" /></button>}
     </article>)}</div>
   </section>
@@ -196,12 +197,12 @@ function TodayFitnessWorkout({ date, currentMember, fitness, onOpenPillar }) {
   </section>
 }
 
-export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealLibrary = [], mealPlanState = 'loading', mealPlanError = '', readOnly = false, canViewFinance = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onViewSchedule, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle', browsingDate = false }) {
+export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealLibrary = [], mealPlanState = 'loading', mealPlanError = '', readOnly = false, canViewFinance = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], householdSignals = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onViewSchedule, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle', browsingDate = false }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
   const [calendarSelection,setCalendarSelection] = useState({member:currentMember,selected:[currentMember]})
   const selectedCalendars = calendarSelection.member === currentMember ? calendarSelection.selected : [currentMember]
   const visibleAppointments = calendarAppointments.filter(item => matchesCalendarScopes(item,selectedCalendars))
-  const readModel = buildTodayReadModel({plan:dailyPlan,calendarAppointments:visibleAppointments,calendarHealth,currentMember})
+  const readModel = buildTodayReadModel({plan:dailyPlan,calendarAppointments:visibleAppointments,calendarHealth,currentMember,householdSignals})
   const [showDecisions, setShowDecisions] = useState(false)
   const [editingFocus, setEditingFocus] = useState(false)
   const [focusDraft, setFocusDraft] = useState(dailyPlan.household?.keyFocus || '')
@@ -258,7 +259,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
 
     <section className="today-pillar-stack" data-pillar="household">
       <div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Household Operations</h2></div>
-      <AttentionPanel items={readModel.attentionItems} onOpenCalendar={onOpenCalendar} />
+      <AttentionPanel onOpenPillar={onOpenPillar} items={readModel.attentionItems} onOpenCalendar={onOpenCalendar} />
       <section className="today-focus-card"><div><span>{browsingDate ? 'Daily Focus' : "Today's Focus"}</span><h2>{browsingDate && !dailyPlan.household?.keyFocus ? 'No focus has been set for this day.' : readModel.focus.headline}</h2>{(!browsingDate || dailyPlan.household?.keyFocus) && readModel.focus.detail && <p>{readModel.focus.detail}</p>}{readModel.governingPrinciple && <p>{readModel.governingPrinciple}</p>}{!readOnly && <button type="button" className="today-focus-edit" onClick={() => { setFocusDraft(dailyPlan.household?.keyFocus || ''); setFocusState('idle'); setFocusError(''); setEditingFocus(true) }}><i className="ti ti-pencil" /> Set Today’s Focus</button>}</div><button type="button" className="today-decision-count" onClick={() => setShowDecisions(true)} disabled={!readModel.counts.decisions} aria-haspopup="dialog" aria-expanded={showDecisions}><strong>{readModel.counts.decisions}</strong><span>{readModel.counts.decisions ? readModel.counts.decisions === 1 ? 'decision needs attention' : 'decisions need attention' : 'no decisions need attention'}</span><i className={`ti ${readModel.counts.decisions ? 'ti-chevron-right' : 'ti-circle-check'}`} aria-hidden="true" /></button></section>
       <TodayHouseholdChores chores={householdChores} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
       <TodayCalendarAgenda filters={<CalendarScopeFilter selected={selectedCalendars} onChange={selected=>setCalendarSelection({member:currentMember,selected})}/>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />

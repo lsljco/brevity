@@ -156,3 +156,12 @@ test('next commitment follows the household date and clock rather than the devic
 
   assert.equal(model.nextCommitment.title, 'Household-zone next commitment')
 })
+
+test('Today includes authoritative operations exceptions without joining similarly named records',()=>{
+  const signals=[{id:'overdue-occurrence-a',title:'Overdue: Clean kitchen',detail:'Source A',priority:'high'},{id:'overdue-occurrence-b',title:'Overdue: Clean kitchen',detail:'Source B',priority:'high'}]
+  const model=buildTodayReadModel({plan:{date:'2026-10-01'},householdSignals:signals})
+  assert.equal(model.counts.attention,2)
+  assert.deepEqual(model.attentionItems.map(item=>item.source.recordId),signals.map(item=>item.id))
+  assert.ok(model.attentionItems.every(item=>item.source.system==='household-operations'))
+  assert.equal(buildTodayReadModel({plan:{date:'2026-10-01'},householdSignals:[]}).counts.attention,0)
+})

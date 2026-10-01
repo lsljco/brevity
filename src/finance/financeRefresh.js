@@ -87,7 +87,7 @@ async function apiFetch(path, { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   try {
     const response = await fetch(`${API}${path}`, { credentials: 'include', headers: { 'content-type': 'application/json' }, signal: controller.signal })
     const body = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(body.detail || body.error || `Finance refresh failed (${response.status}).`)
+    if (!response.ok) throw financeResponseError(body, response.status)
     return body
   } catch (error) {
     if (error?.name === 'AbortError') {
@@ -101,6 +101,20 @@ async function apiFetch(path, { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   } finally {
     clearTimeout(timeout)
   }
+}
+
+export function financeResponseError(body = {}, status = 500) {
+  const summary = body.detail || body.error || `Finance refresh failed (${status}).`
+  // The server provides curated messages; never expose raw provider payloads,
+  // credentials, account IDs or request metadata in the household banner.
+  const failures = (Array.isArray(body.errors) ? body.errors : []).map(item => {
+    const code = /^[A-Z][A-Z0-9_]{1,79}$/.test(item?.code || '') ? item.code : ''
+    return [item?.institution || 'Bank', item?.message || 'Transaction synchronization failed.', code && `(${code})`].filter(Boolean).join(': ')
+  })
+  const error = new Error([summary, ...failures].join(' '))
+  error.code = 'FINANCE_SOURCE_ERROR'
+  error.status = status
+  return error
 }
 
 const TRANSACTION_FINGERPRINT_FIELDS = ['id','accountId','itemId','name','originalStatement','amount','date','category','type','institution','pending','pendingTransactionId']

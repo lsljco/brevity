@@ -585,3 +585,43 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
    await filter.getByRole('button',{name:'All',exact:true}).click()
    await expect(filter.getByRole('button',{name:'All',exact:true})).toHaveAttribute('aria-pressed','true')
  })
+
+test('startup retries a generic institution failure and does not retain its stale alert',async({page})=>{
+  let attempts=0
+  await page.route('**/.netlify/functions/plaid-transactions*',async route=>{
+    const url=new URL(route.request().url())
+    if(url.search)return route.fulfill({status:200,json:{refresh:{requested:false,accepted:0}}})
+    attempts++
+    return route.fulfill(attempts===1
+      ? {status:502,json:{error:'Transaction sync failed for every connected institution.',errors:[{institution:'Fixture Bank',code:'INSTITUTION_DOWN',message:'Transactions could not be refreshed for this institution.'}]}}
+      : {status:200,json:{connected:false,transactions:[],errors:[]}})
+  })
+  await page.reload()
+  await expect.poll(()=>attempts).toBeGreaterThanOrEqual(2)
+  await expect(page.locator('body')).not.toContainText('Transaction sync failed for every connected institution.')
+})
+
+test('persistent transaction failures disclose a safe cause and release the refresh spinner',async({page})=>{
+  await page.route('**/.netlify/functions/plaid-transactions*',async route=>route.fulfill({status:502,json:{error:'Transaction sync failed for every connected institution.',errors:[{institution:'Fixture Bank',code:'PLAID_CURSOR_READ_FAILED',message:'The transaction checkpoint could not be read.'}]}}))
+  await page.reload()
+  const details=page.getByRole('button',{name:'View details',exact:true})
+  await expect(details).toBeVisible({timeout:15000})
+  await details.click()
+  await expect(page.locator('body')).toContainText('PLAID_CURSOR_READ_FAILED')
+  await expect(page.getByRole('button',{name:'Refresh all',exact:true})).toBeEnabled()
+  await expect(page.locator('body')).not.toContainText('Refreshing bank balances and transactions…')
+})
+
+test('Today reflects inventory source exceptions and clears them after a newer source read',async({page})=>{
+  let quantity=1
+  await page.route('**/.netlify/functions/household-state*',async route=>{
+    const key='brevity_household_inventory_v1'
+    return route.fulfill({status:200,json:{records:{[key]:{key,version:quantity,value:JSON.stringify({items:[{id:'inventory-audit-source',name:'Audit paper towels',quantity,parLevel:4,unit:'rolls'}],waste:[]}),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}})
+  })
+  await page.reload()
+  await expect(page.locator('.today-attention')).toContainText('Replenish Audit paper towels')
+  await expect(page.locator('.today-attention')).not.toContainText('No household items need attention')
+  quantity=5
+  await page.reload()
+  await expect(page.locator('.today-attention')).not.toContainText('Replenish Audit paper towels')
+})

@@ -9,6 +9,8 @@ const SYNC_MUTATION_CODE = 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION'
 const MAX_PENDING_TRANSACTIONS = 10_000
 const MAX_PENDING_REMOVALS = 10_000
 const MAX_PENDING_BYTES = 4_000_000
+const SYNC_REQUEST_TIMEOUT_MS = 15_000
+const SYNC_TIME_BUDGET_MS = 45_000
 
 let nativePlaid = null, plaidClient = null
 exports.setNativePlaid = value => { nativePlaid = value; plaidClient = null }
@@ -80,8 +82,11 @@ async function syncItemTransactions({
   initialCursor = '',
   maxPages = MAX_SYNC_PAGES,
   maxMutationRestarts = MAX_MUTATION_RESTARTS,
+  now = Date.now,
+  timeBudgetMs = SYNC_TIME_BUDGET_MS,
 }) {
   let restarts = 0
+  const deadline = now() + timeBudgetMs
 
   while (true) {
     let cursor = initialCursor || ''
@@ -93,6 +98,12 @@ async function syncItemTransactions({
 
     try {
       while (hasMore) {
+        const remaining = deadline - now()
+        if (remaining <= 0) {
+          const error = new Error('Plaid transaction sync exhausted its bounded refresh window.')
+          error.code = 'PLAID_SYNC_TIMEOUT'
+          throw error
+        }
         if (pages >= maxPages) {
           const error = new Error('Plaid transaction sync exceeded the safe pagination limit.')
           error.code = 'PLAID_SYNC_PAGE_LIMIT'
@@ -105,7 +116,7 @@ async function syncItemTransactions({
           ...(cursor ? { cursor } : {}),
           count:SYNC_PAGE_SIZE,
           options:{ include_personal_finance_category:true },
-        })
+        }, { timeout:Math.min(SYNC_REQUEST_TIMEOUT_MS, remaining) })
         const data = response?.data || {}
         const nextCursor = String(data.next_cursor || '')
         hasMore = Boolean(data.has_more)
@@ -211,12 +222,24 @@ async function syncAndStageItem({
 }
 
 function transactionError(itemId, institution, error) {
-  const code = plaidErrorCode(error) || 'PLAID_SYNC_ERROR'
+  const originalCode = plaidErrorCode(error)
+  const code = ['ECONNABORTED','ETIMEDOUT'].includes(originalCode) ? 'PLAID_SYNC_TIMEOUT' : originalCode || 'PLAID_SYNC_ERROR'
+  const messages = {
+    PLAID_SYNC_TIMEOUT:'The bank transaction request timed out. The prior cursor and verified history were retained; Brevity can retry safely.',
+    PLAID_CURSOR_READ_FAILED:'The transaction checkpoint could not be read. Saved transaction history was retained.',
+    PLAID_CURSOR_WRITE_FAILED:'The transaction checkpoint could not be saved. No unacknowledged changes were marked current.',
+    PLAID_CURSOR_VERSION_MISSING:'The transaction checkpoint has no safe version marker. Saved history was retained for repair.',
+    PLAID_PENDING_DELTA_DAMAGED:'The staged transaction batch could not be validated. Saved history and its checkpoint were retained for repair.',
+    PLAID_SYNC_INVALID_CURSOR:'The bank did not return a usable transaction checkpoint. Saved history was retained.',
+    RATE_LIMIT_EXCEEDED:'The bank transaction service is rate limited. Saved history was retained; retry after the service recovers.',
+    INSTITUTION_DOWN:'The institution is temporarily unavailable for transaction updates. Saved history was retained.',
+    INSTITUTION_NOT_RESPONDING:'The institution did not respond to the transaction request. Saved history was retained.',
+  }
   return {
     itemId,
     institution:institution || 'Connected institution',
     code,
-    message:code === 'ITEM_LOGIN_REQUIRED'
+    message:messages[code] || (code === 'ITEM_LOGIN_REQUIRED'
       ? 'This bank connection needs to be re-authenticated.'
       : code === SYNC_MUTATION_CODE
         ? 'Transactions changed while Plaid was paging this institution. Brevity retained the prior verified history; try the refresh again.'
@@ -226,7 +249,7 @@ function transactionError(itemId, institution, error) {
             ? 'This institution returned more transaction pages than Brevity can safely apply in one refresh.'
             : code === 'PLAID_SYNC_DELTA_LIMIT'
               ? 'This institution returned more transaction changes than Brevity can safely stage in one refresh.'
-            : 'Transactions could not be refreshed for this institution.',
+            : 'Transactions could not be refreshed for this institution.'),
   }
 }
 
@@ -292,7 +315,7 @@ exports.handler = async event => {
       const errors = []
       for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
         try {
-          const response = await getPlaidClient().itemGet({ access_token:accessToken })
+          const response = await getPlaidClient().itemGet({ access_token:accessToken }, { timeout:15_000 })
           const lastSuccessfulUpdate = lastSuccessfulTransactionUpdate(response)
           statuses.push({ itemId, institution:institution || 'Connected institution', lastSuccessfulUpdate, complete:transactionRefreshCompleted(lastSuccessfulUpdate, requestedAt) })
         } catch (error) {
@@ -318,7 +341,7 @@ exports.handler = async event => {
     for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
       if (requestRefresh) {
         try {
-          await getPlaidClient().transactionsRefresh({ access_token:accessToken })
+          await getPlaidClient().transactionsRefresh({ access_token:accessToken }, { timeout:20_000 })
           refresh.accepted += 1
         } catch (error) {
           const code = plaidErrorCode(error) || 'TRANSACTIONS_REFRESH_FAILED'
@@ -402,5 +425,6 @@ exports.pendingDeltaResult = pendingDeltaResult
 exports.responseBody = responseBody
 exports.lastSuccessfulTransactionUpdate = lastSuccessfulTransactionUpdate
 exports.transactionRefreshCompleted = transactionRefreshCompleted
+exports.transactionError = transactionError
 exports.syncAndStageItem = syncAndStageItem
 exports.syncItemTransactions = syncItemTransactions

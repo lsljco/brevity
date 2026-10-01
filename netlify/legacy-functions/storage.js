@@ -155,7 +155,7 @@ async function getTransactionSyncState(itemId, event) {
         : { state:null, etag:'', exists:false }
     } catch (error) {
       if (error?.status === 404 || error?.statusCode === 404) return { state:null, etag:'', exists:false }
-      throw new Error(`Plaid transaction cursor could not be read: ${error.message}`)
+      throw Object.assign(new Error(`Plaid transaction cursor could not be read: ${error.message}`), { code:'PLAID_CURSOR_READ_FAILED' })
     }
   }
   if (isHostedRuntime()) throw new Error('Persistent Plaid transaction cursor storage is unavailable in this deployment.')
@@ -168,7 +168,7 @@ async function setTransactionSyncState(itemId, state, event, expected = {}) {
   const key = syncCursorKey(itemId)
   const backend = makeSyncCursorStore(event)
   if (backend) {
-    if (expected.exists && !expected.etag) throw new Error('Plaid transaction cursor did not include a safe version marker.')
+    if (expected.exists && !expected.etag) throw Object.assign(new Error('Plaid transaction cursor did not include a safe version marker.'), { code:'PLAID_CURSOR_VERSION_MISSING' })
     try {
       const result = await backend.store.setJSON(key, state, expected.exists ? { onlyIfMatch:expected.etag } : { onlyIfNew:true })
       if (result?.modified === false) {
@@ -184,7 +184,7 @@ async function setTransactionSyncState(itemId, state, event, expected = {}) {
         conflict.code = 'PLAID_CURSOR_CONFLICT'
         throw conflict
       }
-      throw new Error(`Plaid transaction cursor could not be saved: ${error.message}`)
+      throw Object.assign(new Error(`Plaid transaction cursor could not be saved: ${error.message}`), { code:'PLAID_CURSOR_WRITE_FAILED' })
     }
   }
   if (isHostedRuntime()) throw new Error('Persistent Plaid transaction cursor storage is unavailable in this deployment.')
