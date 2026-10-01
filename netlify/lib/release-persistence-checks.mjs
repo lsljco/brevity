@@ -1,4 +1,4 @@
-import {createHouseholdBackup,restoreReviewedBackupRecord} from './household-backup.mjs'
+import {BACKUP_STORES,createHouseholdBackup,readBackupRecord,restoreReviewedBackupRecord} from './household-backup.mjs'
 import {createConversationRepository} from './assistant-conversation-store.mjs'
 import {createUsageRepository} from './usage-metrics.mjs'
 import assert from 'node:assert/strict'
@@ -88,14 +88,38 @@ export async function verifyReleasePersistence({store,runId}){
  assert.equal((await usage().summary(['Larry'])).members[0].requests,1)
  assert.equal((await usage().summary(['Lorenzo'])).members[0].requests,0);checks.usagePersistenceDeduplicationAndIsolation=true
 
- const backupDestination=scoped('backups'),fixtureKey=`${runId}/backup-input/fixture`
- await store.setJSON(fixtureKey,{synthetic:true,value:'recovery rehearsal'})
- const snapshot=await createHouseholdBackup({id:runId,destination:backupDestination,sourceStore:()=>({async *list(){yield{blobs:[{key:'fixture'}]}},getWithMetadata:(_,options)=>store.getWithMetadata(fixtureKey,options)})})
- assert.equal(snapshot.state,'complete')
- const snapshotRecord=snapshot.records[0],restoredKey=`${runId}/backup-restored/fixture`
- await restoreReviewedBackupRecord({destination:backupDestination,manifest:snapshot,recordId:snapshotRecord.recordId,confirmHash:snapshotRecord.hash,target:{set:(_,bytes,options)=>store.set(restoredKey,bytes,options)}})
- assert.deepEqual(await store.get(restoredKey,{type:'json'}),{synthetic:true,value:'recovery rehearsal'})
- await assert.rejects(()=>restoreReviewedBackupRecord({destination:backupDestination,manifest:snapshot,recordId:snapshotRecord.recordId,confirmHash:snapshotRecord.hash,target:{set:(_,bytes,options)=>store.set(restoredKey,bytes,options)}}),/changed after review/)
+ const backupDestination=scoped('backups')
+ // Rehearse every covered store into a fresh run-scoped destination. Distinct
+ // source records catch accidental cross-store substitution during restoration.
+ for(const name of BACKUP_STORES)await store.setJSON(`${runId}/backup-input/${name}`,{synthetic:true,store:name,stableId:`fixture-${name}`,version:7})
+ const snapshot=await createHouseholdBackup({id:runId,destination:backupDestination,sourceStore:name=>({async *list(){yield{blobs:[{key:'fixture'}]}},getWithMetadata:(_,options)=>store.getWithMetadata(`${runId}/backup-input/${name}`,options)})})
+ assert.equal(snapshot.state,'complete');assert.equal(snapshot.records.length,BACKUP_STORES.length)
+ for(const record of snapshot.records){
+  const restoredKey=`${runId}/backup-restored/${record.store}`,target={set:(_,bytes,options)=>store.set(restoredKey,bytes,options)}
+  const args={destination:backupDestination,manifest:snapshot,recordId:record.recordId,confirmHash:record.hash,target}
+  await restoreReviewedBackupRecord(args)
+  const expected={synthetic:true,store:record.store,stableId:`fixture-${record.store}`,version:7}
+  assert.deepEqual(await store.get(restoredKey,{type:'json'}),expected)
+  await assert.rejects(()=>restoreReviewedBackupRecord(args),/changed after review/)
+  const reviewed=await store.getWithMetadata(restoredKey,{type:'json'})
+  await store.setJSON(restoredKey,{...expected,version:8},{onlyIfMatch:reviewed.etag})
+  await assert.rejects(()=>restoreReviewedBackupRecord({...args,expectedEtag:reviewed.etag}),/changed after review/)
+  assert.equal((await store.get(restoredKey,{type:'json'})).version,8)
+  // A fresh operator review permits recovery; the newer pre-image is retained.
+  const current=await store.getWithMetadata(restoredKey,{type:'json'})
+  await store.setJSON(`${runId}/restore-audit/${record.store}`,{before:current.data,sourceHash:record.hash},{onlyIfNew:true})
+  await restoreReviewedBackupRecord({...args,expectedEtag:current.etag})
+  assert.deepEqual(await store.get(restoredKey,{type:'json'}),expected)
+  const restored=await store.getWithMetadata(restoredKey,{type:'json'})
+  const audit=await store.get(`${runId}/restore-audit/${record.store}`,{type:'json'})
+  assert.notEqual((await store.setJSON(restoredKey,audit.before,{onlyIfMatch:restored.etag})).modified,false)
+  assert.equal((await store.get(restoredKey,{type:'json'})).version,8)
+ }
+ const firstBackup=snapshot.records[0],path=`${snapshot.root}/records/${firstBackup.recordId}`
+ const envelope=await backupDestination.get(path,{type:'json'})
+ await backupDestination.setJSON(path,{...envelope,data:Buffer.from('corrupt fixture').toString('base64')})
+ await assert.rejects(()=>readBackupRecord({destination:backupDestination,manifest:snapshot,recordId:firstBackup.recordId}),/integrity/)
  checks.backupIntegrityConditionalRestoreRehearsal=true
+ checks.allCoveredStoresRecoveryAndRollback=true
  return{passed:true,checks,syntheticData:true,productionWrites:false,scope:'Real action executor and persistence; no browser confirmation interaction.'}
 }

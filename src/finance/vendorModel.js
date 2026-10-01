@@ -44,7 +44,17 @@ export function applyVendorOperation(input,operation,createId){
  else if(operation.type==='vendor.document.remove')vendor.documents=(vendor.documents||[]).filter(doc=>doc.blobId!==payload.blobId)
  return value
 }
-export const vendorForExpense=(workspace,kind,expense)=>(kind==='planned'?expense.vendorId:workspace?.links?.[`${kind}:${expense.id}`])||''
+export function vendorForExpense(workspace,kind,expense){
+ if(kind==='planned')return expense.vendorId||''
+ const links=workspace?.links||{},direct=links[`${kind}:${expense.id}`]
+ if(direct)return direct
+ // Resolve the original reviewed assignment without copying it. Undo of that
+ // assignment therefore affects both lifecycle records; explicit posted edits win.
+ if(kind==='posted'&&expense.pending===false&&typeof expense.pendingTransactionId==='string'&&expense.pendingTransactionId&&expense.pendingTransactionId!==expense.id){
+  return links[`posted:${expense.pendingTransactionId}`]||''
+ }
+ return ''
+}
 export function vendorActivity(workspace,posted=[],planned=[],{dateFrom='',dateTo=''}={}){
  const seen=new Set(),rows=[]
  for(const tx of posted){

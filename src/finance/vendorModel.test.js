@@ -1,9 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {emptyVendors,applyVendorOperation,normalizeVendorPayload,vendorActivity,VENDOR_RESOURCE} from './vendorModel.js'
+import {emptyVendors,applyVendorOperation,normalizeVendorPayload,vendorActivity,vendorForExpense,VENDOR_RESOURCE} from './vendorModel.js'
 import {normalizeActionProposal} from '../../netlify/lib/assistant-action-contract.mjs'
 import {prepareRecordOperations,commitPreparedRecordOperations,resourceForOperation} from '../../netlify/lib/assistant-action-executor.mjs'
 const create=()=>applyVendorOperation(emptyVendors(),{type:'vendor.create',payload:{name:'Sample Insurance',website:'https://example.com',accessMembers:[]}},()=> 'vendor-1')
+test('posted vendor lineage uses only the provider ID and preserves explicit override and Undo',()=>{
+ const workspace=create();workspace.links['posted:pending-1']='vendor-1'
+ const posted={id:'posted-1',pending:false,pendingTransactionId:'pending-1',amount:115,name:'Changed merchant',date:'2026-10-01'}
+ assert.equal(vendorForExpense(workspace,'posted',posted),'vendor-1')
+ assert.equal(vendorActivity(workspace,[posted]).totals['vendor-1'].net,115)
+ for(const tx of [{...posted,pending:true},{...posted,pendingTransactionId:null},{...posted,pendingTransactionId:'unrelated'}])assert.equal(vendorForExpense(workspace,'posted',tx),'')
+ workspace.links['posted:posted-1']='vendor-2'
+ assert.equal(vendorForExpense(workspace,'posted',posted),'vendor-2')
+ delete workspace.links['posted:posted-1'] // Undo of posted override restores original provenance.
+ assert.equal(vendorForExpense(workspace,'posted',posted),'vendor-1')
+ delete workspace.links['posted:pending-1'] // Undo of original reviewed assignment removes derived association.
+ assert.equal(vendorForExpense(workspace,'posted',posted),'')
+})
 test('vendor records default to administrator-only access and accept reviewed contact updates',()=>{let value=create();assert.deepEqual(value.vendors[0].accessMembers,[]);value=applyVendorOperation(value,{type:'vendor.update',targetId:'vendor-1',payload:{address:'123 Sample Lane',phone:'555-0100',accessMembers:['Terica']}},()=> 'new');assert.equal(value.vendors[0].address,'123 Sample Lane');assert.deepEqual(value.vendors[0].accessMembers,['Terica']);assert.throws(()=>normalizeVendorPayload('vendor.update',{password:'never in ordinary records'}),/protected/);assert.throws(()=>normalizeVendorPayload('vendor.update',{website:'javascript:alert(1)'}));assert.throws(()=>normalizeVendorPayload('vendor.update',{website:'https://user:secret@example.com'}))})
 test('vendor spending deduplicates posted activity, separates pending and planned, excludes transfers, and nets assigned credits',()=>{const value=create();value.links={'posted:a':'vendor-1','posted:refund':'vendor-1','posted:pending':'vendor-1','posted:transfer':'vendor-1','planned:plan':'vendor-1'};const result=vendorActivity(value,[{id:'a',amount:100,date:'2026-09-30'},{id:'a',amount:100,date:'2026-09-30'},{id:'refund',amount:-20,date:'2026-09-30'},{id:'pending',amount:50,pending:true,date:'2026-09-30'},{id:'transfer',amount:500,category:'TRANSFER_OUT',date:'2026-09-30'},{id:'unassigned',amount:30,date:'2026-09-30'}],[{id:'plan',vendorId:'vendor-1',type:'expense',amount:1200,freq:'yearly'}]);assert.deepEqual(result.totals['vendor-1'],{charges:100,credits:20,pending:50,net:80,count:2});assert.equal(result.unassigned.length,1);assert.equal(result.planned.length,1);assert.deepEqual(vendorActivity(value,[{id:'a',amount:100,date:'2026-08-30'}],[],{dateFrom:'2026-09-01'}).totals,{})})
 test('archiving preserves expense references and original snapshot for safe Undo',()=>{const before=create();before.links['posted:expense-1']='vendor-1';const after=applyVendorOperation(before,{type:'vendor.archive',targetId:'vendor-1',payload:{}},()=> 'new');assert.equal(before.vendors[0].archived,false);assert.equal(after.vendors[0].archived,true);assert.equal(after.links['posted:expense-1'],'vendor-1');assert.throws(()=>applyVendorOperation(after,{type:'vendor.expense.link',payload:{vendorId:'vendor-1',expenseKind:'posted',expenseId:'a'}},()=> 'new'))})
