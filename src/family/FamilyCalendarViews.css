@@ -73,3 +73,5 @@
   color-scheme: dark;
 }
 .family-calendar-month-navigation button { min-height: 44px; min-width: 44px; }
+.family-calendar-month-navigation input[type="month"] { width: 220px; flex: 0 1 220px; }
+.family-calendar-month-navigation button { padding: 8px 12px; border: 1px solid rgba(197,164,109,.35); border-radius: 8px; background: #171613; color: #f7f3ea; font: inherit; white-space: nowrap; cursor: pointer; }
