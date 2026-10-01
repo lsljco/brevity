@@ -3408,7 +3408,7 @@ function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], i
     () => plaidActuals.filter(tx => String(tx.date || '').startsWith(monthKey)),
     [plaidActuals, monthKey],
   )
-  const syncedActualsByCategory = useMemo(() => summarizeBudgetActuals(selectedMonthActuals), [selectedMonthActuals])
+  const syncedActualsByCategory = useMemo(() => summarizeBudgetActuals(selectedMonthActuals, {includeAllCredits:true}), [selectedMonthActuals])
   const actualAllocation = useMemo(() => allocateBudgetActuals(selectedMonthActuals, budgetLines, buildUniquePlaidAccountMap(data.accounts)), [selectedMonthActuals, budgetLines, data.accounts])
   const DISPLAY_BUDGET_CATS = useMemo(() => {
     const result = { ...BUDGET_CATS }

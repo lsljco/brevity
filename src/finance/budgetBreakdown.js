@@ -196,7 +196,7 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
 export function allocateBudgetActuals(actuals = [], lines = [], accountMap = {}) {
   const byLine = {}, unallocatedByCategory = {}
   for (const transaction of actuals) {
-    const category = budgetCategoryForTransaction(transaction)
+    const category = budgetCategoryForTransaction(transaction, {includeAllCredits:true})
     if (!category) continue
     const amount = Math.abs(Number(transaction.amount) || 0)
     // Only reviewed bank-record links may assign actuals to a planned line.

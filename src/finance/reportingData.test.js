@@ -75,7 +75,7 @@ test('realized income excludes transfers and merchant credits', () => {
 test('budget actuals normalize Plaid categories and exclude transfers', () => {
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'RENT_AND_UTILITIES' }), 'Utilities')
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'TRANSFER_OUT' }), null)
-  assert.equal(budgetCategoryForTransaction({ amount: -24, category: 'GENERAL_MERCHANDISE', name: 'Purchase refund' }), 'Income')
+  assert.equal(budgetCategoryForTransaction({ amount: -24, category: 'GENERAL_MERCHANDISE', name: 'Purchase refund' }), null)
   assert.equal(budgetCategoryForTransaction({ amount: -500, category: 'INCOME', name: 'Employer payroll', pending:true }), null)
   assert.equal(budgetCategoryForTransaction({ amount: 90, category: 'RENT_AND_UTILITIES', pending:true }), null)
   assert.deepEqual(summarizeBudgetActuals([
@@ -86,7 +86,7 @@ test('budget actuals normalize Plaid categories and exclude transfers', () => {
     { amount: -500, category: 'INCOME', name: 'Employer payroll', pending:true },
     { amount: 90, category: 'RENT_AND_UTILITIES', pending:true },
     { amount: 200, category: 'TRANSFER_OUT' },
-  ]), { Utilities: 100, Income: 524 })
+  ]), { Utilities: 100, Income: 500 })
 })
 
 test('cash flow, spending, and income reports exclude account transfers and card payments', () => {
@@ -143,4 +143,11 @@ test('revenue and income reports never count refunds, merchant credits, or pendi
   assert.equal(reportStats(rows, 'income').total, 1000)
   assert.deepEqual(groupReportTransactions(rows, 'income', 'category').map(row => row.name), ['INCOME'])
   assert.equal(groupCashInflows(rows, 'category').reduce((sum, row) => sum + row.amount, 0), 1075)
+})
+
+
+test('monthly cash budget includes all posted credits without changing income-report semantics', () => {
+  const actuals=[{amount:-100,category:'INCOME'},{amount:-50,category:'OTHER',name:'Deposit'},{amount:-10,name:'Purchase refund'},{amount:-500,category:'TRANSFER_IN'},{amount:-999,category:'INCOME',pending:true},{amount:25,category:'FOOD_AND_DRINK'}]
+  assert.deepEqual(summarizeBudgetActuals(actuals,{includeAllCredits:true}),{Income:160,Food:25})
+  assert.deepEqual(summarizeBudgetActuals(actuals),{Income:100,Food:25})
 })
