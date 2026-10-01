@@ -123,6 +123,9 @@ export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHo
   const approvedPairs = expected.flatMap(plan => eligibleActuals.filter(actual => approvedReconciliationMatches(plan,actual,date,accountMap)).map(actual=>({plan,actual,score:100})))
   const candidates = []
   expected.forEach(plan => eligibleActuals.forEach(actual => {
+    // A retained approval is bound to its source snapshot. If that source
+    // changed, surface review instead of silently replacing the approved link.
+    if (plan.reconciliation) return
     const score = matchScore(plan, actual, date, accountMap)
     if (score >= 48) candidates.push({ plan, actual, score })
   }))

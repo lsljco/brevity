@@ -9,13 +9,14 @@ export default function AutoReconciliationReport({ scheduled, actuals, accounts,
   const ambiguousCount=new Set(report.ambiguous.map(row=>row.actual.id)).size
   return <section className="dash-card" aria-label="Automatic reconciliation recommendations" style={{margin:'0 0 16px',padding:20}}>
     <h2 style={{margin:'0 0 8px',fontSize:20}}>Reconciliation recommendations</h2>
-    <p style={{fontSize:12,color:'var(--muted)'}}>Brevity analyzes recent posted expenses against your plan. Nothing changes until you approve the recommended matches in Action Mode.</p>
+    <p style={{fontSize:12,color:'var(--muted)'}}>Brevity analyzes the last 30 days of posted expenses across your linked accounts against your plan. Nothing changes until you approve the recommended matches in Action Mode.</p>
     <p style={{fontSize:12}}>{report.suggestions.length} suggested matches · {ambiguousCount} ambiguous charges · {report.unresolved.length} other charges without a confident match</p>
     {freshnessMessage && <p style={{fontSize:11,color:'var(--muted)'}}>{freshnessMessage}</p>}
     {!report.suggestions.length && <p>No unique matches are ready for approval. Pending charges are excluded.</p>}
     <div style={{display:'grid',gap:10}}>{report.suggestions.map(row=><label key={row.id} style={{display:'flex',gap:10,padding:12,border:'1px solid var(--glass-border)',borderRadius:10}}>
       <input type="checkbox" aria-label={`Review match for ${row.plan.name} on ${row.occurrenceDate}`} checked={!excluded.has(row.id)} disabled={readOnly||busy} onChange={event=>setExcluded(previous=>{const next=new Set(previous);event.target.checked?next.delete(row.id):next.add(row.id);return next})}/>
-      <span style={{minWidth:0,fontSize:12}}><strong>{row.plan.name}</strong><br/>
+      <span style={{minWidth:0,fontSize:12,overflowWrap:'anywhere'}}><strong>{row.plan.name}</strong><br/>
+        Account: {accounts.find(account=>account.id===row.plan.acct)?.name || 'Linked account'}<br/>
         Projected: {row.occurrenceDate} · {fmtMoney(Number(row.plan.amount))}<br/>
         Posted: {row.actual.date} · {fmtMoney(Number(row.actual.amount))} · {row.actual.name}<br/>
         Difference: {fmtMoney(row.amountVariance)}<br/>

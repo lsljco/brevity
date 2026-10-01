@@ -56,6 +56,9 @@ test('review preparation is read-only; explicit execution moves and links one oc
  const reconciliation=reconcileFinanceDay({scheduled:saved.transactions,actuals:[bank],date:bank.date,exactAmounts:true,accountMap:{'bank-operating':'operating'}})
  assert.equal(reconciliation.matched,1);assert.equal(reconciliation.rows[0].amountVariance,6);assert.equal(reconciliation.rows[0].approved,true)
  assert.deepEqual(result.changes[0].before.transactions,[plan],'original records retained for journal Undo')
+ const changedBank={...bank,name:'SAWNEE EMC CORRECTED DRAFT'}
+ const changed=reconcileFinanceDay({scheduled:saved.transactions,actuals:[changedBank],date:bank.date,exactAmounts:true,accountMap:{'bank-operating':'operating'}})
+ assert.equal(changed.matched,0,'changed source cannot silently replace an approved link')
  await assert.rejects(executeRecordOperations({proposal,session,permissions,resources,now}),/changed/)
 })
 
