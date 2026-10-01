@@ -103,14 +103,16 @@ async function apiFetch(path, { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   }
 }
 
+export function financeInstitutionFailure(item = {}) {
+  const code = /^[A-Z][A-Z0-9_]{1,79}$/.test(item?.code || '') ? item.code : ''
+  return [item?.institution || 'Bank', item?.message || 'Transaction synchronization failed.', code && `(${code})`].filter(Boolean).join(': ')
+}
+
 export function financeResponseError(body = {}, status = 500) {
   const summary = body.detail || body.error || `Finance refresh failed (${status}).`
   // The server provides curated messages; never expose raw provider payloads,
   // credentials, account IDs or request metadata in the household banner.
-  const failures = (Array.isArray(body.errors) ? body.errors : []).map(item => {
-    const code = /^[A-Z][A-Z0-9_]{1,79}$/.test(item?.code || '') ? item.code : ''
-    return [item?.institution || 'Bank', item?.message || 'Transaction synchronization failed.', code && `(${code})`].filter(Boolean).join(': ')
-  })
+  const failures = (Array.isArray(body.errors) ? body.errors : []).map(financeInstitutionFailure)
   const error = new Error([summary, ...failures].join(' '))
   error.code = 'FINANCE_SOURCE_ERROR'
   error.status = status
@@ -696,8 +698,8 @@ export async function refreshFinanceData(storage = window.localStorage, {
     const refreshErrors = payload.refresh?.errors || []
     actuals = mergePlaidTransactionResponse(previousActuals, payload)
     transactionDataStatus = payload.connected === false ? 'stale' : syncErrors.length || refreshErrors.length || payload.refresh?.stillProcessing ? 'partial' : 'fresh'
-    syncErrors.forEach(item => errors.push(`${item.institution}: ${item.message}`))
-    refreshErrors.forEach(item => errors.push(`${item.institution}: ${item.message}`))
+    syncErrors.forEach(item => errors.push(financeInstitutionFailure(item)))
+    refreshErrors.forEach(item => errors.push(financeInstitutionFailure(item)))
   } else {
     transactionFailure = transactionResult.reason instanceof Error
       ? transactionResult.reason
@@ -761,7 +763,7 @@ export async function refreshFinanceData(storage = window.localStorage, {
           successfulInstitutions:transactionPayload?.successfulInstitutions || [],
           snapshotFingerprint:transactionSnapshotFingerprint(actuals),
           errors:[...(transactionPayload?.errors || []), ...(transactionPayload?.refresh?.errors || [])]
-            .map(item => `${item.institution || 'Bank'}: ${item.message || 'could not be refreshed'}`),
+            .map(financeInstitutionFailure),
         }
       : null
   if (freshnessUpdate) {

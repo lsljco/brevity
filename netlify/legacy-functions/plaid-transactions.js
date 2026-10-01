@@ -341,7 +341,7 @@ exports.handler = async event => {
     for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
       if (requestRefresh) {
         try {
-          await getPlaidClient().transactionsRefresh({ access_token:accessToken }, { timeout:20_000 })
+          await getPlaidClient().transactionsRefresh({ access_token:accessToken }, { timeout:40_000 })
           refresh.accepted += 1
         } catch (error) {
           const code = plaidErrorCode(error) || 'TRANSACTIONS_REFRESH_FAILED'

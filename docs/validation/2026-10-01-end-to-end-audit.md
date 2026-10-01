@@ -24,3 +24,12 @@ Continued the existing repository at main `5f6b062` (PR #259). Health device con
 - Meaningful unit/server regression covers permissions, financial review, exact source identity, audit, safe Undo, source receipt validation, private member records and recovery conflicts. Browser coverage exercises reviewed workflows on controlled fixtures; production household test records are not fabricated.
 
 Final commit, CI, deployed persistence acceptance and production retest evidence are tracked in the release PR. The audit records observed boundaries, not a guarantee that all devices or future provider requests are infallible.
+
+
+## Post-deployment follow-up
+
+PR 260 merged as `ba69e8de2186ade65ccffb69af96628c9a69aa8a` after 1,298 unit/server tests and 314 browser passes (22 skips). Production served the exact `index-j_K0FuXQ.js` build. Today showed the four canonical operating exceptions and Eastern calendar verification time.
+
+The final explicit bank check verified balances but retained a partial transaction snapshot because the institution did not accept an on-demand update. This is distinct from the original all-institution sync failure. The HTTP-success partial-response path also needs to preserve its safe provider codes. The follow-up uses the same curated formatter for both HTTP failures and partial errors, and allows the on-demand provider request 40 seconds within the existing 45-second client budget. No source error is suppressed and no transaction history or checkpoint is reset.
+
+The preview-only live model/persistence suite was not rerun because this preview requires a separate administrator sign-in. A live production assistant read-only request encountered the expected cross-device conversation conflict protection; it is not counted as a successful model response. All eleven existing sermon photographs loaded when brought into view. Health device acceptance and household pilot remain deferred.
