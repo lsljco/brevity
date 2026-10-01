@@ -5,7 +5,8 @@ import {requestProjectOpen} from '../homehq/projectNavigation.js'
 import { useEffect, useMemo, useState } from 'react'
 import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
-import { calendarSnapshotHealth, readCurrentCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+import { readCurrentCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
+import { useCalendarHealth } from './useCalendarHealth.js'
 import { compareCalendarEventsChronologically, dedupeCalendarEvents } from './calendarOverlay.js'
 import {
   canEditBrevityCalendarEvent,
@@ -132,8 +133,10 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   const [maintenanceState,setMaintenanceState]=useState(readMaintenanceState)
   const cachedCalendar=useMemo(()=>readCurrentCalendarSnapshot(),[])
   const [icloudEvents,setIcloudEvents]=useState(()=>(cachedCalendar?.events||[]).map(normalizeIcloud))
-  const [calendarHealth,setCalendarHealth]=useState(()=>calendarSnapshotHealth(cachedCalendar))
-  const [icloudState,setIcloudState]=useState(()=>calendarSnapshotHealth(cachedCalendar).state)
+  const [calendarSnapshot,setCalendarSnapshot]=useState(cachedCalendar)
+  const calendarHealth=useCalendarHealth(calendarSnapshot)
+  const [icloudLoading,setIcloudLoading]=useState(false)
+  const icloudState=icloudLoading?'loading':calendarHealth.state
   const [icloudError,setIcloudError]=useState(cachedCalendar?.error||'')
   const [calendarName,setCalendarName]=useState(cachedCalendar?.calendar||'Apple/iCloud Calendar')
   const [calendarAccess,setCalendarAccess]=useState({ state:'loading', allowed:false, member:'', role:'', reason:'Verifying Family Calendar permissions…' })
@@ -201,7 +204,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   }
 
   const loadIcloud = async () => {
-    setIcloudState('loading')
+    setIcloudLoading(true)
     setIcloudError('')
     try {
       const result = await fetchICloudCalendarEvents()
@@ -210,9 +213,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       setCalendarName(snapshot.calendar || 'Apple/iCloud Calendar')
       const cacheWrite=writeCalendarSnapshotCache(snapshot)
       if(cacheWrite.warning)setFeedback(cacheWrite.warning)
-      const health=calendarSnapshotHealth(snapshot)
-      setCalendarHealth(health)
-      setIcloudState(health.state)
+      setCalendarSnapshot(snapshot)
+      setIcloudLoading(false)
     } catch (error) {
       const previous=readCurrentCalendarSnapshot()||cachedCalendar||{}
       const snapshot=stampCalendarFailure(previous,error)
@@ -220,9 +222,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       if(cacheWrite.warning)setFeedback(cacheWrite.warning)
       setIcloudEvents((snapshot.events||[]).map(normalizeIcloud))
       setIcloudError(snapshot.error)
-      const health=calendarSnapshotHealth(snapshot)
-      setCalendarHealth(health)
-      setIcloudState(health.state)
+      setCalendarSnapshot(snapshot)
+      setIcloudLoading(false)
     }
   }
 
@@ -250,9 +251,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       setIcloudEvents((result.events||[]).map(normalizeIcloud))
       setCalendarName(result.calendar||'Apple/iCloud Calendar')
       setIcloudError(result.error||'')
-      const health=calendarSnapshotHealth(result)
-      setCalendarHealth(health)
-      setIcloudState(health.state)
+      setCalendarSnapshot(result)
+      setIcloudLoading(false)
     }
     window.addEventListener('storage',refresh)
     window.addEventListener('brevity-family-calendar-updated',refresh)

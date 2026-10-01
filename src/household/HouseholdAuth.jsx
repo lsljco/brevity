@@ -9,6 +9,7 @@ import {
   setHouseholdMemberPassword,
 } from './authApi.js'
 import { getSharedStateHealth, SHARED_STATE_HEALTH_EVENT } from './sharedState.js'
+import { getHouseholdDateTimeLabel } from '../finance/financeTime.js'
 import './HouseholdAuth.css'
 
 export function useHouseholdAuth() {
@@ -83,7 +84,7 @@ function formatSyncTime(value) {
   if (!value) return 'Not yet verified'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'Not yet verified'
-  return date.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+  return getHouseholdDateTimeLabel(date)
 }
 
 function HouseholdSyncHealth() {

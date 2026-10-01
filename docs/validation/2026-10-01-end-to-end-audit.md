@@ -12,7 +12,8 @@ Continued the existing repository at main `5f6b062` (PR #259). Health device con
 | Operations → Today | Production Today announced no household exceptions while Operations had overdue chores and low stock. | Today reads the same maintenance/inventory sources and explicit signal IDs; updates on shared-source changes without copying records. |
 | Saved chores → operating summary | The summary built a default week without supplying saved custom chores, edits or deletions. | Build from the authoritative maintenance state; test exact custom/deleted identities. |
 | Calendar recovery → Today | Today read only localStorage despite the live/session fallback; an old session copy could override a newer local copy after reload. | Use the existing snapshot resolver and select the latest recovery attempt. Reject future verification timestamps as fresh. |
-| Verification time → display | Some Today/calendar verification labels used the device zone. | Display household Eastern Time consistently; operations default date also uses the household zone. |
+| Open calendar → elapsed freshness | A verified badge did not age unless another snapshot arrived. | Reevaluate every minute and on focus/visibility changes, retaining cached appointments and active refresh state. |
+| Verification time → display | Some Today/calendar/settings/application verification labels used the device zone. | Display household Eastern Time consistently; operations default date also uses the household zone. |
 
 ## Verification evidence
 

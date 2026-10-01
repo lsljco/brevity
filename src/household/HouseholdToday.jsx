@@ -3,7 +3,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { buildUnifiedHouseholdIntelligence } from './householdIntelligence.js'
 import { HOUSEHOLD_INVENTORY_STORAGE_KEY } from './householdInventoryData.js'
-import { calendarSnapshotHealth, readCurrentCalendarSnapshot } from '../family/calendarSnapshot.js'
+import { readCurrentCalendarSnapshot } from '../family/calendarSnapshot.js'
+import { useCalendarHealth } from '../family/useCalendarHealth.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import TodayDashboard from './TodayDashboard.jsx'
 import { fetchScheduledDailyPlanDraft, generateDailyPlan } from './dailyPlanGeneratorApi.js'
@@ -90,7 +91,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     () => calendarAppointmentsForPlan(planWithMeals, [...(calendarData?.events||[]).filter(event=>!String(event.sourceId||'').startsWith('project-')),...projectEvents]),
     [calendarData?.events, planWithMeals, projectEvents],
   )
-  const calendarHealth = useMemo(() => calendarSnapshotHealth(calendarData), [calendarData])
+  const calendarHealth = useCalendarHealth(calendarData)
   const planningAccessMessage = planningAccessStatus === 'loading'
     ? 'Brevity is verifying your Plans & decisions permission. Today remains view-only until that check finishes.'
     : planningAccessStatus === 'error'

@@ -625,3 +625,12 @@ test('Today reflects inventory source exceptions and clears them after a newer s
   await page.reload()
   await expect(page.locator('.today-attention')).not.toContainText('Replenish Audit paper towels')
 })
+
+test('an open Today calendar ages from verified to stale without losing appointments',async({page})=>{
+  await page.clock.install({time:new Date()})
+  await page.reload()
+  await expect(page.locator('.today-calendar-health')).toContainText('Calendar verified')
+  await page.clock.fastForward(31*60*1000)
+  await expect(page.locator('.today-calendar-health')).toContainText('Refresh before relying')
+  await expect(page.locator('.today-calendar-agenda')).toContainText('Doctor appointment')
+})
