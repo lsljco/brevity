@@ -148,7 +148,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
 
   const analysis=analysisSourceReady&&result?.pillar===pillar.id && result?.date===plan?.date && sameMember(result?.member,currentMember) && result?.contextSignature===contextSignature ? result.analysis : null
   const visibleError=errorScopeRef.current===currentScopeKey?error:''
-  const compactSpiritual=pillar.id==='spiritual'&&result?.quality?.status==='evidence-fallback'
+  const compactSpiritual=pillar.id==='spiritual'&&result?.quality?.status==='evidence-fallback'&&analysis?.headline===(plan?.spiritual?.todayFocus||plan?.spiritual?.devotionTitle||plan?.spiritual?.devotionFocus)&&Boolean(plan?.spiritual?.scripture?.length||plan?.spiritual?.scriptureFocus)
   const focusSummary=compactSpiritual&&plan?.spiritual?.devotionFocus?plan.spiritual.devotionFocus:analysis?.executiveSummary
   const decisions=analysis?.decisions || []
   const financeSummary=pillar.id==='finance'&&analysisSourceReady?localContext.analysisSummary:null
