@@ -621,6 +621,9 @@ test('Today reflects inventory source exceptions and clears them after a newer s
   await page.reload()
   await expect(page.locator('.today-attention')).toContainText('Replenish Audit paper towels')
   await expect(page.locator('.today-attention')).not.toContainText('No household items need attention')
+  await page.locator('.today-attention').getByRole('button').first().click()
+  await expect(page.getByRole('heading',{name:'Household Cleaning Plan',exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Back to Today',exact:true}).click()
   quantity=5
   await page.reload()
   await expect(page.locator('.today-attention')).not.toContainText('Replenish Audit paper towels')
