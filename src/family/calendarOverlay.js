@@ -70,6 +70,7 @@ export function calendarAppointmentFromEvent(event) {
     owner: clean(event.owner) || 'Family',
     ownershipKnown: event.ownershipKnown,
     calendarScope: event.calendarScope,
+    pillar: event.pillar,
     participants: arrayOrEmpty(event.participants),
     status: 'pending',
     priority: event.priority ? 'high' : 'normal',
