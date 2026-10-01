@@ -192,6 +192,12 @@ test('Household Intelligence dashboard separates metrics and opens an auditable 
   await expect(page.getByText('Plan Adherence',{exact:true}).first()).toBeVisible()
   await expect(page.getByText('Time Allocation',{exact:true}).first()).toBeVisible()
   await expect(page.getByRole('heading',{name:'Member Scorecard'})).toBeVisible()
+  const layout=await page.locator('.hpi-page').evaluate(el=>{
+    const main=el.closest('.app-main').getBoundingClientRect()
+    return {right:main.right,left:main.left,cards:[...el.querySelectorAll('.hpi-pillars>article')].map(card=>({left:card.getBoundingClientRect().left,right:card.getBoundingClientRect().right})),pageWidth:el.clientWidth,contentWidth:el.scrollWidth}
+  })
+  expect(layout.contentWidth).toBeLessThanOrEqual(layout.pageWidth+1)
+  for(const card of layout.cards){expect(card.left).toBeGreaterThanOrEqual(layout.left);expect(card.right).toBeLessThanOrEqual(layout.right+1)}
   const fitness=page.locator('.hpi-pillars article').filter({hasText:'Physical Fitness'})
   await expect(fitness).toContainText('Potential 100% if remaining planned work is completed')
   await expect(fitness.getByLabel('Actual attainment: Off Track')).toBeVisible()
