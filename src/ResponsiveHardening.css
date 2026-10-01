@@ -427,6 +427,11 @@
   text-align: center;
 }
 
+/* Preserve Finance field styling without trapping dialogs in card stacking contexts. */
+.finance-root.finance-calendar-portal { display: contents !important; }
+.finance-calendar-portal::before,
+.finance-calendar-portal::after { display: none !important; }
+
 .finance-insight-overlay,
 .finance-calendar-editor-overlay,
 .calendar-scope-overlay,
@@ -439,6 +444,38 @@
   max-height: min(850px, calc(100dvh - 48px)) !important;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* Native iOS date controls must shrink with their grid column. */
+.finance-calendar-editor-dialog input[type="date"] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.finance-calendar-editor-dialog input[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+.finance-calendar-editor-dialog .finance-calendar-review-move {
+  max-width: 100%;
+  white-space: normal;
+  padding: 10px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--accent, #c5a46d);
+  color: #171511;
+  font: inherit;
+  cursor: pointer;
+}
+.finance-calendar-editor-dialog .finance-calendar-review-move:disabled {
+  background: transparent;
+  color: var(--muted);
+  opacity: 1;
+  cursor: not-allowed;
 }
 .finance-root .toast,
 .finance-storage-error { z-index: 1750 !important; }
