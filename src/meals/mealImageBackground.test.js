@@ -37,3 +37,19 @@ test('background and status endpoints declare the long-running and pollable Netl
   assert.match(status,/state:'pending'/)
   assert.match(status,/readSession/)
 })
+
+test('automatic image jobs share a conditional claim across devices and preserve an intervening upload',async()=>{
+ const records=new Map(),writes=[],missing={...meal,image:''};let count=0,finish
+ const barrier=new Promise(resolve=>{finish=resolve})
+ const jobStore={getWithMetadata:async key=>records.has(key)?{data:records.get(key),etag:'1'}:null,setJSON:async(key,value,options)=>{if(options?.onlyIfNew&&records.has(key))return {modified:false};records.set(key,value);writes.push(value);return {modified:true}}}
+ const handler=createMealImageBackgroundHandler({readSessionFn:async()=>({member:'Larry'}),repository:{getLibrary:async()=>({library:[missing]}),setMealImage:async value=>{assert.equal(value.onlyIfMissing,true);return{image:'/uploaded-while-generating.jpg'}}},jobStore,imageStore:{},generateImage:async()=>{count++;await barrier;return'/generated.png'}})
+ const request=()=>new Request('https://example.test',{method:'POST',body:JSON.stringify({jobId:`auto-${meal.id}`,mealId:meal.id,onlyIfMissing:true})})
+ const first=handler(request());await new Promise(resolve=>setImmediate(resolve));await handler(request());finish();await first
+ assert.equal(count,1);assert.equal(writes.at(-1).meal.image,'/uploaded-while-generating.jpg')
+})
+test('automatic generation never replaces an existing photo',async()=>{
+ let count=0;const writes=[]
+ const handler=createMealImageBackgroundHandler({readSessionFn:async()=>({member:'Larry'}),repository:{getLibrary:async()=>({library:[meal]})},jobStore:{setJSON:async(key,value)=>writes.push(value)},imageStore:{},generateImage:async()=>{count++}})
+ await handler(new Request('https://example.test',{method:'POST',body:JSON.stringify({jobId:`auto-${meal.id}`,mealId:meal.id,onlyIfMissing:true})}))
+ assert.equal(count,0);assert.equal(writes[0].meal.image,meal.image)
+})

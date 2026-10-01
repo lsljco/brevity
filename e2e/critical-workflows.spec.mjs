@@ -55,7 +55,7 @@ const mealPlanResponse=(addedMeal=null)=>{
     const dateValue=date.toISOString().slice(0,10)
     return{id:`meal-plan-${dateValue}`,date:dateValue,version:1,meals:{breakfast:'breakfast-eggs',lunch:'lunch-chicken',dinner:'dinner-fish'},substitutions:{},resolvedMeals:{breakfast:meals[0],lunch:meals[1],dinner:meals[2]},createdAt:now,updatedAt:now}
   })
-  return{householdId:'lslj-family',startDate:start,days,library:meals,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
+  return{householdId:'lslj-family',startDate:start,days,library:meals,libraryVersion:0,librarySummary:{total:meals.length,counts:{breakfast:1+(addedMeal?1:0),lunch:1,dinner:1}}}
 }
 async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,alreadyLinkedExtrasFixture=false,scenarioFixture=false,debtPaymentFixture=false,householdTaskFixture=false,projectFixture=false,intelligenceFixture=false,sessionMember='Larry',sessionRole='admin'}={}){
   let addedMeal=null
@@ -1011,4 +1011,60 @@ test('Family Calendar custom agenda and December navigation retain the correct e
   await expect(grid).not.toContainText('December boundary event')
   await page.getByLabel('Calendar month',{exact:true}).fill('2026-12')
   await expect(grid).toContainText('December boundary event')
+})
+
+test('meal editor scales servings and prepares an exact recipe review without applying it',async({page})=>{
+  const prepared=[],executed=[]
+  await page.route('**/.netlify/functions/meal-plans?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...mealPlanResponse(),libraryVersion:7})}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed.push(request)})
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
+  await page.getByRole('button',{name:'Edit meal',exact:true}).click()
+  const editor=page.getByRole('dialog',{name:'Edit meal',exact:true})
+  await editor.getByLabel('Meal title').fill('Larger breakfast')
+  await editor.getByLabel('Serving multiplier').fill('1.5')
+  await editor.getByRole('button',{name:'Resize serving and macros'}).click()
+  await expect(editor.getByLabel('Protein (g)',{exact:true})).toHaveValue('33')
+  await editor.getByRole('button',{name:'Review meal changes'}).click()
+  await expect.poll(()=>prepared.length).toBe(1)
+  expect(prepared[0].expectedVersion).toBe(7)
+  expect(prepared[0].operation.targetId).toBe('breakfast-eggs')
+  expect(JSON.parse(prepared[0].operation.payload.recipeJson).macros.calories).toBe(525)
+  expect(executed).toHaveLength(0)
+})
+
+test('meal ingredient edits require fresh nutrition or explicit manual verification',async({page})=>{
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
+  await page.getByRole('button',{name:'Edit meal',exact:true}).click()
+  const editor=page.getByRole('dialog',{name:'Edit meal',exact:true})
+  await editor.getByLabel('Ingredients (one per line)').fill('2 eggs')
+  await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeDisabled()
+  await editor.getByRole('button',{name:'Recalculate from ingredients'}).click()
+  await expect(editor.getByLabel('Calories',{exact:true})).toHaveValue('167.5')
+  await expect(editor.getByLabel('Serving size',{exact:true})).toHaveValue('1 pancake')
+  await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeEnabled()
+  await editor.getByLabel('Protein (g)',{exact:true}).fill('10')
+  await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeDisabled()
+  await editor.getByRole('checkbox').check()
+  await expect(editor.getByRole('button',{name:'Review meal changes'})).toBeEnabled()
+})
+
+test('missing meal photos generate automatically and replace placeholders without a click',async({page})=>{
+  await page.goto('about:blank')
+  const jobs=[],meals=mealPlanResponse().library
+  await page.route('**/.netlify/functions/meal-image-generate-background',async route=>{
+    jobs.push(route.request().postDataJSON());await route.fulfill({status:202,contentType:'application/json',body:JSON.stringify({accepted:true})})
+  })
+  await page.route('**/.netlify/functions/meal-image-job-status?*',async route=>{
+    const id=new URL(route.request().url()).searchParams.get('jobId').replace(/^auto-/,'')
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({state:'ready',meal:{...meals.find(meal=>meal.id===id),image:'/meal-images/breakfast-01.webp'}})})
+  })
+  await page.goto('/')
+  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await expect.poll(()=>jobs.length).toBeGreaterThan(0)
+  expect(jobs[0].onlyIfMissing).toBe(true)
+  expect(jobs[0].jobId).toBe(`auto-${jobs[0].mealId}`)
+  await expect(page.getByRole('img',{name:'Eggs and Toast',exact:true}).first()).toHaveAttribute('src','/meal-images/breakfast-01.webp')
+  expect(jobs.filter(job=>job.mealId==='breakfast-eggs')).toHaveLength(1)
 })

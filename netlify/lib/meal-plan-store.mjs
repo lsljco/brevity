@@ -129,13 +129,15 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     return { entry, imageEntry, customMeals, library }
   }
 
-  const setMealImage = async ({ mealId, image, actor = 'Household member' }) => {
+  const setMealImage = async ({ mealId, image, actor = 'Household member', onlyIfMissing = false }) => {
     const safeMealId = safeText(mealId, 180)
     const safeImage = safeText(image, 500)
     if (!safeMealId || !safeImage) throw Object.assign(new Error('A valid meal and generated image are required.'), { code:'VALIDATION_ERROR' })
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const { imageEntry, library } = await getLibrary()
       if (!library.some(meal => meal.id === safeMealId)) throw Object.assign(new Error('That meal is no longer in the household library.'), { code:'VALIDATION_ERROR' })
+      const existing=library.find(meal=>meal.id===safeMealId)
+      if(onlyIfMissing&&existing?.image)return {mealId:safeMealId,image:existing.image}
       const currentImages = imageEntry.data?.images && typeof imageEntry.data.images === 'object' ? imageEntry.data.images : {}
       const payload = { version:Number(imageEntry.data?.version || 0) + 1, images:{ ...currentImages, [safeMealId]:safeImage }, updatedAt:now().toISOString(), updatedBy:actor }
       const options = imageEntry.metadata ? (imageEntry.data ? { onlyIfMatch:imageEntry.etag } : { onlyIfNew:true }) : {}
@@ -180,6 +182,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       startDate,
       days: days.map(day => resolveMealDay(day, viewLibrary)),
       library: viewLibrary,
+      libraryVersion:Number(libraryState.entry.data?.version||0),
       librarySummary: mealLibrarySummary(viewLibrary),
     }
   }

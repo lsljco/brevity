@@ -20,14 +20,27 @@ export function createMealImageBackgroundHandler({readSessionFn=readSession,repo
     const jobs=jobStore||getStore({name:MEAL_IMAGE_JOB_STORE,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
     const images=imageStore||getStore({name:MEAL_IMAGE_STORE,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
     const key=mealImageJobKey(householdId,jobId)
+    const automatic=body.onlyIfMissing===true
+    if(automatic&&jobId!==`auto-${mealId}`)return json(400,{error:'Automatic image jobs require the saved meal identity.'})
     try{
       const meals=repository||await productionMealPlanRepository()
       const library=await meals.getLibrary(),meal=library.library.find(candidate=>candidate.id===mealId)
       if(!meal)throw Object.assign(new Error('That meal is no longer in the household library.'),{code:'VALIDATION_ERROR'})
-      await jobs.setJSON(key,{state:'generating',jobId,mealId,startedAt:now().toISOString(),startedBy:session.member||'Household member'})
+      const progress={state:'generating',jobId,mealId,startedAt:now().toISOString(),startedBy:session.member||'Household member'}
+      if(automatic){
+        if(meal.image){await jobs.setJSON(key,{state:'ready',jobId,mealId,meal});return json(202,{accepted:true,jobId})}
+        const previous=await jobs.getWithMetadata(key,{type:'json'})
+        if(previous?.data){
+          const age=now().getTime()-Date.parse(previous.data.updatedAt||previous.data.startedAt)
+          if(previous.data.state==='ready'||(previous.data.state==='generating'&&age<15*60_000)||(previous.data.state==='error'&&age<24*60*60_000))return json(202,{accepted:true,jobId})
+        }
+        const claimed=await jobs.setJSON(key,progress,previous?.etag?{onlyIfMatch:previous.etag}:{onlyIfNew:true})
+        if(claimed?.modified===false)return json(202,{accepted:true,jobId})
+      }else await jobs.setJSON(key,progress)
       const assetId=`${meal.id}-${randomUUID()}`
-      const image=await generateImage({meal:{...meal,image:''},assetId,householdId,store:images})
-      await meals.setMealImage({mealId:meal.id,image,actor:session.member||'Household member'})
+      let image=await generateImage({meal:{...meal,image:''},assetId,householdId,store:images})
+      const saved=await meals.setMealImage({mealId:meal.id,image,actor:session.member||'Household member',...(automatic?{onlyIfMissing:true}:{})})
+      image=saved?.image||image
       await jobs.setJSON(key,{state:'ready',jobId,mealId,meal:{...meal,image,imageGenerated:true},updatedAt:now().toISOString()})
     }catch(error){
       console.error('[meal-image-generate-background]',error)

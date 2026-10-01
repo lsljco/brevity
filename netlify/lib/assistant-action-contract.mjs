@@ -1,3 +1,4 @@
+import {normalizeRecipeEdit} from '../../src/meals/recipeEdit.js'
 import {VENDOR_RESOURCE,VENDOR_TYPES,normalizeVendorPayload} from '../../src/finance/vendorModel.js'
 import {normalizeModulePatch,MODULE_RESOURCE} from '../../src/modules/configuration.js'
 import {normalizeActivityPayload} from './member-activity.mjs'
@@ -140,7 +141,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'debt.update': ['vendorId', 'creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.delete': [],
   'debt.transaction.apply': ['transactionId', 'transactionDate', 'transactionName', 'amount', 'nonPrincipalAmount', 'paymentRule'],
-  'meal.recipe.update':['name','estimateJson'],
+  'meal.recipe.update':['name','estimateJson','recipeJson'],
   'meal.substitute': ['mealType', 'mealId'],
   'nutrition.meal.log': ['name', 'estimateJson'],
   'nutrition.meal.update': ['entryId', 'name', 'calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams', 'estimateJson', 'reason'],
@@ -319,6 +320,10 @@ function normalizeActionPayload(type, input) {
       if (value.length > 800_000) throw new Error('The reviewed sermon candidate exceeds Brevity’s activation capacity.')
       try { normalized.candidateJson = JSON.stringify(JSON.parse(value)) }
       catch { throw new Error('The reviewed sermon candidate is not valid JSON.') }
+    } else if (type === 'meal.recipe.update' && field === 'recipeJson') {
+      if(typeof value!=='string'||value.length>30000)throw new Error('The recipe edit is too large.')
+      if(payload.estimateJson)throw new Error('Choose a single recipe nutrition source.')
+      normalized.recipeJson=JSON.stringify(normalizeRecipeEdit(JSON.parse(value)))
     } else if ((type === 'nutrition.meal.log' || type === 'nutrition.meal.update' || type === 'meal.recipe.update') && field === 'estimateJson') {
       assertString(type, field, value)
       if(value.length>30000)throw new Error('The meal estimate is too large.')

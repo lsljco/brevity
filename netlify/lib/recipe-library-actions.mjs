@@ -1,3 +1,4 @@
+import {normalizeRecipeEdit,macroFields} from '../../src/meals/recipeEdit.js'
 import {MEAL_LIBRARY} from '../../src/meals/mealLibrary.js'
 export const RECIPE_RESOURCE='meal-library:recipes'
 export function resolvedRecipes(value={}){
@@ -21,6 +22,12 @@ export function applyRecipeUpdate(value,operation,{actor,now}){
   const meal=resolvedRecipes(value).find(item=>item.id===operation.targetId)
   if(!meal)throw new Error('That recipe is no longer in the household library.')
   const patch={name:operation.payload.name,updatedBy:actor,updatedAt:now().toISOString()}
+  if(operation.payload.recipeJson){
+    const edit=normalizeRecipeEdit(JSON.parse(operation.payload.recipeJson))
+    const nutritionChanged=['ingredients','yieldQuantity','yieldUnit','serving','macros'].some(key=>JSON.stringify(edit[key])!==JSON.stringify(meal[key]))
+    Object.assign(patch,edit,{totalMinutes:edit.prepMinutes+edit.cookMinutes,timingRecorded:true})
+    if(nutritionChanged)Object.assign(patch,{ingredientNutrition:[],nutritionWarnings:[],nutritionBasis:'Household-reviewed per-serving nutrition. Ingredient estimates may differ.',batchMacros:Object.fromEntries(macroFields.map(key=>[key,edit.macros[key]*edit.yieldQuantity]))})
+  }
   if(operation.payload.estimateJson){
     const estimate=JSON.parse(operation.payload.estimateJson)
     Object.assign(patch,{ingredients:estimate.ingredients.map(item=>item.input),ingredientNutrition:estimate.ingredients,macros:estimate.perServingMacros,batchMacros:estimate.batchMacros,yieldQuantity:estimate.yieldQuantity,yieldUnit:estimate.yieldUnit,serving:estimate.serving,nutritionWarnings:estimate.warnings,nutritionBasis:estimate.nutritionBasis})

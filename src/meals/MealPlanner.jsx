@@ -1,3 +1,4 @@
+import MealEditDialog from './MealEditDialog.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { MEAL_TYPES } from './mealLibrary.js'
 import { searchMeals } from './mealSearch.js'
@@ -5,7 +6,7 @@ import { mealMonthRange } from './mealMonth.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { useRollingMealPlan } from './useRollingMealPlan.js'
 import { summarizeMealPlan } from './mealPlanInsights.js'
-import { calculateMealNutrition, importMealsFromImage, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
+import { mealImageState, ensureMealImage, calculateMealNutrition, importMealsFromImage, importRecipeFromUrl, regenerateMealImage, uploadMealImage } from './mealPlanApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import BulkMealImport from './BulkMealImport.jsx'
 import ConsumedNutrition from './ConsumedNutrition.jsx'
@@ -26,18 +27,21 @@ const formatPrepMinutes = value => {
 const mealTimingLabel = meal => meal?.timingRecorded === false ? 'Time not recorded' : formatPrepMinutes(meal?.totalMinutes ?? meal?.prepMinutes)
 
 function MealImage({ meal, className = '', loading = 'lazy', alt = '' }) {
+  const [automatic,setAutomatic]=useState(()=>mealImageState(meal?.id))
+  useEffect(()=>{const changed=event=>{if(event.detail?.mealId===meal?.id)setAutomatic(event.detail.state)};window.addEventListener('brevity-meal-image-state',changed);return()=>window.removeEventListener('brevity-meal-image-state',changed)},[meal?.id])
   if (meal?.image) return <img className={className} src={meal.image} alt={alt} loading={loading} />
-  return <div className={`meal-image-placeholder ${className}`} role="img" aria-label={alt || meal?.name || 'Meal photo not added'}><i className="ti ti-tools-kitchen-2" /><span>Photo not added</span></div>
+  return <div className={`meal-image-placeholder ${className}`} role="img" aria-label={alt || meal?.name || 'Meal photo not added'}><i className="ti ti-tools-kitchen-2" /><span>{automatic==='queued'?'Photo queued automatically':automatic==='generating'?'Generating meal photo…':automatic==='error'?'Photo generation needs retry':'Photo not added'}</span></div>
 }
 
 function Macros({ meal }) {
   return <div className="meal-macros" aria-label={`Estimated nutrition per ${meal.serving}`} title={meal.nutritionBasis}><span><strong>{Number(meal.macros.calories).toLocaleString()}</strong> cal</span><span><strong>{meal.macros.proteinGrams}g</strong> protein</span><span><strong>{meal.macros.carbohydrateGrams}g</strong> carbs</span><span><strong>{meal.macros.fatGrams}g</strong> fat</span></div>
 }
 
-function MealDetailDialog({ meal, onClose, onImageGenerated }) {
+function MealDetailDialog({ meal, onClose, onImageGenerated, onEdit }) {
   const ingredients = Array.isArray(meal?.ingredients) ? meal.ingredients : []
   const instructions = Array.isArray(meal?.instructions) ? meal.instructions : []
-  const [imageState,setImageState]=useState('idle')
+  const [imageState,setImageState]=useState(()=>['queued','generating'].includes(mealImageState(meal.id))?'loading':'idle')
+  useEffect(()=>{const changed=event=>{if(event.detail?.mealId===meal.id){setImageState(['queued','generating'].includes(event.detail.state)?'loading':event.detail.state);if(event.detail.state==='error')setImageError('Automatic image generation could not finish. Use Generate New Image to retry.')}};window.addEventListener('brevity-meal-image-state',changed);return()=>window.removeEventListener('brevity-meal-image-state',changed)},[meal.id])
   const [imageError,setImageError]=useState('')
   const uploadInputId=`meal-image-upload-${meal.id}`
   const generateImage=async()=>{
@@ -60,7 +64,7 @@ function MealDetailDialog({ meal, onClose, onImageGenerated }) {
   return <div className="meal-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <section className="meal-dialog meal-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-detail-title">
       <header><div><span>{LABELS[meal.mealType]} recipe</span><h2 id="meal-detail-title">{meal.name}</h2><p>{meal.description}</p></div><button type="button" onClick={onClose} aria-label="Close meal details"><i className="ti ti-x" /></button></header>
-      <div className="meal-detail-body">
+      <div className="meal-detail-body"><button type="button" onClick={onEdit}>Edit meal</button>
         <MealImage meal={meal} className="meal-detail-image" alt={meal.name} loading="eager" />
         <div className="meal-detail-image-action"><div><strong>Meal photo</strong><span>Upload your own photo, or generate one from this exact ingredient list in Brevity’s luxury steakhouse aesthetic.</span></div><div className="meal-detail-image-buttons"><input id={uploadInputId} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadImage} disabled={imageState==='loading'||imageState==='uploading'} /><label htmlFor={uploadInputId} aria-disabled={imageState==='loading'||imageState==='uploading'}><i className="ti ti-upload" /> {imageState==='uploading'?'Uploading…':'Upload Image'}</label><button type="button" onClick={generateImage} disabled={imageState==='loading'||imageState==='uploading'||!ingredients.length}><i className="ti ti-photo-spark" /> {imageState==='loading'?'Generating…':'Generate New Image'}</button></div></div>
         {imageError&&<div className="meal-nutrition-error" role="alert">{imageError}</div>}
@@ -320,6 +324,7 @@ export default function MealPlanner({currentMember}) {
   const [addingMealType, setAddingMealType] = useState('')
   const [bulkImportOpen,setBulkImportOpen] = useState(false)
   const [detailMeal, setDetailMeal] = useState(null)
+  const [editingMeal,setEditingMeal]=useState(null)
   const [message, setMessage] = useState('')
   const [replacementError, setReplacementError] = useState('')
   const [addMealError, setAddMealError] = useState('')
@@ -330,6 +335,8 @@ export default function MealPlanner({currentMember}) {
     setMessage(`${meal.name} now has a newly generated luxury steakhouse image.`)
     await reload({supersede:true}).catch(()=>undefined)
   }
+
+  useEffect(()=>{const ready=event=>setDetailMeal(current=>current?.id===event.detail?.meal?.id?{...current,image:event.detail.meal.image}:current);window.addEventListener('brevity-meal-image-ready',ready);return()=>window.removeEventListener('brevity-meal-image-ready',ready)},[])
 
   useEffect(()=>setSelection(current=>{
     if(!current)return current
@@ -346,7 +353,7 @@ export default function MealPlanner({currentMember}) {
       const created = await addMeal(meal)
       setAddingMealType('')
       setMessage(`${created.name} was added to the household Meal Library. Brevity is generating its image in the background.`)
-      regenerateMealImage(created.id).then(async result=>{
+      ensureMealImage(created).then(async result=>{
         await reload({supersede:true}).catch(()=>undefined)
         setMessage(`${result.meal.name} was added to the household Meal Library with its generated image.`)
       }).catch(imageError=>{
@@ -386,9 +393,10 @@ export default function MealPlanner({currentMember}) {
     {view === 'month' && monthPlan.data && <p className="meal-month-summary">{monthPlan.data.days.length} days · {monthPlan.data.days.reduce((sum,day)=>sum+Object.values(day.resolvedMeals||{}).filter(Boolean).length,0)} planned meals</p>}
     {view === 'library' && data && <LibraryView library={data.library} onAdd={setAddingMealType} onOpenMeal={setDetailMeal} onBulkImport={()=>setBulkImportOpen(true)} />}
     {(view === 'plan' ? data : view === 'month' ? monthPlan.data : null) && <PlanView days={visiblePlan.data.days} monthly={view === 'month'} onOpenMeal={setDetailMeal} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} />}
-    {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} onImageGenerated={imageGenerated} />}
+    {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} onImageGenerated={imageGenerated} onEdit={()=>{setEditingMeal({meal:(data?.library||[]).find(item=>item.id===detailMeal.id)||detailMeal,version:data?.libraryVersion});setDetailMeal(null)}} />}
     {selection && <ReplaceDialog selection={selection} library={visiblePlan.data?.library || data?.library || []} saving={visiblePlan.state === 'saving'} error={replacementError} onClose={() => { setReplacementError(''); setSelection(null) }} onChoose={chooseReplacement} onReview={reviewReplacement} />}
     {addingMealType && <AddMealDialog mealType={addingMealType} saving={state === 'saving'} error={addMealError} onClose={()=>{setAddMealError('');setAddingMealType('')}} onSave={saveMeal} />}
-    {bulkImportOpen && <BulkMealImport library={data?.library || []} onClose={()=>setBulkImportOpen(false)} onSaved={async meals=>{const refreshed=await reload({supersede:true}).then(()=>true).catch(()=>false);setBulkImportOpen(false);setMessage(`${meals.length} meals added to the household Meal Library. ${refreshed?'Open any meal to add a photo.':'Refresh Brevity to see them; the library update succeeded.'}`)}} />}
+    {editingMeal&&<MealEditDialog meal={editingMeal.meal} version={editingMeal.version} onClose={()=>setEditingMeal(null)}/>}
+    {bulkImportOpen && <BulkMealImport library={data?.library || []} onClose={()=>setBulkImportOpen(false)} onSaved={async meals=>{const refreshed=await reload({supersede:true}).then(()=>true).catch(()=>false);setBulkImportOpen(false);setMessage(`${meals.length} meals added to the household Meal Library. ${refreshed?'Missing meal photos are generated automatically.':'Refresh Brevity to see them; the library update succeeded.'}`)}} />}
   </main>
 }
