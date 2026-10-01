@@ -97,10 +97,11 @@ test('Budget, Reporting, Cash Flow, Accounts, and dashboard footer have responsi
   assert.match(responsiveCss, /\.finance-accounts-forecast\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*!important;/)
 })
 
-test('tablet and iPad landscape navigation overlays the workspace instead of crushing it', () => {
-  assert.match(appSource, /MOBILE_NAVIGATION_QUERY\s*=\s*'\(max-width:\s*1180px\)'/)
-  assert.match(mobileShellCss, /@media \(min-width:\s*641px\) and \(max-width:\s*1180px\)[\s\S]*?\.app-sidebar\.is-expanded\s*\{[^}]*margin-right:\s*-180px;/)
-  assert.match(mobileShellCss, /@media \(min-width:\s*641px\) and \(max-width:\s*1180px\)[\s\S]*?\.mobile-sidebar-backdrop\s*\{[^}]*z-index:\s*1350;/)
+test('tablet navigation stays docked and reserves dismissal for phones', () => {
+  assert.match(appSource, /MOBILE_NAVIGATION_QUERY\s*=\s*'\(max-width:\s*640px\)'/)
+  const tabletStyles=mobileShellCss.slice(mobileShellCss.indexOf('@media (min-width: 641px)'),mobileShellCss.indexOf('@media (max-width: 640px)'))
+  assert.match(tabletStyles, /\.app-sidebar\.is-expanded\s*\{[^}]*width:\s*240px;/)
+  assert.doesNotMatch(tabletStyles, /mobile-sidebar-backdrop|margin-right:/)
 })
 
 test('finance sheets and feedback remain above fixed navigation with safe-area spacing', () => {

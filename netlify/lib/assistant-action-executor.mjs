@@ -1,3 +1,5 @@
+import { getHouseholdDateKey } from '../../src/finance/financeTime.js'
+import { buildAutoReconciliationReport } from '../../src/finance/autoReconciliation.js'
 import { mealIdsForDay } from '../../src/meals/mealPlanData.js'
 import {projectCalendarEvent} from '../../src/homehq/projectData.js'
 import {productionVendorVault,vendorVisible} from './vendor-vault.mjs'
@@ -416,6 +418,8 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       throw new Error('Frequency and end-date changes must apply to this and future items.')
     }
     const recurringChanges = {}
+    if (payload.reconciliation) recurringChanges.reconciliation = { ...payload.reconciliation, approvedAt:nowIso(context.now || (()=>new Date())), approvedBy:context.actor || 'Household member' }
+    else if (original.reconciliation) recurringChanges.reconciliation = null
     for (const field of ['amount', 'notes', 'vendorId']) if (payload[field] !== undefined) recurringChanges[field] = payload[field]
     if (payload.title !== undefined) recurringChanges.name = payload.title
     if (payload.category !== undefined) recurringChanges.cat = payload.category
@@ -437,7 +441,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       transferAccountId:[String(payload.transferAccountId ?? ''), String(original.transferTo ?? '')],
       date:[String(payload.date ?? ''), String(operation.targetDate ?? '')],
     }
-    const meaningfulChange = Object.keys(payload).some(field => comparison[field] && comparison[field][0] !== comparison[field][1])
+    const meaningfulChange = Boolean(payload.reconciliation) || Object.keys(payload).some(field => comparison[field] && comparison[field][0] !== comparison[field][1])
     if (operation.type === 'recurring.update' && !meaningfulChange) throw new Error('That scheduled transaction already has the reviewed values. Refresh before preparing another change.')
     const accountIds = new Set((value?.accounts || []).map(item => item.id))
     if (payload.accountId !== undefined && !accountIds.has(payload.accountId)) throw new Error('That scheduled transaction account no longer exists. Refresh Brevity and review the current account list.')
@@ -656,6 +660,13 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
       if(['recurring.create','recurring.update','debt.create','debt.update','project.create','project.update'].includes(operation.type)&&operation.payload?.vendorId){
         const directory=await resources.read(VENDOR_RESOURCE)
         if(!directory.value?.vendors?.some(v=>v.id===operation.payload.vendorId&&!v.archived&&vendorVisible(v,session)))throw new Error('Choose an available vendor you can access for this record.')
+      }
+      if(operation.type==='recurring.update'&&operation.payload.reconciliation){
+        const bank=await resources.read('shared:plaid_actuals_cache')
+        const evidence=operation.payload.reconciliation
+        const report=buildAutoReconciliationReport({scheduled:value.transactions,actuals:Array.isArray(bank.value)?bank.value:[],accounts:value.accounts,today:getHouseholdDateKey(now())})
+        const match=report.suggestions.find(row=>row.plan.id===operation.targetId&&row.occurrenceDate===operation.targetDate&&row.actual.id===evidence.actualId)
+        if(!match||Object.keys(match.evidence).some(key=>match.evidence[key]!==evidence[key])) throw Object.assign(new Error('The planned or posted charge changed, was already reconciled, or no longer has a unique match. Refresh the reconciliation report.'),{code:'VERSION_CONFLICT'})
       }
       const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version}); value=result.after
     }

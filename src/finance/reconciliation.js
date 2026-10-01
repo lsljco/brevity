@@ -1,3 +1,4 @@
+import { approvedReconciliationMatches } from './autoReconciliation.js'
 import { txOccursOnDate } from './projection.js'
 import { actualTransactionKind, categoryGroup, isRecognizedIncomeTransaction, isTransferTransaction, transactionDirection } from './reportingData.js'
 import { normalizeMerchantName } from './financialTruth.js'
@@ -119,14 +120,23 @@ export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHo
     return dayDistance(date, transaction.date) <= matchWindowDays
   })
 
+  const approvedPairs = expected.flatMap(plan => eligibleActuals.filter(actual => approvedReconciliationMatches(plan,actual,date,accountMap)).map(actual=>({plan,actual,score:100})))
   const candidates = []
   expected.forEach(plan => eligibleActuals.forEach(actual => {
+    // A retained approval is bound to its source snapshot. If that source
+    // changed, surface review instead of silently replacing the approved link.
+    if (plan.reconciliation) return
     const score = matchScore(plan, actual, date, accountMap)
     if (score >= 48) candidates.push({ plan, actual, score })
   }))
   candidates.sort((a, b) => b.score - a.score)
 
   const usedPlans = new Set(), usedActuals = new Set(), rows = []
+  for (const candidate of approvedPairs) {
+    if (usedPlans.has(candidate.plan.occurrenceId) || usedActuals.has(actualKey(candidate.actual))) continue
+    usedPlans.add(candidate.plan.occurrenceId); usedActuals.add(actualKey(candidate.actual))
+    rows.push({ ...matchedRow(candidate,date,exactAmounts), state:'matched', approved:true })
+  }
   const candidatesByPlan = new Map()
   const candidatesByActual = new Map()
   candidates.forEach(candidate => {

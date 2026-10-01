@@ -155,6 +155,31 @@ test('expanded side panel remains expanded while navigating until its toggle is 
   await expect(drawer).not.toHaveClass(/is-expanded/)
 })
 
+test('iPad sidebar stays open after content taps, rotation, and reload until explicitly collapsed',async({page},testInfo)=>{
+  test.skip(!testInfo.project.name.startsWith('tablet'),'iPad-specific persistent navigation')
+  const drawer=page.locator('#primary-navigation-drawer')
+  if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click()
+  await page.getByRole('button',{name:'Expand navigation'}).click()
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await expect(page.getByRole('button',{name:'Close navigation',exact:true})).toBeHidden()
+  // A real content click must reach the workspace, without a dismissing overlay.
+  await page.locator('.app-main').click({position:{x:300,y:120}})
+  await expect(drawer).toHaveClass(/is-expanded/)
+  const bounds=await page.evaluate(()=>({sidebar:document.querySelector('#primary-navigation-drawer').getBoundingClientRect().right,main:document.querySelector('.app-main').getBoundingClientRect().left}))
+  expect(bounds.main).toBeGreaterThanOrEqual(bounds.sidebar-1)
+  await page.setViewportSize(testInfo.project.name==='tablet'?{width:1194,height:834}:{width:834,height:1194})
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.reload()
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Collapse navigation'}).click()
+  await expect(drawer).not.toHaveClass(/is-expanded/)
+  await page.reload()
+  await expect(drawer).not.toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Expand navigation'}).click()
+  await expect(drawer).toHaveClass(/is-expanded/)
+})
+
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
 test('Household Intelligence dashboard separates metrics and opens an auditable score drilldown',async({page},testInfo)=>{
@@ -1067,4 +1092,75 @@ test('missing meal photos generate automatically and replace placeholders withou
   expect(jobs[0].jobId).toBe(`auto-${jobs[0].mealId}`)
   await expect(page.getByRole('img',{name:'Eggs and Toast',exact:true}).first()).toHaveAttribute('src','/meal-images/breakfast-01.webp')
   expect(jobs.filter(job=>job.mealId==='breakfast-eggs')).toHaveLength(1)
+})
+
+test('Finance reconciliation recommends matches and opens approval without mutating records',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  const future=new Date(`${dateKey()}T12:00:00Z`);future.setUTCDate(future.getUTCDate()+2)
+  const projected=future.toISOString().slice(0,10)
+  finance.transactions=[{id:'sawnee-plan',name:'Sawnee EMC - Electric',type:'expense',amount:1204,acct:'a1',freq:'once',start:projected,end:projected}]
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value=JSON.stringify([{id:'sawnee-posted',accountId:'plaid-operating',name:'SAWNEE EMC BANK DRAFT',category:'UTILITIES',amount:1210,date:dateKey(),pending:false}])
+  let writes=0,prepared=null
+  await page.route('**/.netlify/functions/household-state*',async route=>{
+    if(route.request().method()!=='GET')writes++
+    await route.fulfill({json:{records,serverTime:new Date().toISOString()}})
+  })
+  page.on('request',request=>{
+    const url=new URL(request.url())
+    if(url.pathname.endsWith('/brevity-assistant-actions')&&url.searchParams.get('action')==='prepare-direct')prepared=request.postDataJSON()
+    if(url.pathname.endsWith('/brevity-assistant-actions')&&url.searchParams.get('action')==='execute')writes++
+  })
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Dashboard',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const report=page.getByRole('region',{name:'Automatic reconciliation recommendations'})
+  await expect(report).toContainText('1 suggested matches')
+  await expect(report).toContainText('Difference: $6.00')
+  await expect(report).toContainText('Nothing changes until you approve')
+  expect(writes).toBe(0)
+  await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
+  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(review).toContainText('Sawnee')
+  await expect(review).toContainText('Future payments stay unchanged')
+  await expect(review).toContainText('$1,204.00'.replace(',',''))
+  expect(prepared.operations).toHaveLength(1)
+  expect(prepared.operations[0].payload.reconciliation.actualId).toBe('sawnee-posted')
+  expect(prepared.operations[0].targetDate).toBe(projected)
+  expect(prepared.operations[0].payload.date).toBe(dateKey())
+  expect(writes).toBe(0)
+})
+
+test('Finance combines Operating and Savings while excluding Renovation across views',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  finance.accounts.push(
+    {id:'savings',name:'Savings Account',type:'savings',balance:2000,plaidAccountId:'bank-savings',plaidType:'depository',plaidSubtype:'savings'},
+    {id:'renovation',name:'Renovation Account',type:'checking',balance:3000,plaidAccountId:'bank-renovation',plaidType:'depository',plaidSubtype:'checking'})
+  finance.transactions=finance.accounts.map((account,index)=>({id:`planned-${account.id}`,name:`${account.name} expense`,type:'expense',amount:(index+1)*10,acct:account.id,freq:'once',start:dateKey(),end:dateKey()}))
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value='[]'
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Dashboard',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const filters=page.getByRole('navigation',{name:'Finance account filters'})
+  await filters.getByRole('button',{name:'Savings Account',exact:true}).click()
+  await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
+  for(const view of ['Transactions','Cash Forecast','Reporting']){
+    await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:view,exact:true}).click();await closeMenuIfMobile(page,testInfo)
+    await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
+    await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
+    await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
+    if(view==='Transactions'){
+      await expect(page.getByText('Operating Account expense',{exact:true})).toBeVisible()
+      await expect(page.getByText('Savings Account expense',{exact:true})).toBeVisible()
+      await expect(page.getByText('Renovation Account expense',{exact:true})).toHaveCount(0)
+    }
+  }
+  await filters.getByRole('button',{name:'All',exact:true}).click()
+  await expect(filters.getByRole('button',{name:'All',exact:true})).toHaveAttribute('aria-pressed','true')
+  await filters.getByRole('button',{name:'Renovation Account',exact:true}).click()
+  await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
 })

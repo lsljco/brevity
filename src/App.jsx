@@ -34,13 +34,16 @@ const SermonWorkspace = lazy(() => import('./ministry/SermonWorkspace.jsx'))
 
 
 const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','debts','vendors','budget','recurring','reporting'])
-// Keep tablet navigation collapsed by default as well. Feature breakpoints are
-// based on the viewport, so an expanded 240px rail at 768px can otherwise leave
-// less usable content width than their phone layouts expect.
-const MOBILE_NAVIGATION_QUERY = '(max-width: 1180px)'
+// Only phones use a dismissible drawer. Tablets retain the user's explicit
+// sidebar preference across navigation, rotation, and reloads.
+const MOBILE_NAVIGATION_QUERY = '(max-width: 640px)'
 const SIDEBAR_STATE_KEY = 'brevity_sidebar_state'
 const isCompactNavigation = () => typeof window !== 'undefined' && window.matchMedia(MOBILE_NAVIGATION_QUERY).matches
-const savedDesktopSidebarState = () => typeof window === 'undefined' || localStorage.getItem(SIDEBAR_STATE_KEY) !== 'collapsed'
+const savedDesktopSidebarState = () => {
+  if(typeof window === 'undefined')return true
+  const saved=localStorage.getItem(SIDEBAR_STATE_KEY)
+  return saved ? saved === 'expanded' : !window.matchMedia('(max-width: 1180px)').matches
+}
 const initialSidebarExpanded = () => !isCompactNavigation() && savedDesktopSidebarState()
 const EXTERNAL_SITES = {
   'live-intentional': { title:'Live Intentional', description:'Legacy planning reference — use Brevity Schedule and Policies & Practices for current household commitments.', url:'https://liveintentional.netlify.app/', icon:'ti-compass', embed:true },
