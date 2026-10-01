@@ -29,10 +29,8 @@
 .family-calendar-scroll.is-hidden { display: none; }
 .family-calendar-mobile-agenda.is-selected { display: block; }
 @media (max-width: 720px) {
-  .family-calendar-view-toggle { display: none; }
-  .family-calendar-month-navigation { display: none !important; }
-  .family-calendar-scroll { display: none !important; }
-  .family-calendar-mobile-agenda { display: block; }
+  .family-calendar-view-toggle { flex-wrap: wrap; }
+  .family-calendar-month-navigation { flex-wrap: wrap; gap: 8px !important; }
 }
 
 @media (pointer: coarse) {
@@ -61,3 +59,17 @@
   color: #c5a46d;
   cursor: pointer;
 }
+
+.family-calendar-month-navigation input[type="month"] {
+  min-width: 175px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgba(197,164,109,.35);
+  border-radius: 8px;
+  background: #171613;
+  color: #f7f3ea;
+  font: inherit;
+  color-scheme: dark;
+}
+.family-calendar-month-navigation button { min-height: 44px; min-width: 44px; }

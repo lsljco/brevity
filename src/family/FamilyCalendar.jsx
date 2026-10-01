@@ -119,13 +119,16 @@ function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, on
 export default function FamilyCalendar({ currentMember = 'Family', includeFamily = false, lockMember = false, title = 'Family Calendar', subtitle = 'Shared Apple events and Brevity-managed commitments from their authoritative records' }){
   const today = getHouseholdCalendarDate()
   const todayKey = getHouseholdDateKey()
-  const [month,setMonth]=useState(today.getMonth())
-  const [year,setYear]=useState(today.getFullYear())
   const [member,setMember]=useState(currentMember || 'Family')
   const [selectedCalendars,setSelectedCalendars]=useState([currentMember || 'Family'])
   useEffect(()=>{setSelectedCalendars([currentMember || 'Family']);setMember(currentMember || 'Family')},[currentMember])
   const [range,setRange]=useState(()=>calendarRange(resolveTimeframe('this-month')))
-  const [viewMode,setViewMode]=useState('month')
+  const [viewMode,setViewMode]=useState(()=>window.matchMedia('(max-width: 720px)').matches?'agenda':'month')
+  // The visible month and event projection share one date scope.
+  const requestedFocus = new Date(`${range.from}T12:00:00`)
+  const focusDate = Number.isNaN(requestedFocus.getTime()) ? today : requestedFocus
+  const year = focusDate.getFullYear(), month = focusDate.getMonth()
+  const selectMonth = (year,month) => setRange({preset:'custom',from:iso(new Date(year,month,1)),to:iso(new Date(year,month+1,0))})
   const projectEvents=useProjectCalendar()
   const [legacyEvents,setLegacyEvents]=useState(readLegacyEvents)
   const [meetingEvents,setMeetingEvents]=useState(readMeetingEvents)
@@ -296,15 +299,11 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     return map
   },[filtered,range])
   const agendaDays=useMemo(()=>Object.entries(byDate).sort(([left],[right])=>left.localeCompare(right)),[byDate])
-  const upcomingAgendaDays=useMemo(()=>{
-    const upcoming=agendaDays.filter(([date])=>date>=todayKey)
-    return (upcoming.length?upcoming:agendaDays).slice(0,14)
-  },[agendaDays,todayKey])
   const first=new Date(year,month,1).getDay()
   const days=new Date(year,month+1,0).getDate()
   const cells=[...Array(first).fill(null),...Array.from({length:days},(_,i)=>i+1)]
   while(cells.length%7)cells.push(null)
-  const move=delta=>{const next=new Date(year,month+delta,1);setYear(next.getFullYear());setMonth(next.getMonth())}
+  const move=delta=>selectMonth(year,month+delta)
 
   const stateCopy={
     loading:'Checking secure iCloud calendar…',
@@ -327,16 +326,18 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       <span style={{fontSize:10,color:icloudState==='ready'?gold:icloudState==='loading'?muted:'#d8a16f'}}>{stateCopy[icloudState]}</span>
       <button onClick={loadIcloud} style={{border:`1px solid ${border}`,background:'rgba(255,255,255,.04)',color:soft,borderRadius:8,padding:'6px 10px',fontSize:10,cursor:'pointer'}}>Sync Family Calendar</button>
     </div>
-    <FinanceTimeframe value={range} onChange={next=>{const calendarDates=calendarRange(next);setRange(calendarDates);const focus=new Date(`${calendarDates.from}T12:00:00`);if(!Number.isNaN(focus.getTime())){setYear(focus.getFullYear());setMonth(focus.getMonth())}}} label="Planner dates" selectLabel="Select calendar timeframe" />
+
     <div className="family-calendar-view-toggle" aria-label="Calendar view">
-      <div><strong>Choose the useful view</strong><span>Agenda surfaces the next commitments; month shows spacing and conflicts.</span></div>
-      <div><button type="button" className={viewMode==='agenda'?'active':''} onClick={()=>setViewMode('agenda')}>Agenda</button><button type="button" className={viewMode==='month'?'active':''} onClick={()=>setViewMode('month')}>Month</button></div>
+      <div><strong>Choose the useful view</strong><span>Agenda lists the selected dates; Month shows every commitment in the selected month.</span></div>
+      <div><button type="button" aria-pressed={viewMode==='agenda'} className={viewMode==='agenda'?'active':''} onClick={()=>setViewMode('agenda')}>Agenda</button><button type="button" aria-pressed={viewMode==='month'} className={viewMode==='month'?'active':''} onClick={()=>{selectMonth(year,month);setViewMode('month')}}>Month</button></div>
     </div>
-    <div className="family-calendar-month-navigation" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:18}}>
+    {viewMode==='agenda'&&<FinanceTimeframe value={range} onChange={next=>setRange(calendarRange(next))} label="Calendar dates" selectLabel="Select calendar timeframe" />}
+    {viewMode==='month'&&<div className="family-calendar-month-navigation" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:18}}>
       <button aria-label="Previous month" onClick={()=>move(-1)} style={{background:'rgba(255,255,255,.05)',border:`1px solid ${border}`,color:soft,borderRadius:8,padding:'6px 12px',cursor:'pointer'}}>‹</button>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:23,color:'rgba(247,243,234,.92)',minWidth:170,textAlign:'center'}}>{new Date(year,month).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+      <input type="month" aria-label="Calendar month" value={`${year}-${String(month+1).padStart(2,'0')}`} onChange={event=>{if(/^\d{4}-\d{2}$/.test(event.target.value)){const [y,m]=event.target.value.split('-').map(Number);selectMonth(y,m-1)}}}/>
       <button aria-label="Next month" onClick={()=>move(1)} style={{background:'rgba(255,255,255,.05)',border:`1px solid ${border}`,color:soft,borderRadius:8,padding:'6px 12px',cursor:'pointer'}}>›</button>
-    </div>
+      <button type="button" onClick={()=>selectMonth(today.getFullYear(),today.getMonth())}>This month</button>
+    </div>}
     <div className={`family-calendar-scroll${viewMode==='month'?'':' is-hidden'}`}><div className="family-calendar-grid" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
       {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=><div className="family-calendar-weekday" key={day} style={{textAlign:'center',padding:8,fontSize:10,fontWeight:700,letterSpacing:1,color:muted,textTransform:'uppercase'}}>{day}</div>)}
       {cells.map((day,index)=>{
@@ -352,7 +353,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
       })}
     </div></div>
     <div className={`family-calendar-mobile-agenda${viewMode==='agenda'?' is-selected':''}`}>
-      {upcomingAgendaDays.map(([date,events])=><section key={date} className="family-calendar-agenda-day">
+      {agendaDays.map(([date,events])=><section key={date} className="family-calendar-agenda-day">
         <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span></header>
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>

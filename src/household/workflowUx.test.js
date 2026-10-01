@@ -6,11 +6,10 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 test('Calendar exposes an agenda-first phone flow and correctly labels its timeframe', () => {
   const calendar = read('../family/FamilyCalendar.jsx')
-  const styles = read('../family/FamilyCalendarViews.css')
   assert.match(calendar, /selectLabel="Select calendar timeframe"/)
   assert.match(calendar, /Choose the useful view/)
-  assert.match(calendar, /upcomingAgendaDays/)
-  assert.match(styles, /max-width: 720px[\s\S]*family-calendar-mobile-agenda \{ display: block/)
+  assert.match(calendar, /agendaDays.map/)
+  assert.match(calendar, /matchMedia\('\(max-width: 720px\)'\).matches\?'agenda':'month'/)
 })
 
 test('Operations defaults to its Operations workspace and honors an explicit protected-workflow destination', () => {

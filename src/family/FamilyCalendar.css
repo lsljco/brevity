@@ -475,12 +475,6 @@
   .family-calendar-status button {
     width: 100%;
   }
-  .family-calendar-scroll {
-    display: none;
-  }
-  .family-calendar-mobile-agenda {
-    display: block;
-  }
   .family-calendar > div:nth-of-type(4) {
     margin-bottom: 14px !important;
   }
