@@ -29,7 +29,7 @@ import {
   calculateTransactionAmountForRange,
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
-import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, compatiblePlaidAccountType, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount, waitForPlaidTransactionRefresh } from './financeRefresh.js'
+import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, compatiblePlaidAccountType, fetchLatestPlaidTransactions, financeInstitutionFailure, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount, waitForPlaidTransactionRefresh } from './financeRefresh.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
@@ -1433,11 +1433,11 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         status:allErrors.length || json.refresh?.stillProcessing ? 'partial' : 'fresh',
         checkedAt:json.syncedAt || new Date().toISOString(),
         successfulInstitutions:json.successfulInstitutions || [],
-        errors:allErrors.map(item=>`${item.institution || 'Bank'}: ${item.message || 'could not be refreshed'}`),
+        errors:allErrors.map(financeInstitutionFailure),
       })
       setPlaidActuals(txns)
       setActualsFreshness(freshness)
-      if (allErrors.length) setActualsError(`Some institutions did not confirm. Their last verified transactions were retained. ${allErrors.map(item=>`${item.institution || 'Bank'}: ${item.message || 'could not be refreshed'}`).join(' ')}`)
+      if (allErrors.length) setActualsError(`Some institutions did not confirm. Their last verified transactions were retained. ${allErrors.map(financeInstitutionFailure).join(' ')}`)
       else setActualsError(null)
       setActualsNotice(syncErrors.length
         ? `Some institutions could not be refreshed. Their last-known transactions were retained; successful institutions were checked at ${getHouseholdTimeLabel()}.`
