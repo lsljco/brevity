@@ -30,7 +30,13 @@ const executedNutrition=async(operations,session,resources)=>{
   const {date,totals}=dailyNutrition(record.value,session.member,log.targetDate)
   return{date,totals}
 }
+const createdRecipeIds=audit=>audit.action==='execute'&&audit.operations?.some(operation=>operation.type==='meal.recipe.create')
+  ? (audit.changes||[]).filter(change=>change.resource==='meal-library:recipes').flatMap(change=>{
+    const previous=new Set((change.before?.meals||[]).map(meal=>meal.id))
+    return (change.after?.meals||[]).filter(meal=>!previous.has(meal.id)).map(meal=>meal.id)
+  }):[]
 export const publicAssistantAudit=audit=>({
+  ...(createdRecipeIds(audit).length?{createdRecipeIds:createdRecipeIds(audit)}:{}),
   id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,taskLinks:savedTaskLinks(audit),
   action:audit.action,status:audit.status,occurredAt:audit.occurredAt,confirmationMode:audit.confirmationMode||'confirmation',
   undoAvailable:Boolean(audit.undoAvailable),undoneAt:audit.undoneAt||null,undoneBy:audit.undoneBy||null,

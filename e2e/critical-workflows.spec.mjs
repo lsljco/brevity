@@ -1357,3 +1357,23 @@ test('Budget includes every scheduled occurrence and posted cash entry for its o
   await expect(page.getByRole('button',{name:'Income Actual $555.00',exact:true})).toBeVisible()
   await page.screenshot({path:`test-results/budget-monthly-${testInfo.project.name}.png`})
 })
+
+test('spiritual fallback presents the devotion once with one response and source evidence',async({page},testInfo)=>{
+  await mockBackend(page)
+  const {buildDeterministicPillarFallback}=await import('../src/household/pillarAnalysisGuardrails.js')
+  await page.route('**/.netlify/functions/pillar-analysis',async route=>{
+    const input=route.request().postDataJSON()
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({pillar:input.pillar,date:input.date,member:input.currentMember,contextSignature:input.contextSignature,generatedAt:new Date().toISOString(),quality:{status:'evidence-fallback'},analysis:buildDeterministicPillarFallback({pillar:input.pillar,date:input.date,pillarData:input.plan.spiritual,localContext:input.localContext})})})
+  })
+  await page.goto('/')
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Spiritual Maturity',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await expect(page.locator('.pillar-analysis-command').getByRole('heading',{name:'Weekly Word',exact:true})).toBeVisible()
+  await expect(page.locator('.pillar-analysis-command').getByText('Shared household devotion',{exact:true})).toHaveCount(1)
+  await expect(page.getByRole('heading',{name:'What Matters Today',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('heading',{name:'The Scriptural anchor',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('heading',{name:'What This Is Based On',exact:true})).toBeVisible()
+  await expect(page.locator('.pillar-action-grid article')).toHaveCount(1)
+  await expect(page.locator('.pillar-action-grid')).toContainText('Practice the teaching.')
+})

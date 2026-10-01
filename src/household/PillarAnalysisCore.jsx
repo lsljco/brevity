@@ -148,6 +148,8 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
 
   const analysis=analysisSourceReady&&result?.pillar===pillar.id && result?.date===plan?.date && sameMember(result?.member,currentMember) && result?.contextSignature===contextSignature ? result.analysis : null
   const visibleError=errorScopeRef.current===currentScopeKey?error:''
+  const compactSpiritual=pillar.id==='spiritual'&&result?.quality?.status==='evidence-fallback'
+  const focusSummary=compactSpiritual&&plan?.spiritual?.devotionFocus?plan.spiritual.devotionFocus:analysis?.executiveSummary
   const decisions=analysis?.decisions || []
   const financeSummary=pillar.id==='finance'&&analysisSourceReady?localContext.analysisSummary:null
   const negativeDay=financeSummary?.operatingForecast?.firstNegative
@@ -170,9 +172,9 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     {analysisSourceReady&&state==='loading' && !analysis && <div className="pillar-analysis-loading"><div className="pillar-analysis-pulse"/><h2>Analyzing {pillar.label}</h2><p>Applying the same Seven Pillars reasoning framework used by the household’s scheduled daily automation.</p></div>}
 
     {analysis && <>
-      <section className="pillar-analysis-command"><div><span>Today’s Focus</span><h2>{analysis.headline}</h2><p>{analysis.executiveSummary}</p></div><aside><strong>{analysis.todayFocus}</strong><small>{analysisStatusLabel(result)} · {new Date(result.generatedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</small></aside></section>
+      <section className="pillar-analysis-command"><div><span>Today’s Focus</span><h2>{analysis.headline}</h2><p>{focusSummary}</p></div><aside>{!compactSpiritual&&<strong>{analysis.todayFocus}</strong>}<small>{analysisStatusLabel(result)} · {new Date(result.generatedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</small></aside></section>
 
-      <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Key Message</span><h2>What Matters Today</h2></div><div className="pillar-analysis-grid">{(analysis.analysisPoints || []).map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.detail}</p></article>)}</div></section>
+      {!compactSpiritual&&<section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Key Message</span><h2>What Matters Today</h2></div><div className="pillar-analysis-grid">{(analysis.analysisPoints || []).map((item,index)=><article key={`${index}-${item.title}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.title}</h3><p>{item.detail}</p></article>)}</div></section>}
 
       <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Evidence & Provenance</span><h2>What This Is Based On</h2></div><div className="pillar-analysis-grid">{(analysis.evidence || []).map((item,index)=><article key={`${index}-${item.source}`}><span>{String(index+1).padStart(2,'0')}</span><h3>{item.source}</h3><p>{item.detail}</p></article>)}</div></section>
 

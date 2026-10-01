@@ -5,7 +5,13 @@ async function actionRequest(method,action,body){const response=await fetch(`/.n
 export function getActionMode(){return actionRequest('GET','history')}
 export function prepareCalendarAction({summary,operation,expectedEventToken}){return actionRequest('POST','prepare-calendar',{summary,operation,expectedEventToken})}
 export function prepareDirectAction({summary,operation,operations,expectedVersion}){return actionRequest('POST','prepare-direct',{summary,operation,operations,expectedVersion})}
-export function executeAssistantProposal({proposalId,selections,confirmed,confirmation,voiceApproval}){return actionRequest('POST','execute',{proposalId,selections,confirmed,confirmation,...(voiceApproval?{voiceApproval}:{})})}
+export async function executeAssistantProposal({proposalId,selections,confirmed,confirmation,voiceApproval}){
+  const result=await actionRequest('POST','execute',{proposalId,selections,confirmed,confirmation,...(voiceApproval?{voiceApproval}:{})})
+  if(result.audit?.createdRecipeIds?.length)import('../meals/mealPlanApi.js').then(({ensureMealImage})=>{
+    result.audit.createdRecipeIds.forEach(id=>ensureMealImage({id}).catch(()=>undefined))
+  }).catch(()=>undefined)
+  return result
+}
 export function undoAssistantAction({auditId,confirmation}){return actionRequest('POST','undo',{auditId,confirmation})}
 export function saveActionPermissions(permissions,expectedVersion,confirmation){return actionRequest('PUT','permissions',{permissions,expectedVersion,confirmation})}
 export async function getElevenLabsVoices(){const response=await fetch(`${ELEVENLABS_WORKER}/elevenlabs-voices`,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||'Could not load your ElevenLabs voices.');return payload.voices||[]}

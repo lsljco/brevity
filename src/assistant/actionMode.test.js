@@ -1276,3 +1276,30 @@ test('Apple source mappings require admin review, exact versions and safe Undo',
   await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
   assert.deepEqual((await resources.read(resource)).value,[])
 })
+
+test('new assistant library recipe is reviewed, versioned, idempotent and undoable without consumption or scheduling',async()=>{
+  const store=versionedBlobStore(),actionStore=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store})
+  const repository=createAssistantActionRepository({store:actionStore}),mealRepository=createMealPlanRepository({store})
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+  const estimate={ingredients:[{input:'12 eggs'}],yieldQuantity:6,yieldUnit:'servings',serving:'1 serving',batchMacros:{calories:840,proteinGrams:72,carbohydrateGrams:6,fatGrams:60},perServingMacros:{calories:140,proteinGrams:12,carbohydrateGrams:1,fatGrams:10},warnings:[]}
+  const input={type:'meal.recipe.create',targetId:'',targetDate:'',description:'Save egg recipe to the library',payloadJson:JSON.stringify({name:'Egg recipe',mealType:'breakfast',estimateId:'fresh'})}
+  assert.throws(()=>bindRecipeOperation(input,{library:[],estimates:new Map()}),/Calculate the new recipe/)
+  const operation=bindRecipeOperation(input,{library:[],estimates:new Map([['fresh',estimate]])})
+  const proposal=await captureExpectedVersions(normalizeActionProposal({summary:'Create reusable recipe',operations:[operation]},session),resources)
+  await repository.saveProposal(proposal)
+  assert.equal(store.values.size,0,'preparing review must not create household records')
+  assert.equal(permissionForOperation({operation:proposal.operations[0],member:'Nyla',role:'member',permissions:{planning:false}}).allowed,false)
+  const execution={repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}}
+  const result=await executeActionWithJournal(execution)
+  await executeActionWithJournal(execution)
+  const custom=(await mealRepository.getLibrary()).library.filter(meal=>meal.custom)
+  assert.equal(custom.length,1);assert.match(custom[0].id,/^custom-breakfast-/)
+  assert.deepEqual(publicAssistantAudit(result.audit).createdRecipeIds,[custom[0].id]);
+  assert.equal(custom[0].name,'Egg recipe');assert.equal(custom[0].yieldQuantity,6)
+  assert.deepEqual(custom[0].macros,estimate.perServingMacros)
+  assert.equal(custom[0].timingRecorded,false)
+  assert.ok([...store.values.keys()].every(key=>!key.includes('/days/')&&!key.includes('nutrition')))
+  await assert.rejects(()=>executeRecordOperations({proposal,session,permissions,resources}),/changed after your review/)
+  await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+  assert.equal((await mealRepository.getLibrary()).library.filter(meal=>meal.custom).length,0)
+})

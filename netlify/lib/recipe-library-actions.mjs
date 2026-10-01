@@ -1,3 +1,4 @@
+import {normalizeMealInput} from './meal-input.mjs'
 import {normalizeRecipeEdit,macroFields} from '../../src/meals/recipeEdit.js'
 import {MEAL_LIBRARY} from '../../src/meals/mealLibrary.js'
 export const RECIPE_RESOURCE='meal-library:recipes'
@@ -11,6 +12,11 @@ export function searchMealRecords(query,{library=[],recentNutrition=[],rollingMe
   return candidates.map(item=>({item,score:score(item)})).filter(row=>!tokens.length||row.score>0).sort((a,b)=>b.score-a.score).slice(0,12).map(({item})=>({kind:item.kind,id:item.id,name:item.name,...(item.kind==='consumed'?{member:item.member}:{}),date:item.date,mealType:item.mealType,ingredients:item.ingredients,macros:item.macros,serving:item.serving,yieldQuantity:item.yieldQuantity,yieldUnit:item.yieldUnit,instructions:item.instructions}))
 }
 export function bindRecipeOperation(operation,{library,estimates}){
+  if(operation.type==='meal.recipe.create'){
+    const data=JSON.parse(operation.payloadJson||'{}'),estimate=estimates.get(data.estimateId)
+    if(!data.name||!estimate||Object.keys(data).some(key=>!['name','mealType','estimateId'].includes(key)))throw new Error('Calculate the new recipe before preparing its library review.')
+    return {...operation,targetId:'',targetDate:'',payloadJson:JSON.stringify({name:data.name,mealType:data.mealType,estimateJson:JSON.stringify(estimate)})}
+  }
   if(operation.type!=='meal.recipe.update')return operation
   const meal=library.find(item=>item.id===operation.targetId),data=JSON.parse(operation.payloadJson||'{}')
   if(!meal||!data.name||Object.keys(data).some(key=>!['name','estimateId'].includes(key)))throw new Error('Find the saved recipe before preparing its edit.')
@@ -34,4 +40,15 @@ export function applyRecipeUpdate(value,operation,{actor,now}){
   }
   return {...value,overrides:{...(value?.overrides||{}),[meal.id]:{...(value?.overrides?.[meal.id]||{}),...patch}}}
 
+}
+
+export function applyRecipeCreate(value,operation,{actor,now,createId}){
+  const estimate=JSON.parse(operation.payload.estimateJson)
+  const meal=normalizeMealInput({name:operation.payload.name,mealType:operation.payload.mealType,
+    prepMinutes:0,cookMinutes:0,timingRecorded:false,
+    ingredients:estimate.ingredients.map(item=>item.input),ingredientNutrition:estimate.ingredients,
+    macros:estimate.perServingMacros,batchMacros:estimate.batchMacros,
+    yieldQuantity:estimate.yieldQuantity,yieldUnit:estimate.yieldUnit,serving:estimate.serving,
+    nutritionWarnings:estimate.warnings,nutritionBasis:estimate.nutritionBasis},actor,now,createId)
+  return {after:{...(value||{}),meals:[...(value?.meals||[]),meal]},createdId:meal.id}
 }

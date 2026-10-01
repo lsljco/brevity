@@ -9,7 +9,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['get_member_preferences','get_module_configuration','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['get_member_preferences','get_module_configuration','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -383,4 +383,23 @@ test('feedback tool reports storage failure without exposing private errors',asy
  const result=JSON.parse(await agent.tools.find(t=>t.name==='record_usage_feedback').invoke({},JSON.stringify({outcome:'helpful',category:'accuracy'})))
  assert.equal(result.recorded,false)
  assert.doesNotMatch(JSON.stringify(result),/secret storage detail/)
+})
+
+test('packaged product research runs concurrently and reuses in-flight evidence within the request',async()=>{
+  const started=[],releases=[]
+  const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{},findSources:async product=>{
+    started.push(product)
+    await new Promise(resolve=>releases.push(resolve))
+    return [`https://example.com/${encodeURIComponent(product)}`]
+  },referenceFetcher:async url=>({sourceUrl:url,html:'Nutrition Facts Serving Size 2 oz Calories 190 Protein 6g Total Fat 15g Total Carbohydrates 5g'})})
+  const batch=agent.tools.find(tool=>tool.name==='find_products_nutrition')
+  const pending=batch.invoke({},JSON.stringify({products:['Green beans','Salted butter','Green beans']}))
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.deepEqual(started,['Green beans','Salted butter'],'both lookups start before either finishes; duplicates share the same research')
+  releases.forEach(resolve=>resolve())
+  const result=JSON.parse(await pending)
+  assert.equal(result.products.length,3)
+  assert.ok(result.products.every(product=>product.references.length===1))
+  await agent.tools.find(tool=>tool.name==='find_product_nutrition').invoke({},JSON.stringify({product:'Green beans'}))
+  assert.equal(started.length,2)
 })

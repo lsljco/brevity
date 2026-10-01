@@ -121,7 +121,7 @@ test('fallback actions identify who, when, completion, and destination without r
     obedienceAction:'Name one truth Hebrews 4:12 brings into view and write the response you will practice today.',
   }}
   const fallback=buildDeterministicPillarFallback(input)
-  assert.equal(fallback.actionableInsights.length,2)
+  assert.equal(fallback.actionableInsights.length,1)
   for(const action of fallback.actionableInsights){
     assert.equal(action.actor,'Each household member')
     assert.equal(action.timing,'Today · 2026-09-09')

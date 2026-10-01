@@ -1,4 +1,4 @@
-export const PILLAR_ANALYSIS_GUARDRAIL_VERSION = 3
+export const PILLAR_ANALYSIS_GUARDRAIL_VERSION = 4
 
 const PILLARS = new Set(['spiritual','health','fitness','household','education','finance','ministry'])
 const PILLAR_LABELS = {
@@ -830,7 +830,7 @@ export function buildDeterministicPillarFallback({pillar,date,pillarData={},loca
   const reflection=primary.kind==='data-gap'
     ? `What is preventing “${clean(primary.value,120)}” from being recorded or refreshed?`
     : reflections[pillar]||`What would change if “${clean(primary.value,120)}” were addressed today?`
-  const includeSecondAction=pillar==='spiritual'&&primary.kind!=='data-gap'&&secondary?.whyItMatters&&normalized(secondary.nextMove)!==normalized(primary.nextMove)
+  const includeSecondAction=pillar==='spiritual'&&primary.kind!=='data-gap'&&secondary?.id!=='plan-scripture'&&secondary?.whyItMatters&&normalized(secondary.nextMove)!==normalized(primary.nextMove)
   const distinctFacts=[primary,...(includeSecondAction?[secondary]:[])].slice(0,2)
   return operationalizePillarAnalysis({
     headline:primary.headline,

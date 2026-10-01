@@ -62,6 +62,7 @@ test('Health reloads for application refreshes and completed meal substitutions 
   assert.equal(shouldReloadRollingMealPlan({type:ROLLING_MEAL_APP_REFRESH_EVENT}),true)
   assert.equal(shouldReloadRollingMealPlan({type:ACTION_COMPLETED_EVENT,detail:{audit:{operations:[{type:'meal.substitute'}]}}}),true)
   assert.equal(shouldReloadRollingMealPlan({type:ACTION_COMPLETED_EVENT,detail:{audit:{operations:[{type:'plan.pillar.update'}]}}}),false)
+  assert.equal(shouldReloadRollingMealPlan({type:ACTION_COMPLETED_EVENT,detail:{audit:{operations:[{type:'meal.recipe.create'}]}}}),true)
   assert.equal(shouldReloadRollingMealPlan({type:'storage'}),false)
 })
 

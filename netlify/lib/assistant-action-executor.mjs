@@ -11,7 +11,7 @@ import {applyActivity} from './member-activity.mjs'
 import {applyLearningObservation,LEARNING_RESOURCE} from './learning-observation.mjs'
 import {applyMemberPreference} from './member-preferences.mjs'
 import {IMPROVEMENT_RESOURCE,applyImprovement} from './improvement-workflow.mjs'
-import {RECIPE_RESOURCE,resolvedRecipes,applyRecipeUpdate} from './recipe-library-actions.mjs'
+import {RECIPE_RESOURCE,resolvedRecipes,applyRecipeUpdate,applyRecipeCreate} from './recipe-library-actions.mjs'
 import { randomUUID } from 'node:crypto'
 import { getStore } from './scoped-store.mjs'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from '../../src/finance/recurrenceEditing.js'
@@ -51,7 +51,7 @@ export function resourceForOperation(operation) {
   if(operation.type==='education.observation.record')return LEARNING_RESOURCE
   if(operation.type==='member.preference.set')return `member-context:${operation.targetId}`
   if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
-  if(operation.type==='meal.recipe.update')return RECIPE_RESOURCE
+  if(operation.type.startsWith('meal.recipe.'))return RECIPE_RESOURCE
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
@@ -215,6 +215,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const notes={...(current.cadenceNotes||{})},cadenceNotes={...(notes[payload.cadence]||{}),[payload.noteIndex]:payload.note}
     return{before,after:{...current,cadenceNotes:{...notes,[payload.cadence]:cadenceNotes}}}
   }
+  if(operation.type==='meal.recipe.create')return {before,...applyRecipeCreate(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='meal.recipe.update')return {before,after:applyRecipeUpdate(value,operation,{actor:context.actor,now:context.now||(()=>new Date())})}
   if(operation.type==='meal.substitute'){
     const errors=validateMealSubstitution({date:operation.targetDate,mealType:payload.mealType,mealId:payload.mealId})
