@@ -1,3 +1,4 @@
+import { mealIdsForDay } from '../../src/meals/mealPlanData.js'
 import {projectCalendarEvent} from '../../src/homehq/projectData.js'
 import {VENDOR_TYPES} from '../../src/finance/vendorModel.js'
 import {savedTaskLinks,taskReceiptText} from '../lib/task-receipt.mjs'
@@ -170,7 +171,7 @@ export async function prepareMealProposal({input,session,permissions,repository,
   if(!day||!Number.isInteger(expectedVersion)||expectedVersion<1||Number(day.version)!==expectedVersion){
     throw Object.assign(new Error('The meal plan changed after you opened it. Refresh and review the current meal before applying a replacement.'),{code:'VERSION_CONFLICT'})
   }
-  const currentMealId=day.meals?.[mealType]
+  const currentMealId=mealIdsForDay(day)[mealType]
   if(!currentMealId)throw Object.assign(new Error('That meal is not available on the selected meal-plan day.'),{code:'INVALID_ACTION'})
   if(currentMealId===mealId)throw Object.assign(new Error('Choose a different meal before reviewing this replacement.'),{code:'INVALID_ACTION'})
   const currentMeal=library.find(meal=>meal.id===currentMealId)||MEALS_BY_ID.get(currentMealId)

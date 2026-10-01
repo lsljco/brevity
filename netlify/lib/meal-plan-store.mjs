@@ -170,7 +170,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       Promise.all(dates.map(async date => readOnly ? (await getDay(date)) || createDay(date) : ensureDay(date))),
     ])
     const viewLibrary = libraryState.library.map(meal => {
-      if (meal.image) return meal
+      if (meal.image || meal.tags?.includes('snack')) return meal
       const image = fallbackMealImage(meal, libraryState.library)
       return image ? { ...meal, image, imageFallback:true } : meal
     })

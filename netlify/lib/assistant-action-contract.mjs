@@ -380,7 +380,7 @@ function normalizeActionPayload(type, input) {
     } else if (field === 'owner') {
       assertString(type, field, value)
       const owner=type.startsWith('meeting.')?canonicalMeetingNameText(value):value
-      if (owner && ![...HOUSEHOLD_MEMBERS, 'Family'].includes(owner)) throw new Error('The proposed owner is not a recognized household member.')
+      if (owner && ![...HOUSEHOLD_MEMBERS, 'Family', ...(type.startsWith('calendar.') ? ['Church Triumphant'] : [])].includes(owner)) throw new Error('The proposed owner is not a recognized household member.')
       normalized[field] = owner
     } else if (field === 'participants') {
       normalized[field] = normalizeParticipants(type, value)
@@ -603,9 +603,9 @@ export function normalizeActionOperation(input = {}) {
   }
   if(type==='meal.recipe.update'&&(!operation.targetId||!payload.name))throw new Error('A recipe update requires its exact saved recipe and title.')
   if(type==='meal.substitute'){
-    if(!MEAL_TYPES.includes(payload.mealType))throw new Error('Choose breakfast, lunch or dinner for the meal substitution.')
+    if(!MEAL_TYPES.includes(payload.mealType))throw new Error('Choose a meal or snack slot for the substitution.')
     const meal=MEALS_BY_ID.get(payload.mealId)
-    const customId=/^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.test(String(payload.mealId||''))
+    const customId=/^custom-(breakfast|lunch|dinner|snack1|snack2)-[a-zA-Z0-9-]+$/.test(String(payload.mealId||''))
     if(!meal&&!customId)throw new Error('Choose a meal from the household meal library.')
   }
   if(type==='nutrition.meal.log'){

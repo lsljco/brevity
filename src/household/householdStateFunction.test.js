@@ -648,3 +648,14 @@ test('empty finance defaults do not prevent a member from creating a daily plan'
   assert.equal(permission.allowed, true)
   assert.equal(permission.domain, 'planning')
 })
+
+ test('Plaid pending lineage from a verified batch is accepted without allowing arbitrary fields',async()=>{
+  const transaction={...actual(),pending:false,pendingTransactionId:'pending-source-id'}
+  const accepted=await writePlaidSourceRecord({dataStore:memoryStore(),session:{member:'Larry',role:'admin'},body:sourceBody('plaid_actuals_cache',[transaction]),now,...stagedSource({transactions:[transaction]})})
+  assert.equal(accepted.statusCode,200)
+  for(const patch of [{pendingTransactionId:{}},{pendingTransactionId:transaction.id},{pending:true},{unexpectedSourceField:'unsafe'}]){
+    const invalid={...transaction,...patch}
+    const rejected=await writePlaidSourceRecord({dataStore:memoryStore(),session:{member:'Larry',role:'admin'},body:sourceBody('plaid_actuals_cache',[invalid]),now,...stagedSource({transactions:[invalid]})})
+    assert.equal(rejected.statusCode,422)
+  }
+ })

@@ -296,6 +296,7 @@ export function parseEvent(ics, href, etag, forceOccurrenceId = false) {
     pillar: unescapeIcs(icsValue(ics, "CATEGORIES")).toLowerCase() || "household",
     priority: icsValue(ics, "PRIORITY") === "1" || icsValue(ics, "X-BREVITY-PRIORITY") === "TRUE",
     owner: unescapeIcs(icsValue(ics, "X-BREVITY-OWNER")) || "Family",
+    ownershipKnown: Boolean(icsValue(ics, "X-BREVITY-OWNER")),
     participants: unescapeIcs(icsValue(ics, "X-BREVITY-PARTICIPANTS")).split("|").filter(Boolean),
     notes: unescapeIcs(icsValue(ics, "DESCRIPTION")),
     location:unescapeIcs(icsValue(ics,"LOCATION")),

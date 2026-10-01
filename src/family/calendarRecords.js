@@ -7,7 +7,7 @@ const clean = value => String(value || '').trim()
 
 export function canonicalCalendarMember(value, fallback = 'Family') {
   const canonical = canonicalCalendarText(value).trim()
-  return canonical === 'Family' || HOUSEHOLD_MEMBERS.includes(canonical) ? canonical : fallback
+  return ['Family','Church Triumphant'].includes(canonical) || HOUSEHOLD_MEMBERS.includes(canonical) ? canonical : fallback
 }
 
 function canonicalMembers(values = []) {

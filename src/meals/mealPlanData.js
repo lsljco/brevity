@@ -4,7 +4,7 @@ export const MEAL_PLAN_SCHEMA_VERSION = 1
 export const DEFAULT_MEAL_TIME_ZONE = 'America/New_York'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const isCustomMealId = mealId => /^custom-(breakfast|lunch|dinner)-[a-zA-Z0-9-]+$/.test(String(mealId || ''))
+const isCustomMealId = mealId => /^custom-(breakfast|lunch|dinner|snack1|snack2)-[a-zA-Z0-9-]+$/.test(String(mealId || ''))
 const libraryIndex = library => new Map((Array.isArray(library) ? library : MEAL_LIBRARY).map(meal => [meal.id, meal]))
 
 export function validMealDate(value) {
@@ -39,6 +39,8 @@ function dayNumber(date) {
 
 export function rotatingMealForDate(date, mealType) {
   if (!MEAL_TYPES.includes(mealType)) throw new Error('Unknown meal type.')
+  if (mealType === 'snack1') return MEAL_LIBRARY.find(meal => meal.id === 'snack-premier-chocolate')
+  if (mealType === 'snack2') return MEAL_LIBRARY.find(meal => meal.id === 'snack-envy-apple')
   const candidates = mealsForType(mealType)
   const offsets = { breakfast: 0, lunch: 11, dinner: 23 }
   const index = ((dayNumber(date) * 7 + offsets[mealType]) % candidates.length + candidates.length) % candidates.length
@@ -64,11 +66,14 @@ export function createRollingMealDay(date, context = {}) {
   }
 }
 
+export const mealIdsForDay = day => ({ snack1:'snack-premier-chocolate', snack2:'snack-envy-apple', ...(day?.meals || {}) })
+
 export function resolveMealDay(day, library = MEAL_LIBRARY) {
   const byId = libraryIndex(library)
   return {
     ...day,
-    resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, byId.get(day?.meals?.[mealType]) || null])),
+    meals: mealIdsForDay(day),
+    resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, byId.get(mealIdsForDay(day)[mealType]) || null])),
   }
 }
 
