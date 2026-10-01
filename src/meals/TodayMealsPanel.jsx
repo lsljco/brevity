@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ACTION_COMPLETED_EVENT, requestActionReview, requestAssistantConversation } from '../assistant/actionEvents.js'
 import { prepareMealSubstitution } from './mealPlanApi.js'
 import { personalMealPlan, portionIngredients } from './personalMealPlan.js'
+import { getHouseholdDateKey } from '../finance/financeTime.js'
+import TodayCalorieConsumption from './TodayCalorieConsumption.jsx'
 import './TodayMealsPanel.css'
 
 const LABELS = {breakfast:'Breakfast',lunch:'Lunch',dinner:'Dinner',snack1:'Snack 1',snack2:'Snack 2'}
@@ -13,6 +15,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
   const [swap,setSwap] = useState(null)
   const [busy,setBusy] = useState(false)
   const [swapError,setSwapError] = useState('')
+  const today=getHouseholdDateKey()
   useEffect(() => {
     let active = true, request = 0
     const load = async () => {
@@ -27,7 +30,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
     setNutrition(null);setError('');setSwap(null);load()
     window.addEventListener(ACTION_COMPLETED_EVENT,load)
     return () => {active=false;window.removeEventListener(ACTION_COMPLETED_EVENT,load)}
-  },[currentMember])
+  },[currentMember,today])
   const verified = nutrition?.member === currentMember
   const targets = verified ? nutrition.targets : {}
   const personal = personalMealPlan(meals,targets)
@@ -52,6 +55,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
       <p>{personal.factor===1?'Standard recipe portions shown.':`Your main meals use ${personal.factor}× the standard recipe serving; both snacks remain full portions.`} Saved goals are unchanged. {personal.totals.proteinGrams!=null&&targets.proteinGrams>personal.totals.proteinGrams+1?`You still need ${display(targets.proteinGrams-personal.totals.proteinGrams)} g protein; ask Brevity for a different snack or meal combination.`:''}</p>
       <button onClick={()=>requestAssistantConversation(`Read my saved nutrition targets and the authoritative meal plan including both snacks for ${mealDay?.date || 'today'}. Help me balance this selected day against all four macro goals. Ask about brands, portions, and food restrictions before recommending replacements. Prepare any saved changes for Action Mode review.`)}>Balance my meals with Brevity</button>
     </section>
+    {!browsingDate && <TodayCalorieConsumption nutrition={nutrition} currentMember={currentMember} date={today} error={error}/>}
     <div className="today-meal-grid">{Object.entries(LABELS).filter(([slot])=>personal.meals[slot]).map(([slot,label])=>{
       const meal=personal.meals[slot]
       return <article className={`today-meal-card${slot.startsWith('snack')?' today-snack-card':''}`} key={slot}>
@@ -62,6 +66,6 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
         </div>
       </article>
     })}</div>
-    {swap&&<div className="meal-dialog-backdrop"><section className="today-snack-swap" role="dialog" aria-modal="true" aria-label={`Swap ${LABELS[swap.slot]}`}><h3>Swap {LABELS[swap.slot]}</h3><p>This changes the shared meal plan for {swap.date}. Each member’s displayed portion uses their own goals.</p><label>Replacement<select value={swap.id} onChange={event=>setSwap({...swap,id:event.target.value})}>{library.map(meal=><option key={meal.id} value={meal.id}>{meal.name}</option>)}</select></label><p>Nothing changes until you approve in Action Mode. Audit History provides safe Undo.</p>{swapError&&<p role="alert">{swapError}</p>}<button disabled={busy} onClick={()=>setSwap(null)}>Cancel</button><button disabled={busy||swap.id===meals[swap.slot]?.id} onClick={reviewSwap}>{busy?'Opening review…':'Review swap'}</button></section></div>}
+    {swap&&<div className="meal-dialog-backdrop"><section className="today-snack-swap" role="dialog" aria-modal="true" aria-label={`Swap ${LABELS[swap.slot]}`}><h3>Swap {LABELS[swap.slot]}</h3><p>This changes the shared meal plan for {swap.date}. Each member’s displayed portion uses their own goals.</p><label>Replacement<select value={swap.id} onChange={event=>setSwap({...swap,id:event.target.value})}>{[...library].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'en',{sensitivity:'base',numeric:true})||String(a.id).localeCompare(String(b.id))).map(meal=><option key={meal.id} value={meal.id}>{meal.name}</option>)}</select></label><p>Nothing changes until you approve in Action Mode. Audit History provides safe Undo.</p>{swapError&&<p role="alert">{swapError}</p>}<button disabled={busy} onClick={()=>setSwap(null)}>Cancel</button><button disabled={busy||swap.id===meals[swap.slot]?.id} onClick={reviewSwap}>{busy?'Opening review…':'Review swap'}</button></section></div>}
   </section>
 }
