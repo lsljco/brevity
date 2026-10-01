@@ -637,3 +637,41 @@ test('an open Today calendar ages from verified to stale without losing appointm
   await expect(page.locator('.today-calendar-health')).toContainText('Refresh before relying')
   await expect(page.locator('.today-calendar-agenda')).toContainText('Doctor appointment')
 })
+
+
+test('Next 7 Days sends the selected meal date to Brevity',async({page})=>{
+  const requests=[]
+  await page.route('**/.netlify/functions/brevity-conversation',route=>route.fulfill({json:{version:0,messages:[]}}))
+  await page.route('**/.netlify/functions/brevity-assistant',async route=>{
+    requests.push(route.request().postDataJSON())
+    await route.fulfill({json:{message:'The selected date is ready for review.',proposal:null}})
+  })
+  await page.getByRole('button',{name:'View Next 7 Days'}).click()
+  const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
+  await expect(page.locator('.today-snack-card')).toHaveCount(2)
+  await page.getByRole('button',{name:'Balance my meals with Brevity'}).click()
+  await expect.poll(()=>requests.length).toBe(1)
+  const message=requests[0].messages.at(-1).content
+  expect(message).toContain(`for ${date}.`)
+  expect(message).toContain('Action Mode review')
+  expect(message).not.toContain('for today.')
+})
+
+test('Next 7 Days refreshes shared chores and ages calendar verification while open',async({page})=>{
+  await page.clock.install({time:new Date()})
+  let source={customChores:[]},version=1
+  const key='brevity_household_maintenance_v1'
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{[key]:{key,version,value:JSON.stringify(source),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
+  await page.reload()
+  await page.getByRole('button',{name:'View Next 7 Days'}).click()
+  await expect(page.locator('.today-calendar-health')).toContainText('Calendar verified')
+  const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
+  source={customChores:[{id:'shared-future-chore',title:'Updated future source chore',date,owners:['Larry']}]};version++
+  await page.clock.fastForward(11000)
+  await expect(page.locator('.today-household-chores')).toContainText('Updated future source chore')
+  source={customChores:[]};version++
+  await page.clock.fastForward(11000)
+  await expect(page.locator('.today-household-chores')).not.toContainText('Updated future source chore')
+  await page.clock.fastForward(31*60*1000)
+  await expect(page.locator('.today-calendar-health')).toContainText('Refresh before relying')
+})
