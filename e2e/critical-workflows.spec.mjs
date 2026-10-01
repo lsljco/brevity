@@ -155,6 +155,31 @@ test('expanded side panel remains expanded while navigating until its toggle is 
   await expect(drawer).not.toHaveClass(/is-expanded/)
 })
 
+test('iPad sidebar stays open after content taps, rotation, and reload until explicitly collapsed',async({page},testInfo)=>{
+  test.skip(!testInfo.project.name.startsWith('tablet'),'iPad-specific persistent navigation')
+  const drawer=page.locator('#primary-navigation-drawer')
+  if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click()
+  await page.getByRole('button',{name:'Expand navigation'}).click()
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+  await expect(page.getByRole('button',{name:'Close navigation',exact:true})).toBeHidden()
+  // A real content click must reach the workspace, without a dismissing overlay.
+  await page.locator('.app-main').click({position:{x:300,y:120}})
+  await expect(drawer).toHaveClass(/is-expanded/)
+  const bounds=await page.evaluate(()=>({sidebar:document.querySelector('#primary-navigation-drawer').getBoundingClientRect().right,main:document.querySelector('.app-main').getBoundingClientRect().left}))
+  expect(bounds.main).toBeGreaterThanOrEqual(bounds.sidebar-1)
+  await page.setViewportSize(testInfo.project.name==='tablet'?{width:1194,height:834}:{width:834,height:1194})
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.reload()
+  await expect(drawer).toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Collapse navigation'}).click()
+  await expect(drawer).not.toHaveClass(/is-expanded/)
+  await page.reload()
+  await expect(drawer).not.toHaveClass(/is-expanded/)
+  await page.getByRole('button',{name:'Expand navigation'}).click()
+  await expect(drawer).toHaveClass(/is-expanded/)
+})
+
 test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
 test('Household Intelligence dashboard separates metrics and opens an auditable score drilldown',async({page},testInfo)=>{
@@ -1087,7 +1112,7 @@ test('Finance reconciliation recommends matches and opens approval without mutat
     if(url.pathname.endsWith('/brevity-assistant-actions')&&url.searchParams.get('action')==='execute')writes++
   })
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Dashboard',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const report=page.getByRole('region',{name:'Automatic reconciliation recommendations'})
   await expect(report).toContainText('1 suggested matches')
   await expect(report).toContainText('Difference: $6.00')
@@ -1115,7 +1140,7 @@ test('Finance combines Operating and Savings while excluding Renovation across v
   records.plaid_actuals_cache.value='[]'
   await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Dashboard',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const filters=page.getByRole('navigation',{name:'Finance account filters'})
   await filters.getByRole('button',{name:'Savings Account',exact:true}).click()
   await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')

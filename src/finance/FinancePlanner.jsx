@@ -3018,7 +3018,6 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ CALENDAR ══════════ */}
       {view === 'calendar' && (
         <div className="finance-inner">
-          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
           <CalendarView vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
             readOnly={readOnly}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
@@ -3035,6 +3034,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             balanceVerifiedLive={forecastBalanceVerifiedLive}
             todayPlanUnresolved={forecastTodayPlanUnresolved}
             onActualTxClick={openActualTxModal} />
+          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
+
         </div>
       )}
 
