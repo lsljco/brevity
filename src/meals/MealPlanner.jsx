@@ -286,7 +286,7 @@ function PlanView({ days, onSelect, onOpenMeal, monthly = false }) {
   return <div className="meal-week">
     {days.map((day, index) => <article className={`meal-day${!monthly && index === 0 ? ' meal-day--today' : ''}`} key={day.date}>
       <header><div><span>{monthly ? `Day ${index + 1}` : index === 0 ? 'Today' : `Day ${index + 1}`}</span><h2>{formatDay(day.date)}</h2></div>{Object.keys(day.substitutions || {}).length > 0 && <small><i className="ti ti-replace" /> Customized</small>}</header>
-      <div className="meal-day-slots">{MEAL_TYPES.map(mealType => {
+      <div className="meal-day-slots">{MEAL_TYPES.filter(mealType=>day.resolvedMeals?.[mealType]).map(mealType => {
         const meal = day.resolvedMeals[mealType]
         return <section className="meal-slot meal-card-action" key={mealType} role="button" tabIndex="0" aria-label={`View ${meal?.name} details`} onClick={()=>meal&&onOpenMeal(meal)} onKeyDown={event=>{if((event.key==='Enter'||event.key===' ')&&meal){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} className="meal-slot-photo" alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes · View recipe</small><button type="button" onClick={event => { event.stopPropagation(); onSelect({ day, mealType }) }}><i className="ti ti-replace" /> Replace</button></div></section>
       })}</div>
@@ -383,7 +383,7 @@ export default function MealPlanner({currentMember}) {
     {view !== 'month' && error && <div className="meal-planner-state meal-planner-state--error"><strong>Meal plan needs attention</strong><span>{error}</span><button type="button" onClick={() => reload().catch(() => undefined)}>Retry</button></div>}
     {view === 'month' && monthPlan.state === 'loading' && <div className="meal-planner-state" role="status">Loading the selected month…</div>}
     {view === 'month' && monthPlan.error && <div className="meal-planner-state meal-planner-state--error" role="alert"><strong>Month plan needs attention</strong><span>{monthPlan.error}</span><button type="button" onClick={() => monthPlan.reload().catch(() => undefined)}>Retry</button></div>}
-    {view === 'month' && monthPlan.data && <p className="meal-month-summary">{monthPlan.data.days.length} days · {monthPlan.data.days.length * MEAL_TYPES.length} planned meals</p>}
+    {view === 'month' && monthPlan.data && <p className="meal-month-summary">{monthPlan.data.days.length} days · {monthPlan.data.days.reduce((sum,day)=>sum+Object.values(day.resolvedMeals||{}).filter(Boolean).length,0)} planned meals</p>}
     {view === 'library' && data && <LibraryView library={data.library} onAdd={setAddingMealType} onOpenMeal={setDetailMeal} onBulkImport={()=>setBulkImportOpen(true)} />}
     {(view === 'plan' ? data : view === 'month' ? monthPlan.data : null) && <PlanView days={visiblePlan.data.days} monthly={view === 'month'} onOpenMeal={setDetailMeal} onSelect={({day,mealType})=>setSelection({day,mealType,mealId:day.meals[mealType],proposal:null})} />}
     {detailMeal && <MealDetailDialog meal={detailMeal} onClose={()=>setDetailMeal(null)} onImageGenerated={imageGenerated} />}
