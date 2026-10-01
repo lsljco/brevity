@@ -1,3 +1,5 @@
+import AutoReconciliationReport from './AutoReconciliationReport.jsx'
+import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
 import {useVendorDirectory} from './vendorApi.js'
 import {decorateVendorTransactions} from './vendorModel.js'
 import VendorSelector from './VendorSelector.jsx'
@@ -1818,7 +1820,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }
   }
 
-  async function stageDirectFinanceReview({ summary, operation, storageKey, expectedVersion, surfaceError = false }) {
+  async function stageDirectFinanceReview({ summary, operation, operations, storageKey, expectedVersion, surfaceError = false }) {
     if (readOnly) {
       showToast('Finance is read-only for this household member')
       return false
@@ -1844,6 +1846,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       const result = await prepareDirectAction({
         summary,
         operation,
+        operations,
         expectedVersion: reviewedVersion,
       })
       if (!result?.proposal?.id) throw new Error('This financial change could not be prepared safely.')
@@ -1857,6 +1860,15 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       if (surfaceError) throw error
       return false
     }
+  }
+
+  const reviewReconciliationReport = async selected => {
+    // Rebuild from the current bank cache and saved plan; never submit stale UI rows.
+    const current = dataRef.current
+    const fresh = buildAutoReconciliationReport({scheduled:current.transactions,actuals:plaidActuals || [],accounts:current.accounts})
+    const rows = selected.map(row=>fresh.suggestions.find(candidate=>candidate.id===row.id && JSON.stringify(candidate.evidence)===JSON.stringify(row.evidence)))
+    if (!rows.length || rows.length > RECONCILIATION_BATCH_LIMIT || rows.some(row=>!row)) throw new Error('The reconciliation report changed. Review the refreshed recommendations.')
+    return stageDirectFinanceReview({summary:`Reconcile ${rows.length} projected expenses with posted bank charges`,operations:rows.map(reconciliationOperation),storageKey:LS_KEY,expectedVersion:captureFinanceReviewVersion(),surfaceError:true})
   }
 
   const reviewBudgetChange = ({ line, year, month, value }) => stageDirectFinanceReview({
@@ -2496,6 +2508,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             <span style={{ color: 'var(--gold)', fontSize: 11, whiteSpace: 'nowrap' }}>Open alignment <i className="ti ti-arrow-right" /></span>
           </button>
 
+          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
           <FinanceReconciliation
             scheduled={fd.transactions}
             accountMap={plaidIdToLocal}
@@ -3001,6 +3014,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ CALENDAR ══════════ */}
       {view === 'calendar' && (
         <div className="finance-inner">
+          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
           <CalendarView vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
             readOnly={readOnly}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
@@ -4663,6 +4677,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           const matchedRows = showActualPills ? (dayReconciliation?.rows || []).filter(row => row.state === 'matched') : []
           const matchedPlanIds = new Set(matchedRows.map(row => row.expected.id))
           const matchedActualIds = new Set(matchedRows.map(row => row.actual.id))
+          const approvedActualIds = new Set(matchedRows.filter(row=>row.approved).map(row=>row.actual.id))
           const visiblePlans = (pt?.txns || []).filter(tx => !matchedPlanIds.has(tx.id))
           return (
             <div key={key}
@@ -4725,7 +4740,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                         color: isIncome ? '#7DCBA4' : '#90AADE',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
                       }}>
-                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{matchedActualIds.has(tx.id) ? '✓ Budget matched · ' : isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
+                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{approvedActualIds.has(tx.id) ? '✓ Reconciled · ' : matchedActualIds.has(tx.id) ? '✓ Budget matched · ' : isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
                         <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600 }}>
                           {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
                         </span>
@@ -4853,7 +4868,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
             <p style={{ fontSize:12, color:'var(--muted)' }}>{reconciliationByDate.get(selDay).matched} matched · {reconciliationByDate.get(selDay).needsReview.length} reconciling items</p>
             {reconciliationByDate.get(selDay).rows.map((row, index) => <div key={row.expected?.id || row.actual?.id || index} style={{ padding:'8px 0', borderTop:'1px solid var(--glass-border)', fontSize:12 }}>
               <strong>{row.expected?.name || transactionDescription(row.actual || row.candidates?.[0])}</strong>
-              <span style={{ marginLeft:8, color:row.state === 'matched' ? '#7DCBA4' : '#E8967A' }}>{row.state === 'matched' ? '✓ Budget matched' : reconciliationStateLabel(row.state)}</span>
+              <span style={{ marginLeft:8, color:row.state === 'matched' ? '#7DCBA4' : '#E8967A' }}>{row.approved ? '✓ Approved reconciliation' : row.state === 'matched' ? '✓ Budget matched' : reconciliationStateLabel(row.state)}</span>
               {row.expected && row.actual && <p style={{ margin:'4px 0', color:'var(--muted)' }}>Budget {fmtMoney(row.expected.expectedAmount)} · Bank {fmtMoney(Math.abs(Number(row.actual.amount)))} · Difference {fmtMoney(row.amountVariance)}</p>}
             </div>)}
             <p style={{ fontSize:11, color:'var(--muted)' }}>Move a planned item to its posting date to match. Matches require the same linked account and a unique merchant match. Both records remain available; the bank charge counts once. Edit the planned occurrence to undo a move.</p>

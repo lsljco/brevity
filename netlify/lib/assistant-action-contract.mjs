@@ -1,3 +1,4 @@
+import { normalizeReconciliationEvidence } from '../../src/finance/autoReconciliation.js'
 import {normalizeRecipeEdit} from '../../src/meals/recipeEdit.js'
 import {VENDOR_RESOURCE,VENDOR_TYPES,normalizeVendorPayload} from '../../src/finance/vendorModel.js'
 import {normalizeModulePatch,MODULE_RESOURCE} from '../../src/modules/configuration.js'
@@ -135,7 +136,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'forecast.update': ['title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'recurring.create': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
-  'recurring.update': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
+  'recurring.update': ['reconciliation', 'vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.delete': [],
   'debt.create': ['vendorId', 'creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
   'debt.update': ['vendorId', 'creditor', 'accountName', 'debtType', 'originalBalance', 'currentBalance', 'interestRate', 'interestMethod', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'paymentMatchText', 'status', 'notes'],
@@ -305,7 +306,9 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='meeting.session.create'&&field==='actions'){
+    if(type==='recurring.update'&&field==='reconciliation'){
+      normalized.reconciliation=normalizeReconciliationEvidence(value)
+    }else if(type==='meeting.session.create'&&field==='actions'){
       normalized.actions=normalizeMeetingSessionActions(value)
     }else if(type==='meeting.session.create'&&field==='corrections'){
       normalized.corrections=normalizeMeetingSessionCorrections(value)
@@ -469,6 +472,7 @@ export function normalizeActionOperation(input = {}) {
     && !/forecast[- ]only planned transfer/i.test(baseDescription)
       ? 'Forecast-only planned transfer; no money will move'
       : ''
+  if (type === 'recurring.update' && payload.reconciliation && (allowedScopes.length !== 1 || allowedScopes[0] !== 'this-item' || Object.keys(payload).some(key=>!['date','reconciliation'].includes(key)) || payload.date !== payload.reconciliation.postedDate)) throw new Error('Reconciliation must link and move only one occurrence using the reviewed bank posting date.')
   const fixedRecurringScope = ['recurring.update', 'recurring.delete'].includes(type) && allowedScopes.length === 1
     ? defaultScope === 'this-and-future' ? 'This and future items' : 'This item only'
     : ''

@@ -34,7 +34,7 @@ export default function FinanceReconciliation({ scheduled, actuals, date, accoun
       <div>
         <span style={{ color:'var(--gold)', fontSize:10, fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase' }}>Daily reconciliation</span>
         <h2 style={{ margin:'4px 0 3px', fontFamily:'var(--font-serif)', fontSize:22, fontWeight:500 }}>
-          {actualsAvailable ? result.allClear ? 'Expected and bank activity agree' : `${result.needsReview.length} item${result.needsReview.length === 1 ? '' : 's'} need review` : 'Bank activity is not available'}
+          {actualsAvailable ? result.allClear ? result.rows.some(row=>row.approved&&row.amountVariance) ? 'Reconciliation approved with differences' : 'Expected and bank activity agree' : `${result.needsReview.length} item${result.needsReview.length === 1 ? '' : 's'} need review` : 'Bank activity is not available'}
         </h2>
         <p style={{ margin:0, color:'var(--muted)', fontSize:11 }}>Expected occurrences for today matched against posted and pending bank activity within four days. No records are changed automatically.</p>
         {actualsAvailable && <p style={{ margin:'5px 0 0', color:'var(--muted)', fontSize:10 }}>{result.matched} matched · {result.needsReview.length} need review{result.counts.ambiguous ? ` · ${result.counts.ambiguous} possible-match set${result.counts.ambiguous === 1 ? '' : 's'}` : ''} · {result.rows.length} total</p>}
@@ -72,7 +72,7 @@ export default function FinanceReconciliation({ scheduled, actuals, date, accoun
             style={{ display:'block', textAlign:'left', padding:'11px 12px', borderRadius:10, border:'1px solid rgba(255,255,255,.08)', background:'rgba(255,255,255,.025)', color:'inherit', cursor:canOpen ? 'pointer' : 'default', fontFamily:'inherit' }}>
             <span style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
               <strong style={{ fontSize:12 }}>{recordName(row)}</strong>
-              <small style={{ color:stateColor(row.state), whiteSpace:'nowrap' }}>{reconciliationStateLabel(row.state)}</small>
+              <small style={{ color:stateColor(row.state), whiteSpace:'nowrap' }}>{row.approved ? 'Approved reconciliation' : reconciliationStateLabel(row.state)}</small>
             </span>
             <span style={{ display:'block', marginTop:5, color:'var(--muted)', fontSize:10 }}>
               {row.state === 'ambiguous' ? `${possibleMatchCount(row)} plausible ${row.expectedCandidates?.length ? 'planned matches' : 'bank matches'} · review required`
