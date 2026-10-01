@@ -1,16 +1,16 @@
-import { buildHouseholdMaintenanceWeek, householdOccurrence, maintenanceDateKey, normalizeHouseholdMaintenanceState, HOUSEHOLD_MAINTENANCE_STORAGE_KEY } from './householdMaintenanceData.js'
+import { buildHouseholdMaintenanceWeek, householdOccurrence, maintenanceToday, maintenanceDateKey, normalizeHouseholdMaintenanceState, HOUSEHOLD_MAINTENANCE_STORAGE_KEY } from './householdMaintenanceData.js'
 import { HOUSEHOLD_INVENTORY_STORAGE_KEY, inventoryIntelligence, normalizeInventoryState } from './householdInventoryData.js'
 import { buildHouseholdFinanceBridge } from './householdFinanceBridge.js'
 
 const parse = (storage, key, fallback = {}) => { try { return JSON.parse(storage.getItem(key) || '') || fallback } catch { return fallback } }
 const money = value => Number(value || 0)
 
-export function buildUnifiedHouseholdIntelligence({ storage = window.localStorage, currentMember = 'Family', today = new Date(), estateWorkspace = null } = {}) {
+export function buildUnifiedHouseholdIntelligence({ storage = window.localStorage, currentMember = 'Family', today = maintenanceToday(), estateWorkspace = null } = {}) {
   const todayKey = maintenanceDateKey(today)
   const operationsState = normalizeHouseholdMaintenanceState(parse(storage, HOUSEHOLD_MAINTENANCE_STORAGE_KEY, {}))
   const inventoryState = normalizeInventoryState(parse(storage, HOUSEHOLD_INVENTORY_STORAGE_KEY, {}))
   const financeBridge = buildHouseholdFinanceBridge({inventoryState,estateWorkspace,today})
-  const week = buildHouseholdMaintenanceWeek(today)
+  const week = buildHouseholdMaintenanceWeek(today, operationsState)
   const inventory = inventoryIntelligence(inventoryState, { today })
   const todayTasks = week.flatMap(day => day.date === todayKey ? day.tasks : [])
   const memberTasks = todayTasks.filter(task => task.owners.includes('Everyone') || task.owners.includes(currentMember) || householdOccurrence(operationsState, task).coveredBy === currentMember)

@@ -2,7 +2,7 @@ import { fetchICloudCalendarEvents } from '../family/icloudCalendarApi.js'
 import { mergeCalendarEventsIntoPlan } from '../family/calendarOverlay.js'
 import { readCurrentCalendarSnapshot, setLiveCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from '../family/calendarSnapshot.js'
 import { refreshFinanceData } from '../finance/financeRefresh.js'
-import { getHouseholdDateKey } from '../finance/financeTime.js'
+import { getHouseholdDateKey, getHouseholdDateTimeLabel } from '../finance/financeTime.js'
 import { fetchDailyPlan } from './householdApi.js'
 import { retryRefresh } from './retry.js'
 import { fetchSystemHealth, systemHealthIssues } from './systemHealth.js'
@@ -101,7 +101,7 @@ export function buildRefreshIssues({ financeResult, planResult, calendar, health
 
   if (bankRefresh?.requested && !['fresh','processing','preserved'].includes(bankRefresh.status) && !issues.some(issue => issue.source === 'Finance & Plaid')) {
     const lastSuccess = bankRefresh.lastSuccessfulAt && Number.isFinite(Date.parse(bankRefresh.lastSuccessfulAt))
-      ? ` Last successful transaction sync: ${new Date(bankRefresh.lastSuccessfulAt).toLocaleString()}.`
+      ? ` Last successful transaction sync: ${getHouseholdDateTimeLabel(new Date(bankRefresh.lastSuccessfulAt))}.`
       : ''
     const message = bankRefresh.status === 'disconnected'
       ? 'Brevity refreshed its application data, but no active Plaid bank connection was confirmed.'
@@ -151,7 +151,9 @@ async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdat
   const plan = planResult.status === 'fulfilled' ? planResult.value : null
   const calendar = await calendarPromise
   const calendarAwarePlan = plan?.date && !calendar?.error ? mergeCalendarEventsIntoPlan(plan, calendar.events) : plan
-  const finance = financeResult.status === 'fulfilled' ? financeResult.value : null
+  // A failed transaction source can still have a verified balance outcome.
+  // Keep both statuses so the UI never hides the failure behind balance success.
+  const finance = financeResult.status === 'fulfilled' ? financeResult.value : financeResult.reason?.detail || null
   const bankRefresh = buildBankRefreshState(finance, { requested:bankUpdateRequested, financeReadOnly })
   const issues = buildRefreshIssues({ financeResult, planResult, calendar, healthResult, bankRefresh })
 

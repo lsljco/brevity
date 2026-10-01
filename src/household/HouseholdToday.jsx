@@ -1,12 +1,15 @@
 import {useProjectCalendar} from '../homehq/useProjectCalendar.js'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
-import { calendarSnapshotHealth } from '../family/calendarSnapshot.js'
+import { buildUnifiedHouseholdIntelligence } from './householdIntelligence.js'
+import { HOUSEHOLD_INVENTORY_STORAGE_KEY } from './householdInventoryData.js'
+import { readCurrentCalendarSnapshot } from '../family/calendarSnapshot.js'
+import { useCalendarHealth } from '../family/useCalendarHealth.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
 import TodayDashboard from './TodayDashboard.jsx'
 import { fetchScheduledDailyPlanDraft, generateDailyPlan } from './dailyPlanGeneratorApi.js'
 import { useDailyPlan } from './useDailyPlan.js'
-import { APP_REFRESH_EVENT, ICLOUD_CACHE_KEY } from './appRefresh.js'
+import { APP_REFRESH_EVENT } from './appRefresh.js'
 import { nextDailyPlanDate } from './alignmentDate.js'
 import { assignmentUpdateOperation, buildAlignmentOperations, buildCalendarIntentOperations, buildPlanDraftOperations, buildRecapOperations, calendarIntentOperation, dailyFocusUpdateOperation, decisionUpdateOperation, stageCalendarIntentReview, stageDailyPlanReview } from './dailyPlanActionReview.js'
 import { clearLocalAlignmentDraft, clearLocalRecapDraft } from './dailyPlanLocalDraft.js'
@@ -23,10 +26,7 @@ const TomorrowProposal = lazy(() => import('./TomorrowProposal.jsx'))
 const UpcomingSchedule = lazy(() => import('./UpcomingSchedule.jsx'))
 const WorkflowBoundary = ({ children }) => <Suspense fallback={<div className="today-sync-banner" role="status">Loading the reviewed planning workflow…</div>}>{children}</Suspense>
 
-const cachedCalendar = () => {
-  try { return JSON.parse(localStorage.getItem(ICLOUD_CACHE_KEY) || 'null') }
-  catch { return null }
-}
+const cachedCalendar = () => readCurrentCalendarSnapshot()
 
 const applyRollingMeals = (plan, rollingPlan) => {
   const mealDay = rollingPlan?.days?.find(day => day.date === plan.date)
@@ -43,6 +43,8 @@ const applyRollingMeals = (plan, rollingPlan) => {
     },
   }
 }
+
+const signalsForDate = date => buildUnifiedHouseholdIntelligence({today:new Date(`${date}T12:00:00`)}).signals
 
 const choresForDate = date => {
   let maintenance
@@ -73,6 +75,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const calendarReviewQueueRef = useRef([])
   const projectEvents=useProjectCalendar()
   const [calendarData, setCalendarData] = useState(cachedCalendar)
+  const [householdSignals, setHouseholdSignals] = useState(() => signalsForDate(plan.date))
   const [householdChores, setHouseholdChores] = useState(() => choresForDate(plan.date))
   const planWithMeals = useMemo(() => applyRollingMeals(plan, mealPlan.data), [mealPlan.data, plan])
   const alignmentPlanWithMeals = useMemo(() => applyRollingMeals(alignmentPlan, mealPlan.data), [alignmentPlan, mealPlan.data])
@@ -88,7 +91,7 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     () => calendarAppointmentsForPlan(planWithMeals, [...(calendarData?.events||[]).filter(event=>!String(event.sourceId||'').startsWith('project-')),...projectEvents]),
     [calendarData?.events, planWithMeals, projectEvents],
   )
-  const calendarHealth = useMemo(() => calendarSnapshotHealth(calendarData), [calendarData])
+  const calendarHealth = useCalendarHealth(calendarData)
   const planningAccessMessage = planningAccessStatus === 'loading'
     ? 'Brevity is verifying your Plans & decisions permission. Today remains view-only until that check finishes.'
     : planningAccessStatus === 'error'
@@ -128,9 +131,10 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
 
   useEffect(() => {
     const refreshChores = event => {
-      if (event?.type === 'storage' && event.key !== HOUSEHOLD_MAINTENANCE_STORAGE_KEY) return
-      if (event?.type === SHARED_STATE_EVENT && !event.detail?.keys?.includes(HOUSEHOLD_MAINTENANCE_STORAGE_KEY)) return
+      if (event?.type === 'storage' && ![HOUSEHOLD_MAINTENANCE_STORAGE_KEY,HOUSEHOLD_INVENTORY_STORAGE_KEY].includes(event.key)) return
+      if (event?.type === SHARED_STATE_EVENT && !event.detail?.keys?.some(key=>[HOUSEHOLD_MAINTENANCE_STORAGE_KEY,HOUSEHOLD_INVENTORY_STORAGE_KEY].includes(key))) return
       setHouseholdChores(choresForDate(plan.date))
+      setHouseholdSignals(signalsForDate(plan.date))
     }
     refreshChores()
     window.addEventListener('storage', refreshChores)
@@ -240,6 +244,6 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
     {mealPlan.error && <div className="today-sync-banner today-sync-banner--error"><div><strong>Rolling meal plan needs attention</strong><span>{mealPlan.error}</span></div><button onClick={() => mealPlan.reload().catch(() => undefined)}>Retry</button></div>}
     <Suspense fallback={null}><TodayIntelligenceSummary currentMember={currentMember} onOpen={onOpenIntelligence}/></Suspense>
     {todayReadiness()}
-    <TodayDashboard mealDay={mealPlan.data?.days?.find(day=>day.date===plan.date)} mealLibrary={mealPlan.data?.library || []} plan={planWithMeals} meals={todayMeals} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} readOnly={!canEditPlanning} canViewFinance={isAdministrator} canGeneratePlan={isAdministrator} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} householdChores={householdChores} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} onViewSchedule={() => setMode('schedule')} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onReviewDecision={reviewDecision} onReviewAssignment={reviewAssignment} onReviewDailyFocus={reviewDailyFocus} generationState={generationState} />
+    <TodayDashboard mealDay={mealPlan.data?.days?.find(day=>day.date===plan.date)} mealLibrary={mealPlan.data?.library || []} plan={planWithMeals} meals={todayMeals} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} readOnly={!canEditPlanning} canViewFinance={isAdministrator} canGeneratePlan={isAdministrator} todayAlignmentCompleted={Boolean(plan.morningAlignment?.completedAt)} todayAlignmentUnavailable={state !== 'ready'} alignmentDate={alignmentDate} alignmentCompleted={Boolean(alignmentPlan.morningAlignment?.completedAt)} alignmentLoading={alignmentState === 'loading'} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} householdSignals={householdSignals} householdChores={householdChores} currentMember={currentMember} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} onViewSchedule={() => setMode('schedule')} onStartTodayAlignment={() => setMode('today-alignment')} onStartAlignment={() => setMode('alignment')} onStartRecap={() => setMode('recap')} onGeneratePlan={generatePlan} onReviewDecision={reviewDecision} onReviewAssignment={reviewAssignment} onReviewDailyFocus={reviewDailyFocus} generationState={generationState} />
   </div>
 }

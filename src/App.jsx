@@ -1,3 +1,4 @@
+import { getHouseholdTimeLabel } from './finance/financeTime.js'
 import {PROJECT_OPEN_EVENT} from './homehq/projectNavigation.js'
 import {configuredPillars,resolveModules} from './modules/configuration.js'
 import ModuleWorkspace from './modules/ModuleWorkspace.jsx'
@@ -123,13 +124,13 @@ export default function App() {
     if(!current.issues?.some(issue=>issue.id==='household-sync'))return current
     const issues=current.issues.filter(issue=>issue.id!=='household-sync')
     if(issues.length)return {...current,status:'warning',message:`Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`,issues,expanded:current.expanded}
-    return {status:'ready',message:`Household synchronization restored at ${new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`,issues:[],expanded:false}
+    return {status:'ready',message:`Household synchronization restored at ${getHouseholdTimeLabel(new Date())}.`,issues:[],expanded:false}
   })
   const clearRecoveredFinanceWarning=()=>setRefreshState(current=>{
     if(!current.issues?.some(issue=>issue.source==='Finance & Plaid'))return current
     const issues=current.issues.filter(issue=>issue.source!=='Finance & Plaid')
     if(issues.length)return {...current,status:'warning',message:`Refresh completed with ${issues.length} integration item${issues.length===1?'':'s'} needing attention.`,issues,expanded:current.expanded}
-    return {status:'ready',message:`Finance synchronization restored at ${new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`,issues:[],expanded:false}
+    return {status:'ready',message:`Finance synchronization restored at ${getHouseholdTimeLabel(new Date())}.`,issues:[],expanded:false}
   })
 
   const refreshAll=(member,{requestBankUpdate=false}={})=>{
@@ -146,7 +147,7 @@ export default function App() {
             ? 'Calendar, Today, and transactions refreshed. The last verified bank balance remains visible while Brevity retries the institution automatically.'
           : bankPending
             ? 'The bank accepted the update request. Brevity will show new transactions as soon as Plaid makes them available; refresh again shortly if they are still pending.'
-            : `All Brevity data refreshed at ${new Date(detail.refreshedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}.`
+            : `All Brevity data refreshed at ${getHouseholdTimeLabel(new Date(detail.refreshedAt))}.`
         setRefreshState({status:issues.length?'warning':'ready',message,issues,expanded:false})
         return detail
       })

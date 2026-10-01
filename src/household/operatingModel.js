@@ -80,7 +80,7 @@ const todayFocus=(plan,{signals,outcomes,nextCommitment,actions})=>{
   return{headline:'Today’s plan has no defined focus yet',detail:'Generate or complete Morning Alignment, then review the proposed outcomes before relying on Today as the household plan.',source:'missing-plan'}
 }
 const formatCommitmentTime=startsAt=>new Date(startsAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})
-export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth,currentMember='Larry',now=new Date()}){
+export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth,householdSignals=[],currentMember='Larry',now=new Date()}){
   const normalized=normalizeDailyPlan(plan)
   const planEstablished=hasOperatingPlan(normalized)
   const commitments=calendarAppointments.map((item,index)=>appointmentRecord(item,index,normalized.date,calendarHealth))
@@ -89,7 +89,8 @@ export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth
   const outcomeItems=normalized.topPriorities.length?normalized.topPriorities:fallbackOutcomeItems(normalized)
   const outcomes=outcomeItems.slice(0,3).map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.outcome,normalized.topPriorities.length?'top-priority':'derived-outcome',index,normalized.date))
   const memberOutcomes=outcomes.filter(item=>item.owner===currentMember||item.participants.includes(currentMember))
-  const signals=[...(planEstablished?planSignals(normalized):[]),integrationSignal(calendarHealth)].filter(Boolean).sort(byPriorityThenTime)
+  const operatingSignals=householdSignals.filter(item=>item?.id&&item?.title).map(item=>createOperatingRecord({id:item.id,kind:OPERATING_KIND.signal,title:item.title,detail:item.detail,priority:item.priority==='medium'?'normal':item.priority,state:'needs-attention',source:source('household-operations','operating-exception',item.id),pillar:'household'}))
+  const signals=[...operatingSignals,...(planEstablished?planSignals(normalized):[]),integrationSignal(calendarHealth)].filter(Boolean).sort(byPriorityThenTime)
   const attentionItems=[...signals,...householdPriorityAttention(normalized)].sort(byPriorityThenTime)
   const householdNowDate=getHouseholdDateKey(now)
   const householdNowMinutes=getHouseholdMinuteOfDay(now)

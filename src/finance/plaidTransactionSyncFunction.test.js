@@ -338,3 +338,26 @@ test('the handler uses transactionsSync and stages a durable outbox before expos
   assert.match(source, /successfulItems/)
   assert.match(source, /connected:false/)
 })
+
+test('transaction pagination has a total time budget and bounded provider requests without advancing the cursor', async () => {
+  let clock = 1000
+  const requests = []
+  await assert.rejects(syncItemTransactions({
+    accessToken:'fixture', initialCursor:'saved', timeBudgetMs:20000, now:()=>clock,
+    client:{transactionsSync:async (request,options)=>{
+      requests.push({cursor:request.cursor,timeout:options.timeout})
+      clock += 12000
+      return {data:{added:[],modified:[],removed:[],has_more:true,next_cursor:`page-${requests.length}`}}
+    }},
+  }), error=>error.code==='PLAID_SYNC_TIMEOUT')
+  assert.deepEqual(requests,[{cursor:'saved',timeout:15000},{cursor:'page-1',timeout:8000}])
+})
+
+test('transaction diagnostics distinguish provider timeouts and storage failures without raw payloads', () => {
+  const {transactionError}=require('../../netlify/legacy-functions/plaid-transactions.js')
+  const result=transactionError('item','Bank',{code:'ECONNABORTED',message:'secret access token',response:{data:{request_id:'private'}}})
+  assert.equal(result.code,'PLAID_SYNC_TIMEOUT')
+  assert.match(result.message,/retained/)
+  assert.doesNotMatch(JSON.stringify(result),/secret|private/)
+  assert.match(transactionError('item','Bank',{code:'PLAID_CURSOR_WRITE_FAILED'}).message,/could not be saved/)
+})

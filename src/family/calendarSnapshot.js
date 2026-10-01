@@ -1,3 +1,5 @@
+import { getHouseholdDateTimeLabel, getHouseholdTimeLabel } from '../finance/financeTime.js'
+
 export const CALENDAR_CACHE_VERSION = 2
 export const CALENDAR_STALE_AFTER_MS = 30 * 60 * 1000
 
@@ -17,13 +19,14 @@ export function getLiveCalendarSnapshot() {
 
 export function readCurrentCalendarSnapshot(storage = globalThis.localStorage, session = globalThis.sessionStorage) {
   if (liveCalendarSnapshot) return liveCalendarSnapshot
+  const snapshots = []
   for (const source of [session, storage]) {
     try {
       const snapshot = JSON.parse(source?.getItem?.('brevity_icloud_calendar_cache_v1') || 'null')
-      if (snapshot && typeof snapshot === 'object') return snapshot
+      if (snapshot && typeof snapshot === 'object') snapshots.push(snapshot)
     } catch { /* use the next recovery source */ }
   }
-  return null
+  return snapshots.sort((a,b) => (Date.parse(b.lastAttemptAt || b.lastSuccessfulSyncAt) || 0) - (Date.parse(a.lastAttemptAt || a.lastSuccessfulSyncAt) || 0))[0] || null
 }
 
 const validDate = value => {
@@ -72,13 +75,13 @@ export function calendarSnapshotHealth(snapshot, { now = new Date(), staleAfterM
   }
 
   const lastSuccessful = validDate(snapshot.lastSuccessfulSyncAt)
-  const ageMs = lastSuccessful ? Math.max(0, now.getTime() - lastSuccessful.getTime()) : Number.POSITIVE_INFINITY
-  const stale = ageMs > staleAfterMs
+  const ageMs = lastSuccessful ? now.getTime() - lastSuccessful.getTime() : Number.POSITIVE_INFINITY
+  const stale = ageMs > staleAfterMs || ageMs < -60_000
   const errorState = snapshot.error ? statusFromError(snapshot.errorStatus) : ''
 
   if (errorState) {
     const fallback = lastSuccessful
-      ? `Cached events from ${lastSuccessful.toLocaleString()} remain visible.`
+      ? `Cached events from ${getHouseholdDateTimeLabel(lastSuccessful)} remain visible.`
       : 'No verified calendar snapshot is available.'
     return {
       state: errorState,
@@ -108,7 +111,7 @@ export function calendarSnapshotHealth(snapshot, { now = new Date(), staleAfterM
       stale: true,
       ageMs,
       lastSuccessfulSyncAt: lastSuccessful.toISOString(),
-      message: `Calendar data was last verified ${lastSuccessful.toLocaleString()}. Refresh before relying on today’s schedule.`,
+      message: ageMs < -60_000 ? 'The saved calendar verification time is in the future. Refresh before relying on today’s schedule.' : `Calendar data was last verified ${getHouseholdDateTimeLabel(lastSuccessful)}. Refresh before relying on today’s schedule.`,
     }
   }
 
@@ -118,6 +121,6 @@ export function calendarSnapshotHealth(snapshot, { now = new Date(), staleAfterM
     stale: false,
     ageMs,
     lastSuccessfulSyncAt: lastSuccessful.toISOString(),
-    message: `Calendar verified ${lastSuccessful.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`,
+    message: `Calendar verified ${getHouseholdTimeLabel(lastSuccessful)}.`,
   }
 }
