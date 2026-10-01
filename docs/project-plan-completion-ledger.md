@@ -1,6 +1,16 @@
-# Project plan delivery ledger — updated 30 September 2026
+# Project plan delivery ledger — updated 1 October 2026
 
 Source: Brevity_Project_Plan.pdf (nine pages, reviewed in full). This ledger distinguishes implementation, verification and real-world adoption. It does not certify the entire plan complete.
+
+## Current scope — October 1 closeout (PR #257)
+
+The owner explicitly deferred **Health Connection** and **Household pilot** work. Their signing/device/consent and observation requirements are not completed and are not gates for this requested technical closeout. The earlier dated sections below remain historical evidence.
+
+Completed implementation: exact-provider pending-to-posted vendor lineage; vendor metadata included in scheduled backup coverage; synthetic recovery checks expanded to every covered store with integrity, stale-write and rollback checks. Production Apple project publication, repeat publication of the same provider record, removal and Undo were exercised through reviewed Action Mode using a temporary project, then the publication was removed and project creation undone. Existing projects were preserved.
+
+The technical package passes 1,277 unit/server tests, build and size budgets. Final CI/deployment evidence is tracked in [PR #257](https://github.com/lsljco/brevity/pull/257) and [the closeout report](validation/2026-10-01-technical-closeout.md). The expanded recovery harness has passed in conditional-storage fixtures; a new deployed Blob rehearsal requires an authenticated staging session. Earlier deployed recovery evidence remains valid for its earlier coverage, not the new check.
+
+Historical expense assignment requires explicit canonical vendor relationships supplied or reviewed by the household. The live vendor directory is empty; no relationships were fabricated from merchant labels. Participant learning certification, repeated physical-package nutrition sampling, a full account-level disaster exercise, and conditional expansion are not code-delivery claims. Prepared exercises and representative technical evidence are complete; no user study or participant understanding is invented.
 
 ## Current checkpoint — September 30
 
