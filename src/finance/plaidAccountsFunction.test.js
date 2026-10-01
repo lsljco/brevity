@@ -283,3 +283,37 @@ test('failure at every connected institution returns a 502 without importable ac
   assert.equal(Object.hasOwn(body, 'accountSourceReceipt'), false)
   assert.equal(loggedErrors.length, 2)
 })
+
+test('a slow bank does not delay starting another independent balance check', async () => {
+  const priorSecret=process.env.BREVITY_SOURCE_RECEIPT_KEY
+  process.env.BREVITY_SOURCE_RECEIPT_KEY='parallel-balance-test'
+  const started=[]
+  let releaseSlow,fastStarted
+  const slow=new Promise(resolve=>{releaseSlow=resolve})
+  const fast=new Promise(resolve=>{fastStarted=resolve})
+  const handler=installHandler({
+    tokens:[{access_token:'slow',item_id:'slow-item',institution:'Slow'},{access_token:'fast',item_id:'fast-item',institution:'Fast'}],
+    client:{accountsBalanceGet:async ({access_token})=>{
+      started.push(access_token)
+      if(access_token==='slow')await slow
+      else fastStarted()
+      return {data:{accounts:[checkingAccount({id:access_token})]}}
+    }},
+  })
+  try{
+    const pending=handler(request('live=1'))
+    await fast
+    assert.deepEqual(started,['slow','fast'])
+    releaseSlow()
+    const response=await pending
+    assert.equal(response.statusCode,200)
+    const body=bodyOf(response)
+    assert.equal(body.accounts.length,2)
+    assert.deepEqual(body.errors,[])
+    assert.equal(body.balanceMode,LIVE_BALANCE_MODE)
+  }finally{
+    releaseSlow()
+    if(priorSecret===undefined)delete process.env.BREVITY_SOURCE_RECEIPT_KEY
+    else process.env.BREVITY_SOURCE_RECEIPT_KEY=priorSecret
+  }
+})

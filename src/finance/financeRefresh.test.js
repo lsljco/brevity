@@ -499,7 +499,7 @@ test('accepted transaction refresh polls bounded Item status until Plaid confirm
   assert.deepEqual(pauses,[10,20])
   assert.equal(calls.length,2)
   assert.match(calls[0].path,/refresh_status=1&since=2026-09-08T23%3A00%3A00\.000Z/)
-  assert.equal(calls[0].options.timeoutMs,45000)
+  assert.ok(calls[0].options.timeoutMs > 0 && calls[0].options.timeoutMs <= 20000)
   assert.equal(result.refresh.stillProcessing,false)
 })
 
@@ -1057,4 +1057,19 @@ test('Plaid source persistence never carries a finance migration or sample-plan 
   })
   assert.equal(emptyImports.some(item=>item.key==='lslj_finance_v9'),false)
   assert.ok(noPlan.errors.some(message=>/no server-confirmed finance plan/i.test(message)))
+})
+
+
+test('bank completion polling shares one deadline instead of three full request timeouts', async () => {
+  let clock=0
+  const calls=[]
+  const refresh={requested:true,requestedAt:'2026-10-01T12:00:00Z',stillProcessing:true}
+  const result=await waitForPlaidTransactionRefresh(refresh,{
+    now:()=>clock,timeBudgetMs:20000,delays:[1500,3000,6000],
+    pause:async delay=>{clock+=delay},
+    fetcher:async (path,{timeoutMs})=>{calls.push(timeoutMs);clock+=timeoutMs;throw new Error('timeout')},
+  })
+  assert.deepEqual(calls,[18500])
+  assert.equal(clock,20000)
+  assert.deepEqual(result,{refresh})
 })

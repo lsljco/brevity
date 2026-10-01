@@ -1420,6 +1420,15 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       let txns = mergePlaidTransactionResponse(plaidActuals || [], json)
       console.log('[Brevity] Plaid actuals fetched:', txns.length, 'transactions')
       await persistSharedSourceImport(localStorage, PLAID_ACTUALS_KEY, txns, { sourceReceipts:json.sourceReceipts })
+      // Publish the durably acknowledged snapshot before optional bank-status
+      // polling; a slow completion check must not hide rows already received.
+      setPlaidActuals(txns)
+      setActualsFreshness(recordTransactionFreshness(localStorage, {
+        status:json.errors?.length || json.refresh?.errors?.length || json.refresh?.stillProcessing ? 'partial' : 'fresh',
+        checkedAt:json.syncedAt || new Date().toISOString(),
+        successfulInstitutions:json.successfulInstitutions || [],
+        errors:[...(json.errors || []), ...(json.refresh?.errors || [])].map(financeInstitutionFailure),
+      }))
       if (json.refresh?.stillProcessing) {
         setActualsNotice('Plaid accepted the update. Brevity is waiting for the bank to confirm completion…')
         const completionStatus = await waitForPlaidTransactionRefresh(json.refresh)

@@ -1,3 +1,4 @@
+const { forEachPlaidConnection } = require('../lib/plaid-connections.cjs')
 const { getTokens } = require('./storage')
 const { readSession } = require('../lib/household-auth.cjs')
 const {
@@ -53,7 +54,7 @@ exports.handler = async (event) => {
     const syncErrors = []
     let liveBalanceTimedOut = false
 
-    for (const { access_token, item_id, institution } of tokens) {
+    await forEachPlaidConnection(tokens, async ({ access_token, item_id, institution }) => {
       try {
         // Automatic application refreshes use Plaid's cached account endpoint,
         // which is fast and reliable. Only an explicit "Sync now" requests the
@@ -110,7 +111,7 @@ exports.handler = async (event) => {
           requiresUpdate.push({ item_id, institution })
         }
       }
-    }
+    })
 
     if (!allAccounts.length && syncErrors.length === tokens.length) {
       return {
