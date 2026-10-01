@@ -58,3 +58,11 @@ test('mapping accepts explicit owners only, rejects duplicate IDs and isolates c
   assert.equal(mapped.sourceId,'')
   assert.equal(mapped.originalSourceId,'assistant-shared')
 })
+
+
+test('a damaged source registry cannot masquerade as an empty fresh Family-only snapshot',async()=>{
+  let reads=0
+  const endpoint=createICloudCalendarHandler({authenticate:async()=>({member:'Larry',role:'admin'}),isTrustedAction:()=>false,calendarDiscovery:async()=>({...primary,sources:[primary]}),sourceConfigReader:async()=>({value:{damaged:true},version:2}),eventLister:async()=>{reads++;return {events:[]}}})
+  assert.notEqual((await endpoint(request)).statusCode,200)
+  assert.equal(reads,0)
+})

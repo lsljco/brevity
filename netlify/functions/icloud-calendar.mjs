@@ -567,7 +567,7 @@ export const createICloudCalendarHandler = ({
     if (event.httpMethod === "GET") {
       // Injected legacy single-calendar adapters need no new storage dependency.
       const entry = calendar.sources ? await sourceConfigReader() : {value:[],version:0};
-      const selected = normalizeAppleSources({sources:Array.isArray(entry.value)?entry.value:[]}).sources;
+      const selected = normalizeAppleSources({sources:entry.value}).sources;
       if (event.queryStringParameters?.action === "sources") {
         if (session.role !== "admin") return json(403,{error:"Only household administrators can configure Apple calendars."});
         return json(200, {version:entry.version, selected, calendars:(calendar.sources || []).map(({id,name,url})=>({id,name,primary:url===calendar.url})), primaryName:calendar.name});
