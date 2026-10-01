@@ -137,7 +137,7 @@ test('generated images use a background job instead of a timeout-prone meal-plan
   assert.match(api,/meal-image-job-status\?jobId=/)
   assert.match(api,/job\.state==='ready'/)
   assert.match(api,/job\.state==='error'/)
-  assert.match(planner,/regenerateMealImage\(created\.id\)/)
+  assert.match(planner,/ensureMealImage\(created\)/)
   assert.match(planner,/generating its image in the background/)
 })
 

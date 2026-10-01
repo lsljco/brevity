@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ACTION_COMPLETED_EVENT } from '../assistant/actionEvents.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
-import { createMealLibraryItem, executeMealSubstitution, fetchRollingMealPlan, prepareMealSubstitution } from './mealPlanApi.js'
+import { ensureMealImage, createMealLibraryItem, executeMealSubstitution, fetchRollingMealPlan, prepareMealSubstitution } from './mealPlanApi.js'
 
 export const ROLLING_MEAL_APP_REFRESH_EVENT = 'brevity-app-refreshed'
 
@@ -71,6 +71,7 @@ export function useRollingMealPlan({ enabled = true, startDate, count = 7, requi
       try {
         const result=validateRollingMealPlan(await fetchRollingMealPlan(effectiveStartDate,count),effectiveStartDate)
         if(request!==requestRef.current)return null
+        result.library?.filter(meal=>!meal.image||meal.imageFallback).forEach(meal=>ensureMealImage(meal).catch(()=>undefined))
         setData(result)
         setDataRequestKey(requestKey)
         setState('ready')
@@ -127,6 +128,12 @@ export function useRollingMealPlan({ enabled = true, startDate, count = 7, requi
       window.removeEventListener(ACTION_COMPLETED_EVENT,refresh)
     }
   },[enabled,reload,reloadOnRefreshEvents])
+
+  useEffect(()=>{
+    const ready=event=>{const meal=event.detail?.meal;if(!meal)return;setData(current=>current?{...current,library:current.library.map(item=>item.id===meal.id?{...item,image:meal.image,imageFallback:false}:item),days:current.days.map(day=>({...day,resolvedMeals:Object.fromEntries(Object.entries(day.resolvedMeals||{}).map(([type,item])=>[type,item?.id===meal.id?{...item,image:meal.image,imageFallback:false}:item]))}))}:current)}
+    window.addEventListener('brevity-meal-image-ready',ready)
+    return()=>window.removeEventListener('brevity-meal-image-ready',ready)
+  },[])
 
   const addMeal = useCallback(async meal => {
     if(!mountedRef.current||!rollingMealPlanScopeIsCurrent(scopeRef.current,requestKey))throw staleMealPlanScopeError()

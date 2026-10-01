@@ -30,20 +30,20 @@ export function createMealLibraryItem(meal) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(meal),
-  })
+  }).then(result=>{ensureMealImage(result.meal).catch(()=>undefined);return result})
 }
 
 export function createMealLibraryBatch(meals) {
-  return request(ENDPOINT, { timeoutMs:45000, method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({action:'bulk-create',meals}) })
+  return request(ENDPOINT, { timeoutMs:45000, method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({action:'bulk-create',meals}) }).then(result=>{result.meals?.forEach(meal=>ensureMealImage(meal).catch(()=>undefined));return result})
 }
 
-export function regenerateMealImage(mealId) {
-  const jobId=globalThis.crypto?.randomUUID?.()||`meal-image-${Date.now()}-${Math.random().toString(36).slice(2)}`
+export function regenerateMealImage(mealId, {onlyIfMissing=false}={}) {
+  const jobId=onlyIfMissing?`auto-${mealId}`:globalThis.crypto?.randomUUID?.()||`meal-image-${Date.now()}-${Math.random().toString(36).slice(2)}`
   return request('/.netlify/functions/meal-image-generate-background', {
     timeoutMs:15000,
     method:'POST',
     headers:{'content-type':'application/json'},
-    body:JSON.stringify({jobId,mealId}),
+    body:JSON.stringify({jobId,mealId,onlyIfMissing}),
   }).then(async()=>{
     const deadline=Date.now()+180000
     while(Date.now()<deadline){
@@ -126,4 +126,23 @@ export function executeMealSubstitution(proposalId) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ proposalId, confirmed: true }),
   })
+}
+
+const automaticImages=new Map()
+const imageStates=new Map()
+export const mealImageState=id=>imageStates.get(id)||'idle'
+const announceImageState=(mealId,state)=>{imageStates.set(mealId,state);if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('brevity-meal-image-state',{detail:{mealId,state}}))}
+let imageQueue=Promise.resolve()
+export function ensureMealImage(meal){
+  if(!meal?.id||meal.image&&!meal.imageFallback)return Promise.resolve({meal})
+  if(automaticImages.has(meal.id))return automaticImages.get(meal.id)
+  announceImageState(meal.id,'queued')
+  const pending=imageQueue.then(()=>{announceImageState(meal.id,'generating');return regenerateMealImage(meal.id,{onlyIfMissing:true})}).then(result=>{
+    announceImageState(meal.id,'ready')
+    if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('brevity-meal-image-ready',{detail:{meal:result.meal}}))
+    return result
+  }).catch(error=>{announceImageState(meal.id,'error');throw error})
+  automaticImages.set(meal.id,pending)
+  imageQueue=pending.catch(()=>undefined)
+  return pending
 }

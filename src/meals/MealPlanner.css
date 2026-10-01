@@ -189,3 +189,5 @@
 .consumed-nutrition-panel button{font:inherit;cursor:pointer;padding:.65rem .85rem;margin:.35rem .5rem .35rem 0;border:1px solid var(--glass-border);border-radius:.6rem;background:var(--glass-bg);color:var(--gold-light)}
 .consumed-nutrition-panel button:hover{border-color:var(--gold-light)}
 .consumed-nutrition-panel button:focus-visible{outline:2px solid var(--gold-light);outline-offset:3px}
+
+.meal-edit-fields{border:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;padding:1.5rem}.meal-edit-fields label{display:flex;flex-direction:column;gap:.4rem}.meal-edit-fields input,.meal-edit-fields textarea{background:#111b22;color:var(--text,#eee);border:1px solid #6a604c;border-radius:8px;padding:.65rem;font:inherit;min-width:0}.meal-edit-fields p,.meal-edit-fields h3{grid-column:1/-1}.meal-edit-fields input[type=checkbox]{width:24px;height:24px}.meal-edit-fields button{min-height:44px}@media(max-width:600px){.meal-edit-fields{grid-template-columns:1fr}}

@@ -201,3 +201,11 @@ test('concurrent rolling-day initialization converges on one conditionally creat
   assert.equal(store.records.size,1)
   assert.equal(first.version,1)
 })
+
+test('automatic missing-image fill preserves a previously uploaded photo',async()=>{
+  const repository=createMealPlanRepository({store:memoryStore()})
+  await repository.setMealImage({mealId:'breakfast-01',image:'/uploaded.png',actor:'Larry'})
+  const result=await repository.setMealImage({mealId:'breakfast-01',image:'/automatic.png',onlyIfMissing:true,actor:'Larry'})
+  assert.equal(result.image,'/uploaded.png')
+  assert.equal((await repository.getLibrary()).library.find(meal=>meal.id==='breakfast-01').image,'/uploaded.png')
+})
