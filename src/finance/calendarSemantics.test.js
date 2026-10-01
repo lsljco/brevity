@@ -131,7 +131,7 @@ test('Cash Forecast names its scope and owns one explicit bank-activity toggle',
   assert.match(planner, /`\$\{showActuals \? 'Hide' : 'Show'\} bank activity \(\$\{monthBankCount\} this month\)`/)
   assert.doesNotMatch(planner, /`Actuals \(\$\{plaidActuals\.length\}\)`/)
   assert.match(planner, /view !== 'calendar' && \(/, 'global account bar toggle should be absent from Cash Forecast')
-  assert.match(planner, /view !== 'scenario-modeling' && view !== 'calendar' && <div[^>]*><FinanceTimeframe/, 'disconnected global timeframe should be hidden on Cash Forecast')
+  assert.match(planner, /view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div[^>]*><FinanceTimeframe/, 'disconnected global timeframe should be hidden on Cash Forecast')
 })
 
 test('mobile agenda separates the plan, bank activity, and balance meaning', () => {

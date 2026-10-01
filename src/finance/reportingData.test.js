@@ -144,3 +144,10 @@ test('revenue and income reports never count refunds, merchant credits, or pendi
   assert.deepEqual(groupReportTransactions(rows, 'income', 'category').map(row => row.name), ['INCOME'])
   assert.equal(groupCashInflows(rows, 'category').reduce((sum, row) => sum + row.amount, 0), 1075)
 })
+
+
+test('monthly cash budget includes all posted credits without changing income-report semantics', () => {
+  const actuals=[{amount:-100,category:'INCOME'},{amount:-50,category:'OTHER',name:'Deposit'},{amount:-10,name:'Purchase refund'},{amount:-500,category:'TRANSFER_IN'},{amount:-999,category:'INCOME',pending:true},{amount:25,category:'FOOD_AND_DRINK'}]
+  assert.deepEqual(summarizeBudgetActuals(actuals,{includeAllCredits:true}),{Income:160,Food:25})
+  assert.deepEqual(summarizeBudgetActuals(actuals),{Income:100,Food:25})
+})
