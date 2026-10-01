@@ -329,19 +329,26 @@ export async function fetchLatestPlaidTransactions({
   }
 }
 
+const TRANSACTION_STATUS_POLL_BUDGET_MS = 20000
 const DEFAULT_TRANSACTION_REFRESH_POLL_DELAYS_MS = [1500, 3000, 6000]
 
 export async function waitForPlaidTransactionRefresh(refresh = {}, {
   fetcher = apiFetch,
   delays = DEFAULT_TRANSACTION_REFRESH_POLL_DELAYS_MS,
+  now = Date.now,
+  timeBudgetMs = TRANSACTION_STATUS_POLL_BUDGET_MS,
   pause = delay => new Promise(resolve => setTimeout(resolve, delay)),
 } = {}) {
   if (!refresh?.stillProcessing || !Number.isFinite(Date.parse(refresh?.requestedAt || ''))) return { refresh }
   let latest = { refresh }
+  const deadline = now() + timeBudgetMs
   for (const delay of delays) {
+    if (now() + delay >= deadline) break
     await pause(delay)
+    const remaining = deadline - now()
+    if (remaining <= 0) break
     try {
-      latest = await fetcher(`/plaid-transactions?refresh_status=1&since=${encodeURIComponent(refresh.requestedAt)}`, { timeoutMs:TRANSACTION_REFRESH_REQUEST_TIMEOUT_MS })
+      latest = await fetcher(`/plaid-transactions?refresh_status=1&since=${encodeURIComponent(refresh.requestedAt)}`, { timeoutMs:remaining })
       if (latest?.refresh?.stillProcessing === false) return latest
     } catch {
       // A status-check outage does not invalidate the verified transaction

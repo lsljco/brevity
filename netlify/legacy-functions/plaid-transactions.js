@@ -1,3 +1,4 @@
+const { forEachPlaidConnection } = require('../lib/plaid-connections.cjs')
 const crypto = require('crypto')
 const { getTokens, getTransactionSyncState, setTransactionSyncState } = require('./storage')
 const { readSession } = require('../lib/household-auth.cjs')
@@ -313,7 +314,7 @@ exports.handler = async event => {
       }
       const statuses = []
       const errors = []
-      for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
+      await forEachPlaidConnection(tokens, async ({ access_token:accessToken, item_id:itemId = '', institution = '' }) => {
         try {
           const response = await getPlaidClient().itemGet({ access_token:accessToken }, { timeout:15_000 })
           const lastSuccessfulUpdate = lastSuccessfulTransactionUpdate(response)
@@ -322,7 +323,7 @@ exports.handler = async event => {
           const code = plaidErrorCode(error) || 'TRANSACTION_REFRESH_STATUS_FAILED'
           errors.push({ itemId, institution:institution || 'Connected institution', code, message:'Brevity could not confirm whether this bank finished updating transactions.' })
         }
-      }
+      })
       const completed = statuses.filter(status => status.complete).length
       return { statusCode:200, headers, body:JSON.stringify(responseBody({
         refresh:{ requested:true, requestedAt, accepted:tokens.length, completed, stillProcessing:completed < tokens.length, errors, statuses },
@@ -338,7 +339,7 @@ exports.handler = async event => {
     const delta = { added:0, modified:0, removed:0 }
     const refresh = { requested:requestRefresh, requestedAt:requestRefresh ? new Date().toISOString() : '', accepted:0, errors:[] }
 
-    for (const { access_token:accessToken, item_id:itemId = '', institution = '' } of tokens) {
+    await forEachPlaidConnection(tokens, async ({ access_token:accessToken, item_id:itemId = '', institution = '' }) => {
       if (requestRefresh) {
         try {
           await getPlaidClient().transactionsRefresh({ access_token:accessToken }, { timeout:40_000 })
@@ -356,7 +357,7 @@ exports.handler = async event => {
           })
         }
       }
-      if (refreshOnly) continue
+      if (refreshOnly) return
 
       try {
         const { pendingDelta, receipt } = await syncAndStageItem({ client:getPlaidClient(), accessToken, itemId, institution, event })
@@ -372,7 +373,7 @@ exports.handler = async event => {
         console.error('Transactions sync error for token:', error.response?.data || error.message)
         syncErrors.push(transactionError(itemId, institution, error))
       }
-    }
+    })
 
     if (refreshOnly) {
       return { statusCode:200, headers, body:JSON.stringify(responseBody({ refresh })) }
