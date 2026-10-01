@@ -35,6 +35,7 @@ import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 import { findPossibleRecurringDuplicates, summarizeActualActivity } from './financialTruth.js'
 import FinanceReconciliation from './FinanceReconciliation.jsx'
+import { reconcileFinanceDay, reconciliationStateLabel } from './reconciliation.js'
 import { getAcknowledgedSharedStateVersion, persistSharedSourceImport, SHARED_STATE_EVENT, syncSharedState } from '../household/sharedState.js'
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
@@ -2497,6 +2498,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
           <FinanceReconciliation
             scheduled={fd.transactions}
+            accountMap={plaidIdToLocal}
             actuals={filteredActuals}
             date={todayKey}
             actualsAvailable={Array.isArray(plaidActuals)}
@@ -4391,6 +4393,14 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
   const [pendingMove, setPendingMove]= useState(null)   // { tx, fromDate, toDate }
   const [pendingScope, setPendingScope] = useState(null) // { action, original, updated?, occurrenceDate }
+  const [moveDate, setMoveDate] = useState('')
+  useEffect(() => { setMoveDate(selTx?._occurrenceDate || selTx?.start || '') }, [selTx])
+  const reconciliationByDate = useMemo(() => {
+    const accountMap = buildUniquePlaidAccountMap(accounts)
+    return new Map([...proj].filter(([date]) => (actualsByDate?.[date]?.length || 0) > 0).map(([date, point]) => [date, reconcileFinanceDay({
+      date, scheduled:point.txns, actuals:actualsByDate[date], matchWindowDays:0, accountMap, exactAmounts:true,
+    })]))
+  }, [proj, actualsByDate, accounts])
   const [dayListOptions, setDayListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
   useEffect(() => {
     if (readOnly) {
@@ -4503,6 +4513,15 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
             <p style={{ margin: '0 0 18px', fontSize: 11, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
               {selTx._fromActual ? `From actual · ${selTx.name}` : selTx._occurrenceDate ? 'Choose the occurrence scope, then review in Action Mode' : 'This scheduled change opens in Action Mode before it can apply'}
             </p>
+            {!selTx._fromActual && selTx.id && <div style={{ marginBottom:16, padding:12, border:'1px solid var(--glass-border)', borderRadius:10 }}>
+              <label style={{ display:'grid', gap:6 }}>Move this occurrence to bank posting date
+                <input type="date" aria-label="Bank posting date" value={moveDate} onChange={event => setMoveDate(event.target.value)} />
+              </label>
+              <button type="button" disabled={!moveDate || moveDate === (selTx._occurrenceDate || selTx.start)} onClick={async () => {
+                if (await onMove({ tx:selTx, fromDate:selTx._occurrenceDate || selTx.start, toDate:moveDate, scope:'one' })) setSelTx(null)
+              }} style={{ marginTop:8 }}>Review move and reconcile</button>
+              <p style={{ margin:'6px 0 0', fontSize:11, color:'var(--muted)' }}>Only this occurrence moves. A unique same-account bank match clears after the move is applied; pending charges and differences stay in review.</p>
+            </div>}
             <TxForm tx={selTx} accounts={accounts} onSave={handleSave} onCancel={() => setSelTx(null)} />
             {!selTx._fromActual && (
               <button onClick={() => handleDelete(selTx)}
@@ -4640,6 +4659,11 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
           const maxBudget      = showActualPills ? 5 : 10
+          const dayReconciliation = reconciliationByDate.get(key)
+          const matchedRows = showActualPills ? (dayReconciliation?.rows || []).filter(row => row.state === 'matched') : []
+          const matchedPlanIds = new Set(matchedRows.map(row => row.expected.id))
+          const matchedActualIds = new Set(matchedRows.map(row => row.actual.id))
+          const visiblePlans = (pt?.txns || []).filter(tx => !matchedPlanIds.has(tx.id))
           return (
             <div key={key}
               className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''} ${dragOver === key ? 'drag-over' : ''}`}
@@ -4652,7 +4676,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                 e.preventDefault(); setDragOver(null)
                 if (!dragTx || key === dragTx.fromDate) return
                 if (dragTx.tx.freq === 'once') {
-                  onSave({ ...dragTx.tx, start: key, end: key })
+                  onMove({ tx:dragTx.tx, fromDate:dragTx.fromDate, toDate:key, scope:'one' })
                 } else {
                   setPendingMove({ tx: dragTx.tx, fromDate: dragTx.fromDate, toDate: key })
                 }
@@ -4663,7 +4687,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
               {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
               {hasTxns && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
-                  {sortAndFilterTransactions(pt.txns).slice(0, maxBudget).map((tx, j) => (
+                  {sortAndFilterTransactions(visiblePlans).slice(0, maxBudget).map((tx, j) => (
                     <div className="finance-calendar-event" key={j}
                       draggable={!readOnly}
                       onDragStart={e => { if (readOnly) return; e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx:{ ...tx, _reviewVersion:captureFinanceReviewVersion() }, fromDate: key }) }}
@@ -4683,8 +4707,8 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                       </span>
                     </div>
                   ))}
-                  {pt.txns.length > maxBudget && (
-                    <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{pt.txns.length - maxBudget} budgeted</div>
+                  {visiblePlans.length > maxBudget && (
+                    <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{visiblePlans.length - maxBudget} budgeted</div>
                   )}
                 </div>
               )}
@@ -4701,7 +4725,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                         color: isIncome ? '#7DCBA4' : '#90AADE',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
                       }}>
-                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
+                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{matchedActualIds.has(tx.id) ? '✓ Budget matched · ' : isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
                         <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600 }}>
                           {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
                         </span>
@@ -4823,6 +4847,17 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
               </div>
             </div>
           )}
+
+          {showActuals && reconciliationByDate.has(selDay) && <section aria-label="Matched budget and bank transactions" style={{ marginTop:14, padding:12, border:'1px solid var(--glass-border)', borderRadius:10 }}>
+            <strong>Budget to bank matching</strong>
+            <p style={{ fontSize:12, color:'var(--muted)' }}>{reconciliationByDate.get(selDay).matched} matched · {reconciliationByDate.get(selDay).needsReview.length} reconciling items</p>
+            {reconciliationByDate.get(selDay).rows.map((row, index) => <div key={row.expected?.id || row.actual?.id || index} style={{ padding:'8px 0', borderTop:'1px solid var(--glass-border)', fontSize:12 }}>
+              <strong>{row.expected?.name || transactionDescription(row.actual || row.candidates?.[0])}</strong>
+              <span style={{ marginLeft:8, color:row.state === 'matched' ? '#7DCBA4' : '#E8967A' }}>{row.state === 'matched' ? '✓ Budget matched' : reconciliationStateLabel(row.state)}</span>
+              {row.expected && row.actual && <p style={{ margin:'4px 0', color:'var(--muted)' }}>Budget {fmtMoney(row.expected.expectedAmount)} · Bank {fmtMoney(Math.abs(Number(row.actual.amount)))} · Difference {fmtMoney(row.amountVariance)}</p>}
+            </div>)}
+            <p style={{ fontSize:11, color:'var(--muted)' }}>Move a planned item to its posting date to match. Matches require the same linked account and a unique merchant match. Both records remain available; the bank charge counts once. Edit the planned occurrence to undo a move.</p>
+          </section>}
 
           {/* Bank activity and reconciliation follow the explicit overlay toggle. */}
           {showActuals && selDay <= todayStr && (() => {

@@ -74,7 +74,10 @@ function merchantScore(expected, actual) {
   return overlap ? Math.min(42, 18 + overlap * 12) : 0
 }
 
-function matchScore(expected, actual, expectedDate) {
+function matchScore(expected, actual, expectedDate, accountMap) {
+  // A merchant and amount on another bank account cannot settle this plan.
+  if (accountMap && (!expected.acct || accountMap[actual.accountId] !== expected.acct)) return -1
+  if (expected.vendorId && actual.vendorId && expected.vendorId !== actual.vendorId) return -1
   const expectedDirection = directionOfScheduled(expected)
   if (expectedDirection === 'income' && !isRecognizedIncomeTransaction(actual, { allowPending:true })) return -1
   if (expectedDirection === 'expense' && transactionDirection(actual) !== 'expense') return -1
@@ -98,15 +101,15 @@ function occurrence(transaction, date) {
   }
 }
 
-function matchedRow(candidate, date) {
+function matchedRow(candidate, date, exactAmounts = false) {
   const amountVariance = amountOf(candidate.actual) - candidate.plan.expectedAmount
   const timingVariance = dayDistance(date, candidate.actual.date)
-  const materialAmount = Math.abs(amountVariance) > Math.max(2, candidate.plan.expectedAmount * 0.02)
+  const materialAmount = exactAmounts ? Math.round(amountOf(candidate.actual) * 100) !== Math.round(candidate.plan.expectedAmount * 100) : Math.abs(amountVariance) > Math.max(2, candidate.plan.expectedAmount * 0.02)
   const state = materialAmount && timingVariance ? 'amount-and-timing-variance' : materialAmount ? 'amount-variance' : timingVariance ? 'timing-variance' : candidate.actual.pending ? 'pending-match' : 'matched'
   return { state, expected:candidate.plan, actual:candidate.actual, amountVariance, timingVariance, realizationStatus:candidate.actual.pending ? 'pending' : 'posted', confidence:candidate.score >= 82 ? 'high' : 'medium' }
 }
 
-export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHouseholdDateKey(), matchWindowDays = 4 } = {}) {
+export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHouseholdDateKey(), matchWindowDays = 4, accountMap = null, exactAmounts = false } = {}) {
   const target = new Date(`${date}T12:00:00`)
   const expected = scheduled
     .filter(transaction => !isTransferTransaction(transaction) && directionOfScheduled(transaction) !== 'transfer' && txOccursOnDate(transaction, target))
@@ -118,7 +121,7 @@ export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHo
 
   const candidates = []
   expected.forEach(plan => eligibleActuals.forEach(actual => {
-    const score = matchScore(plan, actual, date)
+    const score = matchScore(plan, actual, date, accountMap)
     if (score >= 48) candidates.push({ plan, actual, score })
   }))
   candidates.sort((a, b) => b.score - a.score)
@@ -158,7 +161,7 @@ export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHo
     if (!isClearlyFirst(candidate, candidatesByActual.get(bankKey) || [])) continue
     usedPlans.add(planKey)
     usedActuals.add(bankKey)
-    rows.push(matchedRow(candidate, date))
+    rows.push(matchedRow(candidate, date, exactAmounts))
   }
 
   // Resolve near-ties as connected possible-match sets before greedy matching.
@@ -221,7 +224,7 @@ export function reconcileFinanceDay({ scheduled = [], actuals = [], date = getHo
     if (usedPlans.has(candidate.plan.occurrenceId) || usedActuals.has(bankKey)) continue
     usedPlans.add(candidate.plan.occurrenceId)
     usedActuals.add(bankKey)
-    rows.push(matchedRow(candidate, date))
+    rows.push(matchedRow(candidate, date, exactAmounts))
   }
 
   expected.filter(plan => !usedPlans.has(plan.occurrenceId)).forEach(plan => rows.push({ state:'missing-actual', expected:plan, confidence:'medium' }))
