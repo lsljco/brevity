@@ -63,7 +63,7 @@ test('complete isolated persistence harness remains executable with conditional 
  const store={async get(key){return structuredClone(values.get(key)?.data||null)},async getWithMetadata(key,options){const entry=structuredClone(values.get(key)||null);if(entry&&options?.type==='arrayBuffer')entry.data=Uint8Array.from(Buffer.from(JSON.stringify(entry.data))).buffer;return entry},async setJSON(key,data,options={}){const old=values.get(key);if(options.onlyIfNew&&old||options.onlyIfMatch&&old?.etag!==options.onlyIfMatch)return {modified:false};values.set(key,{data:structuredClone(data),etag:String(++seq)});return{modified:true}}}
  store.set=async(key,bytes,options)=>store.setJSON(key,JSON.parse(Buffer.from(bytes).toString()),options)
  const report=await verifyReleasePersistence({store,runId:'11111111-1111-4111-8111-111111111111'})
- assert.equal(report.passed,true);assert.equal(Object.keys(report.checks).length,20)
+ assert.equal(report.passed,true);assert.equal(Object.keys(report.checks).length,21)
 })
 
 

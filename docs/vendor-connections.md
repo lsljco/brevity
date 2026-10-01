@@ -25,7 +25,7 @@ Review/commit uses version checks and conditional writes. Undo restores referenc
 ## Remaining connection work
 
 - Explicitly assign existing unassigned expenses; no production data has been mass-matched.
-- A bank pending item that receives a different posted transaction ID needs a new assignment until upstream pending-to-posted lineage is available.
+- Plaid’s explicit `pending_transaction_id` is retained as `pendingTransactionId`. Posted activity resolves its original reviewed pending vendor assignment through that ID; a direct posted assignment takes precedence. No copy is persisted, so Undo of the original assignment remains effective. Records without provider lineage stay unassigned; historical cached records are not guessed or rewritten.
 - This release connects vendors to expenses, debts, projects and vendor documents. It does not assert that every historical cross-module record has been reconciled.
 - Brevity project/calendar visibility now uses one canonical reviewed project record. Apple publication can be reviewed per project by an administrator. Each review reads the exact source ID/version and changes one Apple snapshot with provider version checks, audit and Undo. Later source edits require republishing; removal is separately reviewed. Bulk publication and automatic cross-provider transactions remain unavailable.
 - Apple Health web/server and the unsigned iPhone companion are implemented separately. Apple Developer signing/distribution and real-device consent/sync verification are still required.

@@ -20,6 +20,12 @@ const {
   verifyTransactionSyncReceipts,
 } = require('../../netlify/legacy-functions/storage.js')
 
+test('provider pending-to-posted identity survives mapping without similarity matching',()=>{
+ const posted=mapPlaidTransaction({transaction_id:'posted',pending:false,pending_transaction_id:'pending',amount:115})
+ assert.equal(posted.pendingTransactionId,'pending')
+ for(const transaction of [{pending:true,pending_transaction_id:'pending'},{pending:false},{pending:false,pending_transaction_id:{id:'invalid'}}])assert.equal(mapPlaidTransaction(transaction).pendingTransactionId,null)
+})
+
 test('transaction refresh completion requires a successful Item update at or after the request', () => {
   // Match Plaid's documented /item/get response, not an invented nested shape.
   const response={data:{item:{item_id:'fixture-item',error:null},status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z',last_failed_update:null}},request_id:'fixture-request'}}
@@ -303,7 +309,7 @@ test('mapped deltas identify their Plaid item and institution', () => {
   assert.equal(transaction.id, 'tx-1')
   assert.equal(transaction.itemId, 'item-1')
   assert.equal(transaction.institution, 'Bank')
-  assert.deepEqual(Object.keys(transaction).sort(), ['accountId','amount','category','date','id','institution','itemId','name','originalStatement','pending','type'].sort())
+  assert.deepEqual(Object.keys(transaction).sort(), ['accountId','amount','category','date','id','institution','itemId','name','originalStatement','pending','pendingTransactionId','type'].sort())
 })
 
 test('incremental responses never imply that an empty delta replaces cached history', () => {

@@ -23,7 +23,7 @@ September 30 checkpoint: scoped credentials, required-reviewer environment, and 
 
 - Daily schedule 08:10 UTC dispatches a signed background backup; 08:35 UTC dispatches retention. Scheduling endpoints are platform-only. The background receiver verifies a two-minute HMAC tied to exact body and uses a once-only job receipt. It never accepts a member-provided target store.
 - Background execution avoids the 30-second scheduled-function ceiling. Trusted deploy origin is embedded during build. Receipts in `brevity-maintenance-jobs` distinguish running, complete and failed work. An HTTP 202 alone is not proof of completion.
-- Backups cover shared state, daily plans, meals/activities and action journals. Each record has a SHA-256 integrity hash and original metadata. Credentials, conversations, generated media and external systems are excluded. Snapshots are per-record, not transactionally consistent across stores.
+- Backups cover shared state, daily plans, meals/activities, action journals and vendor directory/assignment metadata. Each record has a SHA-256 integrity hash and original metadata. Credentials, conversations, generated media and external systems are excluded. Snapshots are per-record, not transactionally consistent across stores.
 - Complete backups trigger retirement of snapshots older than 30 days. Failed backups retain an incomplete manifest and never authorize restore. Recovery restore audits retain the pre-restore bytes separately.
 - Conversations: latest 60 messages/30 days, clear archive seven days. Usage: 90 days. Assistant request jobs/photos: one day. Preview schedules do not run automatically; retire isolated preview stores as an explicit environment operation, or invoke the scheduled function using Netlify's authenticated Run now control.
 
@@ -40,3 +40,9 @@ Use the existing authorized Netlify project credential through environment confi
 The release harness rehearses actual Blob capture, hash verification, fresh-store restoration and stale-overwrite rejection using synthetic records only. Production scheduled backup and retention completion were observed September 30; exact job IDs and UTC times are recorded in the current technical acceptance report. Passing a unit test alone does not prove these jobs are running.
 
 Platform references: [Netlify scheduled functions](https://docs.netlify.com/build/functions/scheduled-functions/) and [Functions API](https://docs.netlify.com/build/functions/api/).
+
+## September 30 closeout recovery coverage
+
+The release persistence drill now restores distinct records for every covered store into an isolated destination, verifies stable IDs and versions, rejects stale overwrites, retains before-images, exercises conditional rollback and rejects corrupt backup bytes. This is an all-covered-store recovery rehearsal, not a destructive production disaster or proof of full Netlify-account recovery.
+
+Vendor metadata is now included in scheduled snapshots. Encrypted vendor documents/login envelopes and their separate keyring remain outside this snapshot scope, alongside authentication/provider credentials, conversations and generated media. Restoring vendor metadata alone cannot recover a lost vault or keyring. Existing references remain opaque; the drill does not grant access or weaken vault isolation.

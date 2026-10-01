@@ -1,5 +1,7 @@
 # Apple Health and household pilot acceptance — September 30, 2026
 
+**October 1 scope update:** The owner explicitly deferred Health Connection and Household pilot work. The observations below are historical; neither workstream is certified complete.
+
 ## Apple Health: blocked on signed distribution and physical devices
 
 The repository contains the iOS 17+ native companion at `ios/BrevityHealth`. CI verifies core Swift logic, simulator compilation and an unsigned device archive. There is no verified signed installation link, App Store release or TestFlight build. The household has asked where to find an installation; no device installation or HealthKit consent is evidenced. The web Health Connections screen is not an installer.

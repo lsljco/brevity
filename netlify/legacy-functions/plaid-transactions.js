@@ -48,6 +48,9 @@ function mapPlaidTransaction(transaction, { institution = '', itemId = '' } = {}
     institution,
     itemId,
     pending:Boolean(transaction.pending),
+    // Provider lineage only; merchant labels, dates and amounts are not identity.
+    pendingTransactionId:transaction.pending === false && typeof transaction.pending_transaction_id === 'string'
+      ? transaction.pending_transaction_id : null,
   }
 }
 

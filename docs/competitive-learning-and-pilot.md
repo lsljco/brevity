@@ -27,7 +27,7 @@ These decisions support the existing seven-pillar design: calendar and workload 
 
 ## Tonight's physical-device acceptance
 
-Owner: Larry, using his actual iPhone. Record device/browser version and deployed release, then run the sequence below. Status is **not yet observed after PR #246**.
+Owner: Larry, using his actual iPhone. Record device/browser version and deployed release, then run the sequence below. Larry subsequently reported “Everything worked” after this sequence; that is user-reported acceptance, not an agent device recording. Health connection and household pilot work were explicitly deferred on October 1.
 
 1. Refresh Brevity. Tap the microphone and ask, “What's my schedule today?” Verify the date, assigned appointments versus shared entries, and audible response. If playback is blocked, verify that **Play response** works directly without repeating the question.
 2. Ask, “Do any of those appointments conflict?” Verify follow-up continuity. Shared events belonging to different people and hotel/all-day informational spans should not be asserted as definite personal conflicts without qualification.
