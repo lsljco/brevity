@@ -23,6 +23,7 @@ const FamilyCalendar = lazy(() => import('./family/FamilyCalendar.jsx'))
 const PillarAnalysis = lazy(() => import('./household/PillarAnalysis.jsx'))
 const FinancePlanner = lazy(() => import('./finance/FinancePlanner.jsx'))
 const HomeHQ = lazy(() => import('./homehq/HomeHQ.jsx'))
+const GroceryList = lazy(() => import('./household/GroceryList.jsx'))
 const MealPlanner = lazy(() => import('./meals/MealPlanner.jsx'))
 const EstateWorkspace = lazy(() => import('./estate/EstateWorkspace.jsx'))
 const HouseholdMaintenance = lazy(() => import('./household/HouseholdMaintenance.jsx'))
@@ -303,7 +304,8 @@ export default function App() {
     if(activeView==='household-intelligence')return <Suspense fallback={<div className="app-view-loading">Loading Household Intelligence…</div>}><HouseholdPerformanceIntelligence currentMember={currentMember} isAdministrator={auth.role==='admin'}/></Suspense>
     if(activeView==='malbec-estate')return <Suspense fallback={<div className="app-view-loading">Loading Malbec Estate…</div>}><EstateWorkspace role={auth.role}/></Suspense>
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="All household commitments · Apple events plus Brevity-managed source records"/></Suspense>
-    if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember}/></Suspense>
+    if(activeView==='grocery-list')return <Suspense fallback={<div className="app-view-loading">Loading Grocery List…</div>}><GroceryList key={currentMember}/></Suspense>
+    if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember} canEditPlanning={canEditPlanning} onOpenGroceryList={()=>navigateTo('household','grocery-list')}/></Suspense>
     if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace currentMember={currentMember} role={auth.role}/></Suspense>
     if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember} onOpenWorkspace={()=>navigateTo('ministry','sermon-workspace')}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><div className="finance-access-shell">{auth.role!=='admin'&&<section className="finance-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Financial records are read-only for {currentMember}</strong><span>{canEditPlanning?'Your planning access still allows reviewed edits to Finance Meeting narrative, saved notes, transcripts, and ordinary commitments. ':''}Financial corrections, forecasts, budgets, transactions, financial-effect details, and bank administration require the household administrator; bank connection changes are disabled for every member in this release.</span></div></section>}<FinancePlanner initialVendorId={vendorDestination} view={activeView} setView={navigateFromFinance} currentMember={currentMember} readOnly={auth.role!=='admin'} meetingPlanningReadOnly={!canEditPlanning}/></div></Suspense>
