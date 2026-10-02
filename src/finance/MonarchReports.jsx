@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { addDays, fmtMoney, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { groupCashInflows, groupReportTransactions, isRealizedIncomeTransaction, reportStats, summarizeActualCashActivity, transactionDirection } from './reportingData.js'
+import RecurringDiscovery from './RecurringDiscovery.jsx'
 import { timeframeLabel } from './financeTimeframe.js'
 
 const COLORS = ['#17A9CC','#35AD76','#FFC247','#FF6A2F','#8850CE','#D23B9A','#4867DD','#18A99A','#ED4C52','#86A63D']
@@ -112,8 +113,8 @@ function recurringOccurrences(rows, range, tab, today) {
   }).filter(item => item.dates.length)
 }
 
-export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenScheduled, vendorOrder='' }) {
-  const [tab, setTab] = useState('upcoming')
+export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenScheduled, vendorOrder='', accounts=[], accountMap={}, onReviewDiscovery, readOnly=false }) {
+  const [tab, setTab] = useState('discover')
   const today = toISO(new Date())
   const recurring = useMemo(() => scheduled.filter(row => row.freq !== 'once' && row.type !== 'transfer'), [scheduled])
   const occurrences = useMemo(() => recurringOccurrences(recurring, range, tab, today), [recurring, range?.from, range?.to, tab, today])
@@ -126,9 +127,10 @@ export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenSc
   }, { income: 0, expense: 0 }), [occurrences])
 
   return <div className="recurring-finance">
-    <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
+    <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['discover','Discover'],['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
+    {tab === 'discover' ? <RecurringDiscovery actuals={actuals} scheduled={scheduled} accounts={accounts} accountMap={accountMap} onReview={onReviewDiscovery} readOnly={readOnly}/> : <>
     <div className="finance-card" style={{ padding: 20, marginBottom: 16 }}><h2 style={{ margin: '0 0 5px' }}>Recurring cash plan</h2><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{timeframeLabel(range)} · {actuals.length} posted transactions available for matching</p></div>
     <div className="report-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 18 }}><Stat label="Recurring income" value={fmtMoney(totals.income)} onClick={() => onOpenScheduled?.({ direction:'income', recurringOnly:true, label:'Recurring income' })} /><Stat label="Recurring expenses" value={fmtMoney(totals.expense)} onClick={() => onOpenScheduled?.({ direction:'expense', recurringOnly:true, label:'Recurring expenses' })} /><Stat label="Expected net" value={fmtMoney(totals.income-totals.expense)} onClick={() => onOpenScheduled?.({ recurringOnly:true, label:'Recurring cash plan' })} /></div>
-    <div className="finance-card" style={{ padding: 20 }}>{rows.length ? rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.vendorName||'Unassigned'} · {row.cat || 'Uncategorized'} · {row.freq}{row.occurrenceCount > 1 ? ` · ${row.occurrenceCount} occurrences` : ''}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.occurrenceDate}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>) : <p style={{ color:'var(--muted)', margin:0 }}>No recurring transactions occur in this timeframe.</p>}</div>
+    <div className="finance-card" style={{ padding: 20 }}>{rows.length ? rows.map(row => <button className="recurring-row" key={row.id} onClick={() => onOpenScheduled?.({ ids:[row.id], label:row.name })} style={{ display: 'grid', width:'100%', gridTemplateColumns: '1fr 130px 110px', gap: 12, padding: '12px 2px', border:0, borderTop: '1px solid rgba(255,255,255,.06)', background:'transparent', color:'inherit', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}><div><strong>{row.name}</strong><div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>{row.vendorName||'Unassigned'} · {row.cat || 'Uncategorized'} · {row.freq}{row.occurrenceCount > 1 ? ` · ${row.occurrenceCount} occurrences` : ''}</div></div><span style={{ color: 'var(--muted)', fontSize: 12 }}>{row.occurrenceDate}</span><strong style={{ textAlign: 'right', color: row.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' }}>{row.type === 'income' ? '+' : '-'}{fmtMoney(row.amount)}</strong></button>) : <p style={{ color:'var(--muted)', margin:0 }}>No recurring transactions occur in this timeframe.</p>}</div></>}
   </div>
 }
