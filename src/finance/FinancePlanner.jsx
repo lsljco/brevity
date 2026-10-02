@@ -1,4 +1,3 @@
-import { discoverRecurring, recurringCoverage, discoveryBudgetLineId } from './recurringDiscovery.js'
 import { createPortal } from 'react-dom'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
 import AutoReconciliationReport from './AutoReconciliationReport.jsx'
@@ -1917,6 +1916,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
   const reviewDiscoveredRecurring = async ({ suggestion, kind, accountId, amount, date, frequency }) => {
     if (readOnly) throw new Error('Finance is read-only for this household member.')
+    const { discoverRecurring, recurringCoverage, discoveryBudgetLineId } = await import('./recurringDiscovery.js')
     await syncSharedState(localStorage)
     const current = loadData()
     dataRef.current = current

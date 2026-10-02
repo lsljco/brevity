@@ -52,3 +52,15 @@ test('discovery budget identity survives server Action Mode normalization',async
  assert.equal(operation.targetId,operation.payload.lineId)
  assert.notEqual(lineId,discoveryBudgetLineId(s,'a2'))
 })
+
+test('monthly forecasts preserve month-end billing in short and leap months',async()=>{
+ const {txOccursOnDate}=await import('./projection.js')
+ const {calculateTransactionAmountForMonth}=await import('./monthlyCashFlow.js')
+ const tx={id:'month-end',name:'Apple',acct:'a1',type:'expense',freq:'monthly',start:'2024-01-31',amount:200}
+ assert.equal(txOccursOnDate(tx,new Date(2024,1,29)),true)
+ assert.equal(txOccursOnDate(tx,new Date(2025,1,28)),true)
+ assert.equal(txOccursOnDate(tx,new Date(2026,3,30)),true)
+ assert.equal(txOccursOnDate(tx,new Date(2026,4,30)),false)
+ assert.equal(txOccursOnDate(tx,new Date(2026,4,31)),true)
+ assert.equal(calculateTransactionAmountForMonth(tx,new Date(2026,1,1)),200)
+})

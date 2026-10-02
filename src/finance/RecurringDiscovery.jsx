@@ -19,7 +19,6 @@ function Suggestion({suggestion:s,accounts,scheduled,budget,today,onReview,readO
       const value=Number(kind==='budget'?monthly:amount)
       if(!accountId || !Number.isFinite(value) || value<=0)throw new Error('Select an account and enter an amount greater than zero.')
       if(kind==='forecast' && (!date || date<today))throw new Error('Choose today or a future payment date.')
-      if(kind==='forecast' && frequency==='monthly' && Number(date.slice(8))>28)throw new Error('Choose a day from 1–28 so the existing monthly schedule runs in every month.')
       const ok=await onReview({suggestion:s,kind,accountId,amount:value,date,frequency})
       if(ok)setStaged(kind)
     }catch(e){setError(e.message)}finally{setBusy(false)}
@@ -39,7 +38,7 @@ function Suggestion({suggestion:s,accounts,scheduled,budget,today,onReview,readO
       <label>Next payment / deposit date<input type="date" min={today} value={date} onChange={e=>setDate(e.target.value)}/></label>
       <label>Frequency<select value={frequency} onChange={e=>setFrequency(e.target.value)}><option value="monthly">Monthly</option><option value="biweekly">Every two weeks</option><option value="weekly">Weekly</option><option value="once">One time</option></select></label>
     </div>
-    <p className="recurring-help">Add to Budget proposes a target for this month in the Budget Plan Grid. Add to Cash Forecast proposes a scheduled entry, which also feeds the monthly cash budget. Both require Action Mode approval. Confirm the next payment has not already posted.</p>
+    <p className="recurring-help">Add to Budget proposes a target for this month in the Budget Plan Grid. Add to Cash Forecast proposes a scheduled entry, which also feeds the monthly cash budget. Both require Action Mode approval. Confirm the next payment has not already posted. Monthly dates 29–31 use the last day of shorter months.</p>
     {error&&<p role="alert">{error}</p>}{staged&&<p role="status">{staged==='budget'?'Budget':'Cash Forecast'} proposal opened in Action Mode; approve it there to save.</p>}
     <div className="recurring-proposal-actions"><button disabled={readOnly||busy||coverage.exactAmount>0} onClick={()=>review('budget')}>Add to Budget</button><button disabled={readOnly||busy||coverage.forecast.length>0} onClick={()=>review('forecast')}>Add to Cash Forecast</button></div>
   </article>
