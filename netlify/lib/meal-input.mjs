@@ -2,6 +2,7 @@ import { MEAL_TYPES } from '../../src/meals/mealLibrary.js'
 
 export const safeSegment = value => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '-')
 const numeric = value => {
+  if (value == null || typeof value === 'boolean' || String(value).trim() === '') return null
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
@@ -42,6 +43,8 @@ export function normalizeMealInput(meal, actor, now, createId) {
     throw error
   }
 
+  // Package labels can declare fractional grams; retain their supplied values.
+  const macroValue = ['Package nutrition label','Open Food Facts'].includes(meal?.sourceName) ? value => value : Math.round
   const createdAt = now().toISOString()
   return {
     id: `custom-${mealType}-${safeSegment(createId())}`,
@@ -60,10 +63,10 @@ export function normalizeMealInput(meal, actor, now, createId) {
     yieldQuantity: numeric(meal?.yieldQuantity),
     yieldUnit: String(meal?.yieldUnit || '').trim(),
     batchMacros: meal?.batchMacros ? {
-      calories:Math.round(numeric(meal.batchMacros.calories) || 0),
-      proteinGrams:Math.round(numeric(meal.batchMacros.proteinGrams) || 0),
-      carbohydrateGrams:Math.round(numeric(meal.batchMacros.carbohydrateGrams) || 0),
-      fatGrams:Math.round(numeric(meal.batchMacros.fatGrams) || 0),
+      calories:macroValue(numeric(meal.batchMacros.calories) || 0),
+      proteinGrams:macroValue(numeric(meal.batchMacros.proteinGrams) || 0),
+      carbohydrateGrams:macroValue(numeric(meal.batchMacros.carbohydrateGrams) || 0),
+      fatGrams:macroValue(numeric(meal.batchMacros.fatGrams) || 0),
     } : undefined,
     ingredientNutrition: normalizeIngredientNutrition(meal?.ingredientNutrition),
     nutritionWarnings: Array.isArray(meal?.nutritionWarnings) ? meal.nutritionWarnings.map(value=>String(value||'').trim()).filter(Boolean).slice(0,20) : [],
@@ -71,10 +74,10 @@ export function normalizeMealInput(meal, actor, now, createId) {
     sourceUrl: safeText(meal?.sourceUrl, 2048),
     sourceName: safeText(meal?.sourceName, 160),
     macros: {
-      calories: Math.round(calories),
-      proteinGrams: Math.round(proteinGrams),
-      carbohydrateGrams: Math.round(carbohydrateGrams),
-      fatGrams: Math.round(fatGrams),
+      calories: macroValue(calories),
+      proteinGrams: macroValue(proteinGrams),
+      carbohydrateGrams: macroValue(carbohydrateGrams),
+      fatGrams: macroValue(fatGrams),
     },
     tags: ['household custom'],
     createdAt,
