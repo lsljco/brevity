@@ -1,8 +1,13 @@
+import {MEAL_CATEGORIES,mealCategory} from './mealCategories.js'
 export const macroFields = ['calories','proteinGrams','carbohydrateGrams','fatGrams']
 export function normalizeRecipeEdit(value) {
-  const allowed=['description','serving','yieldQuantity','yieldUnit','ingredients','instructions','prepMinutes','cookMinutes','macros']
+  const allowed=['mealType','description','serving','yieldQuantity','yieldUnit','ingredients','instructions','prepMinutes','cookMinutes','macros']
   if(!value||typeof value!=='object'||Object.keys(value).some(key=>!allowed.includes(key)))throw new Error('The recipe edit contains an unsupported field.')
   const result={}
+  if(value.mealType!==undefined){
+    if(!MEAL_CATEGORIES.includes(mealCategory(value.mealType)))throw new Error('Choose Breakfast, Lunch, Dinner, Snack, or Ingredient.')
+    result.mealType=mealCategory(value.mealType)
+  }
   for(const key of ['description','serving','yieldUnit']){
     if(typeof value[key]!=='string'||value[key].length>2000)throw new Error(`Enter a valid ${key}.`)
     result[key]=value[key].trim()

@@ -1,3 +1,4 @@
+import {MEAL_CATEGORIES,mealCategoryLabel} from './mealCategories.js'
 import {useEffect,useRef,useState} from 'react'
 import {importMealsFromImage,lookupPackagedFood} from './mealPlanApi.js'
 import {LABEL_MACROS,packagedFoodInput} from './packagedFood.js'
@@ -64,7 +65,7 @@ export default function PackagedFoodForm({mealType,saving,error,onClose,onSave})
       {busy&&<p role="status">Reading product details…</p>}
       {warnings.map((warning,index)=><p key={index}>{warning}</p>)}
     </section>
-    <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)} disabled={locked}>{[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack1','Snack 1'],['snack2','Snack 2']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+    <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)} disabled={locked}>{MEAL_CATEGORIES.map(type=>[type,mealCategoryLabel(type)]).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
     <label className="meal-add-form--wide"><span>Product name and flavor</span><input required value={form.name} disabled={locked} onChange={event=>set('name',event.target.value)} placeholder="Premier Protein Shake — Bananas & Cream" /></label>
     <label className="meal-add-form--wide"><span>Label serving size</span><input required value={form.serving} disabled={locked} onChange={event=>set('serving',event.target.value)} placeholder="1 bottle (11 fl oz / 325 mL)" /></label>
     <p className="meal-add-form--wide">Enter values for one label serving, not the whole multipack. Keep the label’s calorie value; label rounding can differ from calculations using protein, carbs and fat.</p>
