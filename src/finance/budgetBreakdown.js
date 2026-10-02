@@ -77,7 +77,16 @@ export function buildBudgetLines(transactions = [], budget = {}, { accountIds = 
     })
 
   for (const stored of storedBudgetLines(budget, accountIds)) {
-    if (!lines.has(stored.id)) lines.set(stored.id, stored)
+    // A discovery target can be reviewed before its cash-plan entry exists.
+    // Reuse that target identity when the one matching schedule is later approved.
+    const matching = stored.id.startsWith('discovered:') ? [...lines.values()].filter(line =>
+      line.accountId === stored.accountId && line.direction === stored.direction
+      && line.name.trim().toLowerCase() === stored.name.trim().toLowerCase()
+    ) : []
+    if (matching.length === 1 && !lines.has(stored.id)) {
+      lines.delete(matching[0].id)
+      lines.set(stored.id, { ...matching[0], id:stored.id })
+    } else if (!lines.has(stored.id)) lines.set(stored.id, stored)
   }
   return [...lines.values()].sort((left, right) => (
     left.category.localeCompare(right.category)

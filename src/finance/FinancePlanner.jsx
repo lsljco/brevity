@@ -1914,6 +1914,32 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     storageKey: BUDGET_LS_KEY,
   })
 
+  const reviewDiscoveredRecurring = async ({ suggestion, kind, accountId, amount, date, frequency }) => {
+    if (readOnly) throw new Error('Finance is read-only for this household member.')
+    const { discoverRecurring, recurringCoverage, discoveryBudgetLineId } = await import('./recurringDiscovery.js')
+    await syncSharedState(localStorage)
+    const current = loadData()
+    dataRef.current = current
+    setData(current)
+    if (!current.accounts.some(account => account.id === accountId)) throw new Error('Refresh and select an available account.')
+    const today = getHouseholdDateKey()
+    const currentBudget = loadBudget()
+    const coverage = recurringCoverage(suggestion, { scheduled:decorateVendorTransactions(current.transactions,vendorDirectory,'planned'), budget:currentBudget, today, accountId })
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a positive amount.')
+    if (kind === 'budget') {
+      if (coverage.exactAmount > 0) throw new Error('This item is already budgeted. Review its existing budget line.')
+      const line = coverage.exact[0] || { id:discoveryBudgetLineId(suggestion,accountId), recordId:'', name:suggestion.name, category:suggestion.category, direction:suggestion.direction, accountId }
+      return reviewBudgetChange({line,year:Number(today.slice(0,4)),month:Number(today.slice(5,7))-1,value:amount})
+    }
+    if (coverage.forecast.length) throw new Error('A matching Cash Forecast entry already exists. Review that entry first.')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || !['monthly','biweekly','weekly','once'].includes(frequency)) throw new Error('Choose a valid future date and frequency.')
+    // Refresh posted evidence before preparing a cash-plan proposal, including changes from other devices.
+    const freshActuals = JSON.parse(localStorage.getItem(PLAID_ACTUALS_KEY) || '[]')
+    const freshSuggestion = discoverRecurring(decorateVendorTransactions(freshActuals.map(tx => applyTransactionRules(tx,txRules,current.accounts)).map(tx => txOverrides[tx.id]?{...tx,...txOverrides[tx.id]}:tx),vendorDirectory,'posted'), {today,accountMap:plaidIdToLocal}).suggestions.find(row=>row.key===suggestion.key)
+    if (!freshSuggestion || freshSuggestion.currentCount !== suggestion.currentCount || freshSuggestion.currentTotal !== suggestion.currentTotal) throw new Error('Posted activity changed. Refresh and review this suggestion again.')
+    return reviewScheduledTransaction({name:suggestion.name,type:suggestion.direction,amount,acct:accountId,freq:frequency,start:date,end:'',cat:suggestion.category,vendorId:suggestion.vendorId,notes:`Reviewed recurring suggestion: seen in ${suggestion.monthsSeen} of 6 completed months. Estimated posting date.`})
+  }
+
   const reviewScheduledTransaction = async (tx, options = {}) => {
     const current = dataRef.current.transactions.find(item => item.id === tx?.id) || null
     const occurrenceDate = options.occurrenceDate || current?.start || tx?.start
@@ -3283,7 +3309,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ RECURRING ══════════ */}
       {view === 'recurring' && (
         <div className="finance-inner">
-          <RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={timeframeActuals} range={financeRange} onOpenScheduled={openScheduledTransactions} />
+          <RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions} />
         </div>
       )}
 

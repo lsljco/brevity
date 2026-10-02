@@ -79,7 +79,7 @@ export function txOccursOnDate(tx, d) {
       return diff >= 0 && diff % 14 === 0
     }
     case 'semimonthly': return dom === 1 || dom === 15
-    case 'monthly':     return dom === sdm
+    case 'monthly':     return dom === Math.min(sdm, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())
     case 'quarterly': {
       const md = (d.getFullYear() - start.getFullYear()) * 12 + d.getMonth() - start.getMonth()
       return md >= 0 && md % 3 === 0 && dom === sdm
