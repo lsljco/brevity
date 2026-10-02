@@ -65,7 +65,7 @@ export function recurringCoverage(suggestion,{scheduled=[],budget={},today,accou
   const date=new Date(`${today.slice(0,7)}-01T12:00:00`), year=date.getFullYear(),month=date.getMonth()
   const sameName=name=>normalize(name)===normalize(suggestion.name)
   const matches=row=>row.type===suggestion.direction && String(row.acct)===String(accountId) && (suggestion.vendorId && row.vendorId?suggestion.vendorId===row.vendorId:sameName(row.vendorName)||sameName(row.name))
-  const forecast=scheduled.filter(matches).filter(row=>(!row.end||row.end>=today))
+  const forecast=scheduled.filter(matches).filter(row=>row.freq==='once'?row.start>=today:(!row.end||row.end>=today))
   const lines=buildBudgetLines(scheduled,budget,{accountIds:new Set([accountId])}),owners=buildLegacyBudgetOwners(lines)
   const value=line=>{const target=budgetTargetForLine({budget,line,year,month,legacyYear:year,legacyAccountId,legacyOwners:owners});return target??line.transactions.reduce((sum,tx)=>sum+calculateTransactionAmountForMonth(tx,date),0)}
   const exact=lines.filter(line=>line.direction===suggestion.direction && (sameName(line.name)||(suggestion.vendorId && line.vendorId===suggestion.vendorId)))

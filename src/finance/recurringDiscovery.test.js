@@ -64,3 +64,10 @@ test('monthly forecasts preserve month-end billing in short and leap months',asy
  assert.equal(txOccursOnDate(tx,new Date(2026,4,31)),true)
  assert.equal(calculateTransactionAmountForMonth(tx,new Date(2026,1,1)),200)
 })
+
+test('a historical one-time forecast does not block a new recurring proposal',()=>{
+ const s=report(monthly()).suggestions[0]
+ const scheduled=[{id:'old',name:'Apple',acct:'a1',type:'expense',freq:'once',start:'2026-04-15',amount:200}]
+ assert.equal(recurringCoverage(s,{scheduled,today}).forecast.length,0)
+ scheduled[0].start='2026-10-15';assert.equal(recurringCoverage(s,{scheduled,today}).forecast.length,1)
+})
