@@ -99,7 +99,7 @@ export function importRecipeFromUrl(url) {
   })
 }
 
-export async function importMealsFromImage(file) {
+export async function importMealsFromImage(file, {packagedFood=false}={}) {
   if (!['image/jpeg','image/png','image/webp'].includes(file?.type)) throw new Error('Choose a JPEG, PNG, or WebP image.')
   const bitmap=await createImageBitmap(file)
   const scale=Math.min(1,1600/bitmap.width,1600/bitmap.height)
@@ -109,7 +109,7 @@ export async function importMealsFromImage(file) {
   bitmap.close?.()
   const optimized=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare the image.')),'image/jpeg',.88))
   if(optimized.size>5*1024*1024)throw new Error('Choose an image smaller than 5 MB.')
-  return request('/.netlify/functions/meal-image-import',{timeoutMs:60000,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mimeType:'image/jpeg',imageBase64:await blobBase64(optimized)})})
+  return request('/.netlify/functions/meal-image-import',{timeoutMs:60000,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mimeType:'image/jpeg',imageBase64:await blobBase64(optimized),packagedFood})})
 }
 
 export function prepareMealSubstitution({ date, mealType, mealId, expectedVersion }) {
@@ -146,3 +146,5 @@ export function ensureMealImage(meal){
   imageQueue=pending.catch(()=>undefined)
   return pending
 }
+
+export const lookupPackagedFood = barcode => request('/.netlify/functions/packaged-food-lookup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({barcode})})

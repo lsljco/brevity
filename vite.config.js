@@ -8,6 +8,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
+          if (id.includes('/@zxing/')) return 'barcode-scanner'
           if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'charts-vendor'
           if (id.includes('/react/') || id.includes('/react-dom/')) return 'react-vendor'
           if (id.includes('pdfkit') || id.includes('docx') || id.includes('pptxgenjs') || id.includes('mammoth') || id.includes('pdf-parse')) return 'documents-vendor'
