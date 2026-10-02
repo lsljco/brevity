@@ -1196,6 +1196,7 @@ test('Calendar income editor reviews payer changes without applying them',async(
   const editor=page.locator('.finance-calendar-editor-dialog')
   await expect(editor.getByLabel('Income payer')).toBeVisible()
   await editor.getByRole('combobox',{name:'Income payer',exact:true}).fill('Gene')
+  await expect(editor.getByRole('option',{name:'Genesco',exact:true})).toBeVisible()
   await editor.getByRole('option',{name:'Genesco',exact:true}).click()
   await expect(editor.getByRole('button',{name:'Review move and reconcile'})).toBeDisabled()
   await expect(editor).toContainText('Choose a different bank posting date')
@@ -1287,6 +1288,7 @@ test('Empty payer picker reviews creation and keeps the transaction draft',async
   payerOptions=[{id:'genesco',name:'Genesco',accessMembers:[],documents:[]}]
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-action-completed')))
   await editor.getByRole('combobox',{name:'Income payer',exact:true}).fill('Gene')
+  await expect(editor.getByRole('option',{name:'Genesco',exact:true})).toBeVisible()
   await editor.getByRole('combobox',{name:'Income payer',exact:true}).press('ArrowDown')
   await editor.getByRole('combobox',{name:'Income payer',exact:true}).press('Enter')
   await expect(editor.getByRole('combobox',{name:'Income payer',exact:true})).toHaveValue('Genesco')
@@ -1382,7 +1384,7 @@ test('spiritual fallback presents the devotion once with one response and source
 test('Packaged food barcode fills a reviewed reusable snack and preserves fractional macros',async({page})=>{
  await page.route('**/.netlify/functions/packaged-food-lookup',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({product:{name:'Test banana drink',serving:'1 bottle (325 mL)',macros:{calories:160,proteinGrams:30,carbohydrateGrams:4.5,fatGrams:3},warnings:['Check your label.']}})}))
  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
- await page.getByRole('button',{name:'Meal Library',exact:true}).click()
+ await page.getByRole('button',{name:/Meal Library$/}).click()
  await page.locator('.meal-library-add').filter({hasText:'Add Breakfast'}).click()
  const dialog=page.getByRole('dialog',{name:'Add a meal'})
  await dialog.getByRole('button',{name:'Packaged food / nutrition label',exact:true}).click()
@@ -1407,7 +1409,7 @@ test('Packaged food photo leaves unreadable macros blank and requires correction
   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({meals:[{name:'Test label drink',serving:'1 bottle',macros:{calories:160,proteinGrams:30,carbohydrateGrams:4.5,fatGrams:null},warnings:['Fat is unreadable.']}],warnings:[]})})
  })
  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
- await page.getByRole('button',{name:'Meal Library',exact:true}).click()
+ await page.getByRole('button',{name:/Meal Library$/}).click()
  await page.locator('.meal-library-add').filter({hasText:'Add Breakfast'}).click()
  const dialog=page.getByRole('dialog',{name:'Add a meal'})
  await dialog.getByRole('button',{name:'Packaged food / nutrition label',exact:true}).click()
