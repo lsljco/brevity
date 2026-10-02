@@ -9,6 +9,7 @@ export const PILLARS = [
     { id:'household-intelligence', label:'Household Intelligence', icon:'ti-chart-dots-3' },
     { id:'household-practices', label:'Policies & Practices', icon:'ti-list-check' },
     { id:'property', label:'Projects', icon:'ti-building-estate' },
+    { id:'grocery-list', label:'Grocery List', icon:'ti-shopping-cart' },
     { id:'household-maintenance', label:'Household Operations', icon:'ti-broom' },
     { id:'family-calendar', label:'Family Calendar', icon:'ti-calendar-event' },
     { id:'malbec-estate', label:'Malbec Estate', icon:'ti-building-community' },
