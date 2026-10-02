@@ -193,3 +193,15 @@
 .meal-edit-fields{border:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;padding:1.5rem}.meal-edit-fields label{display:flex;flex-direction:column;gap:.4rem}.meal-edit-fields input,.meal-edit-fields textarea,.meal-edit-fields select{background:#111b22;color:var(--text,#eee);border:1px solid #6a604c;border-radius:8px;padding:.65rem;font:inherit;min-width:0}.meal-edit-fields p,.meal-edit-fields h3{grid-column:1/-1}.meal-edit-fields input[type=checkbox]{width:24px;height:24px}.meal-edit-fields button{min-height:44px}@media(max-width:600px){.meal-edit-fields{grid-template-columns:1fr}}
 
 .meal-edit-button{display:inline-flex;align-items:center;gap:.5rem;min-height:44px;padding:.7rem 1.2rem;margin-bottom:1rem;border:1px solid #bba16b;border-radius:12px;background:#302c21;color:#e5c988;font:inherit;cursor:pointer}.meal-category-label{display:inline-block;color:#d8bc81;font-size:.85rem;margin:.5rem 0}
+
+/* Keep the action row outside the independently scrolling editor body. */
+.meal-edit-dialog{height:min(820px,90vh);height:min(820px,90dvh)}
+.meal-edit-dialog>header{flex:0 0 auto}
+.meal-edit-dialog>form{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden}
+.meal-edit-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.meal-edit-fields{min-width:0;margin:0}
+.meal-edit-dialog form>footer{flex:0 0 auto;display:flex;justify-content:flex-end;gap:12px;padding:16px 24px;padding-bottom:max(16px,env(safe-area-inset-bottom));border-top:1px solid var(--glass-border);background:#111820}
+.meal-edit-fields button,.meal-edit-dialog form>footer button{min-height:44px;padding:10px 16px;border:1px solid #bba16b;border-radius:10px;background:#302c21;color:#e5c988;font:inherit;cursor:pointer}
+.meal-edit-fields button:disabled,.meal-edit-dialog form>footer button:disabled{opacity:.5;cursor:not-allowed}
+.meal-edit-dialog form>.meal-nutrition-error{flex:0 0 auto;margin:0;padding:8px 24px}
+@media(max-width:600px){.meal-edit-dialog{height:96vh;height:96dvh;max-height:96dvh}.meal-edit-dialog>header{padding:14px 16px}.meal-edit-dialog form>footer{padding:12px;gap:8px}.meal-edit-dialog form>footer button{flex:1;padding:10px 8px}}
