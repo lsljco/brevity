@@ -54,7 +54,7 @@ export default function PackagedFoodForm({mealType,saving,error,onClose,onSave})
   const submit=event=>{event.preventDefault();try{const meal=packagedFoodInput(form);onSave(meal)}catch(error){setValidation(error.message)}}
   return <form className="meal-add-form" onSubmit={submit}>
     <p className="meal-add-form--wide">Save a reusable packaged food using its nutrition label. Adding it to the library does not schedule it or count it as consumed.</p>
-    <section className="meal-add-form--wide">
+    <section className="meal-recipe-import meal-packaged-import meal-add-form--wide">
       <p>Scan a barcode or photograph the Nutrition Facts panel to fill this draft. Review the exact product and serving before saving.</p>
       <label><span>Product barcode</span><input inputMode="numeric" value={barcode} disabled={locked} onChange={event=>setBarcode(event.target.value)} placeholder="Printed barcode digits" /></label>
       <button type="button" disabled={locked||!barcode.trim()} onClick={()=>lookup(barcode)}>Look up barcode</button>
