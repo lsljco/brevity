@@ -26,3 +26,16 @@ test('reviewed full recipe update preserves identity and recomputes batch totals
  assert.deepEqual(saved.meals,[original]);assert.deepEqual(saved.overrides['exact-recipe'].ingredientNutrition,[])
  assert.throws(()=>normalizeActionProposal({operations:[{type:'meal.recipe.update',targetId:'exact-recipe',payload:{...payload,estimateJson:'{}'}}]},{member:'Larry',role:'admin'}))
 })
+
+test('meal category edits preserve the recipe identity, nutrition and existing plan references',()=>{
+ const original={id:'shake',name:'Shake',mealType:'breakfast',...recipe}
+ for(const mealType of ['breakfast','lunch','dinner','snack1','ingredient']){
+  const operation=normalizeActionProposal({operations:[{type:'meal.recipe.update',targetId:'shake',payload:{name:'Shake',recipeJson:JSON.stringify({...recipe,mealType})}}]},{member:'Larry',role:'admin'}).operations[0]
+  const saved=applyRecipeUpdate({meals:[original]},operation,{actor:'Larry',now:()=>new Date('2026-10-02')})
+  assert.equal(saved.overrides.shake.mealType,mealType)
+  assert.deepEqual(saved.overrides.shake.macros,recipe.macros)
+  assert.equal(saved.overrides.shake.nutritionBasis,undefined)
+  assert.deepEqual(saved.meals,[original])
+ }
+ assert.throws(()=>normalizeRecipeEdit({...recipe,mealType:'brunch'}),/Choose Breakfast/)
+})

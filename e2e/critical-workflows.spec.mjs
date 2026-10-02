@@ -1054,6 +1054,9 @@ test('meal editor scales servings and prepares an exact recipe review without ap
   await page.getByRole('button',{name:'Edit meal',exact:true}).click()
   const editor=page.getByRole('dialog',{name:'Edit meal',exact:true})
   await editor.getByLabel('Meal title').fill('Larger breakfast')
+  await expect(editor.getByLabel('Meal label',{exact:true}).locator('option')).toHaveText(['Breakfast','Lunch','Dinner','Snack','Ingredient'])
+  await editor.getByLabel('Meal label',{exact:true}).selectOption('snack1')
+  await editor.screenshot({path:`test-results/meal-editor-${test.info().project.name}.png`})
   await editor.getByLabel('Serving multiplier').fill('1.5')
   await editor.getByRole('button',{name:'Resize serving and macros'}).click()
   await expect(editor.getByLabel('Protein (g)',{exact:true})).toHaveValue('33')
@@ -1061,6 +1064,7 @@ test('meal editor scales servings and prepares an exact recipe review without ap
   await expect.poll(()=>prepared.length).toBe(1)
   expect(prepared[0].expectedVersion).toBe(7)
   expect(prepared[0].operation.targetId).toBe('breakfast-eggs')
+  expect(JSON.parse(prepared[0].operation.payload.recipeJson).mealType).toBe('snack1')
   expect(JSON.parse(prepared[0].operation.payload.recipeJson).macros.calories).toBe(525)
   expect(executed).toHaveLength(0)
 })
@@ -1423,4 +1427,23 @@ test('Packaged food photo leaves unreadable macros blank and requires correction
  await dialog.getByLabel('Fat (g)',{exact:true}).fill('3')
  await dialog.getByRole('button',{name:'Add packaged food to Meal Library',exact:true}).click()
  await expect(page.getByText(/Test label drink was added/)).toBeVisible()
+})
+
+test('meal library labels group both snacks and allow ingredients to be edited',async({page})=>{
+ const response=mealPlanResponse()
+ const base=response.library[0]
+ response.library=[...response.library,{...base,id:'snack-a',name:'First shake',mealType:'snack1'},{...base,id:'snack-b',name:'Second shake',mealType:'snack2'},{...base,id:'ingredient-oats',name:'Rolled oats',mealType:'ingredient'}]
+ response.libraryVersion=7
+ await page.route('**/.netlify/functions/meal-plans?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)}))
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ await page.getByRole('button',{name:'Meal Library',exact:true}).click()
+ const filters=page.getByRole('group',{name:'Filter meals by type',exact:true})
+ await filters.getByRole('button',{name:/^Snack/}).click()
+ await expect(page.getByRole('button',{name:'View First shake details',exact:true})).toContainText('Meal: Snack')
+ await expect(page.getByRole('button',{name:'View Second shake details',exact:true})).toContainText('Meal: Snack')
+ await filters.getByRole('button',{name:/^Ingredient/}).click()
+ await page.getByRole('button',{name:'View Rolled oats details',exact:true}).click()
+ await expect(page.getByRole('dialog')).toContainText('Meal: Ingredient')
+ await page.getByRole('button',{name:'Edit meal',exact:true}).click()
+ await expect(page.getByLabel('Meal label',{exact:true})).toHaveValue('ingredient')
 })

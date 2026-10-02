@@ -1,3 +1,4 @@
+import {MEAL_CATEGORIES,mealCategory,mealCategoryLabel} from './mealCategories.js'
 import MealEditDialog from './MealEditDialog.jsx'
 import PackagedFoodForm from './PackagedFoodForm.jsx'
 import { useEffect, useMemo, useState } from 'react'
@@ -14,8 +15,8 @@ import ConsumedNutrition from './ConsumedNutrition.jsx'
 import './MealPlanner.css'
 import './MealPlannerInsights.css'
 
-const LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack1: 'Snack 1', snack2: 'Snack 2' }
-const ICONS = { breakfast: 'ti-sunrise', lunch: 'ti-sun-high', dinner: 'ti-moon-stars', snack1: 'ti-bottle', snack2: 'ti-apple' }
+const LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack1: 'Snack 1', snack2: 'Snack 2', ingredient:'Ingredient' }
+const ICONS = { breakfast: 'ti-sunrise', lunch: 'ti-sun-high', dinner: 'ti-moon-stars', snack1: 'ti-bottle', snack2: 'ti-apple', ingredient:'ti-carrot' }
 
 const formatDay = date => new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const formatPrepMinutes = value => {
@@ -64,8 +65,8 @@ function MealDetailDialog({ meal, onClose, onImageGenerated, onEdit }) {
   }, [onClose])
   return <div className="meal-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <section className="meal-dialog meal-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-detail-title">
-      <header><div><span>{LABELS[meal.mealType]} recipe</span><h2 id="meal-detail-title">{meal.name}</h2><p>{meal.description}</p></div><button type="button" onClick={onClose} aria-label="Close meal details"><i className="ti ti-x" /></button></header>
-      <div className="meal-detail-body"><button type="button" onClick={onEdit}>Edit meal</button>
+      <header><div><span>Meal: {mealCategoryLabel(meal.mealType)}</span><h2 id="meal-detail-title">{meal.name}</h2><p>{meal.description}</p></div><button type="button" onClick={onClose} aria-label="Close meal details"><i className="ti ti-x" /></button></header>
+      <div className="meal-detail-body"><button className="meal-edit-button" type="button" onClick={onEdit}><i className="ti ti-edit" aria-hidden="true" /> Edit meal</button>
         <MealImage meal={meal} className="meal-detail-image" alt={meal.name} loading="eager" />
         <div className="meal-detail-image-action"><div><strong>Meal photo</strong><span>Upload your own photo, or generate one from this exact ingredient list in Brevity’s luxury steakhouse aesthetic.</span></div><div className="meal-detail-image-buttons"><input id={uploadInputId} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadImage} disabled={imageState==='loading'||imageState==='uploading'} /><label htmlFor={uploadInputId} aria-disabled={imageState==='loading'||imageState==='uploading'}><i className="ti ti-upload" /> {imageState==='uploading'?'Uploading…':'Upload Image'}</label><button type="button" onClick={generateImage} disabled={imageState==='loading'||imageState==='uploading'||!ingredients.length}><i className="ti ti-photo-spark" /> {imageState==='loading'?'Generating…':'Generate New Image'}</button></div></div>
         {imageError&&<div className="meal-nutrition-error" role="alert">{imageError}</div>}
@@ -86,7 +87,7 @@ function MealChoice({ meal, onChoose, selected, current }) {
   return <button type="button" className={`meal-choice${selected ? ' is-selected' : ''}`} onClick={onChoose}>
     <MealImage meal={meal} alt="" />
     <span className="meal-choice-mark"><i className={`ti ${selected ? 'ti-circle-check-filled' : 'ti-circle'}`} /></span>
-    <span><strong>{meal.name}</strong><small>{LABELS[meal.mealType]} · {meal.description}</small><Macros meal={meal} /></span>
+    <span><strong>{meal.name}</strong><small>{mealCategoryLabel(meal.mealType)} · {meal.description}</small><Macros meal={meal} /></span>
     <em>{current ? 'Current' : selected ? 'Selected' : mealTimingLabel(meal)}</em>
   </button>
 }
@@ -95,7 +96,7 @@ function ReplaceDialog({ selection, library, saving, error, onClose, onChoose, o
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const matchingMeals = useMemo(() => searchMeals(library, query), [library, query])
-  const candidates = useMemo(() => typeFilter === 'all' ? matchingMeals : matchingMeals.filter(meal => meal.mealType === typeFilter), [matchingMeals, typeFilter])
+  const candidates = useMemo(() => typeFilter === 'all' ? matchingMeals : matchingMeals.filter(meal => mealCategory(meal.mealType) === typeFilter), [matchingMeals, typeFilter])
   const currentMeal=library.find(meal=>meal.id===selection.day.meals[selection.mealType])
   const selectedMeal=library.find(meal=>meal.id===selection.mealId)
   useEffect(() => {
@@ -108,7 +109,7 @@ function ReplaceDialog({ selection, library, saving, error, onClose, onChoose, o
     <section className="meal-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-dialog-title">
       <header><div><span>Meal library · {candidates.length} options</span><h2 id="meal-dialog-title">Replace {LABELS[selection.mealType]}</h2><p>{formatDay(selection.day.date)} · Choose from any meal category</p></div><button type="button" onClick={onClose} disabled={saving} aria-label="Close"><i className="ti ti-x" /></button></header>
       <label className="meal-search"><i className="ti ti-search" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Search all meals or ingredients" /></label>
-      <div className="meal-replace-filters" role="group" aria-label="Filter replacement meals by type">{[['all','All meals'],...MEAL_TYPES.map(type=>[type,LABELS[type]])].map(([type,label])=><button type="button" key={type} aria-pressed={typeFilter===type} onClick={()=>setTypeFilter(type)}>{label} <span>{type==='all'?matchingMeals.length:matchingMeals.filter(meal=>meal.mealType===type).length}</span></button>)}</div>
+      <div className="meal-replace-filters" role="group" aria-label="Filter replacement meals by type">{[['all','All meals'],...MEAL_CATEGORIES.map(type=>[type,mealCategoryLabel(type)])].map(([type,label])=><button type="button" key={type} aria-pressed={typeFilter===type} onClick={()=>setTypeFilter(type)}>{label} <span>{type==='all'?matchingMeals.length:matchingMeals.filter(meal=>mealCategory(meal.mealType)===type).length}</span></button>)}</div>
       <div className="meal-choice-list">{candidates.length ? candidates.map(meal => <MealChoice key={meal.id} meal={meal} current={meal.id === selection.day.meals[selection.mealType]} selected={meal.id === selection.mealId} onChoose={() => onChoose(meal.id)} />) : <p className="meal-replace-empty">No meals match this search and category.</p>}</div>
       <footer className="meal-dialog-review">
         <div><span>Selection</span><strong>{currentMeal?.name||'Current meal'} <i className="ti ti-arrow-right" /> {selectedMeal?.name||'Choose a replacement'}</strong><small>Review opens Action Mode. Nothing changes until you confirm there, and the completed change can be undone from Audit History.</small>{error&&<small className="meal-dialog-error" role="alert">{error}</small>}</div>
@@ -262,7 +263,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
           {importError&&<div className="meal-nutrition-error" role="alert">{importError}</div>}
           {importNotice&&<div className="meal-recipe-import-notice" role="status">{importNotice}{form.sourceUrl&&<a href={form.sourceUrl} target="_blank" rel="noreferrer">View source</a>}</div>}
         </section>
-        <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)}>{MEAL_TYPES.map(type=><option key={type} value={type}>{LABELS[type]}</option>)}</select></label>
+        <label><span>Meal type</span><select value={form.mealType} onChange={event=>set('mealType',event.target.value)}>{MEAL_CATEGORIES.map(type=><option key={type} value={type}>{mealCategoryLabel(type)}</option>)}</select></label>
         <label className="meal-add-form--wide"><span>Meal name</span><input required value={form.name} onChange={event=>set('name',event.target.value)} placeholder="Steak and Loaded Mashed Potatoes" /></label>
         <label className="meal-add-form--wide"><span>Description</span><textarea value={form.description} onChange={event=>set('description',event.target.value)} placeholder="Brief description of the plated meal" /></label>
         <label className="meal-add-form--wide"><span>Measured ingredients <small>one per line; include brand, amount and unit</small></span><textarea required value={form.ingredients} onChange={event=>set('ingredients',event.target.value)} placeholder={'2 cups Pearl Milling Company pancake mix\n1 cup water\n1 stick salted butter'} /></label>
@@ -295,7 +296,7 @@ function PlanView({ days, onSelect, onOpenMeal, monthly = false }) {
       <header><div><span>{monthly ? `Day ${index + 1}` : index === 0 ? 'Today' : `Day ${index + 1}`}</span><h2>{formatDay(day.date)}</h2></div>{Object.keys(day.substitutions || {}).length > 0 && <small><i className="ti ti-replace" /> Customized</small>}</header>
       <div className="meal-day-slots">{MEAL_TYPES.filter(mealType=>day.resolvedMeals?.[mealType]).map(mealType => {
         const meal = day.resolvedMeals[mealType]
-        return <section className="meal-slot meal-card-action" key={mealType} role="button" tabIndex="0" aria-label={`View ${meal?.name} details`} onClick={()=>meal&&onOpenMeal(meal)} onKeyDown={event=>{if((event.key==='Enter'||event.key===' ')&&meal){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} className="meal-slot-photo" alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes · View recipe</small><button type="button" onClick={event => { event.stopPropagation(); onSelect({ day, mealType }) }}><i className="ti ti-replace" /> Replace</button></div></section>
+        return <section className="meal-slot meal-card-action" key={mealType} role="button" tabIndex="0" aria-label={`View ${meal?.name} details`} onClick={()=>meal&&onOpenMeal(meal)} onKeyDown={event=>{if((event.key==='Enter'||event.key===' ')&&meal){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} className="meal-slot-photo" alt={meal?.name || ''} loading={index === 0 ? 'eager' : 'lazy'} /><div className="meal-slot-heading"><div className="meal-slot-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{LABELS[mealType]}</span><strong>{meal?.name}</strong></div></div><span className="meal-category-label">Meal: {mealCategoryLabel(meal?.mealType)}</span><p>{meal?.description}</p>{meal && <Macros meal={meal} />}<div className="meal-slot-footer"><small>{meal?.prepMinutes} minutes · View recipe</small><button type="button" onClick={event => { event.stopPropagation(); onSelect({ day, mealType }) }}><i className="ti ti-replace" /> Replace</button></div></section>
       })}</div>
     </article>)}
   </div>
@@ -305,15 +306,15 @@ function LibraryView({ library, onAdd, onOpenMeal, onBulkImport }) {
   const [query, setQuery] = useState('')
   const [mealTypeFilter, setMealTypeFilter] = useState('all')
   const matchingMeals = useMemo(() => searchMeals(library, query), [library, query])
-  const filteredMeals = useMemo(() => mealTypeFilter === 'all' ? matchingMeals : matchingMeals.filter(meal => meal.mealType === mealTypeFilter), [matchingMeals, mealTypeFilter])
+  const filteredMeals = useMemo(() => mealTypeFilter === 'all' ? matchingMeals : matchingMeals.filter(meal => mealCategory(meal.mealType) === mealTypeFilter), [matchingMeals, mealTypeFilter])
   const filtered = Boolean(query.trim()) || mealTypeFilter !== 'all'
-  const shownTypes = filtered ? MEAL_TYPES.filter(mealType => filteredMeals.some(meal => meal.mealType === mealType)) : MEAL_TYPES
+  const shownTypes = filtered ? MEAL_CATEGORIES.filter(mealType => filteredMeals.some(meal => mealCategory(meal.mealType) === mealType)) : MEAL_CATEGORIES
   return <div className="meal-library">
-    <div className="meal-library-search"><label htmlFor="meal-library-query">Search Meal Library</label><div><i className="ti ti-search" aria-hidden="true" /><input id="meal-library-query" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search meals or ingredients, e.g. steak and eggs" /></div><div className="meal-library-filters" role="group" aria-label="Filter meals by type">{[['all','All meals'],...MEAL_TYPES.map(type=>[type,LABELS[type]])].map(([type,label])=><button key={type} type="button" aria-pressed={mealTypeFilter===type} onClick={()=>setMealTypeFilter(type)}>{label} <span>{type==='all'?matchingMeals.length:matchingMeals.filter(meal=>meal.mealType===type).length}</span></button>)}</div><span role="status">{filtered ? `${filteredMeals.length} ${filteredMeals.length === 1 ? 'meal' : 'meals'} found` : `${library.length} meals available`}</span><button type="button" onClick={onBulkImport}>Bulk import from images</button></div>
+    <div className="meal-library-search"><label htmlFor="meal-library-query">Search Meal Library</label><div><i className="ti ti-search" aria-hidden="true" /><input id="meal-library-query" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search meals or ingredients, e.g. steak and eggs" /></div><div className="meal-library-filters" role="group" aria-label="Filter meals by type">{[['all','All meals'],...MEAL_CATEGORIES.map(type=>[type,mealCategoryLabel(type)])].map(([type,label])=><button key={type} type="button" aria-pressed={mealTypeFilter===type} onClick={()=>setMealTypeFilter(type)}>{label} <span>{type==='all'?matchingMeals.length:matchingMeals.filter(meal=>mealCategory(meal.mealType)===type).length}</span></button>)}</div><span role="status">{filtered ? `${filteredMeals.length} ${filteredMeals.length === 1 ? 'meal' : 'meals'} found` : `${library.length} meals available`}</span><button type="button" onClick={onBulkImport}>Bulk import from images</button></div>
     {filtered && !filteredMeals.length && <p className="meal-library-no-results">No {mealTypeFilter === 'all' ? 'meals' : LABELS[mealTypeFilter].toLowerCase() + ' meals'} match{query.trim() ? ` “${query.trim()}”` : ' this filter'}. Try another search or meal type.</p>}
     {shownTypes.map(mealType => {
-    const meals = filteredMeals.filter(meal => meal.mealType === mealType)
-    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{LABELS[mealType]}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {LABELS[mealType]}</button></header><div className="meal-library-grid">{meals.map(meal => <article className="meal-card-action" key={meal.id} role="button" tabIndex="0" aria-label={`View ${meal.name} details`} onClick={()=>onOpenMeal(meal)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{mealTimingLabel(meal)}</span></div><p>{meal.description}</p><Macros meal={meal} /><small className="meal-library-view">View ingredients &amp; recipe</small></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
+    const meals = filteredMeals.filter(meal => mealCategory(meal.mealType) === mealType)
+    return <section key={mealType}><header><div className="meal-library-heading"><div className="meal-library-icon"><i className={`ti ${ICONS[mealType]}`} /></div><div><span>{meals.length} choices</span><h2>{mealCategoryLabel(mealType)}</h2></div></div><button type="button" className="meal-library-add" onClick={()=>onAdd(mealType)}><i className="ti ti-plus" /> Add {mealCategoryLabel(mealType)}</button></header><div className="meal-library-grid">{meals.map(meal => <article className="meal-card-action" key={meal.id} role="button" tabIndex="0" aria-label={`View ${meal.name} details`} onClick={()=>onOpenMeal(meal)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onOpenMeal(meal)}}}><MealImage meal={meal} alt={meal.name} /><div className="meal-library-copy"><div><strong>{meal.name}</strong><span>{mealTimingLabel(meal)}</span></div><span className="meal-category-label">Meal: {mealCategoryLabel(meal.mealType)}</span><p>{meal.description}</p><Macros meal={meal} /><small className="meal-library-view">View ingredients &amp; recipe</small></div></article>)}</div><footer>Nutrition values are per plated serving and are estimates; ingredients and preparation change actual values.</footer></section>
   })}</div>
 }
 
