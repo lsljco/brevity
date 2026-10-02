@@ -72,3 +72,8 @@
 @media (max-width:800px) { .meal-plan-insight { grid-template-columns:1fr; }.meal-plan-insight > small { grid-column:auto; } }
 @media (max-width:620px) { .meal-library > section > header { align-items:flex-start; flex-direction:column; }.meal-library-add { width:100%; } .meal-add-form { grid-template-columns:1fr; padding:18px; }.meal-add-form--wide,.meal-add-form footer { grid-column:auto; }.meal-recipe-import-controls { grid-template-columns:1fr; }.meal-recipe-import-controls button,.meal-nutrition-action button { width:100%; }.meal-nutrition-action,.meal-nutrition-row { align-items:stretch; flex-direction:column; }.meal-nutrition-totals { grid-template-columns:1fr; }.meal-nutrition-row > span { flex:auto; } }
 @media (max-width:520px) { .meal-plan-insight dl { grid-template-columns:repeat(2,1fr); } .meal-choice > .meal-image-placeholder { width:72px; height:60px; } }
+
+.meal-packaged-import button { min-height:44px; padding:9px 13px; border:1px solid rgba(197,164,109,.42); border-radius:9px; background:rgba(197,164,109,.14); color:var(--gold); font:inherit; cursor:pointer; }
+.meal-packaged-import button:disabled { cursor:not-allowed; opacity:.45; }
+.meal-packaged-import p { margin:0; line-height:1.5; }
+.meal-packaged-import video + button { display:block; width:100%; margin-top:8px; }
