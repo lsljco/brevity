@@ -224,7 +224,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if(operation.type==='meal.substitute'){
     const errors=validateMealSubstitution({date:operation.targetDate,mealType:payload.mealType,mealId:payload.mealId})
     if(errors.length)throw new Error(errors.join(' '))
-    if(!mealIdsForDay(value)[payload.mealType])throw new Error('That meal-plan day is not available. Refresh Brevity and try again.')
+    if(!value?.meals||value.date!==operation.targetDate)throw new Error('That meal-plan day is not available. Refresh Brevity and try again.')
     const changedAt=nowIso(context.now||(()=>new Date())),previousMealId=mealIdsForDay(value)[payload.mealType]
     return{before,after:{...value,meals:{...value.meals,[payload.mealType]:payload.mealId},substitutions:{...(value.substitutions||{}),[payload.mealType]:{previousMealId,mealId:payload.mealId,changedAt,changedBy:context.actor||'Household member',actionId:operation.id}}}}
   }

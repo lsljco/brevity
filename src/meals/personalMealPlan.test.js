@@ -32,16 +32,21 @@ test('batch recipe ingredients are divided by the recorded yield before member p
   assert.deepEqual(portionIngredients({yieldQuantity:4,portionMultiplier:1.07,ingredients:['24 oz chicken breast','4 cups broccoli']}),['6.4 oz chicken breast','1.1 cups broccoli'])
   assert.deepEqual(portionIngredients({portionMultiplier:1,ingredients:['6 oz chicken breast']}),['6 oz chicken breast'])
 })
-test('existing three-slot days receive deterministic snacks without rewriting the source',()=>{
+test('existing three-slot days leave snacks empty and allow a deliberate addition',()=>{
   const day={date:'2026-10-01',version:7,meals:{breakfast:'breakfast-01',lunch:'lunch-01',dinner:'dinner-01'}}
   const resolved=resolveMealDay(day)
-  assert.equal(resolved.resolvedMeals.snack1.id,'snack-premier-chocolate')
-  assert.equal(resolved.resolvedMeals.snack2.id,'snack-envy-apple')
+  assert.equal(resolved.resolvedMeals.snack1,null)
+  assert.equal(resolved.resolvedMeals.snack2,null)
   assert.equal(day.meals.snack1,undefined)
   const operation={id:'swap',type:'meal.substitute',targetDate:day.date,payload:{mealType:'snack2',mealId:'breakfast-01'}}
   const changed=applyRecordOperation(day,operation,{actor:'Larry'})
   assert.deepEqual(changed.before,day)
   assert.equal(changed.after.meals.snack2,'breakfast-01')
-  assert.equal(changed.after.substitutions.snack2.previousMealId,'snack-envy-apple')
+  assert.equal(changed.after.substitutions.snack2.previousMealId,null)
   assert.deepEqual(resolveMealDay(changed.before).meals,resolved.meals)
+})
+
+test('three main meals form a complete plan without optional snack calories',()=>{
+ const result=personalMealPlan({breakfast:plate,lunch:plate,dinner:plate},{})
+ assert.equal(result.complete,true);assert.equal(result.totals.calories,1200)
 })

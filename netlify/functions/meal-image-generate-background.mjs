@@ -24,7 +24,8 @@ export function createMealImageBackgroundHandler({readSessionFn=readSession,repo
     if(automatic&&jobId!==`auto-${mealId}`)return json(400,{error:'Automatic image jobs require the saved meal identity.'})
     try{
       const meals=repository||await productionMealPlanRepository()
-      const library=await meals.getLibrary(),meal=library.library.find(candidate=>candidate.id===mealId)
+      const scheduled=mealId.startsWith('scheduled-')
+      const meal=scheduled?await meals.getScheduledMeal(mealId):(await meals.getLibrary()).library.find(candidate=>candidate.id===mealId)
       if(!meal)throw Object.assign(new Error('That meal is no longer in the household library.'),{code:'VALIDATION_ERROR'})
       const progress={state:'generating',jobId,mealId,startedAt:now().toISOString(),startedBy:session.member||'Household member'}
       if(automatic){
@@ -39,7 +40,8 @@ export function createMealImageBackgroundHandler({readSessionFn=readSession,repo
       }else await jobs.setJSON(key,progress)
       const assetId=`${meal.id}-${randomUUID()}`
       let image=await generateImage({meal:{...meal,image:''},assetId,householdId,store:images})
-      const saved=await meals.setMealImage({mealId:meal.id,image,actor:session.member||'Household member',...(automatic?{onlyIfMissing:true}:{})})
+      const imageWrite={mealId:meal.id,image,actor:session.member||'Household member',...(automatic?{onlyIfMissing:true}:{})}
+      const saved=scheduled?await meals.setScheduledMealImage({...imageWrite,expectedMeal:meal}):await meals.setMealImage(imageWrite)
       image=saved?.image||image
       await jobs.setJSON(key,{state:'ready',jobId,mealId,meal:{...meal,image,imageGenerated:true},updatedAt:now().toISOString()})
     }catch(error){

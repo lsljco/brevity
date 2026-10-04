@@ -45,15 +45,15 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
   return <section className="today-section today-meals" aria-labelledby="today-meals-title" data-pillar="health">
     <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">{browsingDate?'Planned Meals':'Today’s Meals'}</h2></div><button className="today-meals-open" aria-label="Open Meal Plan" onClick={onOpenMealPlan}>Open Meal Plan →</button></div>
     <section className="today-macro-summary" aria-label="Planned daily macros compared with goals">
-      <h3>{currentMember}’s planned daily macros</h3><p>If you eat all the portions and both snacks below. These are estimates, not logged consumption.</p>
+      <h3>{currentMember}’s planned daily macros</h3><p>If you eat the meals and any optional snacks listed below. These are estimates, not logged consumption.</p>
       {!personal.complete && <p role="status">The plan is incomplete. Totals cover only the listed items; missing meals have not been estimated.</p>}
       {!verified && <p role="status">{error || 'Loading your saved macro goals…'}</p>}
       <div className="today-macro-goals">{FIELDS.map(([key,label,unit]) => {
         const total=personal.totals[key], goal=targets[key], hasGoal=Number.isFinite(goal)&&goal>0
         return <div key={key}><strong>{label}</strong><p>{display(total)} {unit} / {hasGoal?`${display(goal)} ${unit}`:'Goal not set'}</p><progress aria-label={`${label} planned versus goal`} max={hasGoal?goal:1} value={hasGoal&&total!=null?Math.min(total,goal):0}/><small>{hasGoal&&total!=null?`${display(Math.abs(goal-total))} ${unit} ${total>goal?'over goal':'below goal'}`:'Set your target with Brevity'}</small></div>
       })}</div>
-      <p>{personal.factor===1?'Standard recipe portions shown.':`Your main meals use ${personal.factor}× the standard recipe serving; both snacks remain full portions.`} Saved goals are unchanged. {personal.totals.proteinGrams!=null&&targets.proteinGrams>personal.totals.proteinGrams+1?`You still need ${display(targets.proteinGrams-personal.totals.proteinGrams)} g protein; ask Brevity for a different snack or meal combination.`:''}</p>
-      <button onClick={()=>requestAssistantConversation(`Read my saved nutrition targets and the authoritative meal plan including both snacks for ${mealDay?.date || 'today'}. Help me balance this selected day against all four macro goals. Ask about brands, portions, and food restrictions before recommending replacements. Prepare any saved changes for Action Mode review.`)}>Balance my meals with Brevity</button>
+      <p>{personal.factor===1?'Standard recipe portions shown.':`Your main meals use ${personal.factor}× the standard recipe serving; any added snacks remain full portions.`} Saved goals are unchanged. {personal.totals.proteinGrams!=null&&targets.proteinGrams>personal.totals.proteinGrams+1?`You still need ${display(targets.proteinGrams-personal.totals.proteinGrams)} g protein; ask Brevity for a different snack or meal combination.`:''}</p>
+      <button onClick={()=>requestAssistantConversation(`Read my saved nutrition targets and the authoritative meal plan including any manually added snacks for ${mealDay?.date || 'today'}. Help me balance this selected day against all four macro goals. Ask about brands, portions, and food restrictions before recommending replacements. Prepare any saved changes for Action Mode review.`)}>Balance my meals with Brevity</button>
     </section>
     {!browsingDate && <TodayCalorieConsumption nutrition={nutrition} currentMember={currentMember} date={today} error={error}/>}
     <div className="today-meal-grid">{Object.entries(LABELS).filter(([slot])=>personal.meals[slot]).map(([slot,label])=>{
@@ -66,6 +66,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
         </div>
       </article>
     })}</div>
+    {!readOnly&&<button className="today-meals-open" onClick={onOpenMealPlan}>Add optional snacks in Meal Plan →</button>}
     {swap&&<div className="meal-dialog-backdrop"><section className="today-snack-swap" role="dialog" aria-modal="true" aria-label={`Swap ${LABELS[swap.slot]}`}><h3>Swap {LABELS[swap.slot]}</h3><p>This changes the shared meal plan for {swap.date}. Each member’s displayed portion uses their own goals.</p><label>Replacement<select value={swap.id} onChange={event=>setSwap({...swap,id:event.target.value})}>{[...library].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'en',{sensitivity:'base',numeric:true})||String(a.id).localeCompare(String(b.id))).map(meal=><option key={meal.id} value={meal.id}>{meal.name}</option>)}</select></label><p>Nothing changes until you approve in Action Mode. Audit History provides safe Undo.</p>{swapError&&<p role="alert">{swapError}</p>}<button disabled={busy} onClick={()=>setSwap(null)}>Cancel</button><button disabled={busy||swap.id===meals[swap.slot]?.id} onClick={reviewSwap}>{busy?'Opening review…':'Review swap'}</button></section></div>}
   </section>
 }

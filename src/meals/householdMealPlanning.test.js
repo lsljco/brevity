@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {automaticMeals,automaticMealAllowed,mealVariety,applyMealScheduleCommand,scheduleCommandDates,householdIngredients,normalizeMealScheduleCommand,MEAL_SCHEDULE_RESOURCE} from './householdMealPlanning.js'
+import {refreshAutomaticDay,effectiveMealDay,automaticMeals,automaticMealAllowed,mealVariety,applyMealScheduleCommand,scheduleCommandDates,householdIngredients,normalizeMealScheduleCommand,MEAL_SCHEDULE_RESOURCE} from './householdMealPlanning.js'
 import {createRollingMealDay,resolveMealDay,addMealDays} from './mealPlanData.js'
 import {proposeWeeklyGroceries} from '../household/groceryData.js'
 import {captureExpectedVersions,prepareRecordOperations,createProductionActionResources,commitPreparedRecordOperations} from '../../netlify/lib/assistant-action-executor.mjs'
@@ -103,4 +103,17 @@ test('a small eligible library repeats transparently without relaxing hard food 
  const dates=Array.from({length:7},(_,i)=>addMealDays('2026-10-10',i)),menus=generateSafeMealRange(dates,{library})
  for(const menu of Object.values(menus))for(const slot of ['breakfast','lunch','dinner'])assert.equal(menu[slot].id,slot)
  assert.equal(mealPlanWarnings(dates.map(date=>({date,resolvedMeals:menus[date]}))).filter(w=>w.includes('within seven days')).length,18)
+})
+
+test('automatic snacks start empty while deliberate snack choices survive refresh and schedule edits',()=>{
+ const date='2026-10-04',base=createRollingMealDay(date)
+ assert.equal(base.meals.snack1,null);assert.equal(base.meals.snack2,null)
+ const old={...base,meals:{...base.meals,snack1:'snack-premier-chocolate',snack2:'snack-envy-apple'}}
+ const cleared=refreshAutomaticDay(old)
+ assert.equal(cleared.meals.snack1,null);assert.equal(cleared.meals.snack2,null)
+ const legacySchedule={days:{[date]:{meals:old.meals,substitutions:{dinner:{customized:true}}}}}
+ assert.equal(effectiveMealDay(cleared,legacySchedule).meals.snack1,null)
+ const edited=applyMealScheduleCommand(legacySchedule,{kind:'set',date,slot:'snack1',mealId:'snack-envy-apple',servings:1},{[date]:cleared})
+ const saved=effectiveMealDay(cleared,edited)
+ assert.equal(saved.meals.snack1,'snack-envy-apple');assert.equal(saved.servings.snack1,1);assert.equal(saved.meals.snack2,null)
 })

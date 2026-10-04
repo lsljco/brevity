@@ -176,6 +176,31 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
+  const scheduledIdentity = mealId => {
+    const match=String(mealId||'').match(/^scheduled-(\d{4}-\d{2}-\d{2})-(breakfast|lunch|dinner|snack1|snack2)$/)
+    if(!match)throw Object.assign(Error('Choose a saved customized meal.'),{code:'VALIDATION_ERROR'})
+    return {date:match[1],slot:match[2]}
+  }
+  const recipeImageBasis=meal=>JSON.stringify([meal.name,meal.ingredients,meal.instructions,meal.macros,meal.yieldQuantity,meal.serving])
+  const getScheduledMeal = async mealId => {
+    const {date,slot}=scheduledIdentity(mealId),schedule=await store.get(`${household}/schedule`,{type:'json'})
+    const recipe=schedule?.days?.[date]?.recipes?.[slot]
+    if(!recipe)throw Object.assign(Error('Save this customized meal before generating its image.'),{code:'VALIDATION_ERROR'})
+    return {...recipe,id:mealId}
+  }
+  const setScheduledMealImage = async ({mealId,image,expectedMeal,actor='Household member',onlyIfMissing=false}) => {
+    const {date,slot}=scheduledIdentity(mealId),key=`${household}/schedule`
+    for(let attempt=0;attempt<3;attempt++){
+      const entry=await store.getWithMetadata(key,{type:'json'}),schedule=entry?.data,day=schedule?.days?.[date],recipe=day?.recipes?.[slot]
+      if(!recipe||recipeImageBasis(recipe)!==recipeImageBasis(expectedMeal))throw Object.assign(Error('This meal changed while its image was generated. Open the updated meal and try again.'),{code:'VERSION_CONFLICT'})
+      if(onlyIfMissing&&recipe.image)return {image:recipe.image}
+      const next={...schedule,version:Number(schedule.version||0)+1,updatedAt:now().toISOString(),updatedBy:actor,days:{...schedule.days,[date]:{...day,recipes:{...day.recipes,[slot]:{...recipe,image,imageGenerated:true}}}}}
+      const written=await store.setJSON(key,next,{onlyIfMatch:entry.etag})
+      if(written?.modified!==false)return {image}
+    }
+    throw Object.assign(Error('The calendar changed. Generate the image again from the updated meal.'),{code:'VERSION_CONFLICT'})
+  }
+
   const setMealPreferences = async ({mealId,preferences,actor='Household member'}) => {
     let patch
     try { patch=normalizeMealPreferences(preferences) } catch(error) { error.code='VALIDATION_ERROR';throw error }
@@ -222,7 +247,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
-  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, createMeals, setMealPreferences, importPlanToEat, setMealImage, substitute }
+  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, createMeals, getScheduledMeal, setScheduledMealImage, setMealPreferences, importPlanToEat, setMealImage, substitute }
 }
 
 export async function productionMealPlanRepository(options = {}) {

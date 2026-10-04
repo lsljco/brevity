@@ -1760,3 +1760,31 @@ test('Meal Library previews CSV imports and saves favorite and seasonal filters 
  await expect(page.getByRole('dialog')).toContainText('0 new · 1 duplicates skipped')
  expect(writes.filter(body=>body.action==='preferences')).toHaveLength(3)
 })
+
+test('empty snack slots offer an optional library choice for the selected date',async({page})=>{
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ const day=page.locator('.meal-calendar-day').first()
+ await expect(day).toContainText('Optional — none added')
+ await day.getByRole('button',{name:'Add snack',exact:true}).first().click()
+ const picker=page.getByRole('dialog',{name:'Add snack'})
+ await expect(picker).toBeVisible()
+ await expect(picker.getByRole('searchbox',{name:'Search Meal Library'})).toBeVisible()
+ await expect(picker.getByRole('button',{name:'Swap to Eggs and Toast'})).toBeVisible()
+})
+
+test('saved a la carte meals can generate a photo from their dated recipe',async({page})=>{
+ const date=dateKey(),id=`scheduled-${date}-dinner`
+ let image='',requested
+ const recipe={id,name:'Steak à la carte',mealType:'dinner',ingredients:['6 ounces cooked steak','1 cup cooked broccoli'],instructions:['Cook and portion.'],serving:'1 person',yieldQuantity:1,macros:{calories:450,proteinGrams:40,carbohydrateGrams:12,fatGrams:25}}
+ await page.route('**/.netlify/functions/meal-plans*',route=>{const response=mealPlanResponse();response.days[0].resolvedMeals.dinner={...recipe,image};response.days[0].recipes={dinner:{...recipe,image}};return route.fulfill({json:response})})
+ await page.route('**/.netlify/functions/meal-image-generate-background',route=>{const body=route.request().postDataJSON();if(body.mealId!==id)return route.fallback();requested=body;image='/meal-images/dinner-01.webp';return route.fulfill({status:202,body:''})})
+ await page.route('**/.netlify/functions/meal-image-job-status?*',route=>requested&&new URL(route.request().url()).searchParams.get('jobId')===requested.jobId?route.fulfill({json:{state:'ready',meal:{...recipe,image}}}):route.fallback())
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ await page.getByRole('button',{name:'View Steak à la carte details'}).click()
+ const dialog=page.getByRole('dialog',{name:'Steak à la carte'})
+ await dialog.getByRole('button',{name:'Generate Image',exact:true}).click()
+ await expect(dialog.getByRole('button',{name:'Generate New Image',exact:true})).toBeVisible({timeout:15000})
+ expect(requested.mealId).toBe(id)
+ await expect(dialog.getByRole('img',{name:'Steak à la carte'})).toHaveAttribute('src',image)
+ await expect(dialog.getByRole('button',{name:'Swap meal',exact:true})).toBeVisible()
+})

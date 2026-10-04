@@ -56,13 +56,16 @@ export function automaticMeals(date,library=MEAL_LIBRARY){
   cycles.set(library,cycle)
  }
  const number=Math.floor(Date.parse(`${date}T00:00:00Z`)/86400000)
- return {...cycle[((number%42)+42)%42],snack1:library.find(m=>m.id==='snack-premier-chocolate'),snack2:library.find(m=>m.id==='snack-envy-apple')}
+ return {...cycle[((number%42)+42)%42],snack1:null,snack2:null}
 }
 export function scaleIngredient(line,factor){const p=parseGroceryIngredient(line);return p.amount==null?line:`${Number((p.amount*factor).toFixed(3))} ${p.unit?`${p.unit} `:''}${p.name}`}
 export function householdIngredients(meal,servings=6){return (meal?.ingredients||[]).map(line=>scaleIngredient(line,servings/(Number(meal.yieldQuantity)||1)))}
 export function effectiveMealDay(day,schedule){
  const override=schedule?.days?.[day.date]
- return override?{...day,...override,date:day.date,scheduleEdited:true}:day
+ if(!override)return day
+ const merged={...day,...override,date:day.date,scheduleEdited:true,meals:{...override.meals}}
+ for(const slot of ['snack1','snack2'])if(!override.substitutions?.[slot]&&!override.recipes?.[slot])merged.meals[slot]=day.substitutions?.[slot]?day.meals?.[slot]:null
+ return merged
 }
 export function scheduleSlot(day,slot){return {mealId:day.meals?.[slot]||null,servings:day.servings?.[slot]??6,recipe:day.recipes?.[slot]||null}}
 export function assignScheduleSlot(day,slot,value){return {...day,meals:{...day.meals,[slot]:value.mealId},servings:{...day.servings,[slot]:value.servings},recipes:{...day.recipes,[slot]:value.recipe},substitutions:{...day.substitutions,[slot]:{customized:true}}}}

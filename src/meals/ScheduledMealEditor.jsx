@@ -27,6 +27,6 @@ export default function ScheduledMealEditor({selection,library,onClose,onReview,
  {containsSeafood({name,ingredients})&&<p role="alert">This meal contains seafood. It is excluded from automatic plans because of household allergies. Only continue if this is a deliberate selection.</p>}
  <button type="button" disabled={!ingredients.length||ingredients.some(line=>!line.trim())} onClick={calculate}>{calculating?'Calculating…':'Calculate nutrition'}</button>
  {macros&&<p>{dirty?'Needs recalculation · ':''}Per person: {macros.calories} cal · {macros.proteinGrams}g protein · {macros.carbohydrateGrams}g carbs · {macros.fatGrams}g fat</p>}
- <h3>Prepare for {people||6} people</h3><ul>{householdIngredients({ingredients,yieldQuantity:1},Number(people)||6).map((line,i)=><li key={i}>{line}</li>)}</ul>
+ <p>After saving this à la carte meal, open Recipe and choose Generate Image to create a photo from these exact ingredients and portions.</p><h3>Prepare for {people||6} people</h3><ul>{householdIngredients({ingredients,yieldQuantity:1},Number(people)||6).map((line,i)=><li key={i}>{line}</li>)}</ul>
  </fieldset>{error&&<p role="alert">{error}</p>}</div><footer><button type="button" disabled={working} onClick={onClose}>Cancel</button><button className="is-primary" disabled={working||dirty||!macros||!ingredients.length} type="submit">Review changes</button></footer></form></section></div>
 }

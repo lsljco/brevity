@@ -6,7 +6,7 @@ export const MEAL_PLAN_SCHEMA_VERSION = 1
 export const DEFAULT_MEAL_TIME_ZONE = 'America/New_York'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const isCustomMealId = mealId => /^custom-(breakfast|lunch|dinner|snack1|snack2)-[a-zA-Z0-9-]+$/.test(String(mealId || ''))
+const isCustomMealId = mealId => /^custom-(breakfast|lunch|dinner|snack1|snack2|meal|side|ingredient|plantoeat)-[a-zA-Z0-9-]+$/.test(String(mealId || ''))
 const libraryIndex = library => new Map((Array.isArray(library) ? library : MEAL_LIBRARY).map(meal => [meal.id, meal]))
 
 export function validMealDate(value) {
@@ -50,7 +50,7 @@ export function createRollingMealDay(date, context = {}) {
     schemaVersion: MEAL_PLAN_SCHEMA_VERSION,
     version: 1,
     date,
-    meals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, rotatingMealForDate(date, mealType).id])),
+    meals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, rotatingMealForDate(date, mealType)?.id||null])),
     substitutions: {},
     generatedBy: 'brevity-rolling-meal-plan',
     createdAt: now,
@@ -60,7 +60,7 @@ export function createRollingMealDay(date, context = {}) {
   }
 }
 
-export const mealIdsForDay = day => ({ snack1:'snack-premier-chocolate', snack2:'snack-envy-apple', ...(day?.meals || {}) })
+export const mealIdsForDay = day => ({ snack1:null, snack2:null, ...(day?.meals || {}) })
 
 export function resolveMealDay(day, library = MEAL_LIBRARY) {
   const byId = libraryIndex(library)
