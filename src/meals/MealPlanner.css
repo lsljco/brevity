@@ -205,3 +205,9 @@
 .meal-edit-fields button:disabled,.meal-edit-dialog form>footer button:disabled{opacity:.5;cursor:not-allowed}
 .meal-edit-dialog form>.meal-nutrition-error{flex:0 0 auto;margin:0;padding:8px 24px}
 @media(max-width:600px){.meal-edit-dialog{height:96vh;height:96dvh;max-height:96dvh}.meal-edit-dialog>header{padding:14px 16px}.meal-edit-dialog form>footer{padding:12px;gap:8px}.meal-edit-dialog form>footer button{flex:1;padding:10px 8px}}
+
+.meal-swap-dialog{width:min(1100px,96vw);max-height:90vh;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden}
+.meal-swap-dialog>header{flex-shrink:0}
+.meal-swap-library{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px}
+.meal-swap-library .meal-card-action[aria-disabled="true"]{opacity:.55;cursor:wait}
+.meal-swap-library .meal-library-view{display:block;padding:10px;border:1px solid var(--gold,#c1a365);border-radius:8px;text-align:center}

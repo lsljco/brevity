@@ -121,7 +121,7 @@ test('meal cards open an accessible ingredient and recipe detail dialog', () => 
   assert.match(source,/function MealDetailDialog/)
   assert.match(source,/Ingredients/)
   assert.match(source,/Recipe/)
-  assert.match(source,/View ingredients &amp; recipe/)
+  assert.match(source,/View ingredients &(?:amp;)? recipe/)
   assert.match(source,/role="dialog" aria-modal="true" aria-labelledby="meal-detail-title"/)
   assert.match(source,/Generate New Image/)
   assert.match(source,/Upload Image/)
