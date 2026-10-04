@@ -81,13 +81,22 @@ export async function uploadMealImage(mealId,file) {
   })
 }
 
-export function calculateMealNutrition(ingredients, yieldQuantity, yieldUnit) {
-  return request('/.netlify/functions/meal-nutrition', {
-    timeoutMs: 45000,
-    method:'POST',
-    headers:{'content-type':'application/json'},
-    body:JSON.stringify({ ingredients, yieldQuantity, yieldUnit }),
+export async function calculateMealNutrition(ingredients, yieldQuantity, yieldUnit) {
+  const jobId=globalThis.crypto.randomUUID()
+  await request('/.netlify/functions/meal-nutrition-background', {
+    timeoutMs:15000, method:'POST', headers:{'content-type':'application/json'},
+    body:JSON.stringify({jobId,ingredients,yieldQuantity,yieldUnit}),
   })
+  const deadline=Date.now()+180000
+  while(Date.now()<deadline){
+    await new Promise(resolve=>setTimeout(resolve,1500))
+    let job
+    try{job=await request(`/.netlify/functions/meal-nutrition-job-status?jobId=${encodeURIComponent(jobId)}`,{timeoutMs:10000})}
+    catch(error){if(error.name==='AbortError'||error instanceof TypeError||error.status>=500)continue;throw error}
+    if(job.state==='ready')return {nutrition:job.nutrition}
+    if(job.state==='error')throw new Error(job.error||'Nutrition calculation failed. Your recipe is still here; please try again.')
+  }
+  throw new Error('Nutrition calculation is taking longer than expected. Your recipe is still here; please try calculating again.')
 }
 
 export function importRecipeFromUrl(url) {
