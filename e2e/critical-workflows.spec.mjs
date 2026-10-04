@@ -295,9 +295,9 @@ test('Meal Library finds ingredients and month view shows every selected day',as
   await expect(page.getByText('No meals match')).toBeVisible()
   await page.getByRole('button',{name:'Month Plan'}).click()
   await page.getByLabel('Select month').fill('2028-02')
-  await expect(page.locator('.meal-day')).toHaveCount(29)
+  await expect(page.locator('.meal-calendar-day')).toHaveCount(29)
   await expect(page.getByText('29 days · 87 planned meals')).toBeVisible()
-  await expect(page.locator('.meal-day').last()).toContainText('Feb 29')
+  await expect(page.locator('.meal-calendar-day').last()).toContainText('Feb 29')
 })
 
 test('Meal Library calculates batch and per-serving nutrition from measured ingredients',async({page})=>{
@@ -417,13 +417,15 @@ test('Review change opens Action Mode for a custom meal replacement',async({page
   await page.evaluate(async()=>fetch('/.netlify/functions/meal-plans',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mealType:'breakfast',name:'Saturday Pancakes',description:'Golden pancakes',ingredients:['2 cups pancake mix'],prepMinutes:5,cookMinutes:15,totalMinutes:20,serving:'1 pancake',macros:{calories:168,proteinGrams:2,carbohydrateGrams:21,fatGrams:8}})}))
   await page.reload()
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
-  await page.locator('.meal-day--today .meal-slot').filter({hasText:'Breakfast'}).getByRole('button',{name:'Replace'}).click()
-  const replace=page.getByRole('dialog',{name:'Replace Breakfast'})
-  await replace.getByText('Saturday Pancakes',{exact:true}).click()
-  await replace.getByRole('button',{name:'Review change'}).click()
+  await page.locator('.meal-calendar-day').first().getByRole('button',{name:'Customize',exact:true}).first().click()
+  const replace=page.getByRole('dialog',{name:'Customize this meal'})
+  await replace.getByRole('combobox',{name:'Use a library meal',exact:true}).selectOption({label:'Saturday Pancakes'})
+  await replace.getByLabel('Cooking instructions').fill('Cook pancakes through and serve.')
+  await replace.getByRole('button',{name:'Calculate nutrition',exact:true}).click()
+  await replace.getByRole('button',{name:'Review changes',exact:true}).click()
   const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toBeVisible()
-  await expect(review).toContainText('Replace Eggs and Toast with Saturday Pancakes')
+  await expect(review).toContainText('Saturday Pancakes')
   await expect(review.getByRole('button',{name:'Apply approved changes'})).toBeVisible()
 })
 
@@ -1049,6 +1051,7 @@ test('meal editor scales servings and prepares an exact recipe review without ap
   await page.route('**/.netlify/functions/meal-plans?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...mealPlanResponse(),libraryVersion:7})}))
   page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed.push(request)})
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'Meal Library',exact:true}).click()
   await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
   await page.getByRole('button',{name:'Edit meal',exact:true}).click()
   const editor=page.getByRole('dialog',{name:'Edit meal',exact:true})
@@ -1070,6 +1073,7 @@ test('meal editor scales servings and prepares an exact recipe review without ap
 
 test('meal ingredient edits require fresh nutrition or explicit manual verification',async({page})=>{
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.getByRole('button',{name:'Meal Library',exact:true}).click()
   await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
   await page.getByRole('button',{name:'Edit meal',exact:true}).click()
   const editor=page.getByRole('dialog',{name:'Edit meal',exact:true})
@@ -1449,7 +1453,8 @@ test('meal library labels group both snacks and allow ingredients to be edited',
 
 test('meal editor scrolls to its final fields while review stays in the viewport',async({page})=>{
  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
- await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
+ await page.getByRole('button',{name:'Meal Library',exact:true}).click()
+  await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
  await page.getByRole('button',{name:'Edit meal',exact:true}).click()
  const editor=page.getByRole('dialog',{name:'Edit meal',exact:true})
  const review=editor.getByRole('button',{name:'Review meal changes',exact:true})

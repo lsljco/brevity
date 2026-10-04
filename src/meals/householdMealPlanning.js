@@ -8,11 +8,11 @@ const seafood=/\b(salmon|whiting|catfish|fish|seafood|shrimp|prawn|crab|lobster|
 export const containsSeafood=meal=>seafood.test(textOf(meal))
 export function automaticMealAllowed(meal){
  const text=textOf(meal)
- return !containsSeafood(meal)&&!(/quinoa|brussels? sprouts?|tofu|ground turkey|turkey (?:patty|patties|bacon|meatball)|raw |smoked salmon|salad|cucumber|smoothie|overnight|yogurt|cottage cheese|ricotta|chia pudding/.test(text))
+ return !containsSeafood(meal)&&!(/quinoa|brussels? sprouts?|tofu|ground turkey|turkey (?:patty|patties|bacon|meatball)|turkey sausage|minced turkey|tartare|carpaccio|ceviche|sashimi|sushi|poke bowl|raw |smoked salmon|salad|cucumber|smoothie|overnight|yogurt|cottage cheese|ricotta|chia pudding/.test(text))
 }
 const vegetables=['broccoli','asparagus','green beans','spinach','kale','cauliflower','cabbage','carrot','zucchini','yellow squash','bell pepper','collard greens','okra','sweet potato','mushroom','tomato','corn','romaine','cucumber','potato','onion','eggplant','peas','beet','turnip','pumpkin']
 export function mealVariety(meal){
- const text=textOf(meal)
+ const text=textOf(meal?.ingredients?.length?{ingredients:meal.ingredients}:meal)
  const veg=vegetables.filter(name=>new RegExp(name.replace(/ /g,'[ -]')).test(text))
  const meats=[]
  for(const [kind,pattern] of Object.entries({chicken:/chicken/,turkey:/turkey/,pork:/pork/,beef:/beef|steak|sirloin/,lamb:/lamb/}))if(pattern.test(text)){
