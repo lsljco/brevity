@@ -14,21 +14,22 @@ export function parseGroceryIngredient(line){
  if(!name||/^[–-]|^to\s/.test(name))return {name:text,amount:null,unit:''}
  return {name,amount,unit}
 }
-export function proposeWeeklyGroceries(days,servings=1){
+export function proposeWeeklyGroceries(days,servings=6){
  if(!Number.isFinite(servings)||servings<=0||servings>100)throw Error('Choose between 0 and 100 servings per meal.')
  const grouped=new Map(),missing=[]
  for(const day of days||[])for(const [slot,meal] of Object.entries(day.resolvedMeals||{})){
   if(!meal){missing.push(`${day.date}: ${slot} has no saved meal.`);continue}
+  const people=Number(day.servings?.[slot]??servings)
   const lines=meal.ingredients?.filter(Boolean)||[]
   const servingOnly=lines.length===1&&lines[0]===meal.serving
-  const ingredients=servingOnly?[`${servings} ${meal.name} — ${meal.serving} each`]:lines
+  const ingredients=servingOnly?[`${people} ${meal.name} — ${meal.serving} each`]:lines
   if(!ingredients.length){missing.push(`${day.date}: ${meal.name} has no ingredient list.`);continue}
   const yieldQuantity=Number(meal.yieldQuantity)||1
   for(const line of ingredients){
    const parsed=parseGroceryIngredient(line),groupKey=key(`${parsed.name}|${parsed.unit}`)
    const row=grouped.get(groupKey)||{id:groupKey,name:parsed.name,unit:parsed.unit,amount:0,unmeasured:false,sources:[],category:'Food & Pantry',selected:false}
    if(parsed.amount==null)row.unmeasured=true
-   else row.amount+=parsed.amount*(servingOnly?1:servings/yieldQuantity)
+   else row.amount+=parsed.amount*(servingOnly?1:people/yieldQuantity)
    const source=`${day.date} · ${meal.name}`
    if(!row.sources.includes(source))row.sources.push(source)
    grouped.set(groupKey,row)

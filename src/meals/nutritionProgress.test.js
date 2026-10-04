@@ -33,7 +33,7 @@ test('planned options fit the saved remainder and are never represented as consu
     dinner:{name:'Fish plate',macros:{calories:650,proteinGrams:55,carbohydrateGrams:35,fatGrams:22}},
   }}
   const options=suggestPlannedMeals(progress,{days:[day]},'2026-09-28')
-  assert.deepEqual(options.map(option=>option.name),['Fish plate','Chicken plate'])
+  assert.deepEqual(options.map(option=>option.name),['Chicken plate'])
   assert.match(options[0].notice,/not recorded as eaten/)
   assert.deepEqual(suggestPlannedMeals(progress,{days:[day]},'2026-09-27'),[])
 })

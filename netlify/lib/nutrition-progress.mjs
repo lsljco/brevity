@@ -1,3 +1,4 @@
+import {automaticMealAllowed} from '../../src/meals/householdMealPlanning.js'
 import { NUTRIENTS } from './nutrition-ledger.mjs'
 
 const round=value=>Number(value.toFixed(1))
@@ -28,7 +29,7 @@ export function suggestPlannedMeals(progress,mealWindow,date) {
   const remaining=progress?.nutrients||{}
   const options=Object.entries(day.meals||{}).flatMap(([mealType,meal])=>{
     const macros=meal?.macros
-    if(!meal?.name||!macros||!['calories','proteinGrams','carbohydrateGrams','fatGrams'].every(key=>Number.isFinite(Number(macros[key]))&&Number(macros[key])>=0))return []
+    if(!meal?.name||!macros||!automaticMealAllowed(meal)||!['calories','proteinGrams','carbohydrateGrams','fatGrams'].every(key=>Number.isFinite(Number(macros[key]))&&Number(macros[key])>=0))return []
     const calories=Number(macros.calories),protein=Number(macros.proteinGrams)
     if(remaining.calories?.target!=null&&calories>remaining.calories.remaining)return []
     if(remaining.fatGrams?.target!=null&&Number(macros.fatGrams)>remaining.fatGrams.remaining)return []

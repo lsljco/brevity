@@ -1,3 +1,4 @@
+import {effectiveMealDay,refreshAutomaticDay} from '../../src/meals/householdMealPlanning.js'
 import { normalizeMealInput, safeSegment, safeText } from './meal-input.mjs'
 import {resolvedRecipes} from './recipe-library-actions.mjs'
 import { randomUUID } from 'node:crypto'
@@ -84,9 +85,10 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
 
   const buildWindow = async ({ startDate, count, readOnly }) => {
     const dates = rollingMealDates(startDate, count)
-    const [libraryState, days] = await Promise.all([
+    const [libraryState, days, schedule] = await Promise.all([
       getLibrary(),
       Promise.all(dates.map(async date => readOnly ? (await getDay(date)) || createDay(date) : ensureDay(date))),
+      store.get(`${household}/schedule`,{type:'json'}),
     ])
     const viewLibrary = libraryState.library.map(meal => {
       if (meal.image || meal.tags?.includes('snack')) return meal
@@ -97,7 +99,8 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       householdId,
       timeZone,
       startDate,
-      days: days.map(day => resolveMealDay(day, viewLibrary)),
+      days: days.map(day => resolveMealDay(effectiveMealDay(refreshAutomaticDay(day,libraryState.library),schedule), viewLibrary)),
+      scheduleVersion:Number(schedule?.version||0),
       library: viewLibrary,
       libraryVersion:Number(libraryState.entry.data?.version||0),
       librarySummary: mealLibrarySummary(viewLibrary),

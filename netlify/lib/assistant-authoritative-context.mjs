@@ -53,6 +53,7 @@ const compactMealDay = day => ({
   date: day.date,
   version: day.version,
   updatedAt: day.updatedAt,
+  servings:day.servings||{},
   meals: Object.fromEntries(Object.entries(day.resolvedMeals || {}).map(([mealType, meal]) => [mealType, {
     id: meal?.id,
     name: meal?.name,
@@ -61,6 +62,8 @@ const compactMealDay = day => ({
     macroBasis: meal?.nutritionBasis || meal?.macroBasis,
     serving: meal?.serving,
     ingredients: meal?.ingredients,
+    yieldQuantity:meal?.yieldQuantity||1,
+    instructions:meal?.instructions,
   }])),
 })
 
@@ -160,6 +163,7 @@ export async function buildAuthoritativeAssistantContext({
     rollingMealPlan: mealWindow ? {
       timeZone: mealWindow.timeZone,
       startDate: mealWindow.startDate,
+      scheduleVersion:mealWindow.scheduleVersion,
       days: mealDays,
       nutritionNotice: 'Meal macros are estimates based on the saved meal definition and should not be treated as clinical nutrition calculations.',
     } : null,

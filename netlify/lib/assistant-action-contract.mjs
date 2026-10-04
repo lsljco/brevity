@@ -1,3 +1,4 @@
+import {normalizeMealScheduleCommand,MEAL_SCHEDULE_RESOURCE} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { normalizeReconciliationEvidence } from '../../src/finance/autoReconciliation.js'
 import {normalizeRecipeEdit} from '../../src/meals/recipeEdit.js'
@@ -80,6 +81,7 @@ export const ACTION_TYPES = {
   'meal.recipe.create':'planning',
   'meal.recipe.update':'planning',
   'meal.substitute': 'planning',
+  'meal.schedule.update':'planning',
   'nutrition.meal.log': 'planning',
   'nutrition.meal.update': 'planning',
   'nutrition.meal.remove': 'planning',
@@ -149,6 +151,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meal.recipe.create':['name','mealType','estimateJson'],
   'meal.recipe.update':['name','estimateJson','recipeJson'],
   'meal.substitute': ['mealType', 'mealId'],
+  'meal.schedule.update':['commandJson'],
   'nutrition.meal.log': ['name', 'estimateJson'],
   'nutrition.meal.update': ['entryId', 'name', 'calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams', 'estimateJson', 'reason'],
   'nutrition.meal.remove': ['entryId', 'reason'],
@@ -206,6 +209,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
   if (operation.type === 'nutrition.meal.log') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type.startsWith('meal.recipe.')) return 'meal-library:recipes'
+  if(operation.type==='meal.schedule.update')return MEAL_SCHEDULE_RESOURCE
   if (operation.type === 'meal.substitute') return `meal:${operation.targetDate}`
   if (operation.type === 'sermon.activate') return 'sermon:active'
   const householdKey=householdResourceKeyForAction(operation.type)
@@ -313,7 +317,10 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='recurring.update'&&field==='reconciliation'){
+    if(type==='meal.schedule.update'&&field==='commandJson'){
+      if(typeof value!=='string'||value.length>30000)throw Error('The meal calendar change is too large.');
+      normalized.commandJson=JSON.stringify(normalizeMealScheduleCommand(value))
+    }else if(type==='recurring.update'&&field==='reconciliation'){
       normalized.reconciliation=normalizeReconciliationEvidence(value)
     }else if(type==='meeting.session.create'&&field==='actions'){
       normalized.actions=normalizeMeetingSessionActions(value)
@@ -620,6 +627,7 @@ export function normalizeActionOperation(input = {}) {
   }
   if(type==='meal.recipe.create'&&(!payload.name||!MEAL_TYPES.includes(payload.mealType)||!payload.estimateJson||operation.targetId||operation.targetDate))throw new Error('A new library recipe requires a title, meal category and verified nutrition, without a dated consumption target.')
   if(type==='meal.recipe.update'&&(!operation.targetId||!payload.name))throw new Error('A recipe update requires its exact saved recipe and title.')
+  if(type==='meal.schedule.update'&&(operation.targetId!=='household-meal-calendar'||!payload.commandJson||JSON.parse(payload.commandJson).date!==operation.targetDate))throw Error('The meal calendar action needs its exact starting date.')
   if(type==='meal.substitute'){
     if(!MEAL_TYPES.includes(payload.mealType))throw new Error('Choose a meal or snack slot for the substitution.')
     const meal=MEALS_BY_ID.get(payload.mealId)
@@ -693,6 +701,7 @@ export function permissionForOperation({ operation, member, role, permissions, c
 
   if(operation.type==='member.preference.set')return operation.targetId===member?{allowed:true}:{allowed:false,reason:'Members can change only their own preferences.'}
   if(operation.type.startsWith('improvement.'))return improvementPermission({operation,member,role,permissions,currentRecord})
+  if(operation.type==='meal.schedule.update')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'planning actions are not enabled for this member.'}
   if(operation.type==='meal.recipe.create')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'Recipe creation requires household planning access.'}
   if(operation.type==='meal.recipe.update')return currentRecord&&(role==='admin'||permissions?.planning)?{allowed:true}:{allowed:false,reason:'Recipe changes require an existing recipe and household planning access.'}
   if(operation.type==='nutrition.meal.log' && operation.targetId!==member)return {allowed:false,reason:'Members can log only their own meals.'}

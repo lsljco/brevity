@@ -1,3 +1,4 @@
+import {captureExpectedVersions} from '../lib/assistant-action-executor.mjs'
 import { mealIdsForDay } from '../../src/meals/mealPlanData.js'
 import {projectCalendarEvent} from '../../src/homehq/projectData.js'
 import {VENDOR_TYPES} from '../../src/finance/vendorModel.js'
@@ -235,7 +236,7 @@ export async function prepareRepeatMealProposal({input,session,permissions,repos
   return proposal
 }
 
-const DIRECT_REVIEW_TYPES=new Set(['apple.sources.update',...VENDOR_TYPES,'meal.recipe.update','nutrition.meal.update','nutrition.meal.remove','nutrition.targets.update','household.intelligence.config.update','debt.create','debt.update','debt.delete','debt.transaction.apply','decision.create','decision.update','assignment.create','assignment.update','plan.overview.update','plan.pillar.update','plan.alignment.update','plan.recap.update','household.schedule.block.create','household.schedule.block.update','household.schedule.block.delete','household.schedule.invitation.update','household.schedule.routine.create','household.schedule.routine.update','household.schedule.routine.delete','household.schedule.occurrence.update','household.maintenance.coverage.update','household.maintenance.exception.update','household.maintenance.completion.update','household.maintenance.chore.create','household.maintenance.chore.update','household.maintenance.chore.delete','household.inventory.item.create','household.inventory.quantity.update','household.inventory.waste.create','project.create','project.update','project.delete','transaction.update','transaction.rule.create','transaction.rule.delete','meeting.action.create','meeting.action.update','meeting.correction.create','meeting.correction.update','meeting.session.create','meeting.workspace.update','meeting.history.update','budget.update','forecast.update','finance.account.link','recurring.create','recurring.update','recurring.delete'])
+const DIRECT_REVIEW_TYPES=new Set(['meal.schedule.update','apple.sources.update',...VENDOR_TYPES,'meal.recipe.update','nutrition.meal.update','nutrition.meal.remove','nutrition.targets.update','household.intelligence.config.update','debt.create','debt.update','debt.delete','debt.transaction.apply','decision.create','decision.update','assignment.create','assignment.update','plan.overview.update','plan.pillar.update','plan.alignment.update','plan.recap.update','household.schedule.block.create','household.schedule.block.update','household.schedule.block.delete','household.schedule.invitation.update','household.schedule.routine.create','household.schedule.routine.update','household.schedule.routine.delete','household.schedule.occurrence.update','household.maintenance.coverage.update','household.maintenance.exception.update','household.maintenance.completion.update','household.maintenance.chore.create','household.maintenance.chore.update','household.maintenance.chore.delete','household.inventory.item.create','household.inventory.quantity.update','household.inventory.waste.create','project.create','project.update','project.delete','transaction.update','transaction.rule.create','transaction.rule.delete','meeting.action.create','meeting.action.update','meeting.correction.create','meeting.correction.update','meeting.session.create','meeting.workspace.update','meeting.history.update','budget.update','forecast.update','finance.account.link','recurring.create','recurring.update','recurring.delete'])
 export async function prepareDirectProposal({input,session,permissions,repository,resources,now=new Date(),id}) {
   const requested=Array.isArray(input?.operations)?input.operations:input?.operation?[input.operation]:[]
   if(!requested.length||requested.some(operation=>!DIRECT_REVIEW_TYPES.has(operation?.type))){
@@ -248,6 +249,10 @@ export async function prepareDirectProposal({input,session,permissions,repositor
   const resource=resourceForOperation(proposal.operations[0]),expectedVersion=Number(input.expectedVersion)
   if(proposal.operations.some(operation=>resourceForOperation(operation)!==resource))throw Object.assign(new Error('Each direct Action Mode review must change one versioned record group.'),{code:'INVALID_ACTION'})
   if(!Number.isInteger(expectedVersion)||expectedVersion<0)throw Object.assign(new Error('Refresh this record before reviewing the change.'),{code:'VERSION_CONFLICT'})
+  if(proposal.operations.some(operation=>operation.type==='meal.schedule.update')){
+    proposal=await captureExpectedVersions(proposal,resources)
+    if(proposal.expectedVersions[resource]!==expectedVersion)throw Object.assign(Error('The meal calendar changed. Refresh before review.'),{code:'VERSION_CONFLICT'})
+  }
   proposal={...proposal,expectedVersions:{[resource]:expectedVersion}}
   // This dry preparation validates the exact target and current permission
   // against the reviewed version without mutating anything.
