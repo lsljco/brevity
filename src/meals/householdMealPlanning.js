@@ -2,7 +2,7 @@ import {MEAL_LIBRARY} from './mealLibrary.js'
 import {parseGroceryIngredient} from '../household/groceryData.js'
 export const HOUSEHOLD_MEAL_SERVINGS=6
 export const MEAL_SCHEDULE_RESOURCE='meal-schedule:household'
-export const MEAL_POLICY_NOTICE='Automatic plans exclude all seafood, quinoa, Brussels sprouts, tofu, ground turkey, turkey patties and turkey bacon. Cooked meals only. Vegetable sides do not repeat today or tomorrow; exact meat cuts do not repeat within a day.'
+export const MEAL_POLICY_NOTICE='Automatic plans exclude all seafood, quinoa, Brussels sprouts, tofu, ground turkey, turkey patties and turkey bacon. Cooked meals only. Vegetable sides do not repeat today or tomorrow; exact meat cuts do not repeat within a day. Breakfast, lunch and dinner recipes are kept different within seven days wherever the eligible library allows.'
 const textOf=meal=>[meal?.name,meal?.description,...(meal?.ingredients||[])].join(' ').toLowerCase().replace(/[-–]/g,' ')
 const seafood=/\b(salmon|whiting|catfish|fish|seafood|shrimp|prawn|crab|lobster|scallop|clam|mussel|oyster|tuna|trout|cod|tilapia|grouper|mahi|anchov|sardine|surimi|bonito|dashi|squid|octopus|swordfish|haddock|halibut|pollock|sole|flounder|herring|mackerel|snapper|perch|bass|eel|crawfish|crayfish|langoustine|abalone|conch|roe|caviar)\w*\b/
 export const containsSeafood=meal=>seafood.test(textOf(meal))
@@ -21,6 +21,11 @@ export function mealVariety(meal){
  }
  return {vegetables:veg,meats}
 }
+const mainSlots=['breakfast','lunch','dinner']
+const recipeKey=meal=>String(meal?.name||meal?.id||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
+const mainMeals=menu=>mainSlots.map(slot=>menu?.[slot]).filter(Boolean)
+const recentRecipeKeys=menus=>new Set(menus.flatMap(mainMeals).map(recipeKey))
+const preferFresh=(meals,recent)=>meals.map((meal,index)=>({meal,index})).sort((a,b)=>Number(recent.has(recipeKey(a.meal)))-Number(recent.has(recipeKey(b.meal)))||a.index-b.index).map(item=>item.meal)
 const cycles=new WeakMap()
 export function automaticMeals(date,library=MEAL_LIBRARY){
  let cycle=cycles.get(library)
@@ -30,18 +35,20 @@ export function automaticMeals(date,library=MEAL_LIBRARY){
   for(let day=0;day<42;day++){
    const previous=new Set(Object.values(cycle.at(-1)||{}).flatMap(meal=>mealVariety(meal).vegetables))
    const boundary=new Set(day===41?Object.values(cycle[0]).flatMap(meal=>mealVariety(meal).vegetables):[])
-   const choose=(index,chosen,usedVeg,usedMeat)=>{
+   const recent=recentRecipeKeys([...cycle.slice(-6),...(day>=36?cycle.slice(0,day-35):[])])
+   const choose=(index,chosen,usedVeg,usedMeat,allowRepeats=false)=>{
     if(index===slots.length)return chosen
-    const slot=slots[index],candidates=pool[slot]
-    for(let i=0;i<candidates.length;i++){
-     const meal=candidates[(i+day*7+index*11)%candidates.length],traits=mealVariety(meal)
+    const slot=slots[index],candidates=preferFresh(pool[slot].map((_,i)=>pool[slot][(i+day*7+index*11)%pool[slot].length]),recent)
+    for(const meal of candidates){
+     if(!allowRepeats&&(recent.has(recipeKey(meal))||mainMeals(chosen).some(m=>recipeKey(m)===recipeKey(meal))))continue
+     const traits=mealVariety(meal)
      if(traits.vegetables.some(v=>previous.has(v)||boundary.has(v)||usedVeg.has(v))||traits.meats.some(m=>usedMeat.has(m)))continue
-     const result=choose(index+1,{...chosen,[slot]:meal},new Set([...usedVeg,...traits.vegetables]),new Set([...usedMeat,...traits.meats]))
+     const result=choose(index+1,{...chosen,[slot]:meal},new Set([...usedVeg,...traits.vegetables]),new Set([...usedMeat,...traits.meats]),allowRepeats)
      if(result)return result
     }
     return null
    }
-   const selected=choose(0,{},new Set(),new Set())
+   const selected=choose(0,{},new Set(),new Set())||choose(0,{},new Set(),new Set(),true)
    if(!selected)throw Error('The meal library needs more eligible cooked meals to satisfy household variety rules.')
    cycle.push(selected)
   }
@@ -92,8 +99,11 @@ export function refreshAutomaticDay(day,library=MEAL_LIBRARY){
  return {...day,meals:Object.fromEntries(Object.entries(automatic).map(([slot,meal])=>[slot,day.substitutions?.[slot]?day.meals?.[slot]:meal?.id||null]))}
 }
 export function mealPlanWarnings(days){
- const warnings=[];let previous=new Set()
- for(const day of days){const veg=new Set(),meats=new Set()
+ const warnings=[];let previous=new Set();const history=[]
+ for(const day of [...days].sort((a,b)=>a.date.localeCompare(b.date))){const veg=new Set(),meats=new Set()
+  const recent=recentRecipeKeys(history.filter(old=>Date.parse(day.date)-Date.parse(old.date)<7*86400000).map(old=>old.resolvedMeals))
+  for(const meal of mainMeals(day.resolvedMeals)){if(recent.has(recipeKey(meal)))warnings.push(`${day.date}: ${meal.name} repeats within seven days. Choose another eligible recipe for more variety.`);recent.add(recipeKey(meal))}
+  history.push(day)
   for(const meal of Object.values(day.resolvedMeals||{})){if(!meal)continue;const traits=mealVariety(meal)
    if(containsSeafood(meal))warnings.push(`${day.date}: ${meal.name} contains seafood; deliberate selection only.`)
    for(const v of traits.vegetables){if(veg.has(v)||previous.has(v))warnings.push(`${day.date}: ${v} repeats today or from yesterday.`);veg.add(v)}
@@ -101,18 +111,20 @@ export function mealPlanWarnings(days){
   }previous=veg
  }return [...new Set(warnings)]
 }
-export function generateSafeMealRange(dates,{previous,next,library=MEAL_LIBRARY}={}){
+export function generateSafeMealRange(dates,{previous,next,previousDays=previous?[previous]:[],nextDays=next?[next]:[],library=MEAL_LIBRARY}={}){
  const traits=day=>Object.values(day?.resolvedMeals||{}).flatMap(meal=>mealVariety(meal).vegetables)
  let blocked=new Set(traits(previous));const nextVeg=new Set(traits(next)),result={}
  for(const [index,date] of dates.entries()){
   const preferred=automaticMeals(date,library),slots=['breakfast','lunch','dinner']
-  const choose=(position,selected,veg,meat)=>{
+  const nearby=[...previousDays,...nextDays,...Object.entries(result).map(([date,resolvedMeals])=>({date,resolvedMeals}))].filter(day=>Math.abs(Date.parse(day.date)-Date.parse(date))<7*86400000)
+  const recent=recentRecipeKeys(nearby.map(day=>day.resolvedMeals))
+  const choose=(position,selected,veg,meat,allowRepeats=false)=>{
    if(position===slots.length)return selected
-   const slot=slots[position],pool=[preferred[slot],...library.filter(m=>m.mealType===slot&&m.id!==preferred[slot].id&&automaticMealAllowed(m))]
-   for(const meal of pool){const t=mealVariety(meal);if(t.vegetables.some(v=>blocked.has(v)||veg.has(v)||index===dates.length-1&&nextVeg.has(v))||t.meats.some(m=>meat.has(m)))continue;const found=choose(position+1,{...selected,[slot]:meal},new Set([...veg,...t.vegetables]),new Set([...meat,...t.meats]));if(found)return found}
+   const slot=slots[position],pool=preferFresh([preferred[slot],...library.filter(m=>m.mealType===slot&&m.id!==preferred[slot].id&&automaticMealAllowed(m))],recent)
+   for(const meal of pool){if(!allowRepeats&&(recent.has(recipeKey(meal))||mainMeals(selected).some(m=>recipeKey(m)===recipeKey(meal))))continue;const t=mealVariety(meal);if(t.vegetables.some(v=>blocked.has(v)||veg.has(v)||index===dates.length-1&&nextVeg.has(v))||t.meats.some(m=>meat.has(m)))continue;const found=choose(position+1,{...selected,[slot]:meal},new Set([...veg,...t.vegetables]),new Set([...meat,...t.meats]),allowRepeats);if(found)return found}
    return null
   }
-  const chosen=choose(0,{},new Set(),new Set());if(!chosen)throw Error(`No eligible menu satisfies the neighboring days on ${date}. Adjust adjacent menus before auto-scheduling.`)
+  const chosen=choose(0,{},new Set(),new Set())||choose(0,{},new Set(),new Set(),true);if(!chosen)throw Error(`No eligible menu satisfies the neighboring days on ${date}. Adjust adjacent menus before auto-scheduling.`)
   result[date]={...preferred,...chosen};blocked=new Set(Object.values(chosen).flatMap(meal=>mealVariety(meal).vegetables))
  }
  return result

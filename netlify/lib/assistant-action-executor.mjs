@@ -739,9 +739,10 @@ export async function captureExpectedVersions(proposal, resources) {
       if(command.mealId&&!library.some(meal=>meal.id===command.mealId))throw Error('That saved recipe is no longer available.')
       for(const date of scheduleCommandDates(command)){const source=await resources.read(`meal:${date}`);days[date]=refreshAutomaticDay(command.kind==='generate'?createRollingMealDay(date):source.value,library);versions[`meal:${date}`]=source.version}
       if(command.kind==='generate'){
-        const dates=scheduleCommandDates(command),neighbors=[]
-        for(const date of [addMealDays(dates[0],-1),addMealDays(dates.at(-1),1)]){const source=await resources.read(`meal:${date}`);versions[`meal:${date}`]=source.version;neighbors.push(resolveMealDay(effectiveMealDay(refreshAutomaticDay(source.value,library),snapshots.get(resource).value),library))}
-        const generated=generateSafeMealRange(dates,{previous:neighbors[0],next:neighbors[1],library})
+        const dates=scheduleCommandDates(command)
+        const neighborDates=[...Array.from({length:6},(_,i)=>addMealDays(dates[0],-6+i)),...Array.from({length:6},(_,i)=>addMealDays(dates.at(-1),i+1))]
+        const neighbors=await Promise.all(neighborDates.map(async date=>{const source=await resources.read(`meal:${date}`);versions[`meal:${date}`]=source.version;return resolveMealDay(effectiveMealDay(refreshAutomaticDay(source.value,library),snapshots.get(resource).value),library)}))
+        const generated=generateSafeMealRange(dates,{previous:neighbors[5],next:neighbors[6],previousDays:neighbors.slice(0,6),nextDays:neighbors.slice(6),library})
         for(const date of dates)days[date]={...days[date],meals:Object.fromEntries(Object.entries(generated[date]).map(([slot,meal])=>[slot,meal?.id||null]))}
       }
       const after=applyMealScheduleCommand(snapshots.get(resource).value,command,days)

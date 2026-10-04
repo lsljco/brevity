@@ -79,3 +79,28 @@ test('monthly generation respects neighboring saved menus and presents all propo
  assert.deepEqual(mealPlanWarnings(all),[]);assert.equal(proposal.operations[0].mealReview.length,30)
  assert.ok(Object.hasOwn(proposal.operations[0].mealContext.versions,`meal:${next}`))
 })
+
+test('default automatic menus avoid recipe repeats in every rolling week across the cycle boundary',async()=>{
+ const {mealPlanWarnings}=await import('./householdMealPlanning.js')
+ const days=Array.from({length:400},(_,i)=>{const date=addMealDays('2026-10-01',i);return {date,resolvedMeals:automaticMeals(date)}})
+ assert.deepEqual(mealPlanWarnings(days).filter(w=>w.includes('within seven days')),[])
+})
+test('range scheduling considers six days on either side and excludes snacks from recipe variety',async()=>{
+ const {generateSafeMealRange,mealPlanWarnings}=await import('./householdMealPlanning.js')
+ const slots=['breakfast','lunch','dinner'],library=slots.flatMap(slot=>Array.from({length:20},(_,i)=>({id:`${slot}-${i}`,name:`Cooked ${slot} ${i}`,mealType:slot,ingredients:['1 cup oats']})))
+ const dates=Array.from({length:7},(_,i)=>addMealDays('2026-10-10',i))
+ const day=(date,i)=>({date,resolvedMeals:Object.fromEntries(slots.map(slot=>[slot,library.find(m=>m.id===`${slot}-${i}`)]))})
+ const previousDays=Array.from({length:6},(_,i)=>day(addMealDays(dates[0],i-6),i)),nextDays=Array.from({length:6},(_,i)=>day(addMealDays(dates.at(-1),i+1),i+7))
+ const menus=generateSafeMealRange(dates,{previous:previousDays.at(-1),next:nextDays[0],previousDays,nextDays,library})
+ assert.deepEqual(mealPlanWarnings([...previousDays,...dates.map(date=>({date,resolvedMeals:menus[date]})),...nextDays]).filter(w=>w.includes('within seven days')),[])
+ const snack={name:'Daily snack'}
+ assert.deepEqual(mealPlanWarnings(dates.map(date=>({date,resolvedMeals:{snack1:snack}}))),[])
+})
+test('a small eligible library repeats transparently without relaxing hard food constraints',async()=>{
+ const {generateSafeMealRange,mealPlanWarnings}=await import('./householdMealPlanning.js')
+ const library=['breakfast','lunch','dinner'].map(slot=>({id:slot,name:`Cooked ${slot}`,mealType:slot,ingredients:['1 cup oats']}))
+ library.push({id:'seafood',name:'Salmon',mealType:'dinner',ingredients:['6 oz salmon']})
+ const dates=Array.from({length:7},(_,i)=>addMealDays('2026-10-10',i)),menus=generateSafeMealRange(dates,{library})
+ for(const menu of Object.values(menus))for(const slot of ['breakfast','lunch','dinner'])assert.equal(menu[slot].id,slot)
+ assert.equal(mealPlanWarnings(dates.map(date=>({date,resolvedMeals:menus[date]}))).filter(w=>w.includes('within seven days')).length,18)
+})
