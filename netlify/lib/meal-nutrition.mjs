@@ -161,7 +161,7 @@ export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, ti
   if(request.conversational)request.productReferences=await retrieveNutritionReferences(request.productReferences,{referenceFetcher,referenceCache,onFailure:failure=>referenceFailures.push(failure)})
   const controller=new AbortController()
   const timeout=setTimeout(()=>controller.abort(),timeoutMs)
-  let response
+  let response, payload
   try{
     response=await fetcher('https://api.openai.com/v1/responses',{
       method:'POST',
@@ -174,11 +174,11 @@ export async function calculateMealNutrition(body, {fetcher=globalThis.fetch, ti
         text:{format:{type:'json_schema',name:'brevity_meal_nutrition',strict:true,schema:nutritionSchema}},
       }),
     })
+    payload=await response.json().catch(error=>{if(controller.signal.aborted)throw error;return {}})
   }catch(error){
-    if(error?.name==='AbortError')throw Object.assign(new Error('Nutrition calculation took too long. Please try again.'),{status:504})
+    if(controller.signal.aborted||error?.name==='AbortError')throw Object.assign(new Error('Nutrition calculation took too long. Please try again.'),{status:504})
     throw error
   }finally{clearTimeout(timeout)}
-  const payload=await response.json().catch(()=>({}))
   if(!response.ok)throw Object.assign(new Error(payload.error?.message||'Nutrition calculation failed.'),{status:response.status})
   let parsed
   try{parsed=JSON.parse(outputText(payload))}catch{throw Object.assign(new Error('Brevity returned an invalid nutrition calculation.'),{status:502})}

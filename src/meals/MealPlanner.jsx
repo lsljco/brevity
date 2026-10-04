@@ -6,7 +6,7 @@ import WeeklyGroceries from '../household/WeeklyGroceries.jsx'
 import {MEAL_CATEGORIES,mealCategory,mealCategoryLabel} from './mealCategories.js'
 import MealEditDialog from './MealEditDialog.jsx'
 import PackagedFoodForm from './PackagedFoodForm.jsx'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { searchMeals } from './mealSearch.js'
 import { mealMonthRange } from './mealMonth.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
@@ -115,21 +115,25 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
   const [nutrition,setNutrition]=useState(null)
   const [nutritionState,setNutritionState]=useState('idle')
   const [nutritionError,setNutritionError]=useState('')
+  const nutritionGeneration=useRef(0)
   const set = (field, value) => {
     setForm(current => ({ ...current, [field]:value }))
-    if(['ingredients','yieldQuantity','yieldUnit'].includes(field)&&!imageNutrition){setNutrition(null);setNutritionError('');setNutritionState('idle')}
+    if(['ingredients','yieldQuantity','yieldUnit'].includes(field)&&!imageNutrition){nutritionGeneration.current++;setNutrition(null);setNutritionError('');setNutritionState('idle')}
   }
   const ingredientLines=value=>(value??form.ingredients).split(/\r?\n/).map(line=>line.trim()).filter(Boolean)
   const calculateFor=async(ingredients,yieldQuantity,yieldUnit)=>{
+    const generation=++nutritionGeneration.current
     setNutritionState('loading');setNutritionError('')
     try{
       const result=await calculateMealNutrition(ingredients,Number(yieldQuantity),yieldUnit.trim())
+      if(generation!==nutritionGeneration.current)return false
       setNutrition(result.nutrition);setNutritionState('ready')
       return true
-    }catch(error){setNutrition(null);setNutritionError(error.message||'Could not calculate nutrition.');setNutritionState('error');return false}
+    }catch(error){if(generation!==nutritionGeneration.current)return false;setNutrition(null);setNutritionError(error.message||'Could not calculate nutrition.');setNutritionState('error');return false}
   }
   const calculate=()=>calculateFor(ingredientLines(),form.yieldQuantity,form.yieldUnit)
   const importFromWebsite=async()=>{
+    nutritionGeneration.current++
     setImportState('loading');setImportError('');setImportNotice('');setNutrition(null);setNutritionError('');setNutritionState('idle')
     try{
       const result=await importRecipeFromUrl(recipeUrl.trim())
@@ -160,6 +164,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
     }catch(error){setImportError(error.message||'Could not import that recipe.');setImportState('error')}
   }
   const chooseImageMeal=meal=>{
+    nutritionGeneration.current++
     setForm(current=>({...current,mealType:meal.mealType || current.mealType,name:meal.name,description:'',ingredients:meal.ingredients.join('\n'),instructions:'',prepMinutes:'',cookMinutes:'',totalMinutes:'',yieldQuantity:'1',yieldUnit:'plate',sourceUrl:'',sourceName:'Uploaded meal graphic'}))
     setImageWarnings(meal.warnings)
     const values=Object.values(meal.macros)
@@ -241,7 +246,7 @@ function AddMealDialog({ mealType, saving, error, onClose, onSave }) {
         <label><span>Total time (minutes) <small>optional override</small></span><input min="0" step="1" type="number" value={form.totalMinutes} onChange={event=>set('totalMinutes',event.target.value)} /></label>
         <label><span>Batch yield</span><input required min="0.1" max="500" step="0.1" type="number" value={form.yieldQuantity} onChange={event=>set('yieldQuantity',event.target.value)} placeholder="12" /></label>
         <label><span>Yield unit</span><input required value={form.yieldUnit} onChange={event=>set('yieldUnit',event.target.value)} placeholder="pancakes" /></label>
-        <div className="meal-nutrition-action meal-add-form--wide"><div><strong>{imageNutrition?'Nutrition printed in image':'Nutrition from ingredients'}</strong><span>{imageNutrition?'Confirm or correct the transcribed figures above. They are source estimates, not values calculated from ingredient quantities.':'Brevity totals the full batch, then divides it by the batch yield.'}</span></div><button type="button" onClick={()=>{setImageNutrition(false);calculate()}} disabled={saving||nutritionState==='loading'||!ingredientLines().length||!Number(form.yieldQuantity)||!form.yieldUnit.trim()}>{nutritionState==='loading'?'Calculating…':imageNutrition?'Calculate from measured ingredients':nutrition?'Recalculate nutrition':'Calculate nutrition'}</button></div>
+        <div className="meal-nutrition-action meal-add-form--wide"><div><strong>{imageNutrition?'Nutrition printed in image':'Nutrition from ingredients'}</strong><span>{nutritionState==='loading'?'Calculating nutrition for the full batch. Larger recipes may take a couple of minutes. Keep this window open.':imageNutrition?'Confirm or correct the transcribed figures above. They are source estimates, not values calculated from ingredient quantities.':'Brevity totals the full batch, then divides it by the batch yield.'}</span></div><button type="button" onClick={()=>{setImageNutrition(false);calculate()}} disabled={saving||nutritionState==='loading'||!ingredientLines().length||!Number(form.yieldQuantity)||!form.yieldUnit.trim()}>{nutritionState==='loading'?'Calculating…':imageNutrition?'Calculate from measured ingredients':nutrition?'Recalculate nutrition':'Calculate nutrition'}</button></div>
         {nutritionError&&<div className="meal-nutrition-error meal-add-form--wide" role="alert">{nutritionError}</div>}
         {nutrition&&<section className="meal-nutrition-preview meal-add-form--wide" aria-label="Calculated nutrition preview">
           <header><div><span>Calculated estimate</span><strong>Total batch and per {nutrition.serving}</strong></div></header>
