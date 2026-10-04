@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { fmtMoney } from './projection.js'
 import { bankActivityPreview, bankBalanceMovement, cashForecastSourceSeverity } from './calendarSemantics.js'
 import { isTransferTransaction } from './reportingData.js'
@@ -11,26 +11,29 @@ export function CashForecastIntro({ monthName, showBankActivity, error, freshnes
       <section className="finance-calendar-intro" aria-labelledby="cash-forecast-title">
         <p>Finance planning</p>
         <h1 id="cash-forecast-title">Cash Forecast</h1>
-        <span>
+        <p className="finance-calendar-simple-guide">Today shows your latest bank balance. Future dates show what may remain after scheduled income and bills. Scheduled items are plans, not proof of payment.</p>
+        {todayPlanUnresolved && <p className="finance-calendar-simple-guide">Some of today’s scheduled items have not been matched to bank activity. Future balances may change after those items are confirmed.</p>}
+        <details className="finance-calendar-explanation"><summary>How this forecast works</summary><span>
           Scheduled activity, reconstructed posted closes, and forward cash-balance projections for {monthName}.
           {showBankActivity ? ' Bank activity is shown separately from the plan.' : ' Turn on bank activity to compare posted and pending transactions with the plan.'}
           {excludedAccountCount ? ` ${excludedAccountCount} selected non-cash account${excludedAccountCount === 1 ? ' is' : 's are'} excluded; this forecast includes checking and savings only.` : ''}
           {unmappedTransactionCount ? ` Across all bank history, ${unmappedTransactionCount} transaction${unmappedTransactionCount === 1 ? ' is' : 's are'} not linked to one unique Brevity account and ${unmappedTransactionCount === 1 ? 'is' : 'are'} excluded from this forecast.` : ''}
           {` The balance anchor uses ${balanceSource}.`}
           {todayPlanUnresolved ? ` Today’s balance value is ${balanceVerifiedLive ? 'a live intraday bank snapshot' : 'the latest stored cash anchor, not a verified live bank reading'}. Because Brevity cannot yet prove which scheduled items have cleared, today’s plan is not automatically reapplied; future balances carry that uncertainty.` : ''}
-        </span>
+        </span></details>
       </section>
       {(error || freshnessMessage || balanceMessage || unmappedTransactionCount > 0) && (
         <div
           className={`finance-calendar-source-status finance-calendar-source-status--${sourceSeverity}`}
           role={sourceSeverity === 'error' ? 'alert' : 'status'}
         >
-          <span className="finance-calendar-source-status-label">
-            {sourceSeverity === 'error' ? 'Bank data error' : sourceSeverity === 'attention' ? 'Bank data notice' : 'Bank data status'}
-          </span>
+          <details><summary className="finance-calendar-source-status-label">
+            {sourceSeverity === 'error' ? 'Bank update failed — view details' : sourceSeverity === 'attention' ? 'Bank update needs attention — view details' : 'Bank update details'}
+          </summary>
           {balanceMessage && <span><strong>Balance anchor status:</strong> {balanceMessage}</span>}
           {(error || freshnessMessage) && <span><strong>Transaction snapshot status:</strong> {error || freshnessMessage} Bank activity below uses this exact-account snapshot; reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</span>}
           {unmappedTransactionCount > 0 && <span><strong>Excluded bank activity:</strong> Review unlinked rows in Finance › Transactions with all accounts selected.</span>}
+          </details>
         </div>
       )}
     </>
@@ -53,6 +56,7 @@ export default function CashForecastAgenda({
   hasCashAccounts = true,
   onSelectDay,
 }) {
+  const [showEarlier, setShowEarlier] = useState(false)
   const agendaRef = useRef(null)
   const pendingDetailFocusRef = useRef(false)
   const detailId = `cash-forecast-day-detail-${useId().replace(/:/g, '')}`
@@ -76,11 +80,15 @@ export default function CashForecastAgenda({
         pendingNet:bankBalanceMovement(pendingBank),
         postedBankCount:postedBank.length,
         pendingBankCount:pendingBank.length,
-        balance:reconstructedBalance !== undefined ? reconstructedBalance : point?.bal,
+        balance:reconstructedBalance !== undefined ? reconstructedBalance : key < todayKey ? undefined : point?.bal,
         balanceIsReconstructed:reconstructedBalance !== undefined,
       }
     })
     .filter(day => day.key === todayKey || day.key === selectedDay || day.planned.length > 0 || day.bank.length > 0)
+
+  const includesToday = days.some(day => day.key === todayKey)
+  const earlierCount = includesToday ? days.filter(day => day.key < todayKey).length : 0
+  const visibleDays = includesToday && !showEarlier ? days.filter(day => day.key >= todayKey || day.key === selectedDay) : days
 
   useEffect(() => {
     if (!selectedDay || !pendingDetailFocusRef.current || typeof window === 'undefined') return undefined
@@ -110,8 +118,9 @@ export default function CashForecastAgenda({
 
   return (
     <div ref={agendaRef} className="finance-calendar-mobile-agenda" aria-label={`${monthName} cash forecast agenda`}>
-      {days.length > 0 ? days.map(day => {
-        const plannedPreview = day.planned.map(tx=>`${tx.vendorName||'Unassigned'} · ${transactionDescription(tx)}`).filter(Boolean).slice(0, 2)
+      {earlierCount > 0 && <div className="finance-calendar-earlier"><button type="button" aria-expanded={showEarlier} onClick={() => setShowEarlier(value => !value)}>{showEarlier ? 'Hide' : 'Show'} earlier days ({earlierCount})</button></div>}
+      {visibleDays.length > 0 ? visibleDays.map(day => {
+        const plannedPreview = day.planned.slice(0, 3).map(tx => ({ label:tx.vendorName && tx.vendorName !== 'Unassigned' ? `${tx.vendorName} · ${transactionDescription(tx)}` : transactionDescription(tx), amount:Number(tx.amount || 0), direction:tx.type }))
         const namedBankTransactions = day.bank.filter(transaction => transactionDescription(transaction))
         const bankPreview = (vendorOrder?namedBankTransactions.slice(0,2):bankActivityPreview(namedBankTransactions)).map(transaction => {
           const label = transactionDescription(transaction)
@@ -122,14 +131,14 @@ export default function CashForecastAgenda({
         const dateLabel = new Date(`${day.key}T12:00:00`).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
         const plannedNetLabel = `${day.plannedNet >= 0 ? 'plus' : 'minus'} ${fmtMoney(Math.abs(day.plannedNet))}`
         const balanceKind = day.balanceIsReconstructed
-          ? 'Reconstructed posted close'
+          ? 'Balance from posted activity'
           : day.key < todayKey
-            ? 'Estimated historical cash balance'
+            ? 'Past balance unavailable'
             : day.key === todayKey
-              ? balanceVerifiedLive ? 'Current bank liquidity' : 'Latest stored cash balance'
+              ? balanceVerifiedLive ? 'Current bank balance' : 'Last saved bank balance'
               : todayPlanUnresolved
-                ? 'Projected balance with today unresolved'
-                : 'Projected cash balance'
+                ? 'Forecast balance · payments need confirmation'
+                : 'Forecast balance'
         const pendingSummary = day.pendingBankCount
           ? ` ${day.pendingBankCount} pending authorization${day.pendingBankCount === 1 ? '' : 's'}; pending movement ${day.pendingNet >= 0 ? 'plus' : 'minus'} ${fmtMoney(Math.abs(day.pendingNet))}, shown separately and not counted as posted.`
           : ''
@@ -152,24 +161,27 @@ export default function CashForecastAgenda({
           >
             <span className="finance-calendar-agenda-date">
               <strong>{new Date(`${day.key}T12:00:00`).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}</strong>
-              <small>{day.planned.length} planned item{day.planned.length === 1 ? '' : 's'}{showBankActivity ? ` · ${day.bank.length} bank transaction${day.bank.length === 1 ? '' : 's'}` : ''}</small>
+              <small>{day.key === todayKey ? 'Today · ' : ''}{day.planned.length} scheduled item{day.planned.length === 1 ? '' : 's'}{showBankActivity ? ` · ${day.bank.length} bank transaction${day.bank.length === 1 ? '' : 's'}` : ''}</small>
             </span>
             {day.balance !== undefined && (
               <span className="finance-calendar-agenda-values" title={`Balance anchor: ${balanceSource}`}>
-                <small>{day.balanceIsReconstructed ? 'Reconstructed posted close' : day.key < todayKey ? 'Estimated historical cash balance' : day.key === todayKey ? balanceVerifiedLive ? 'Current bank liquidity' : 'Latest stored cash balance' : todayPlanUnresolved ? 'Projected balance · today unresolved' : 'Projected cash balance'}</small>
+                <small>{balanceKind}</small>
                 <strong>{fmtMoney(day.balance)}</strong>
               </span>
             )}
             <span className="finance-calendar-agenda-activity">
+              {day.key < todayKey && !day.balanceIsReconstructed && <small>Past bank balance unavailable from the current bank data.</small>}
+              {!showBankActivity && day.key <= todayKey && <small>Bank transactions are hidden. Use “Show bank activity” above to compare.</small>}
               {day.planned.length > 0 && (
                 <span className="finance-calendar-agenda-group finance-calendar-agenda-group--planned">
                   <span className="finance-calendar-agenda-group-heading">
-                    <small>Planned activity</small>
+                    <small>{day.key < todayKey ? 'Was scheduled' : 'Scheduled'}</small>
                     <strong>Net {day.plannedNet >= 0 ? '+' : '−'}{fmtMoney(Math.abs(day.plannedNet))}</strong>
                   </span>
                   <span className="finance-calendar-agenda-preview">
-                    {plannedPreview.map((label, index) => <small key={`${label}-${index}`}>{label}</small>)}
-                    {day.planned.length > plannedPreview.length && <small>+{day.planned.length - plannedPreview.length} more planned</small>}
+                    {plannedPreview.map((item, index) => <span className="finance-calendar-agenda-item" key={index}><span>{item.label}</span><strong>{item.direction === 'income' ? '+' : item.direction === 'transfer' ? '' : '−'}{fmtMoney(Math.abs(item.amount))}</strong></span>)}
+                    {day.planned.length > plannedPreview.length && <small>+{day.planned.length - plannedPreview.length} more scheduled · tap for details</small>}
+                    {day.key <= todayKey && <small>Scheduled does not mean paid or received.</small>}
                   </span>
                 </span>
               )}
@@ -187,6 +199,7 @@ export default function CashForecastAgenda({
                 </span>
               )}
               {day.planned.length === 0 && (!showBankActivity || day.bank.length === 0) && <small className="finance-calendar-agenda-no-activity">No scheduled activity</small>}
+              <small className="finance-calendar-day-link">{selected ? 'Close' : 'View'} day details →</small>
             </span>
           </button>
         )

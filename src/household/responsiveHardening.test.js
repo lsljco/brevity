@@ -70,7 +70,7 @@ test('390px finance layouts stack, expose a forecast agenda, and keep the full c
   assert.match(responsiveCss, /\.finance-calendar-mobile-agenda\s*\{\s*display:\s*grid;/)
   assert.match(financeSource, /<CashForecastAgenda/)
   assert.match(cashForecastAgendaSource, /className="finance-calendar-mobile-agenda"/)
-  assert.match(cashForecastAgendaSource, /days\.length > 0/)
+  assert.match(cashForecastAgendaSource, /visibleDays\.length > 0/)
   assert.match(cashForecastAgendaSource, /No planned or bank activity for this month/)
 })
 
