@@ -1,3 +1,4 @@
+import {mealReadyForPlanning} from './mealCategories.js'
 import {useState} from 'react'
 import {calculateMealNutrition} from './mealPlanApi.js'
 import {scaleIngredient,householdIngredients,containsSeafood} from './householdMealPlanning.js'
@@ -17,7 +18,7 @@ export default function ScheduledMealEditor({selection,library,onClose,onReview,
  const working=busy||calculating
  return <div className="meal-dialog-backdrop"><section className="meal-dialog meal-edit-dialog scheduled-meal-editor" role="dialog" aria-modal="true" aria-labelledby="scheduled-meal-title"><header><div><span>{day.date} · {slot}</span><h2 id="scheduled-meal-title">Customize this meal</h2><p>Changes apply only to this date. Nutrition and portions are per person; groceries scale to the people eating.</p></div><button disabled={working} onClick={onClose} aria-label="Close scheduled meal editor">×</button></header><form onSubmit={submit}><div className="meal-edit-scroll" tabIndex="0" role="region" aria-label="Scheduled meal fields"><fieldset className="meal-edit-fields" disabled={working}>
  <label>People eating<input required type="number" min="1" max="100" step="1" value={people} onChange={e=>setPeople(e.target.value)}/></label>
- <label>Use a library meal<select value={mealId} onChange={e=>chooseRecipe(e.target.value)}><option value="">Choose a meal</option>{library.map(meal=><option key={meal.id} value={meal.id}>{meal.name}{containsSeafood(meal)?' — Seafood':''}</option>)}</select></label>
+ <label>Use a library meal<select value={mealId} onChange={e=>chooseRecipe(e.target.value)}><option value="">Choose a meal</option>{library.map(meal=><option key={meal.id} value={meal.id} disabled={!mealReadyForPlanning(meal)}>{meal.name}{containsSeafood(meal)?' — Seafood':''}</option>)}</select></label>
  <button type="button" onClick={()=>{setMealId('');setName('À la carte meal');changeIngredients([]);setMacros(null);setInstructions('Cook each component fully using its appropriate preparation method, then divide into the specified portions.')}}>Build à la carte</button>
  <label>Meal name<input required maxLength="200" value={name} onChange={e=>{setName(e.target.value);setCustom(true)}}/></label>
  <h3>Ingredients for one person</h3><div className="scheduled-meal-ingredients">{ingredients.map((line,i)=><div className="scheduled-meal-ingredient" key={i}><input aria-label={`Ingredient ${i+1} per person`} required value={line} onChange={e=>changeIngredients(ingredients.map((old,j)=>i===j?e.target.value:old))}/><button type="button" onClick={()=>changeIngredients(ingredients.filter((_,j)=>i!==j))}>Remove</button></div>)}</div>
@@ -26,6 +27,6 @@ export default function ScheduledMealEditor({selection,library,onClose,onReview,
  {containsSeafood({name,ingredients})&&<p role="alert">This meal contains seafood. It is excluded from automatic plans because of household allergies. Only continue if this is a deliberate selection.</p>}
  <button type="button" disabled={!ingredients.length||ingredients.some(line=>!line.trim())} onClick={calculate}>{calculating?'Calculating…':'Calculate nutrition'}</button>
  {macros&&<p>{dirty?'Needs recalculation · ':''}Per person: {macros.calories} cal · {macros.proteinGrams}g protein · {macros.carbohydrateGrams}g carbs · {macros.fatGrams}g fat</p>}
- <h3>Prepare for {people||6} people</h3><ul>{householdIngredients({ingredients,yieldQuantity:1},Number(people)||6).map((line,i)=><li key={i}>{line}</li>)}</ul>
+ <p>After saving this à la carte meal, open Recipe and choose Generate Image to create a photo from these exact ingredients and portions.</p><h3>Prepare for {people||6} people</h3><ul>{householdIngredients({ingredients,yieldQuantity:1},Number(people)||6).map((line,i)=><li key={i}>{line}</li>)}</ul>
  </fieldset>{error&&<p role="alert">{error}</p>}</div><footer><button type="button" disabled={working} onClick={onClose}>Cancel</button><button className="is-primary" disabled={working||dirty||!macros||!ingredients.length} type="submit">Review changes</button></footer></form></section></div>
 }

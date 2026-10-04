@@ -73,7 +73,7 @@ test('Spinach & Mushroom Eggs includes measured ingredients and teachable steps'
 test('rolling dates and rotation provide seven stable days with the correct meal categories', () => {
   const dates = rollingMealDates('2026-08-24')
   assert.deepEqual(dates, ['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30'])
-  for (const date of dates) for (const mealType of MEAL_TYPES) { assert.equal(rotatingMealForDate(date,mealType).mealType,mealType); assert.equal(rotatingMealForDate(date,mealType).id,rotatingMealForDate(date,mealType).id) }
+  for (const date of dates) for (const mealType of ['breakfast','lunch','dinner']) { assert.equal(rotatingMealForDate(date,mealType).mealType,mealType); assert.equal(rotatingMealForDate(date,mealType).id,rotatingMealForDate(date,mealType).id) }
   assert.equal(addMealDays('2026-12-31', 1), '2027-01-01')
 })
 

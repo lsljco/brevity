@@ -10,7 +10,7 @@ export function personalMealPlan(meals, targets = {}) {
   const main = Object.fromEntries(['breakfast','lunch','dinner'].map(key => [key, meals?.[key]]))
   const mainTotals = mealTotals(main)
   const snacks = mealTotals({snack1:meals?.snack1,snack2:meals?.snack2})
-  const complete = ['breakfast','lunch','dinner','snack1','snack2'].every(slot=>meals?.[slot]) && MACRO_FIELDS.every(key => mainTotals[key] != null && snacks[key] != null)
+  const complete = ['breakfast','lunch','dinner'].every(slot=>meals?.[slot]) && MACRO_FIELDS.every(key => mainTotals[key] != null && snacks[key] != null)
   const usable = key => valid(targets[key]) && targets[key] > 0
   let factor = 1
   if (complete && usable('proteinGrams') && mainTotals.proteinGrams > 0) {

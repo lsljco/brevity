@@ -157,3 +157,9 @@ export function ensureMealImage(meal){
 }
 
 export const lookupPackagedFood = barcode => request('/.netlify/functions/packaged-food-lookup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({barcode})})
+
+export const importPlanToEatCsv=csv=>request(ENDPOINT,{timeoutMs:45000,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'import-plan-to-eat',csv})})
+
+export function saveMealPreferences(mealId, preferences) {
+ return request(ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'preferences',mealId,preferences})})
+}

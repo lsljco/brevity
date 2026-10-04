@@ -35,6 +35,8 @@ const handler = async event => {
 
     if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}')
+      if(body.action==='preferences')return response(200,await repository.setMealPreferences({mealId:body.mealId,preferences:body.preferences,actor:session.member||'Household member'}))
+      if(body.action==='import-plan-to-eat')return response(201,await repository.importPlanToEat({csv:body.csv,actor:session.member||'Household member'}))
       if (body.action === 'bulk-create') {
         const meals = await repository.createMeals({ meals:body.meals, actor:session.member || 'Household member' })
         return response(201, { meals })

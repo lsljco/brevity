@@ -33,7 +33,7 @@ export function normalizeMealInput(meal, actor, now, createId) {
   const fatGrams = numeric(meal?.macros?.fatGrams)
   const errors = []
 
-  if (!MEAL_CATEGORIES.includes(mealCategory(mealType))) errors.push('Choose Breakfast, Lunch, Dinner, Snack, or Ingredient.')
+  if (!MEAL_CATEGORIES.includes(mealCategory(mealType))) errors.push('Choose Complete meal, Side, or Individual food / ingredient.')
   if (!name) errors.push('Meal name is required.')
   if (prepMinutes == null || cookMinutes == null || (meal?.totalMinutes !== undefined && meal?.totalMinutes !== '' && suppliedTotalMinutes == null)) errors.push('Prep, cook and total time must each be zero or greater.')
   if ([calories, proteinGrams, carbohydrateGrams, fatGrams].some(value => value == null)) errors.push('Calories, protein, carbs and fat must each be zero or greater.')

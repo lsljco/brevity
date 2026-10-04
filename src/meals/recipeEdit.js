@@ -5,7 +5,7 @@ export function normalizeRecipeEdit(value) {
   if(!value||typeof value!=='object'||Object.keys(value).some(key=>!allowed.includes(key)))throw new Error('The recipe edit contains an unsupported field.')
   const result={}
   if(value.mealType!==undefined){
-    if(!MEAL_CATEGORIES.includes(mealCategory(value.mealType)))throw new Error('Choose Breakfast, Lunch, Dinner, Snack, or Ingredient.')
+    if(!MEAL_CATEGORIES.includes(mealCategory(value.mealType)))throw new Error('Choose Complete meal, Side, or Individual food / ingredient.')
     result.mealType=mealCategory(value.mealType)
   }
   for(const key of ['description','serving','yieldUnit']){

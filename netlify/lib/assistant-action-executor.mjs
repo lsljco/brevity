@@ -1,3 +1,4 @@
+import {mealReadyForPlanning} from '../../src/meals/mealCategories.js'
 import {MEAL_SCHEDULE_RESOURCE,normalizeMealScheduleCommand,scheduleCommandDates,applyMealScheduleCommand,refreshAutomaticDay,generateSafeMealRange,effectiveMealDay} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { getHouseholdDateKey } from '../../src/finance/financeTime.js'
@@ -223,7 +224,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if(operation.type==='meal.substitute'){
     const errors=validateMealSubstitution({date:operation.targetDate,mealType:payload.mealType,mealId:payload.mealId})
     if(errors.length)throw new Error(errors.join(' '))
-    if(!mealIdsForDay(value)[payload.mealType])throw new Error('That meal-plan day is not available. Refresh Brevity and try again.')
+    if(!value?.meals||value.date!==operation.targetDate)throw new Error('That meal-plan day is not available. Refresh Brevity and try again.')
     const changedAt=nowIso(context.now||(()=>new Date())),previousMealId=mealIdsForDay(value)[payload.mealType]
     return{before,after:{...value,meals:{...value.meals,[payload.mealType]:payload.mealId},substitutions:{...(value.substitutions||{}),[payload.mealType]:{previousMealId,mealId:payload.mealId,changedAt,changedBy:context.actor||'Household member',actionId:operation.id}}}}
   }
@@ -736,6 +737,7 @@ export async function captureExpectedVersions(proposal, resources) {
       const command=normalizeMealScheduleCommand(operation.payload.commandJson),days={},versions={}
       const libraryState=await resources.read(RECIPE_RESOURCE),library=resolvedRecipes(libraryState.value)
       versions[RECIPE_RESOURCE]=libraryState.version
+      if(command.mealId&&!command.recipe&&library.some(meal=>meal.id===command.mealId&&!mealReadyForPlanning(meal)))throw Error('Review the imported recipe’s nutrition, ingredients, directions and serving yield before planning it.')
       if(command.mealId&&!library.some(meal=>meal.id===command.mealId))throw Error('That saved recipe is no longer available.')
       for(const date of scheduleCommandDates(command)){const source=await resources.read(`meal:${date}`);days[date]=refreshAutomaticDay(command.kind==='generate'?createRollingMealDay(date):source.value,library);versions[`meal:${date}`]=source.version}
       if(command.kind==='generate'){

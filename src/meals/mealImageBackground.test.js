@@ -53,3 +53,24 @@ test('automatic generation never replaces an existing photo',async()=>{
  await handler(new Request('https://example.test',{method:'POST',body:JSON.stringify({jobId:`auto-${meal.id}`,mealId:meal.id,onlyIfMissing:true})}))
  assert.equal(count,0);assert.equal(writes[0].meal.image,meal.image)
 })
+
+test('custom calendar image generation saves against exact ingredients and follows the recipe on day moves',async()=>{
+ const {createMealPlanRepository}=await import('../../netlify/lib/meal-plan-store.mjs')
+ const {applyMealScheduleCommand}=await import('./householdMealPlanning.js')
+ const key='lslj-family/schedule',date='2026-10-04',slot='dinner',id=`scheduled-${date}-${slot}`
+ const recipe={name:'Steak + broccoli',ingredients:['6 ounces cooked steak','1 cup cooked broccoli'],instructions:['Cook fully.'],macros:{calories:450,proteinGrams:40,carbohydrateGrams:12,fatGrams:25},yieldQuantity:1,serving:'1 person'}
+ const records=new Map([[key,{version:1,days:{[date]:{meals:{dinner:null},recipes:{dinner:recipe},substitutions:{dinner:{customized:true}}}}}]])
+ const store={get:async key=>records.get(key)||null,getWithMetadata:async key=>records.has(key)?{data:records.get(key),etag:String(records.get(key).version)}:null,setJSON:async(key,value,options)=>{assert.equal(options.onlyIfMatch,String(records.get(key).version));records.set(key,value);return {modified:true}}}
+ const repository=createMealPlanRepository({store}),jobs=[]
+ const handler=createMealImageBackgroundHandler({readSessionFn:async()=>({member:'Larry'}),repository,imageStore:{},jobStore:{setJSON:async(_key,value)=>jobs.push(value)},generateImage:async({meal})=>{assert.deepEqual(meal.ingredients,recipe.ingredients);return '/generated-steak.png'}})
+ await handler(new Request('https://example.test',{method:'POST',body:JSON.stringify({jobId:'scheduled-image',mealId:id})}))
+ assert.equal(jobs.at(-1).state,'ready');assert.equal((await repository.getScheduledMeal(id)).image,'/generated-steak.png');assert.equal(records.get(key).version,2)
+ const destination='2026-10-05',baseDays={[date]:{date,meals:{dinner:null}},[destination]:{date:destination,meals:{dinner:null}}}
+ const moved=applyMealScheduleCommand(records.get(key),{kind:'move',date,slot,toDate:destination,toSlot:'lunch'},baseDays)
+ assert.equal(moved.days[destination].recipes.lunch.image,'/generated-steak.png')
+ records.set(key,moved)
+ await assert.rejects(()=>repository.setScheduledMealImage({mealId:id,image:'/stale.png',expectedMeal:recipe}),/changed while/)
+ const movedId=`scheduled-${destination}-lunch`,expected=await repository.getScheduledMeal(movedId)
+ records.get(key).days[destination].recipes.lunch={...expected,ingredients:['6 ounces cooked chicken']}
+ await assert.rejects(()=>repository.setScheduledMealImage({mealId:movedId,image:'/stale.png',expectedMeal:expected}),/changed while/)
+})
