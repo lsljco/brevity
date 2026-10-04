@@ -1197,8 +1197,14 @@ test('Calendar income editor reviews payer changes without applying them',async(
   page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes++})
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
-  const todayCell=page.locator('.cal-cell.is-today')
-  if(!(await todayCell.getAttribute('class')||'').includes('is-selected'))await todayCell.locator('.finance-calendar-day-number').click()
+  const agenda=page.locator('.finance-calendar-mobile-agenda')
+  if(await agenda.isVisible()){
+    const todayRow=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    if(await todayRow.getAttribute('aria-expanded')!=='true')await todayRow.click()
+  }else{
+    const todayCell=page.locator('.cal-cell.is-today')
+    if(!(await todayCell.getAttribute('class')||'').includes('is-selected'))await todayCell.locator('.finance-calendar-day-number').click()
+  }
   await page.locator('.finance-card').filter({has:page.locator('.finance-calendar-day-header')}).getByText('Genesco payroll fixture',{exact:true}).click()
   const editor=page.locator('.finance-calendar-editor-dialog')
   await expect(editor.getByLabel('Income payer')).toBeVisible()
@@ -1273,8 +1279,14 @@ test('Empty payer picker reviews creation and keeps the transaction draft',async
   page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes++})
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
-  const todayCell=page.locator('.cal-cell.is-today')
-  if(!(await todayCell.getAttribute('class')||'').includes('is-selected'))await todayCell.locator('.finance-calendar-day-number').click()
+  const agenda=page.locator('.finance-calendar-mobile-agenda')
+  if(await agenda.isVisible()){
+    const todayRow=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    if(await todayRow.getAttribute('aria-expanded')!=='true')await todayRow.click()
+  }else{
+    const todayCell=page.locator('.cal-cell.is-today')
+    if(!(await todayCell.getAttribute('class')||'').includes('is-selected'))await todayCell.locator('.finance-calendar-day-number').click()
+  }
   await page.locator('.finance-card').filter({has:page.locator('.finance-calendar-day-header')}).getByText('Genesco payroll fixture',{exact:true}).click()
   const editor=page.locator('.finance-calendar-editor-dialog')
   await expect(editor.getByLabel('Income payer')).toBeVisible()
