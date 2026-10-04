@@ -1,3 +1,4 @@
+import {MEAL_SCHEDULE_RESOURCE,normalizeMealScheduleCommand,scheduleCommandDates,applyMealScheduleCommand,refreshAutomaticDay,generateSafeMealRange,effectiveMealDay} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { getHouseholdDateKey } from '../../src/finance/financeTime.js'
 import { buildAutoReconciliationReport } from '../../src/finance/autoReconciliation.js'
@@ -19,7 +20,7 @@ import { applyBudgetTarget } from '../../src/finance/budgetBreakdown.js'
 import { calculateDebtPayment } from '../../src/finance/debtModel.js'
 import { createEmptyDailyPlan } from '../../src/household/dailyPlan.js'
 import { applyHouseholdRecordOperation, householdRecordForOperation, householdResourceKeyForAction } from '../../src/household/householdActionModel.js'
-import { createRollingMealDay, validateMealSubstitution } from '../../src/meals/mealPlanData.js'
+import { createRollingMealDay, validateMealSubstitution, resolveMealDay, addMealDays } from '../../src/meals/mealPlanData.js'
 import { permissionForOperation, selectedOperation } from './assistant-action-contract.mjs'
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
@@ -51,6 +52,7 @@ export function resourceForOperation(operation) {
   if(operation.type==='education.observation.record')return LEARNING_RESOURCE
   if(operation.type==='member.preference.set')return `member-context:${operation.targetId}`
   if(operation.type.startsWith('improvement.'))return IMPROVEMENT_RESOURCE
+  if(operation.type==='meal.schedule.update')return MEAL_SCHEDULE_RESOURCE
   if(operation.type.startsWith('meal.recipe.'))return RECIPE_RESOURCE
   if (operation.type === 'nutrition.meal.update' || operation.type === 'nutrition.meal.remove') return `nutrition:${operation.targetId}:${operation.targetDate}`
   if (operation.type === 'nutrition.targets.update') return `nutrition-targets:${operation.targetId}`
@@ -217,6 +219,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   }
   if(operation.type==='meal.recipe.create')return {before,...applyRecipeCreate(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='meal.recipe.update')return {before,after:applyRecipeUpdate(value,operation,{actor:context.actor,now:context.now||(()=>new Date())})}
+  if(operation.type==='meal.schedule.update')return {before,after:applyMealScheduleCommand(value,JSON.parse(payload.commandJson),operation.mealContext?.days||{})}
   if(operation.type==='meal.substitute'){
     const errors=validateMealSubstitution({date:operation.targetDate,mealType:payload.mealType,mealId:payload.mealId})
     if(errors.length)throw new Error(errors.join(' '))
@@ -516,6 +519,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
         const member=resource.slice('member-context:'.length),entry=await readStoreEntry(mealStorage(),memberContextKey(member)),value=entry?.data
         return {value:value||{member,preferences:{}},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
       }
+      if(resource===MEAL_SCHEDULE_RESOURCE){const entry=await readStoreEntry(mealStorage(),`${HOUSEHOLD_ID}/schedule`);return {value:entry?.data||{days:{}},version:Number(entry?.data?.version||0),etag:entry?.etag||null}}
       if(resource===RECIPE_RESOURCE){const entry=await readStoreEntry(mealStorage(),`${HOUSEHOLD_ID}/library/custom`);return {value:entry?.data||{meals:[],overrides:{}},version:Number(entry?.data?.version||0),etag:entry?.etag||null}}
       if(resource.startsWith('nutrition-targets:')){
         const member=resource.slice('nutrition-targets:'.length),entry=await readStoreEntry(mealStorage(),nutritionTargetsKey(member)),value=entry?.data
@@ -556,6 +560,12 @@ export function createProductionActionResources({ now = () => new Date(), shared
         if(version!==expectedVersion)throw Object.assign(Error('Your preferences changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
         const record={...value,member,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''}
         await conditionalStoreJson(store,key,record,entry);return {version:record.version,value:record}
+      }
+      if(resource===MEAL_SCHEDULE_RESOURCE){
+        const storageKey=`${HOUSEHOLD_ID}/schedule`,store=mealStorage(),entry=await readStoreEntry(store,storageKey),version=Number(entry?.data?.version||0)
+        if(version!==expectedVersion)throw Object.assign(Error('The meal calendar changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
+        const record={...value,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''}
+        await conditionalStoreJson(store,storageKey,record,entry);return {version:record.version,value:record}
       }
       if(resource===RECIPE_RESOURCE){
         const storageKey=`${HOUSEHOLD_ID}/library/custom`,store=mealStorage(),entry=await readStoreEntry(store,storageKey),version=Number(entry?.data?.version||0)
@@ -613,7 +623,7 @@ const withoutManagedMetadata = value => {
   delete result.lastActionId
   return result
 }
-export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
+export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===MEAL_SCHEDULE_RESOURCE||resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===MEAL_SCHEDULE_RESOURCE||resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
 export const resourceLastWriter=(resource,current)=>resource===VENDOR_RESOURCE||resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
 export const resourceLastActionId=(resource,current)=>resource===VENDOR_RESOURCE||resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
 
@@ -647,6 +657,10 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
     const reviewedVersion=proposal.expectedVersions[resource]
     if(Number(current.version)!==reviewedVersion)throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
     for(const operation of resourceOperations){
+      if(operation.type==='meal.schedule.update'){
+        if(!operation.mealContext?.days||!operation.mealContext?.versions)throw Error('Refresh the meal calendar before reviewing this change.')
+        for(const [dependency,version] of Object.entries(operation.mealContext.versions)){if((await resources.read(dependency)).version!==version)throw Object.assign(Error('A recipe or meal changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})}
+      }
       const record=recordForOperation(value,operation)
       const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:record})
       if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
@@ -717,6 +731,22 @@ export async function captureExpectedVersions(proposal, resources) {
       const snapshot=await resources.read(resource),version=snapshot.version
       if(typeof version!=='number'||!Number.isInteger(version)||version<0)throw Object.assign(new Error('Household data did not provide an exact version for Action Mode review.'),{code:'VERSION_CONFLICT'})
       expectedVersions[resource]=version;snapshots.set(resource,snapshot)
+    }
+    if(operation.type==='meal.schedule.update'){
+      const command=normalizeMealScheduleCommand(operation.payload.commandJson),days={},versions={}
+      const libraryState=await resources.read(RECIPE_RESOURCE),library=resolvedRecipes(libraryState.value)
+      versions[RECIPE_RESOURCE]=libraryState.version
+      if(command.mealId&&!library.some(meal=>meal.id===command.mealId))throw Error('That saved recipe is no longer available.')
+      for(const date of scheduleCommandDates(command)){const source=await resources.read(`meal:${date}`);days[date]=refreshAutomaticDay(command.kind==='generate'?createRollingMealDay(date):source.value,library);versions[`meal:${date}`]=source.version}
+      if(command.kind==='generate'){
+        const dates=scheduleCommandDates(command),neighbors=[]
+        for(const date of [addMealDays(dates[0],-1),addMealDays(dates.at(-1),1)]){const source=await resources.read(`meal:${date}`);versions[`meal:${date}`]=source.version;neighbors.push(resolveMealDay(effectiveMealDay(refreshAutomaticDay(source.value,library),snapshots.get(resource).value),library))}
+        const generated=generateSafeMealRange(dates,{previous:neighbors[0],next:neighbors[1],library})
+        for(const date of dates)days[date]={...days[date],meals:Object.fromEntries(Object.entries(generated[date]).map(([slot,meal])=>[slot,meal?.id||null]))}
+      }
+      const after=applyMealScheduleCommand(snapshots.get(resource).value,command,days)
+      const mealReview=scheduleCommandDates(command).map(date=>{const day=resolveMealDay(effectiveMealDay(days[date],after),library);return `${date}: ${Object.entries(day.resolvedMeals).map(([slot,meal])=>`${slot}: ${meal?.name||'No meal'} (${day.servings?.[slot]??6} people)`).join('; ')}`})
+      operations.push({...operation,mealContext:{days,versions},mealReview});continue
     }
     // This identity comes from the same stored version used at execution, never
     // from the agent-authored summary or payload. Old proposals stay ineligible.

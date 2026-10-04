@@ -12,6 +12,15 @@ export function searchMealRecords(query,{library=[],recentNutrition=[],rollingMe
   return candidates.map(item=>({item,score:score(item)})).filter(row=>!tokens.length||row.score>0).sort((a,b)=>b.score-a.score).slice(0,12).map(({item})=>({kind:item.kind,id:item.id,name:item.name,...(item.kind==='consumed'?{member:item.member}:{}),date:item.date,mealType:item.mealType,ingredients:item.ingredients,macros:item.macros,serving:item.serving,yieldQuantity:item.yieldQuantity,yieldUnit:item.yieldUnit,instructions:item.instructions}))
 }
 export function bindRecipeOperation(operation,{library,estimates}){
+  if(operation.type==='meal.schedule.update'){
+    const data=JSON.parse(operation.payloadJson||'{}'),command=JSON.parse(data.commandJson||'{}')
+    if(command.recipe){
+      const estimate=estimates.get(command.recipe.estimateId)
+      if(!estimate||Number(estimate.yieldQuantity)!==1)throw Error('Calculate the customized meal for one person before preparing calendar review.')
+      command.recipe={name:command.recipe.name,ingredients:estimate.ingredients.map(item=>item.input),instructions:command.recipe.instructions,macros:estimate.perServingMacros}
+    }
+    return {...operation,payloadJson:JSON.stringify({commandJson:JSON.stringify(command)})}
+  }
   if(operation.type==='meal.recipe.create'){
     const data=JSON.parse(operation.payloadJson||'{}'),estimate=estimates.get(data.estimateId)
     if(!data.name||!estimate||Object.keys(data).some(key=>!['name','mealType','estimateId'].includes(key)))throw new Error('Calculate the new recipe before preparing its library review.')

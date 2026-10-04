@@ -112,7 +112,7 @@ test('custom meals generate a Brevity image and replacements open standard Actio
   assert.match(source,/Adding meal…/)
   assert.match(source,/generating its image in the background/)
   assert.doesNotMatch(source,/Photo URL/)
-  assert.match(source,/requestActionReview\(proposal\)/)
+  assert.match(source,/requestActionReview\(result.proposal\)/)
   assert.match(source,/meal-dialog-error/)
 })
 

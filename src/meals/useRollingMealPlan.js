@@ -27,7 +27,7 @@ export function rollingMealPlanView({ enabled = true, startDate, count = 7, requ
 export function shouldReloadRollingMealPlan(event) {
   if(event?.type===ROLLING_MEAL_APP_REFRESH_EVENT)return true
   if(event?.type!==ACTION_COMPLETED_EVENT)return false
-  return (event?.detail?.audit?.operations || []).some(operation=>['meal.substitute','meal.recipe.update','meal.recipe.create'].includes(operation?.type))
+  return (event?.detail?.audit?.operations || []).some(operation=>['meal.schedule.update','meal.substitute','meal.recipe.update','meal.recipe.create'].includes(operation?.type))
 }
 
 export function validateRollingMealPlan(result,startDate) {
@@ -37,7 +37,7 @@ export function validateRollingMealPlan(result,startDate) {
   if(result?.startDate!==requested||!requestedDay){
     throw new Error(`The rolling meal plan did not return the requested day (${requested}).`)
   }
-  const missingMeals=['breakfast','lunch','dinner'].filter(mealType=>!requestedDay.resolvedMeals?.[mealType]?.name)
+  const missingMeals=['breakfast','lunch','dinner'].filter(mealType=>!requestedDay.resolvedMeals?.[mealType]?.name&&!(requestedDay.scheduleEdited&&requestedDay.meals?.[mealType]===null))
   if(missingMeals.length)throw new Error(`The rolling meal plan for ${requested} is incomplete (${missingMeals.join(', ')} missing).`)
   return result
 }

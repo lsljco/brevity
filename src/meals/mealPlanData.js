@@ -1,4 +1,5 @@
-import { MEAL_LIBRARY, MEAL_TYPES, mealsForType } from './mealLibrary.js'
+import {automaticMeals} from './householdMealPlanning.js'
+import { MEAL_LIBRARY, MEAL_TYPES } from './mealLibrary.js'
 
 export const MEAL_PLAN_SCHEMA_VERSION = 1
 export const DEFAULT_MEAL_TIME_ZONE = 'America/New_York'
@@ -33,18 +34,10 @@ export function rollingMealDates(startDate, count = 7) {
   return Array.from({ length }, (_, index) => addMealDays(startDate, index))
 }
 
-function dayNumber(date) {
-  return Math.floor(new Date(`${date}T00:00:00.000Z`).getTime() / 86400000)
-}
 
 export function rotatingMealForDate(date, mealType) {
   if (!MEAL_TYPES.includes(mealType)) throw new Error('Unknown meal type.')
-  if (mealType === 'snack1') return MEAL_LIBRARY.find(meal => meal.id === 'snack-premier-chocolate')
-  if (mealType === 'snack2') return MEAL_LIBRARY.find(meal => meal.id === 'snack-envy-apple')
-  const candidates = mealsForType(mealType)
-  const offsets = { breakfast: 0, lunch: 11, dinner: 23 }
-  const index = ((dayNumber(date) * 7 + offsets[mealType]) % candidates.length + candidates.length) % candidates.length
-  return candidates[index]
+  return automaticMeals(date)[mealType]
 }
 
 export function createRollingMealDay(date, context = {}) {
@@ -73,7 +66,7 @@ export function resolveMealDay(day, library = MEAL_LIBRARY) {
   return {
     ...day,
     meals: mealIdsForDay(day),
-    resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, byId.get(mealIdsForDay(day)[mealType]) || null])),
+    resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, day.recipes?.[mealType] ? {...day.recipes[mealType],id:`scheduled-${day.date}-${mealType}`} : byId.get(mealIdsForDay(day)[mealType]) || null])),
   }
 }
 
