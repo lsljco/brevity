@@ -211,3 +211,5 @@
 .meal-swap-library{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px}
 .meal-swap-library .meal-card-action[aria-disabled="true"]{opacity:.55;cursor:wait}
 .meal-swap-library .meal-library-view{display:block;padding:10px;border:1px solid var(--gold,#c1a365);border-radius:8px;text-align:center}
+
+.meal-preferences{margin:1rem 0;padding:1rem;border:1px solid #bda46c66;border-radius:1rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:center}.meal-preferences [role="group"]{display:flex;flex-wrap:wrap;gap:1rem}.meal-preferences label{display:flex;gap:.4rem;align-items:center}.meal-preferences small{flex-basis:100%}.meal-preferences button[aria-pressed="true"]{color:#dfc285}.meal-library-filters select{max-width:100%;padding:.6rem;border-radius:.6rem;background:#101b22;color:inherit}.meal-library-filters label{display:flex;gap:.5rem;align-items:center}

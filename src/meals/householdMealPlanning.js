@@ -1,3 +1,4 @@
+import {mealReadyForPlanning} from './mealCategories.js'
 import {MEAL_LIBRARY} from './mealLibrary.js'
 import {parseGroceryIngredient} from '../household/groceryData.js'
 export const HOUSEHOLD_MEAL_SERVINGS=6
@@ -8,7 +9,7 @@ const seafood=/\b(salmon|whiting|catfish|fish|seafood|shrimp|prawn|crab|lobster|
 export const containsSeafood=meal=>seafood.test(textOf(meal))
 export function automaticMealAllowed(meal){
  const text=textOf(meal)
- return !containsSeafood(meal)&&!(/quinoa|brussels? sprouts?|tofu|ground turkey|turkey (?:patty|patties|bacon|meatball)|turkey sausage|minced turkey|tartare|carpaccio|ceviche|sashimi|sushi|poke bowl|raw |smoked salmon|salad|cucumber|smoothie|overnight|yogurt|cottage cheese|ricotta|chia pudding/.test(text))
+ return mealReadyForPlanning(meal)&&!containsSeafood(meal)&&!(/worcester|worchest|quinoa|brussels? sprouts?|tofu|ground turkey|turkey (?:patty|patties|bacon|meatball)|turkey sausage|minced turkey|tartare|carpaccio|ceviche|sashimi|sushi|poke bowl|raw |smoked salmon|salad|cucumber|smoothie|overnight|yogurt|cottage cheese|ricotta|chia pudding/.test(text))
 }
 const vegetables=['broccoli','asparagus','green beans','spinach','kale','cauliflower','cabbage','carrot','zucchini','yellow squash','bell pepper','collard greens','okra','sweet potato','mushroom','tomato','corn','romaine','cucumber','potato','onion','eggplant','peas','beet','turnip','pumpkin']
 export function mealVariety(meal){
@@ -30,7 +31,7 @@ const cycles=new WeakMap()
 export function automaticMeals(date,library=MEAL_LIBRARY){
  let cycle=cycles.get(library)
  if(!cycle){
-  const slots=['breakfast','lunch','dinner'],pool=Object.fromEntries(slots.map(slot=>[slot,library.filter(meal=>meal.mealType===slot&&automaticMealAllowed(meal))]))
+  const slots=['breakfast','lunch','dinner'],pool=Object.fromEntries(slots.map(slot=>[slot,library.filter(meal=>(meal.mealType===slot||meal.mealType==='meal')&&automaticMealAllowed(meal))]))
   cycle=[]
   for(let day=0;day<42;day++){
    const previous=new Set(Object.values(cycle.at(-1)||{}).flatMap(meal=>mealVariety(meal).vegetables))
@@ -120,7 +121,7 @@ export function generateSafeMealRange(dates,{previous,next,previousDays=previous
   const recent=recentRecipeKeys(nearby.map(day=>day.resolvedMeals))
   const choose=(position,selected,veg,meat,allowRepeats=false)=>{
    if(position===slots.length)return selected
-   const slot=slots[position],pool=preferFresh([preferred[slot],...library.filter(m=>m.mealType===slot&&m.id!==preferred[slot].id&&automaticMealAllowed(m))],recent)
+   const slot=slots[position],pool=preferFresh([preferred[slot],...library.filter(m=>(m.mealType===slot||m.mealType==='meal')&&m.id!==preferred[slot].id&&automaticMealAllowed(m))],recent)
    for(const meal of pool){if(!allowRepeats&&(recent.has(recipeKey(meal))||mainMeals(selected).some(m=>recipeKey(m)===recipeKey(meal))))continue;const t=mealVariety(meal);if(t.vegetables.some(v=>blocked.has(v)||veg.has(v)||index===dates.length-1&&nextVeg.has(v))||t.meats.some(m=>meat.has(m)))continue;const found=choose(position+1,{...selected,[slot]:meal},new Set([...veg,...t.vegetables]),new Set([...meat,...t.meats]),allowRepeats);if(found)return found}
    return null
   }

@@ -1,3 +1,4 @@
+import {MEAL_CATEGORIES} from '../../src/meals/mealCategories.js'
 import {normalizeMealScheduleCommand,MEAL_SCHEDULE_RESOURCE} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { normalizeReconciliationEvidence } from '../../src/finance/autoReconciliation.js'
@@ -625,7 +626,7 @@ export function normalizeActionOperation(input = {}) {
     if (payload.transactionType && payload.transactionType !== 'transfer' && payload.transferAccountId) throw new Error('Only a forecast-only planned transfer can include a destination account.')
     if (payload.accountId && payload.transferAccountId && payload.accountId === payload.transferAccountId) throw new Error('A scheduled transfer requires different source and destination accounts.')
   }
-  if(type==='meal.recipe.create'&&(!payload.name||!MEAL_TYPES.includes(payload.mealType)||!payload.estimateJson||operation.targetId||operation.targetDate))throw new Error('A new library recipe requires a title, meal category and verified nutrition, without a dated consumption target.')
+  if(type==='meal.recipe.create'&&(!payload.name||!MEAL_CATEGORIES.includes(payload.mealType)||!payload.estimateJson||operation.targetId||operation.targetDate))throw new Error('A new library recipe requires a title, meal category and verified nutrition, without a dated consumption target.')
   if(type==='meal.recipe.update'&&(!operation.targetId||!payload.name))throw new Error('A recipe update requires its exact saved recipe and title.')
   if(type==='meal.schedule.update'&&(operation.targetId!=='household-meal-calendar'||!payload.commandJson||JSON.parse(payload.commandJson).date!==operation.targetDate))throw Error('The meal calendar action needs its exact starting date.')
   if(type==='meal.substitute'){

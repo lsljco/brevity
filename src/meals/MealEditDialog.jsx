@@ -1,4 +1,4 @@
-import {MEAL_CATEGORIES,mealCategory,mealCategoryLabel} from './mealCategories.js'
+import {LIBRARY_CATEGORIES,LIBRARY_CATEGORY_LABELS,libraryCategory,mealReadyForPlanning,mealCategoryLabel} from './mealCategories.js'
 import {useState} from 'react'
 import {prepareDirectAction} from '../assistant/assistantApi.js'
 import {requestActionReview} from '../assistant/actionEvents.js'
@@ -7,8 +7,8 @@ import {macroFields,normalizeRecipeEdit,resizeRecipeServing} from './recipeEdit.
 const labels={calories:'Calories',proteinGrams:'Protein (g)',carbohydrateGrams:'Carbs (g)',fatGrams:'Fat (g)'}
 export default function MealEditDialog({meal,version,onClose}) {
   const [name,setName]=useState(meal.name)
-  const [draft,setDraft]=useState(()=>({mealType:mealCategory(meal.mealType),description:meal.description||'',serving:meal.serving||'1 serving',yieldQuantity:meal.yieldQuantity||1,yieldUnit:meal.yieldUnit||'servings',ingredients:meal.ingredients||[],instructions:meal.instructions||[],prepMinutes:meal.prepMinutes||0,cookMinutes:meal.cookMinutes||0,macros:meal.macros}))
-  const [dirty,setDirty]=useState(false),[checked,setChecked]=useState(false),[factor,setFactor]=useState(1),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notes,setNotes]=useState([])
+  const [draft,setDraft]=useState(()=>({mealType:libraryCategory(meal),description:meal.description||'',serving:meal.serving||'1 serving',yieldQuantity:meal.yieldQuantity||1,yieldUnit:meal.yieldUnit||'servings',ingredients:meal.ingredients||[],instructions:meal.instructions||[],prepMinutes:meal.prepMinutes||0,cookMinutes:meal.cookMinutes||0,macros:meal.macros}))
+  const [dirty,setDirty]=useState(!mealReadyForPlanning(meal)),[checked,setChecked]=useState(false),[factor,setFactor]=useState(1),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notes,setNotes]=useState([])
   const change=(key,value)=>{setDraft(current=>({...current,[key]:value}));if(['ingredients','serving','yieldQuantity','yieldUnit','macros'].includes(key)){setDirty(true);setChecked(false)}}
   const calculate=async()=>{
     setBusy('calculate');setError('')
@@ -33,7 +33,7 @@ export default function MealEditDialog({meal,version,onClose}) {
   }
   return <div className="meal-dialog-backdrop"><section className="meal-dialog meal-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="meal-edit-title"><header><div><span>Shared recipe</span><h2 id="meal-edit-title">Edit meal</h2><p>Changes update this recipe everywhere it is planned. Previously logged meals stay unchanged.</p></div><button type="button" onClick={onClose} disabled={Boolean(busy)} aria-label="Close meal editor">×</button></header><form onSubmit={review}><div className="meal-edit-scroll" tabIndex="0" role="region" aria-label="Meal editing fields"><fieldset className="meal-edit-fields" disabled={Boolean(busy)}>
     <label>Meal title<input required maxLength="200" value={name} onChange={event=>setName(event.target.value)}/></label>
-    <label>Meal label<select aria-label="Meal label" value={draft.mealType} onChange={event=>change('mealType',event.target.value)}>{MEAL_CATEGORIES.map(type=><option key={type} value={type}>{mealCategoryLabel(type)}</option>)}</select></label>
+    <label>Library category<select aria-label="Library category" value={draft.mealType} onChange={event=>change('mealType',event.target.value)}>{LIBRARY_CATEGORIES.map(type=><option key={type} value={type}>{LIBRARY_CATEGORY_LABELS[type]}</option>)}</select></label>
     <label>Description<textarea value={draft.description} onChange={event=>change('description',event.target.value)}/></label>
     <label>Serving size<input required value={draft.serving} onChange={event=>change('serving',event.target.value)}/></label>
     <label>Servings per batch<input required type="number" min="0.001" step="any" value={draft.yieldQuantity} onChange={event=>change('yieldQuantity',event.target.value)}/></label>

@@ -1,3 +1,4 @@
+import {mealReadyForPlanning} from './mealCategories.js'
 import {automaticMeals} from './householdMealPlanning.js'
 import { MEAL_LIBRARY, MEAL_TYPES } from './mealLibrary.js'
 
@@ -77,6 +78,7 @@ export function validateMealSubstitution({ date, mealType, mealId }, library) {
 
   const suppliedLibrary = Array.isArray(library)
   const meal = libraryIndex(library).get(mealId)
+  if(meal&&!mealReadyForPlanning(meal))errors.push('Review the imported recipe before planning it.')
   if (!meal) {
     // Action Mode validates built-in meals without loading the meal store. Custom
     // Custom IDs can be used in any slot. Proposal preparation verifies that

@@ -1,3 +1,5 @@
+import {normalizeMealPreferences} from '../../src/meals/mealPreferences.js'
+import {previewPlanToEatImport} from '../../src/meals/planToEatImport.js'
 import {effectiveMealDay,refreshAutomaticDay} from '../../src/meals/householdMealPlanning.js'
 import { normalizeMealInput, safeSegment, safeText } from './meal-input.mjs'
 import {resolvedRecipes} from './recipe-library-actions.mjs'
@@ -174,6 +176,37 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
+  const setMealPreferences = async ({mealId,preferences,actor='Household member'}) => {
+    let patch
+    try { patch=normalizeMealPreferences(preferences) } catch(error) { error.code='VALIDATION_ERROR';throw error }
+    for(let attempt=0;attempt<3;attempt++){
+      const {entry,library}=await getLibrary()
+      const meal=library.find(item=>item.id===mealId)
+      if(!meal)throw Object.assign(Error('That meal is no longer in the library.'),{code:'VALIDATION_ERROR'})
+      const metadata={...patch,updatedAt:now().toISOString(),updatedBy:actor}
+      const payload={...entry.data,version:Number(entry.data?.version||0)+1,overrides:{...entry.data?.overrides,[mealId]:{...entry.data?.overrides?.[mealId],...metadata}}}
+      const written=await store.setJSON(customLibraryKey,payload,entry.metadata?(entry.data?{onlyIfMatch:entry.etag}:{onlyIfNew:true}):{})
+      if(written?.modified!==false)return {meal:{...meal,...metadata}}
+    }
+    throw Object.assign(Error('The library changed. Try saving these labels again.'),{code:'VERSION_CONFLICT'})
+  }
+
+  const importPlanToEat = async ({csv,actor='Household member'}) => {
+    for(let attempt=0;attempt<3;attempt++){
+      const {entry,customMeals,library}=await getLibrary()
+      let preview
+      try{preview=previewPlanToEatImport(csv,library)}catch(error){error.code='VALIDATION_ERROR';throw error}
+      const result={total:preview.total,added:preview.meals.length,skipped:preview.skipped,needsReview:preview.needsReview}
+      if(!preview.meals.length)return result
+      const stamp=now().toISOString()
+      const imported=preview.meals.map(meal=>({...meal,createdAt:stamp,createdBy:actor,updatedAt:stamp,updatedBy:actor}))
+      const payload={...entry.data,version:Number(entry.data?.version||0)+1,meals:[...customMeals,...imported],updatedAt:stamp,updatedBy:actor}
+      const written=await store.setJSON(customLibraryKey,payload,entry.metadata?(entry.data?{onlyIfMatch:entry.etag}:{onlyIfNew:true}):{})
+      if(written?.modified!==false)return result
+    }
+    throw Object.assign(Error('The library changed during import. Retry the same file; saved recipes will be skipped.'),{code:'VERSION_CONFLICT'})
+  }
+
   const substitute = async ({ date, mealType, mealId, expectedVersion, actor = 'Household member' }) => {
     const { library } = await getLibrary()
     const errors = validateMealSubstitution({ date, mealType, mealId }, library)
@@ -189,7 +222,7 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
     throw error
   }
 
-  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, createMeals, setMealImage, substitute }
+  return { ensureDay, getDay, getDayEntry, getLibrary, getWindow, getWindowReadOnly, createMeal, createMeals, setMealPreferences, importPlanToEat, setMealImage, substitute }
 }
 
 export async function productionMealPlanRepository(options = {}) {

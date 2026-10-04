@@ -1,3 +1,4 @@
+import {mealReadyForPlanning} from '../../src/meals/mealCategories.js'
 import {MEAL_SCHEDULE_RESOURCE,normalizeMealScheduleCommand,scheduleCommandDates,applyMealScheduleCommand,refreshAutomaticDay,generateSafeMealRange,effectiveMealDay} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
 import { getHouseholdDateKey } from '../../src/finance/financeTime.js'
@@ -736,6 +737,7 @@ export async function captureExpectedVersions(proposal, resources) {
       const command=normalizeMealScheduleCommand(operation.payload.commandJson),days={},versions={}
       const libraryState=await resources.read(RECIPE_RESOURCE),library=resolvedRecipes(libraryState.value)
       versions[RECIPE_RESOURCE]=libraryState.version
+      if(command.mealId&&!command.recipe&&library.some(meal=>meal.id===command.mealId&&!mealReadyForPlanning(meal)))throw Error('Review the imported recipe’s nutrition, ingredients, directions and serving yield before planning it.')
       if(command.mealId&&!library.some(meal=>meal.id===command.mealId))throw Error('That saved recipe is no longer available.')
       for(const date of scheduleCommandDates(command)){const source=await resources.read(`meal:${date}`);days[date]=refreshAutomaticDay(command.kind==='generate'?createRollingMealDay(date):source.value,library);versions[`meal:${date}`]=source.version}
       if(command.kind==='generate'){
