@@ -1,3 +1,4 @@
+import {isBrevityMealImage} from '../../src/meals/mealImageStyle.js'
 import {normalizeMealPreferences} from '../../src/meals/mealPreferences.js'
 import {previewPlanToEatImport} from '../../src/meals/planToEatImport.js'
 import {effectiveMealDay,refreshAutomaticDay} from '../../src/meals/householdMealPlanning.js'
@@ -45,11 +46,11 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       : store.get(imageOverridesKey, { type:'json' }).then(data => ({ data, etag:'', metadata:false }))])
     const customMeals = Array.isArray(entry.data?.meals) ? entry.data.meals : []
     const imageOverrides = imageEntry.data?.images && typeof imageEntry.data.images === 'object' ? imageEntry.data.images : {}
-    const library = resolvedRecipes(entry.data||{}).map(meal => imageOverrides[meal.id] ? { ...meal, image:imageOverrides[meal.id], imageGenerated:true } : meal)
+    const library = resolvedRecipes(entry.data||{}).map(meal => imageOverrides[meal.id] ? { ...meal, image:imageOverrides[meal.id], imageGenerated:imageEntry.data?.origins?.[meal.id]!=='uploaded', imageOrigin:imageEntry.data?.origins?.[meal.id]||'generated' } : meal)
     return { entry, imageEntry, customMeals, library }
   }
 
-  const setMealImage = async ({ mealId, image, actor = 'Household member', onlyIfMissing = false }) => {
+  const setMealImage = async ({ mealId, image, actor = 'Household member', onlyIfMissing = false, onlyIfNonBrevity = false, expectedImage, imageOrigin = 'generated' }) => {
     const safeMealId = safeText(mealId, 180)
     const safeImage = safeText(image, 500)
     if (!safeMealId || !safeImage) throw Object.assign(new Error('A valid meal and generated image are required.'), { code:'VALIDATION_ERROR' })
@@ -58,8 +59,9 @@ export function createMealPlanRepository({ store, householdId = 'lslj-family', t
       if (!library.some(meal => meal.id === safeMealId)) throw Object.assign(new Error('That meal is no longer in the household library.'), { code:'VALIDATION_ERROR' })
       const existing=library.find(meal=>meal.id===safeMealId)
       if(onlyIfMissing&&existing?.image)return {mealId:safeMealId,image:existing.image}
+      if(onlyIfNonBrevity&&(isBrevityMealImage(existing)||existing.image!==expectedImage))return {mealId:safeMealId,image:existing.image}
       const currentImages = imageEntry.data?.images && typeof imageEntry.data.images === 'object' ? imageEntry.data.images : {}
-      const payload = { version:Number(imageEntry.data?.version || 0) + 1, images:{ ...currentImages, [safeMealId]:safeImage }, updatedAt:now().toISOString(), updatedBy:actor }
+      const payload = { version:Number(imageEntry.data?.version || 0) + 1, images:{ ...currentImages, [safeMealId]:safeImage }, origins:{...imageEntry.data?.origins,[safeMealId]:imageOrigin}, updatedAt:now().toISOString(), updatedBy:actor }
       const options = imageEntry.metadata ? (imageEntry.data ? { onlyIfMatch:imageEntry.etag } : { onlyIfNew:true }) : {}
       const written = await store.setJSON(imageOverridesKey, payload, options)
       if (written?.modified !== false) return { mealId:safeMealId, image:safeImage }

@@ -1788,3 +1788,18 @@ test('saved a la carte meals can generate a photo from their dated recipe',async
  await expect(dialog.getByRole('img',{name:'Steak à la carte'})).toHaveAttribute('src',image)
  await expect(dialog.getByRole('button',{name:'Swap meal',exact:true})).toBeVisible()
 })
+
+test('meal library starts resumable Brevity image rendering and preserves the library filters',async({page})=>{
+ let started=false
+ await page.route('**/.netlify/functions/meal-library-images',route=>{if(route.request().method()==='POST')started=true;return route.fulfill({json:{requested:started,active:started,total:5,completed:3,remaining:2,failed:[]}})})
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ await page.getByRole('button',{name:'Meal Library',exact:false}).click()
+ await expect(page.getByRole('heading',{name:'Meal Library',exact:true})).toBeVisible()
+ const batch=page.getByRole('region',{name:'Brevity meal photography'})
+ await expect(batch).toContainText('3 of 5 items have Brevity images · 2 remaining')
+ await batch.getByRole('button',{name:'Render non-Brevity images'}).click()
+ await expect(batch.getByRole('button',{name:'Rendering images…'})).toBeDisabled()
+ await expect(batch).toContainText('You can leave this page.')
+ expect(started).toBe(true)
+ await expect(page.getByLabel('Filter by season')).toBeVisible()
+})
