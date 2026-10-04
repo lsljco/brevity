@@ -498,9 +498,9 @@
   }
   .finance-root .dash-body { overflow-y: visible !important; }
   .finance-account-filter {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 80 !important;
+    position: relative !important;
+    top: auto !important;
+    z-index: 1 !important;
     background: var(--theme-surface, rgba(10,9,8,.97)) !important;
     box-shadow: 0 8px 24px rgba(0,0,0,.24);
   }
@@ -508,7 +508,7 @@
     min-width: 44px;
     min-height: 44px;
   }
-  .app-main:has(.app-context-navigation) .finance-account-filter { top: 56px !important; }
+  .app-main:has(.app-context-navigation) .finance-account-filter { top: auto !important; }
   .finance-root .finance-inner {
     box-sizing: border-box !important;
     width: calc(100% - 24px) !important;
@@ -671,3 +671,23 @@
 /* Reviewed payer creation keeps the transaction draft open beneath Action Mode. */
 body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevity-assistant-backdrop { z-index: 1790; }
 body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevity-assistant-drawer { z-index: 1800; }
+
+.finance-calendar-intro > .finance-calendar-simple-guide { color:var(--soft-white); font-size:14px; line-height:1.6; letter-spacing:normal; text-transform:none; }
+.finance-calendar-explanation { margin-top:12px; color:var(--muted); line-height:1.6; }
+.finance-calendar-explanation summary, .finance-calendar-source-status summary { cursor:pointer; min-height:44px; padding:10px 0; }
+.finance-calendar-source-status details > span { display:block; margin:8px 0; line-height:1.5; }
+.finance-calendar-earlier { grid-column:1 / -1; }
+.finance-calendar-earlier button { min-height:44px; padding:10px 14px; border:1px solid var(--glass-border); border-radius:10px; color:var(--gold); background:transparent; font:inherit; }
+.finance-calendar-agenda-item { display:flex; justify-content:space-between; gap:12px; padding:6px 0; font-size:13px; line-height:1.4; }
+.finance-calendar-agenda-item > span { min-width:0; overflow-wrap:anywhere; }
+.finance-calendar-agenda-item > strong { flex-shrink:0; font-variant-numeric:tabular-nums; }
+.finance-calendar-day-link { color:var(--gold); margin-top:6px; }
+@media (max-width:720px) {
+  .finance-calendar-mobile-agenda > button { grid-template-columns:minmax(0,1fr); }
+  .finance-calendar-agenda-values { text-align:left; padding-top:8px; border-top:1px solid var(--glass-border); }
+  .finance-calendar-agenda-values strong { font-size:22px; }
+  .finance-calendar-agenda-date small,.finance-calendar-agenda-preview small,.finance-calendar-agenda-values small { font-size:12px; }
+  .finance-calendar-agenda-group-heading { flex-wrap:wrap; }
+  .finance-calendar-agenda-group-heading > small { font-size:12px; }
+  .app-context-navigation { background:var(--theme-surface,#100f0c); }
+}
