@@ -33,6 +33,7 @@ export async function generateMealImage({ meal, assetId, householdId = 'lslj-fam
   if (!process.env.OPENAI_API_KEY) throw Object.assign(new Error('Meal image generation is not configured.'), { code:'IMAGE_GENERATION_ERROR' })
   const response = await fetcher('https://api.openai.com/v1/images/generations', {
     method:'POST',
+    signal:AbortSignal.timeout(180000),
     headers:{ authorization:`Bearer ${process.env.OPENAI_API_KEY}`, 'content-type':'application/json' },
     body:JSON.stringify({
       model:process.env.BREVITY_IMAGE_MODEL || 'gpt-image-2',

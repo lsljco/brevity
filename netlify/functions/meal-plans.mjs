@@ -62,7 +62,7 @@ const handler = async event => {
       mealImageContentType(bytes)
       await imageStore.set(mealImageKey(process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family',assetId),bytes)
       image=`/.netlify/functions/meal-images?id=${encodeURIComponent(assetId)}`
-      await repository.setMealImage({ mealId:meal.id, image, actor:session.member || 'Household member' })
+      await repository.setMealImage({ mealId:meal.id, image, imageOrigin:'uploaded', actor:session.member || 'Household member' })
       return response(200, { meal:{ ...meal, image, imageGenerated:true } })
     }
 
