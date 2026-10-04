@@ -691,3 +691,8 @@ body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevi
   .finance-calendar-agenda-group-heading > small { font-size:12px; }
   .app-context-navigation { background:var(--theme-surface,#100f0c); }
 }
+@media (max-width:720px) {
+  .finance-root .finance-calendar-month-head,
+  .finance-root .finance-calendar-month-grid { display:none !important; }
+  .finance-calendar-header > button { color:var(--soft-white); }
+}

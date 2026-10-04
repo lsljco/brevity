@@ -1567,6 +1567,8 @@ test('iPhone Cash Forecast separates earlier schedules from current and future m
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   await expect(agenda).not.toContainText('Earlier paycheck')
   await expect(agenda).toContainText('Today ·')
+  await expect(page.locator('.finance-calendar-month-head')).toBeHidden()
+  await expect(page.locator('.finance-calendar-month-grid')).toBeHidden()
   await expect(agenda).toContainText('−$40.00')
   await expect(agenda).not.toContainText('Unassigned')
   await agenda.getByRole('button',{name:/Show earlier days/}).click()
