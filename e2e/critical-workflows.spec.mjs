@@ -1803,3 +1803,27 @@ test('meal library starts resumable Brevity image rendering and preserves the li
  expect(started).toBe(true)
  await expect(page.getByLabel('Filter by season')).toBeVisible()
 })
+
+test('Today coordinates dental care, maintenance and reviewed meal skipping',async({page},testInfo)=>{
+ let care={version:0,items:[]};const prepared=[]
+ await page.route('**/.netlify/functions/health-care',route=>{if(route.request().method()==='POST'){const body=route.request().postDataJSON();care={version:care.version+1,items:[{...body.item,id:'care-1'}]}}return route.fulfill({json:care})})
+ await page.route('**/.netlify/functions/estate?*',route=>route.fulfill({json:{workspace:{maintenanceEvents:[{id:'service-1',workOrderId:'work-1',scheduledFor:'2026-01-01',status:'due'}],workOrders:[{id:'work-1',title:'Replace HVAC filters',status:'due'}],maintenancePlans:[]}}}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const health=page.getByRole('region',{name:'Health priorities',exact:true})
+ await health.getByRole('button',{name:'Add dental cleaning',exact:true}).click()
+ await health.getByRole('combobox',{name:'Household member',exact:true}).selectOption('Terica')
+ await health.getByRole('button',{name:'Save health need',exact:true}).click()
+ await expect(health).toContainText('Terica · Dental · Needs scheduling')
+ await health.getByRole('button',{name:'Edit Teeth cleaning for Terica'}).click()
+ await health.getByRole('combobox',{name:'Status',exact:true}).selectOption('Completed')
+ await health.getByRole('button',{name:'Save health need',exact:true}).click()
+ await expect(health).not.toContainText('Terica · Dental')
+ await health.getByLabel('Show completed').check();await expect(health).toContainText('Terica · Dental · Completed')
+ await expect(page.getByRole('region',{name:'Household Maintenance',exact:true})).toContainText('Replace HVAC filters')
+ page.on('request',r=>{if(r.url().includes('action=prepare-direct'))prepared.push(r.postDataJSON())})
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ await page.getByRole('button',{name:`Skip Dinner on ${dateKey()}`,exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(1)
+ const op=prepared[0].operation||prepared[0].operations[0]
+ expect(JSON.parse(op.payload.commandJson)).toEqual({kind:'skip',date:dateKey(),slot:'dinner'})
+})
