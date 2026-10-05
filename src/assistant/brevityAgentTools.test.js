@@ -403,3 +403,15 @@ test('packaged product research runs concurrently and reuses in-flight evidence 
   await agent.tools.find(tool=>tool.name==='find_product_nutrition').invoke({},JSON.stringify({product:'Green beans'}))
   assert.equal(started.length,2)
 })
+
+test('assistant nutrition allows the background budget and suppresses duplicate timed-out calls only within a turn',async()=>{
+ const input=JSON.stringify({ingredients:['4 oz cooked pot roast','1 cup cooked rice'],yieldQuantity:1,yieldUnit:'meal',allowGenericEstimate:false,productReferences:[]})
+ let calls=0;const estimates=new Map()
+ const calculate=async(_input,options)=>{calls++;assert.equal(options.timeoutMs,150000);throw Object.assign(new Error('Calculation timed out'),{status:504})}
+ const make=()=>createBrevitySdkAgent({model:'test',schema,canonical,browser:{},calculate,estimates}).tools.find(t=>t.name==='estimate_meal_nutrition')
+ const tool=make()
+ const first=JSON.parse(await tool.invoke({},input)),second=JSON.parse(await tool.invoke({},input))
+ assert.equal(first.code,'NUTRITION_TIMEOUT');assert.equal(first.estimateId,null);assert.equal(first.logged,false)
+ assert.deepEqual(second,first);assert.equal(calls,1);assert.equal(estimates.size,0)
+ await make().invoke({},input);assert.equal(calls,2)
+})

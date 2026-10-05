@@ -241,3 +241,19 @@ test('reference retrieval honors all ten supported sources instead of dropping f
  assert.equal(refs.length,10)
  assert.equal(refs[9].url,'https://example.com/product-9')
 })
+
+test('nutrition uses bounded reasoning for GPT-5 and omits unsupported reasoning options for other models',async()=>{
+ const prior=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test-key'
+ try{
+  for(const model of ['gpt-5-mini','gpt-5.6-sol','gpt-4.1']){
+   let sent
+   const result=await calculateMealNutrition({ingredients:['2 cups pancake mix','1 cup water','1 stick butter'],yieldQuantity:12,yieldUnit:'pancakes'},{model,fetcher:async(_url,options)=>{
+    sent=JSON.parse(options.body)
+    return {ok:true,status:200,json:async()=>({output_text:JSON.stringify({ingredients,warnings:[]})})}
+   }})
+   assert.equal(sent.model,model)
+   assert.deepEqual(sent.reasoning,model.startsWith('gpt-5')?{effort:'low'}:undefined)
+   assert.deepEqual(result.batchMacros,{calories:2010,proteinGrams:25,carbohydrateGrams:252,fatGrams:98})
+  }
+ }finally{if(prior===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=prior}
+})
