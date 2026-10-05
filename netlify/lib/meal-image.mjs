@@ -44,7 +44,7 @@ export async function generateMealImage({ meal, assetId, householdId = 'lslj-fam
     }),
   })
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw Object.assign(new Error(payload.error?.message || `Meal image generation returned ${response.status}.`), { code:'IMAGE_GENERATION_ERROR' })
+  if (!response.ok) throw Object.assign(new Error(payload.error?.message || `Meal image generation returned ${response.status}.`), { code:'IMAGE_GENERATION_ERROR', status:response.status })
   const encoded = payload.data?.[0]?.b64_json
   if (!encoded) throw Object.assign(new Error('Meal image generation returned no image.'), { code:'IMAGE_GENERATION_ERROR' })
   const bytes = assertMealImagePng(Buffer.from(encoded, 'base64'))
