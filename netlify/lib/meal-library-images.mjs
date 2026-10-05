@@ -15,7 +15,7 @@ export function createLibraryImageBatch({store,repository,imageStore,householdId
   for(let attempt=0;attempt<3;attempt++){
    const entry=await read()
    if(entry?.data?.enabled&&Date.parse(entry.data.leaseUntil)>now().getTime())return status()
-   const stamp=now().toISOString(),data={enabled:true,requestedAt:stamp,updatedAt:stamp,actor,failures:{}}
+   const stamp=now().toISOString(),data={enabled:true,requestedAt:stamp,updatedAt:stamp,actor,failures:{},nextRunAt:entry?.data?.nextRunAt||null}
    const result=await store.setJSON(key,data,entry?.etag?{onlyIfMatch:entry.etag}:{onlyIfNew:true})
    if(result?.modified!==false)return status()
   }
@@ -23,23 +23,21 @@ export function createLibraryImageBatch({store,repository,imageStore,householdId
  }
  const run=async()=>{
   const entry=await read(),stamp=now()
-  if(!entry?.data?.enabled||Date.parse(entry.data.leaseUntil)>stamp.getTime())return
-  const lease=randomUUID(),claimed={...entry.data,lease,leaseUntil:new Date(stamp.getTime()+14*60_000).toISOString(),updatedAt:stamp.toISOString()}
+  if(!entry?.data?.enabled||Date.parse(entry.data.leaseUntil)>stamp.getTime()||Date.parse(entry.data.nextRunAt)>stamp.getTime())return
+  const lease=randomUUID(),claimed={...entry.data,lease,leaseUntil:new Date(stamp.getTime()+14*60_000).toISOString(),updatedAt:stamp.toISOString(),nextRunAt:new Date(stamp.getTime()+120_000).toISOString()}
   if((await store.setJSON(key,claimed,{onlyIfMatch:entry.etag}))?.modified===false)return
   const {library}=await repository.getLibrary(),failures={...claimed.failures}
-  const pending=library.filter(meal=>!isBrevityMealImage(meal)&&(failures[meal.id]?.attempts||0)<3).slice(0,24)
-  let cursor=0
-  const work=async()=>{while(cursor<pending.length){const meal=pending[cursor++];try{
+  const pending=library.filter(meal=>!isBrevityMealImage(meal)&&(failures[meal.id]?.attempts||0)<3).slice(0,4)
+  let cursor=0,rateLimited=false
+  const work=async()=>{while(cursor<pending.length&&!rateLimited){const meal=pending[cursor++];try{
    const image=await generateImage({meal,assetId:`${meal.id}-${randomUUID()}`,householdId,store:imageStore})
    await repository.setMealImage({mealId:meal.id,image,expectedImage:meal.image,onlyIfNonBrevity:true,actor:claimed.actor||'Brevity'})
    delete failures[meal.id]
-  }catch(error){failures[meal.id]={attempts:(failures[meal.id]?.attempts||0)+1,error:error.message||'Image generation failed.'}}}}
-  await Promise.all(Array.from({length:Math.min(6,pending.length)},work))
+  }catch(error){if(error.status===429||/rate limit/i.test(error.message||'')){rateLimited=true;continue}failures[meal.id]={attempts:(failures[meal.id]?.attempts||0)+1,error:error.message||'Image generation failed.'}}}}
+  await Promise.all(Array.from({length:Math.min(2,pending.length)},work))
   const latest=await read()
   if(latest?.data?.lease!==lease)return
-  const current=(await repository.getLibrary()).library
-  const remaining=current.filter(meal=>!isBrevityMealImage(meal)&&(failures[meal.id]?.attempts||0)<3)
-  await store.setJSON(key,{...latest.data,failures,enabled:true,lease:null,leaseUntil:null,updatedAt:now().toISOString()},{onlyIfMatch:latest.etag})
+  await store.setJSON(key,{...latest.data,failures,enabled:true,nextRunAt:new Date(now().getTime()+120_000).toISOString(),lease:null,leaseUntil:null,updatedAt:now().toISOString()},{onlyIfMatch:latest.etag})
  }
  return {status,start,run}
 }
