@@ -1062,6 +1062,7 @@ test('meal editor scales servings and prepares an exact recipe review without ap
   await page.route('**/.netlify/functions/meal-plans?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...mealPlanResponse(),libraryVersion:7})}))
   page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed.push(request)})
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.addStyleTag({content:'.meal-planner-controls .ti::before { content: "decorative-icon"; }'})
   await page.getByRole('button',{name:'Meal Library',exact:true}).click()
   await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
   await page.getByRole('button',{name:'Edit meal',exact:true}).click()
@@ -1652,7 +1653,7 @@ test('household meal calendar reviews portions, a la carte meals and cross-date 
  expect(custom.servings).toBe(6)
  await cancelReview()
  const source=first.locator('.meal-calendar-slot').first(),target=page.locator('.meal-calendar-day').nth(3).locator('.meal-calendar-slot').nth(1)
- if(testInfo.project.name==='desktop-chromium')await source.locator('[draggable]').dragTo(target)
+ if(testInfo.project.name==='desktop-chromium')await source.locator('[draggable]').dragTo(target,{sourcePosition:{x:20,y:70},targetPosition:{x:20,y:30}})
  else{await source.getByRole('button',{name:'Move',exact:true}).click();await target.getByRole('button',{name:'Place here'}).click()}
  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
  expect(JSON.parse(prepared.at(-1).operation.payload.commandJson)).toEqual({kind:'move',date:'2026-11-01',slot:'breakfast',toDate:'2026-11-04',toSlot:'lunch'})
@@ -1848,7 +1849,7 @@ test('GOV-001 prepares useful assistance without assigning fallback or changing 
  await panel.getByRole('button',{name:'Review and retain preparation',exact:true}).click()
  await expect.poll(()=>prepared.length).toBe(1)
  expect(prepared[0].operation.type).toBe('orchestration.case.update')
- expect(prepared[0].operation.payload.sourceVersions).toEqual(versions)
+ expect(prepared[0].operation.payload.sourceVersions).toEqual({[`plan:${date}`]:1})
  expect(prepared[0].operation.payload.event).toBe('prepare')
  expect(executed).toBe(0)
  expect(prepared[0].operation.payload.owner).toBeUndefined()
@@ -1888,4 +1889,30 @@ test('GOV-001 policy, support and recovery controls produce reviewed requests on
  expect(prepared[2].operation.type).toBe('orchestration.recovery.update');expect(prepared[2].operation.payload.intent).toBe('propose')
  expect(prepared[2].operation.payload.scheduleVersion).toBe(2)
  await expect(panel).toContainText('Nothing is saved until you confirm')
+})
+
+test('GOV-001 audit fixes keep completed learning and paused recovery exit reviewable',async({page},testInfo)=>{
+ const {buildOrchestration}=await import('../src/governance/orchestration.js')
+ const date=dateKey(),versions={[`plan:${date}`]:1,'shared:brevity_household_schedule_v1':9,'shared:brevity_household_maintenance_v1':1}
+ const configuration={effectiveDate:date,reviewDate:date,decisionMaker:'Larry',supportMembers:['Nyla'],workerEnabled:false,promptMinutes:240,threshold:64,recurrenceWindow:28,revision:1}
+ const data={...buildOrchestration({date,plan:{...plan(),assignments:[{id:'done-task',title:'Completed dinner preparation',owner:'Larry',status:'completed'}]},schedule:{routines:[]},maintenance:{},sourceStates:Object.fromEntries(Object.keys(versions).map(key=>[key,'available'])),versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:2,canReview:true,caseStoreAvailable:true,configuration,policyActive:true,preferenceVersion:0,routines:[],recovery:[],workload:[],conflicts:[]}
+ await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const panel=page.getByRole('region',{name:'Brevity can help',exact:true}),prepared=[]
+ page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
+ await panel.getByRole('combobox',{name:'Responsibility'}).selectOption(`assignment:${date}:done-task`)
+ await panel.getByText('Coordinate support, consequences and decisions',{exact:true}).click()
+ await panel.getByLabel('Shared coordination reason or observed strategy').fill('Preparing ingredients earlier helped.')
+ await panel.getByRole('button',{name:'Review what helped',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(1)
+ expect(prepared[0].operation.payload.event).toBe('learn')
+ data.paused=true;data.policyActive=false
+ data.recovery=[{id:'recovery-audit',title:'Travel recovery',startsOn:date,endsOn:date,status:'active',displayStatus:'active',essential:'Protect care',operations:[],exitOperations:[]}]
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ await panel.getByText('Recovery Mode',{exact:true}).click()
+ await expect(panel.getByRole('button',{name:'Review recovery exit',exact:true})).toBeEnabled()
+ await panel.getByRole('button',{name:'Review recovery exit',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(2)
+ expect(prepared[1].operation.payload.intent).toBe('end')
+ expect(prepared[1].expectedVersions['shared:brevity_household_schedule_v1']).toBe(9)
 })

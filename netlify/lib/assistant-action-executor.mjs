@@ -712,6 +712,13 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
     }
     prepared.push({resource,before:current.value,after:value,beforeVersion:current.version,afterVersion:current.version+1})
   }
+  const recoveryActivation=operations.find(op=>op.type==='orchestration.recovery.update'&&op.payload.intent==='activate')
+  if(recoveryActivation){
+    const governance=prepared.find(change=>change.resource==='shared:brevity_orchestration_v1')
+    const schedule=prepared.find(change=>change.resource==='shared:brevity_household_schedule_v1')
+    const plan=governance?.after?.recovery?.[recoveryActivation.targetId]
+    if(plan)plan.activatedOverrides=Object.fromEntries(plan.operations.map(op=>{const key=`${op.targetId}:${op.targetDate}`;return [key,structuredClone(schedule?.after?.routineOverrides?.[key]||null)]}))
+  }
   return {operations,prepared,preparedAt:nowIso(now)}
 }
 

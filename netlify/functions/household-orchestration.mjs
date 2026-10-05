@@ -15,7 +15,7 @@ export function createOrchestrationHandler({readSession=auth.readSession,resourc
     const permissions=await (repository||productionAssistantActionRepository()).getPermissions()
     const model=await loadOrchestration({resources:resources||createProductionActionResources(),session:{...session,planning:permissions?.[session.member]?.planning===true},date:event.queryStringParameters?.date})
     const inbox=resources||!model.policyActive||model.paused||!model.configuration?.workerEnabled?{messages:[]}:await readOrchestrationInbox(session.member,{isAdmin:session.role==='admin'}).catch(()=>({messages:[],error:'Background inbox is temporarily unavailable.'}))
-    inbox.messages=inbox.messages.filter(message=>message.policyRevision===model.configuration?.revision&&model.cases.some(c=>c.id===message.caseId))
+    inbox.messages=inbox.messages.filter(message=>message.policyRevision===model.configuration?.revision&&model.cases.some(c=>c.id===message.caseId&&c.stage!=='paused'&&(!message.exception||c.automaticException)))
     model.adaptation=adaptationSummary(model.observedCases||[],session.member,model.preferences,new Date(),inbox.observations||[])
     model.healthTrends=inbox.healthTrends||[]
     delete inbox.healthTrends
