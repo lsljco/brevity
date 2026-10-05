@@ -739,16 +739,16 @@ export async function captureExpectedVersions(proposal, resources) {
       versions[RECIPE_RESOURCE]=libraryState.version
       if(command.mealId&&!command.recipe&&library.some(meal=>meal.id===command.mealId&&!mealReadyForPlanning(meal)))throw Error('Review the imported recipe’s nutrition, ingredients, directions and serving yield before planning it.')
       if(command.mealId&&!library.some(meal=>meal.id===command.mealId))throw Error('That saved recipe is no longer available.')
-      for(const date of scheduleCommandDates(command)){const source=await resources.read(`meal:${date}`);days[date]=refreshAutomaticDay(command.kind==='generate'?createRollingMealDay(date):source.value,library);versions[`meal:${date}`]=source.version}
+      await Promise.all(scheduleCommandDates(command,snapshots.get(resource).value).map(async date=>{const source=await resources.read(`meal:${date}`);days[date]=refreshAutomaticDay(command.kind==='generate'?createRollingMealDay(date):source.value,library);versions[`meal:${date}`]=source.version}))
       if(command.kind==='generate'){
-        const dates=scheduleCommandDates(command)
+        const dates=scheduleCommandDates(command,snapshots.get(resource).value)
         const neighborDates=[...Array.from({length:6},(_,i)=>addMealDays(dates[0],-6+i)),...Array.from({length:6},(_,i)=>addMealDays(dates.at(-1),i+1))]
         const neighbors=await Promise.all(neighborDates.map(async date=>{const source=await resources.read(`meal:${date}`);versions[`meal:${date}`]=source.version;return resolveMealDay(effectiveMealDay(refreshAutomaticDay(source.value,library),snapshots.get(resource).value),library)}))
         const generated=generateSafeMealRange(dates,{previous:neighbors[5],next:neighbors[6],previousDays:neighbors.slice(0,6),nextDays:neighbors.slice(6),library})
         for(const date of dates)days[date]={...days[date],meals:Object.fromEntries(Object.entries(generated[date]).map(([slot,meal])=>[slot,meal?.id||null]))}
       }
       const after=applyMealScheduleCommand(snapshots.get(resource).value,command,days)
-      const mealReview=scheduleCommandDates(command).map(date=>{const day=resolveMealDay(effectiveMealDay(days[date],after),library);return `${date}: ${Object.entries(day.resolvedMeals).map(([slot,meal])=>`${slot}: ${meal?.name||'No meal'} (${day.servings?.[slot]??6} people)`).join('; ')}`})
+      const mealReview=scheduleCommandDates(command,snapshots.get(resource).value).map(date=>{const day=resolveMealDay(effectiveMealDay(days[date],after),library);return `${date}: ${Object.entries(day.resolvedMeals).map(([slot,meal])=>`${slot}: ${meal?.name||'No meal'} (${day.servings?.[slot]??6} people)`).join('; ')}`})
       operations.push({...operation,mealContext:{days,versions},mealReview});continue
     }
     // This identity comes from the same stored version used at execution, never

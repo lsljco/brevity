@@ -71,13 +71,13 @@ export function scheduleSlot(day,slot){return {mealId:day.meals?.[slot]||null,se
 export function assignScheduleSlot(day,slot,value){return {...day,meals:{...day.meals,[slot]:value.mealId},servings:{...day.servings,[slot]:value.servings},recipes:{...day.recipes,[slot]:value.recipe},substitutions:{...day.substitutions,[slot]:{customized:true}}}}
 export function normalizeMealScheduleCommand(input){
  const c=typeof input==='string'?JSON.parse(input):input
- if(!c||!['set','move','swap-day','move-day','shift-week','generate'].includes(c.kind))throw Error('Choose a supported meal calendar action.')
+ if(!c||!['set','move','swap-day','move-day','shift-week','skip','generate'].includes(c.kind))throw Error('Choose a supported meal calendar action.')
  const validDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&Number.isFinite(Date.parse(d))&&new Date(`${d}T12:00:00Z`).toISOString().slice(0,10)===d
  if(!validDate(c.date))throw Error('Choose an exact meal date.')
  const result={kind:c.kind,date:c.date}
  if(['move','swap-day','move-day'].includes(c.kind)){if(!validDate(c.toDate)||c.toDate===c.date&&c.kind!=='move')throw Error('Choose a different destination date.');result.toDate=c.toDate}
  const slots=['breakfast','lunch','dinner','snack1','snack2']
- if(['set','move'].includes(c.kind)){if(!slots.includes(c.slot))throw Error('Choose a meal slot.');result.slot=c.slot}
+ if(['set','move','skip'].includes(c.kind)){if(!slots.includes(c.slot))throw Error('Choose a meal slot.');result.slot=c.slot}
  if(c.kind==='move'){if(!slots.includes(c.toSlot)||c.date===c.toDate&&c.slot===c.toSlot)throw Error('Choose a different destination slot.');result.toSlot=c.toSlot}
  if(c.kind==='shift-week'){if(![-3,-2,-1,1,2,3].includes(c.offset))throw Error('Shift the week by one, two or three days.');result.offset=c.offset}
  if(c.kind==='generate'){if(!Number.isInteger(c.count)||c.count<1||c.count>31)throw Error('Choose up to 31 days.');result.count=c.count}
@@ -88,10 +88,20 @@ export function normalizeMealScheduleCommand(input){
  }
  return result
 }
-export function scheduleCommandDates(c){const add=(d,n)=>new Date(Date.parse(`${d}T12:00:00Z`)+n*86400000).toISOString().slice(0,10);return [...new Set(c.kind==='generate'?Array.from({length:c.count},(_,i)=>add(c.date,i)):c.kind==='shift-week'?Array.from({length:7},(_,i)=>[add(c.date,i),add(c.date,i+c.offset)]).flat():[c.date,c.toDate].filter(Boolean))]}
+export function scheduleCommandDates(c,schedule={}){
+ if(c.kind==='skip'){
+  const start=new Date(`${c.date}T12:00:00Z`),remaining=7-((start.getUTCDay()+6)%7)
+  const endWeek=new Date(start.getTime()+(remaining-1)*86400000).toISOString().slice(0,10)
+  const saved=Object.entries(schedule.days||{}).filter(([date,day])=>date>=c.date&&(day.meals?.[c.slot]||day.recipes?.[c.slot])).map(([date])=>date).sort().at(-1)
+  const end=saved&&saved>endWeek?saved:endWeek,count=Math.round((Date.parse(end)-Date.parse(c.date))/86400000)+2
+  if(count>93)throw Error('This skip would shift more than three months of saved meals. Shorten the future plan before skipping.')
+  return Array.from({length:count},(_,i)=>new Date(start.getTime()+i*86400000).toISOString().slice(0,10))
+ }
+const add=(d,n)=>new Date(Date.parse(`${d}T12:00:00Z`)+n*86400000).toISOString().slice(0,10);return [...new Set(c.kind==='generate'?Array.from({length:c.count},(_,i)=>add(c.date,i)):c.kind==='shift-week'?Array.from({length:7},(_,i)=>[add(c.date,i),add(c.date,i+c.offset)]).flat():[c.date,c.toDate].filter(Boolean))]}
 export function applyMealScheduleCommand(schedule,command,baseDays){
  const c=normalizeMealScheduleCommand(command),days={...(schedule?.days||{})},get=date=>structuredClone(effectiveMealDay(baseDays[date],{days})),put=(date,day)=>{days[date]={meals:day.meals,servings:day.servings||{},recipes:day.recipes||{},substitutions:day.substitutions||{}}},empty=day=>({...day,meals:Object.fromEntries(Object.keys(day.meals).map(slot=>[slot,null])),recipes:{},servings:{}})
  if(c.kind==='set'){const day=get(c.date),old=scheduleSlot(day,c.slot);put(c.date,assignScheduleSlot(day,c.slot,{mealId:c.mealId??old.mealId,servings:c.servings,recipe:c.recipe??(c.mealId?null:old.recipe)}))}
+ if(c.kind==='skip'){const dates=scheduleCommandDates(c,schedule),original=dates.map(get),first=scheduleSlot(original[0],c.slot);if(!first.mealId&&!first.recipe)throw Error('There is no meal to skip.');for(let i=dates.length-1;i>0;i--)put(dates[i],assignScheduleSlot(original[i],c.slot,scheduleSlot(original[i-1],c.slot)));put(c.date,assignScheduleSlot(original[0],c.slot,{mealId:null,recipe:null,servings:6}))}
  if(c.kind==='move'){const source=get(c.date),destination=c.date===c.toDate?source:get(c.toDate),a=scheduleSlot(source,c.slot),b=scheduleSlot(destination,c.toSlot);if(!a.mealId&&!a.recipe)throw Error('The source meal is empty.');if(c.date===c.toDate)put(c.date,assignScheduleSlot(assignScheduleSlot(source,c.slot,b),c.toSlot,a));else{put(c.date,assignScheduleSlot(source,c.slot,b));put(c.toDate,assignScheduleSlot(destination,c.toSlot,a))}}
  if(c.kind==='swap-day'||c.kind==='move-day'){const a=get(c.date),b=get(c.toDate);put(c.toDate,a);put(c.date,c.kind==='swap-day'?b:empty(a))}
  if(c.kind==='shift-week'){const dates=scheduleCommandDates({kind:'generate',date:c.date,count:7}),original=dates.map(get);dates.forEach(date=>put(date,empty(get(date))));dates.forEach((date,i)=>put(new Date(Date.parse(`${date}T12:00:00Z`)+c.offset*86400000).toISOString().slice(0,10),original[i]))}

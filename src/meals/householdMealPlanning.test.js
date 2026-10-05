@@ -117,3 +117,16 @@ test('automatic snacks start empty while deliberate snack choices survive refres
  const saved=effectiveMealDay(cleared,edited)
  assert.equal(saved.meals.snack1,'snack-envy-apple');assert.equal(saved.servings.snack1,1);assert.equal(saved.meals.snack2,null)
 })
+test('skipping dinner inserts an empty day and shifts dinners with portions across the week boundary',()=>{
+ const c={kind:'skip',date:'2026-10-05',slot:'dinner'},schedule={days:{'2026-10-12':{meals:{dinner:'saved-potroast'},servings:{dinner:4},recipes:{dinner:{name:'Custom roast',image:'photo'}}}}}
+ const dates=scheduleCommandDates(c,schedule),base=Object.fromEntries(dates.map(date=>[date,createRollingMealDay(date)]))
+ schedule.days['2026-10-12'].meals={...base['2026-10-12'].meals,dinner:'saved-potroast'}
+ const result=applyMealScheduleCommand(schedule,c,base)
+ assert.equal(result.days[c.date].meals.dinner,null)
+ for(let i=1;i<dates.length-1;i++)assert.equal(result.days[dates[i]].meals.dinner,base[dates[i-1]].meals.dinner)
+ assert.equal(result.days['2026-10-13'].meals.dinner,'saved-potroast')
+ assert.equal(result.days['2026-10-13'].servings.dinner,4)
+ assert.equal(result.days['2026-10-13'].recipes.dinner.image,'photo')
+ for(const date of dates){assert.equal(result.days[date].meals.breakfast,base[date].meals.breakfast);assert.equal(result.days[date].meals.lunch,base[date].meals.lunch)}
+ assert.throws(()=>normalizeMealScheduleCommand({...c,slot:'invalid'}))
+})

@@ -1,6 +1,7 @@
 export const PILLARS = [
   { id:'spiritual', label:'Spiritual Maturity', icon:'ti-sun', layer:1, description:'The foundation of everything — your relationship with God and family.', items:[] },
   { id:'health', label:'Health & Nutrition', icon:'ti-heart', layer:2, description:'Stewardship of the body — nourishment and whole-family wellness.', items:[
+    { id:'health-care', label:'Health', icon:'ti-heart-plus' },
     { id:'meal-plan', label:'Meal Plan', icon:'ti-tools-kitchen-2' },
     { id:'health-connections', label:'Health Connections', icon:'ti-heart-handshake' },
   ] },
@@ -12,7 +13,7 @@ export const PILLARS = [
     { id:'grocery-list', label:'Grocery List', icon:'ti-shopping-cart' },
     { id:'household-maintenance', label:'Household Operations', icon:'ti-broom' },
     { id:'family-calendar', label:'Family Calendar', icon:'ti-calendar-event' },
-    { id:'malbec-estate', label:'Malbec Estate', icon:'ti-building-community' },
+    { id:'malbec-estate', label:'Household Maintenance', icon:'ti-building-community' },
     { id:'live-intentional', label:'Live Intentional', icon:'ti-compass' },
   ]},
   { id:'education', label:'Education', icon:'ti-book', layer:4, description:'Knowledge and growth — learning across every member of the family.', items:[] },
