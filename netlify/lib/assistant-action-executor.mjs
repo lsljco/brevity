@@ -1,3 +1,5 @@
+import {GOVERNANCE_RESOURCE,applyOrchestration} from '../../src/governance/orchestration.js'
+import {validateOrchestrationCase,phaseOneEnabled} from './household-orchestration.mjs'
 import {mealReadyForPlanning} from '../../src/meals/mealCategories.js'
 import {MEAL_SCHEDULE_RESOURCE,normalizeMealScheduleCommand,scheduleCommandDates,applyMealScheduleCommand,refreshAutomaticDay,generateSafeMealRange,effectiveMealDay} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
@@ -46,6 +48,7 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type.startsWith('orchestration.'))return GOVERNANCE_RESOURCE
   if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
   if(operation.type==='apple.sources.update')return APPLE_SOURCES_RESOURCE
   if(operation.type==='module.configuration.update')return MODULE_RESOURCE
@@ -77,6 +80,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type.startsWith('orchestration.'))return value?.cases?.[operation.targetId]||null
   if(operation.type.startsWith('vendor.'))return value?.vendors?.find(v=>v.id===(operation.payload?.vendorId||operation.targetId))||null
   if(operation.type.startsWith('activity.'))return (value?.entries||[]).find(item=>item.id===operation.payload?.entryId)||null
   if(operation.type==='improvement.transition')return (Array.isArray(value)?value:[]).find(item=>item.id===operation.targetId)
@@ -106,6 +110,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type.startsWith('orchestration.'))return {before,after:applyOrchestration(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,orchestrationCase:context.orchestrationCase})}
   if(operation.type.startsWith('vendor.'))return {before,after:applyVendorOperation(value,operation,createId)}
   if(operation.type==='apple.sources.update')return {before,after:normalizeAppleSources(operation.payload).sources}
   if(operation.type==='module.configuration.update')return {before,after:applyModulePatch(value,operation.payload)}
@@ -658,6 +663,8 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
     const reviewedVersion=proposal.expectedVersions[resource]
     if(Number(current.version)!==reviewedVersion)throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
     for(const operation of resourceOperations){
+      if(operation.type.startsWith('orchestration.')&&!phaseOneEnabled())throw Error('GOV-001 Phase 1 has not been activated.')
+      const orchestrationCase=operation.type==='orchestration.case.update'?await validateOrchestrationCase({operation,resources,session}):null
       if(operation.type==='meal.schedule.update'){
         if(!operation.mealContext?.days||!operation.mealContext?.versions)throw Error('Refresh the meal calendar before reviewing this change.')
         for(const [dependency,version] of Object.entries(operation.mealContext.versions)){if((await resources.read(dependency)).version!==version)throw Object.assign(Error('A recipe or meal changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})}
@@ -687,7 +694,7 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
         const match=report.suggestions.find(row=>row.plan.id===operation.targetId&&row.occurrenceDate===operation.targetDate&&row.actual.id===evidence.actualId)
         if(!match||Object.keys(match.evidence).some(key=>match.evidence[key]!==evidence[key])) throw Object.assign(new Error('The planned or posted charge changed, was already reconciled, or no longer has a unique match. Refresh the reconciliation report.'),{code:'VERSION_CONFLICT'})
       }
-      const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version}); value=result.after
+      const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version,orchestrationCase}); value=result.after
     }
     prepared.push({resource,before:current.value,after:value,beforeVersion:current.version,afterVersion:current.version+1})
   }

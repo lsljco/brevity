@@ -1,3 +1,4 @@
+import {normalizeOrchestrationPayload} from '../../src/governance/orchestration.js'
 import {MEAL_CATEGORIES} from '../../src/meals/mealCategories.js'
 import {normalizeMealScheduleCommand,MEAL_SCHEDULE_RESOURCE} from '../../src/meals/householdMealPlanning.js'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources } from '../../src/family/appleCalendarSources.js'
@@ -18,6 +19,7 @@ import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-pla
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 export const ACTION_DOMAINS = ['planning', 'calendar', 'projects', 'finance']
 export const ACTION_TYPES = {
+  'orchestration.case.update':'planning','orchestration.pause.update':'planning',
   ...Object.fromEntries(VENDOR_TYPES.map(type=>[type,'finance'])),
   'member.preference.set':'planning',
   'module.configuration.update':'planning',
@@ -304,6 +306,7 @@ function normalizeMeetingSessionCorrections(value){
 
 function normalizeActionPayload(type, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`The ${type} action details must be an object.`)
+  if(type.startsWith('orchestration.'))return normalizeOrchestrationPayload(type,input)
   if (type.startsWith('plan.')) return normalizeDailyPlanActionPayload(type, input)
   const payload = input
   if(type.startsWith('vendor.'))return normalizeVendorPayload(type,payload)
@@ -689,6 +692,8 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type==='orchestration.pause.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Only the household administrator may pause household assistance.'}
+  if(operation.type==='orchestration.case.update')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'Planning permission is required for reviewed assistance records.'}
   if(operation.type==='apple.sources.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Apple calendar connections require administrator review.'}
   if(operation.type.startsWith('calendar.')&&currentRecord?.sourceReadOnly)return {allowed:false,reason:'Edit this connected calendar in Apple Calendar.'}
   if(operation.type==='module.configuration.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Household module configuration requires administrator review.'}
