@@ -148,7 +148,7 @@ test('routine escalation requires evidenced consequence and prior assistance, th
  await assert.rejects(reviewOperation(resources,govOperation('escalate')),/consequence/)
  retain(resources,[{event:'assess',factors}])
  await assert.rejects(reviewOperation(resources,govOperation('escalate')),/useful assistance/)
- retain(resources,[{event:'assess',factors},{event:'prepare'}])
+ retain(resources,[{event:'assess',factors},{event:'prepare',at:'2026-10-04T08:00:00Z'},{event:'owner-intervention',note:'Confirmed next step with owner',at:'2026-10-04T09:00:00Z'},{event:'support-exhausted',note:'Approved coverage could not resolve the blocker',at:'2026-10-04T14:00:00Z'}])
  const result=await reviewOperation(resources,govOperation('escalate'))
  const event=result[0].after.cases[operation().targetId].events.at(-1)
  assert.equal(event.recipient,'Larry');assert.equal(event.exception.owner,'Terica');assert.ok(event.exception.attempts.length)
@@ -159,7 +159,7 @@ test('routine escalation requires evidenced consequence and prior assistance, th
 })
 test('automatic exception visibility belongs only to ratified explicit recipient; no fallback leader',async()=>{
  const resources=governed();resources.data.get(GOVERNANCE_RESOURCE).value.policy.decisionMaker='Nyla'
- retain(resources,[{event:'assess',factors},{event:'prepare'}])
+ retain(resources,[{event:'assess',factors},{event:'prepare',at:'2026-10-04T08:00:00Z'},{event:'owner-intervention',note:'Confirmed next step with owner',at:'2026-10-04T09:00:00Z'},{event:'support-exhausted',note:'Approved coverage could not resolve the blocker',at:'2026-10-04T14:00:00Z'}])
  const nyla=await loadOrchestration({resources,date,session:{member:'Nyla',role:'member'}})
  assert.equal(nyla.cases.find(c=>c.sourceId==='a1').automaticException,true)
  const lorenzo=await loadOrchestration({resources,date,session:{member:'Lorenzo',role:'member'}})
@@ -182,7 +182,7 @@ test('preferences are own-member only; learning is opt-in and unknowns do not co
  assert.equal(adaptationSummary([], 'Terica',defaultPreferences()).enabled,false)
  const observations=[{member:'Terica',at:`${date}T15:00:00Z`,state:'unknown'},{member:'Terica',at:`${date}T15:00:00Z`,state:'completed',promptedAt:`${date}T14:00:00Z`,acknowledgedAt:`${date}T14:30:00Z`}]
  const result=adaptationSummary([],'Terica',{...defaultPreferences(),learning:true},new Date(`${date}T16:00:00Z`),observations)
- assert.deepEqual(result.completionReliability,{completed:1,observed:1});assert.equal(result.responseTime.medianMinutes,30)
+ assert.deepEqual(result.observedCompletion,{completed:1,observed:1});assert.equal(result.responseTime.medianMinutes,30)
 })
 test('Recovery Mode activation and early exit use exact dated changes, audit and safe Undo',async()=>{
  const resources=governed(),repository=memoryRepository(),permissions=defaultActionPermissions('admin')
@@ -225,15 +225,15 @@ test('durable follow-up is scoped, opt-in, idempotent, quiet-window aware, and r
  assert.equal(store.value.observations.find(o=>o.sourceId==='a1').state,'completed')
  resources.data.get(preferenceResource('Terica')).value.learning=false
  clock=new Date(clock.getTime()+16*60000);await run();assert.equal(store.value.observations.length,0)
- clock=new Date(`${date}T04:30:00Z`);store.value.nextRunAt=null;await run();assert.equal(store.value.messages.length,0)
+ const retainedMessages=clone(store.value.messages);clock=new Date(`${date}T04:30:00Z`);store.value.nextRunAt=null;await run();assert.deepEqual(store.value.messages,retainedMessages)
 })
 test('worker refuses concurrent leases, inactive policy, source failures and stale policy snapshots',async()=>{
  const resources=governed(),clock=new Date(`${date}T16:00:00Z`),store=jobStore({leaseUntil:`${date}T16:01:00Z`})
  const runner=createOrchestrationRunner({store,key:'test',resources,now:()=>clock,createId:()=> 'lease'})
  assert.equal((await runner()).state,'waiting')
  store.value.leaseUntil=null;resources.data.delete(planKey)
- assert.equal((await runner()).state,'retry-pending');assert.equal(store.value.messages.length,0)
- store.value.failures=6;assert.equal((await runner()).state,'attention-required')
+ assert.equal((await runner()).state,'completed');assert.ok(store.value.coverage.unavailableSources>0)
+ store.value.failures=6;store.value.nextRunAt=null;assert.equal((await runner()).state,'completed')
  resources.data.get(GOVERNANCE_RESOURCE).value.paused=true;assert.equal((await runner()).state,'inactive')
  const r=governed(),s=jobStore(),read=r.read.bind(r);let count=0;r.read=async key=>{const result=await read(key);if(key===GOVERNANCE_RESOURCE&&++count===3)result.version++;return result}
  assert.equal((await createOrchestrationRunner({store:s,key:'test',resources:r,now:()=>clock,createId:()=> 'lease'})()).state,'retry-pending')
@@ -292,4 +292,103 @@ test('existing version-zero sources remain available; explicitly missing sources
  assert.equal(model.sourceStates[planKey],'available');assert.equal(model.sourceStates[scheduleKey],'available');assert.ok(model.cases.some(c=>c.sourceId==='a1'))
  resources.data.get(scheduleKey).missing=true
  assert.equal((await loadOrchestration({resources,date,session})).sourceStates[scheduleKey],'unavailable')
+})
+
+import {escalationReadiness,eligibleException,caseResolved,activeDependencies,recoveryExitOperations} from '../governance/governanceModel.js'
+import {validateGovernance} from '../../netlify/lib/governance-service.mjs'
+import {retainObservation} from '../../netlify/lib/orchestration-runner.mjs'
+test('routine escalation waits for owner opportunity and support outcome; immediate evidence bypasses delay',()=>{
+ const now=new Date('2026-10-05T16:00:00Z'),item={risk:consequenceAssessment(factors),events:[{event:'prepare',at:'2026-10-05T08:00:00Z'}]}
+ assert.equal(eligibleException(item,approvedPolicy,now),false)
+ item.events.push({event:'owner-intervention',at:'2026-10-05T13:00:00Z'})
+ assert.match(escalationReadiness(item,approvedPolicy,now).reason,/window/)
+ item.events[1].at='2026-10-05T09:00:00Z'
+ assert.equal(eligibleException(item,approvedPolicy,now),false)
+ item.events.push({event:'support-exhausted',at:'2026-10-05T14:00:00Z',note:'Coverage unavailable after review'})
+ assert.equal(eligibleException(item,approvedPolicy,now),true)
+ item.events.push({id:'request',event:'request-support',recipient:'Nyla'})
+ assert.equal(eligibleException(item,approvedPolicy,now),false)
+ item.events.push({event:'withdraw-support',requestId:'request',note:'No longer needed; other coverage reviewed'})
+ assert.equal(eligibleException(item,approvedPolicy,now),true)
+ assert.equal(eligibleException({...item,events:[],risk:consequenceAssessment({...factors,urgency:{value:4,evidence:'Immediate consequential deadline'}})},approvedPolicy,now),true)
+ item.events.push({event:'decision'})
+ assert.equal(eligibleException(item,approvedPolicy,now),false)
+})
+test('Recovery exit remains reviewable while paused or expired and preserves newer occurrence edits',async()=>{
+ const op={type:'household.schedule.occurrence.update',targetId:'r1',targetDate:date,payload:{date,cancelled:true}},snapshot={date,cancelled:true,updatedAt:'original'}
+ const saved={status:'active',activatedScheduleVersion:2,operations:[op],activatedOverrides:{[`r1:${date}`]:snapshot}}
+ const value={paused:true,policy:{...approvedPolicy,reviewDate:'2026-10-04'},recovery:{r:saved}},source={version:9,value:{routines:[{id:'r1'}],routineOverrides:{[`r1:${date}`]:clone(snapshot)}}}
+ const operation={type:'orchestration.recovery.update',targetId:'r',payload:{intent:'end'}},now=new Date('2026-10-05T16:00:00Z')
+ const restore=recoveryExitOperations(saved,date,source.value)
+ assert.equal(restore.length,1)
+ await validateGovernance({operation,value,resources:{read:async()=>source},proposal:{operations:restore},now})
+ source.value.routineOverrides[`r1:${date}`].updatedAt='newer'
+ assert.equal(recoveryExitOperations(saved,date,source.value).length,0)
+ await assert.rejects(validateGovernance({operation,value,resources:{read:async()=>source},proposal:{operations:restore},now}),/exact reviewed/)
+ await validateGovernance({operation,value,resources:{read:async()=>source},proposal:{operations:[]},now})
+})
+test('closed source cases allow learning and resolved assistance can reopen without completing source',async()=>{
+ const resources=governed()
+ resources.data.get(planKey).value.assignments[0].status='completed'
+ assert.equal((await reviewOperation(resources,govOperation('learn')))[0].after.cases[operation().targetId].events.at(-1).event,'learn')
+ await assert.rejects(reviewOperation(resources,govOperation('reopen')),/source workflow/)
+ resources.data.get(planKey).value.assignments[0].status='pending'
+ const resolved=await reviewOperation(resources,govOperation('resolve'));resources.data.get(GOVERNANCE_RESOURCE).value=resolved[0].after
+ const model=await loadOrchestration({resources,date,session})
+ assert.equal(model.cases.some(c=>c.sourceId==='a1'),false);assert.equal(model.closedCases.some(c=>c.sourceId==='a1'),true)
+ const reopened=await reviewOperation(resources,govOperation('reopen'))
+ assert.equal(caseResolved(reopened[0].after.cases[operation().targetId].events),false)
+ assert.equal(resources.data.get(planKey).value.assignments[0].status,'pending')
+ assert.deepEqual(activeDependencies([{event:'dependency',dependencyId:'x'},{event:'remove-dependency',dependencyId:'x'}]),[])
+})
+test('retention cleanup runs with worker disabled and expired observations cannot be refreshed into eligibility',async()=>{
+ const resources=governed(),now=new Date('2026-10-05T16:00:00Z')
+ resources.data.set(preferenceResource('Terica'),{version:1,value:{...defaultPreferences(),learning:true,retentionDays:7}})
+ resources.data.get(GOVERNANCE_RESOURCE).value.policy.workerEnabled=false
+ const store=jobStore({observations:[{id:'assignment:2026-09-01:old:Terica',member:'Terica',at:now.toISOString()}]})
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now})
+ assert.equal((await run()).state,'inactive');assert.deepEqual(store.value.observations,[])
+ assert.equal(retainObservation({date:'2026-09-01',at:now.toISOString()},{...defaultPreferences(),learning:true},now),false)
+})
+test('worker rotates more than fifty cases and retains inbox items outside prompting windows',async()=>{
+ const resources=governed(),store=jobStore();let now=new Date('2026-10-05T16:00:00Z')
+ resources.data.get(planKey).value.assignments=Array.from({length:60},(_,i)=>({id:`audit-${i}`,title:`Task ${i}`,owner:'Terica',status:'pending'}))
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now})
+ await run();assert.equal(store.value.messages.filter(m=>m.recipient==='Terica').length,50)
+ now=new Date(now.getTime()+16*60000);await run();assert.equal(store.value.messages.filter(m=>m.recipient==='Terica').length,60)
+ const before=clone(store.value.messages)
+ now=new Date('2026-10-06T01:00:00Z');await run()
+ assert.deepEqual(store.value.messages,before)
+})
+test('prompt method remains the original method after preferences change',async()=>{
+ const resources=governed(),store=jobStore();let now=new Date('2026-10-05T16:00:00Z')
+ const pref={version:1,value:{...defaultPreferences(),learning:true,style:'checklist'}};resources.data.set(preferenceResource('Terica'),pref)
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now});await run()
+ pref.value.style='options';pref.version++
+ now=new Date(now.getTime()+16*60000);await run()
+ assert.equal(store.value.observations.find(o=>o.sourceId==='a1').style,'checklist')
+})
+test('review reminder does not extend legacy authorization or expire an explicitly longer authorization',()=>{
+ assert.equal(policyActive({...approvedPolicy,reviewDate:'2026-10-04'},date),false)
+ assert.equal(policyActive({...approvedPolicy,reviewDate:'2026-10-04',expiresOn:'2026-10-10'},date),true)
+ const payload=Object.fromEntries(['effectiveDate','reviewDate','supportMembers','decisionMaker','promptMinutes','threshold','recurrenceWindow','workerEnabled'].map(k=>[k,approvedPolicy[k]]))
+ assert.throws(()=>normalizeGovernancePayload('orchestration.policy.update',{...payload,expiresOn:'2026-09-01'}),/expire before/)
+})
+test('worker follows previously prompted source to completion across date boundaries without requiring a retained case event',async()=>{
+ const resources=governed(),store=jobStore();let now=new Date('2026-10-05T16:00:00Z')
+ resources.data.set(preferenceResource('Terica'),{version:1,value:{...defaultPreferences(),learning:true}})
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now});await run()
+ resources.data.get(planKey).value.assignments[0].status='completed';resources.data.get(planKey).version++
+ resources.data.set('plan:2026-10-06',{version:1,value:{date:'2026-10-06',assignments:[]}})
+ now=new Date('2026-10-06T16:00:00Z');await run()
+ assert.equal(store.value.observations.find(o=>o.sourceId==='a1').state,'completed')
+ assert.equal(store.value.messages.some(m=>m.caseId===operation().targetId),false)
+})
+test('consent revoked during a run prevents that member observations from being committed',async()=>{
+ const resources=governed(),store=jobStore(),now=new Date('2026-10-05T16:00:00Z'),prefKey=preferenceResource('Terica')
+ resources.data.set(prefKey,{version:1,value:{...defaultPreferences(),learning:true}})
+ const read=resources.read.bind(resources);let reads=0
+ resources.read=async key=>{if(key===prefKey&&++reads===2)resources.data.set(prefKey,{version:2,value:defaultPreferences()});return read(key)}
+ await createOrchestrationRunner({resources,store,key:'test',now:()=>now})()
+ assert.deepEqual(store.value.observations,[])
 })

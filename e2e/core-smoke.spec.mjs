@@ -111,7 +111,9 @@ test('Today can browse tomorrow and the next seven days without changing a plan'
   await expect(page.locator('.upcoming-schedule .today-dashboard')).toBeVisible()
   await expect(page.locator('.upcoming-schedule .weather-header')).toBeVisible()
   for (const pillar of ['spiritual','health','fitness','household','education','finance','ministry']) {
-    await expect(page.locator(`.upcoming-schedule [data-pillar="${pillar}"]`)).toBeVisible()
+    const sections=page.locator(`.upcoming-schedule [data-pillar="${pillar}"]`)
+    expect(await sections.count()).toBeGreaterThan(0)
+    for(const section of await sections.all())await expect(section).toBeVisible()
   }
   await expect(page.getByRole('heading',{name:'Appointments & Meetings'})).toBeVisible()
   await expect(page.getByRole('heading',{name:'Scheduled Chores'})).toBeVisible()

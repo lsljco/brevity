@@ -1,4 +1,4 @@
-import {GOVERNANCE_TYPES,normalizeGovernancePayload,sharedCaseMember,supportRequests,policyActive,eligibleException} from './governanceModel.js'
+import {GOVERNANCE_TYPES,normalizeGovernancePayload,sharedCaseMember,supportRequests,policyActive,eligibleException,activeDependencies,caseResolved} from './governanceModel.js'
 import {dailyPracticeCards, readPracticeDay, mealReadiness, validPracticeDate} from '../household/operatingPractices.js'
 import {buildHouseholdMaintenanceWeek, householdOccurrence, normalizeHouseholdMaintenanceState} from '../household/householdMaintenanceData.js'
 
@@ -50,7 +50,7 @@ function assistance(item) {
 }
 export function buildOrchestration({date,policyDate=date,plan,schedule,maintenance,sourceStates={},versions={},saved={},member,isAdmin=false}={}) {
   if(!validPracticeDate(date))throw Error('Choose a valid household date.')
-  const candidates=[],observedCases=[]
+  const candidates=[],observedCases=[],closedCases=[]
   const add=item=>{
     if(!item.sourceId||item.closed)return
     const owners=[...new Set((item.owners||[]).filter(Boolean))]
@@ -66,7 +66,8 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     base.events=events
     base.stage=paused?'paused':events.some(e=>e.event==='prepare')?'ASSIST':events.some(e=>e.event==='acknowledge')?'DIAGNOSE':'DETECT'
     base.requests=supportRequests(retained)
-    base.dependencies=events.filter(e=>e.event==='dependency').map(e=>({id:e.dependencyId,title:e.dependencyTitle}))
+    base.dependencies=activeDependencies(events)
+    base.resolved=caseResolved(events)
     base.risk=consequenceAssessment([...events].reverse().find(e=>e.event==='assess')?.factors||{})
     if(events.some(e=>e.event==='escalate'))base.stage='ESCALATE'
     else if(base.requests.length)base.stage='ORCHESTRATE'
@@ -75,7 +76,8 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     base.exception={issue:base.title,owner:owners.join(', ')||'Unresolved — no fallback assigned',requiredOutcome:base.outcome,whatHappened:base.evidence,attempts:events.length?events.map(e=>`${e.at}: ${e.actor} reviewed ${e.event}${e.note?` — ${e.note}`:''}`):['No persisted assistance attempts. A preview is not an executed action.'],risk:base.risk.complete?`Reviewed consequence score: ${base.risk.score}/256. Factors: ${Object.entries(base.risk.factors).map(([k,v])=>`${k} ${v.value}: ${v.evidence}`).join('; ')}`:'Consequence factors require evidence; no severity or escalation is inferred.',options:base.assistance.options,recommendation:base.assistance.recommendation,decision:base.owners.length?'Confirm the next step or request support.':'Confirm accountable ownership.',deadline:base.due||'Not established — confirm an intervention deadline.',recipient:policyActive(saved.policy,policyDate)?saved.policy.decisionMaker:null,routing:policyActive(saved.policy,policyDate)?`Designated decision-maker: ${saved.policy.decisionMaker}. Sharing requires reviewed escalation or explicitly approved in-app follow-up.`:'Leadership routing has not been approved. This is a preview; nothing has been sent.'}
     base.automaticException=policyActive(saved.policy,policyDate)&&eligibleException(base,saved.policy)&&!paused&&!saved.paused
     observedCases.push(base)
-    if(!['completed','verified'].includes(base.state))candidates.push(base)
+    if(!['completed','verified'].includes(base.state)&&!base.resolved)candidates.push(base)
+    else {base.stage=base.resolved?'RESOLVED':'LEARN';closedCases.push(base)}
   }
   if(sourceStates[`plan:${date}`]==='available'&&plan){
     for(const item of plan.assignments||[])add({kind:'assignment',sourceId:item.id,sourceResource:`plan:${date}`,title:item.title||'Assignment',owners:[item.owner].filter(x=>x&&x!=='Family'),state:explicitState(item),closed:['deferred','cancelled'].includes(item.status),outcome:item.title||'Confirm the required outcome',evidence:`Saved assignment status: ${item.status||'unrecorded'}.`,due:item.dueAt||'',steps:item.notes?[item.notes]:[],pillar:item.pillar||'household'})
@@ -101,7 +103,7 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
       add({kind:'chore',sourceId:task.occurrenceId,sourceResource:'shared:brevity_household_maintenance_v1',title:task.title,owners:task.owners.filter(x=>x!=='Everyone'),coveredBy:occurrence.coveredBy,state:explicitState(occurrence),outcome:task.standard||task.title,evidence:`Recorded chore status: ${occurrence.status||'unrecorded'}${occurrence.exception?` — ${occurrence.exception}`:''}.`,due:task.endTime||task.timing||'',steps:task.details||[],pillar:'household'})
     }
   }
-  return {date,policy:GOV_POLICY,cases:candidates,observedCases,sourceStates,sourceVersions:versions,paused:saved.paused===true,systemHealth:{visibleOpenCases:candidates.length,unknown:candidates.filter(x=>x.state==='unknown').length,blocked:candidates.filter(x=>x.state==='blocked').length,unassigned:candidates.filter(x=>!x.owners.length).length,unavailableSources:Object.values(sourceStates).filter(x=>x!=='available').length,scope:isAdmin?'Household source records':'Your owned or covered responsibilities',notice:'Visible operational indicators, not a household performance score. Missing evidence remains unknown.'}}
+  return {date,policy:GOV_POLICY,cases:candidates,closedCases,observedCases,sourceStates,sourceVersions:versions,paused:saved.paused===true,systemHealth:{visibleOpenCases:candidates.length,unknown:candidates.filter(x=>x.state==='unknown').length,blocked:candidates.filter(x=>x.state==='blocked').length,unassigned:candidates.filter(x=>!x.owners.length).length,unavailableSources:Object.values(sourceStates).filter(x=>x!=='available').length,scope:isAdmin?'Household source records':'Your owned or covered responsibilities',notice:'Visible operational indicators, not a household performance score. Missing evidence remains unknown.'}}
 }
 export function normalizeOrchestrationPayload(type,input) {
   if(GOVERNANCE_TYPES.includes(type)){

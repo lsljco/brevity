@@ -11,10 +11,11 @@ const date=v=>{if(!validPracticeDate(v))throw Error('Choose a valid date.');retu
 const members=v=>{if(!Array.isArray(v)||v.length>6||v.some(m=>!MEMBERS.includes(m)))throw Error('Choose known household members.');return [...new Set(v)]}
 export const defaultPreferences=()=>({learning:false,style:'checklist',startTime:'08:00',endTime:'20:00',capacityMinutes:null,retentionDays:28,supportStrategy:''})
 export function normalizeGovernancePayload(type,p){
- only(p,type==='orchestration.policy.update'?['effectiveDate','reviewDate','supportMembers','decisionMaker','promptMinutes','threshold','recurrenceWindow','workerEnabled']:type==='orchestration.policy.approve'?['revision']:type==='orchestration.preferences.update'?['learning','style','startTime','endTime','capacityMinutes','retentionDays','supportStrategy']:type==='orchestration.recovery.update'?['intent','title','reason','startsOn','endsOn','essential','routineIds','scheduleVersion']:['event','recipient','requestId','note','factors','dependencyId','sourceVersions'])
+ only(p,type==='orchestration.policy.update'?['effectiveDate','reviewDate','expiresOn','supportMembers','decisionMaker','promptMinutes','threshold','recurrenceWindow','workerEnabled']:type==='orchestration.policy.approve'?['revision']:type==='orchestration.preferences.update'?['learning','style','startTime','endTime','capacityMinutes','retentionDays','supportStrategy']:type==='orchestration.recovery.update'?['intent','title','reason','startsOn','endsOn','essential','routineIds','scheduleVersion']:['event','recipient','requestId','note','factors','dependencyId','sourceVersions'])
  if(type==='orchestration.policy.update'){
   if(!ADULTS.includes(p.decisionMaker))throw Error('Choose an explicit leadership decision-maker. No fallback is assigned.')
   date(p.effectiveDate);date(p.reviewDate);if(p.reviewDate<p.effectiveDate)throw Error('Policy review must follow its effective date.')
+  if(p.expiresOn){date(p.expiresOn);if(p.expiresOn<p.reviewDate)throw Error('Authorization must not expire before the review reminder.')}
   if(typeof p.workerEnabled!=='boolean')throw Error('Choose whether to enable in-app follow-up.')
   return {...p,supportMembers:members(p.supportMembers).filter(m=>ADULTS.includes(m)),promptMinutes:integer(p.promptMinutes,60,1440),threshold:integer(p.threshold,1,256),recurrenceWindow:integer(p.recurrenceWindow,7,90)}
  }
@@ -32,28 +33,50 @@ export function normalizeGovernancePayload(type,p){
   if(!title||!reason||!essential)throw Error('Describe the disruption and essential outcomes to protect.')
   return {...p,title,reason,essential,routineIds:[...new Set(p.routineIds)],scheduleVersion:integer(p.scheduleVersion,0,Number.MAX_SAFE_INTEGER)}
  }
- if(!['request-support','accept-support','decline-support','assess','escalate','decision','learn','dependency'].includes(p.event))throw Error('Unsupported coordination event.')
+ if(!['request-support','accept-support','decline-support','assess','escalate','decision','learn','dependency','remove-dependency','owner-intervention','support-exhausted','resolve','reopen','withdraw-support'].includes(p.event))throw Error('Unsupported coordination event.')
  const result={event:p.event,note:text(p.note||'',1000),sourceVersions:p.sourceVersions}
  if(p.event==='request-support'){if(!ADULTS.includes(p.recipient))throw Error('Choose an approved adult support member.');result.recipient=p.recipient}
- if(['accept-support','decline-support'].includes(p.event)){result.requestId=text(p.requestId,160);if(!result.requestId)throw Error('Choose an exact support request.')}
+ if(['accept-support','decline-support','withdraw-support'].includes(p.event)){result.requestId=text(p.requestId,160);if(!result.requestId)throw Error('Choose an exact support request.')}
  if(p.event==='assess'){
   only(p.factors,['urgency','impact','recurrence','crossPillarEffect']);result.factors={}
   for(const k of ['urgency','impact','recurrence','crossPillarEffect']){only(p.factors[k],['value','evidence']);const evidence=text(p.factors[k].evidence,500);if(!evidence)throw Error('Explain every consequence factor.');result.factors[k]={value:integer(p.factors[k].value,1,4),evidence}}
  }
- if(p.event==='dependency'){result.dependencyId=text(p.dependencyId,300);if(!result.dependencyId)throw Error('Choose an exact dependency.')}
- if(['decision','learn','escalate'].includes(p.event)&&!result.note)throw Error('Record the decision, observed strategy, or escalation reason.')
+ if(['dependency','remove-dependency'].includes(p.event)){result.dependencyId=text(p.dependencyId,300);if(!result.dependencyId)throw Error('Choose an exact dependency.')}
+ if(['decision','learn','escalate','owner-intervention','support-exhausted','resolve','reopen','withdraw-support'].includes(p.event)&&!result.note)throw Error('Record the decision, observed strategy, or escalation reason.')
  return result
 }
-export function policyActive(policy,today){return Boolean(policy?.approvedBy==='Lorenzo'&&policy.approvedRevision===policy.revision&&policy.effectiveDate<=today&&policy.reviewDate>=today)}
-export function eligibleException(item,policy){
- return Boolean(policy?.workerEnabled&&item.risk?.complete&&item.risk.score>=policy.threshold&&(item.events?.some(e=>e.event==='prepare')||item.risk.factors.urgency.value===4))
+export function policyActive(policy,today){return Boolean(policy?.approvedBy==='Lorenzo'&&policy.approvedRevision===policy.revision&&policy.effectiveDate<=today&&(policy.expiresOn||policy.reviewDate)>=today)}
+export function activeDependencies(events=[]){
+ const active=new Map()
+ for(const event of events){if(event.event==='dependency')active.set(event.dependencyId,{id:event.dependencyId,title:event.dependencyTitle});if(event.event==='remove-dependency')active.delete(event.dependencyId)}
+ return [...active.values()]
 }
-export const recoveryExitOperations=(plan,today)=>(plan.operations||[]).filter(op=>op.targetDate>=today).map(op=>({...op,payload:{date:op.targetDate,cancelled:false},description:`End Recovery Mode: restore the dated routine on ${op.targetDate}. Standing ownership is unchanged.`}))
+export function caseResolved(events=[]){return [...events].reverse().find(e=>['resolve','reopen','decision'].includes(e.event))?.event!=='reopen'&&events.some(e=>['resolve','decision'].includes(e.event))}
+export function escalationReadiness(item,policy,now=new Date()){
+ const history=item.events||[],events=history.slice(history.findLastIndex(e=>e.event==='reopen')+1)
+ if(caseResolved(events)||['completed','verified'].includes(item.state))return {allowed:false,reason:'This case is resolved.'}
+ if(!item.risk?.complete)return {allowed:false,reason:'Record the evidenced consequence assessment before escalation.'}
+ if(item.risk.factors.urgency.value===4)return {allowed:true,reason:'Evidenced immediate consequence requires leadership judgment.'}
+ const prepare=events.find(e=>e.event==='prepare')
+ if(!prepare)return {allowed:false,reason:'Prepare useful assistance before routine escalation.'}
+ const intervention=[...events].reverse().find(e=>e.event==='owner-intervention'&&Date.parse(e.at)>=Date.parse(prepare.at))
+ if(!intervention)return {allowed:false,reason:'Record the owner intervention and allow time for the owner to act.'}
+ const wait=(policy?.promptMinutes||240)*60000
+ if(!Number.isFinite(Date.parse(intervention.at))||now.getTime()-Date.parse(intervention.at)<wait)return {allowed:false,reason:'The owner response window is still open.'}
+ const exhausted=[...events].reverse().find(e=>e.event==='support-exhausted'&&Date.parse(e.at)>=Date.parse(intervention.at)+wait)
+ if(!exhausted)return {allowed:false,reason:'Review approved support and established coverage, and record why assistance remains insufficient.'}
+ if(supportRequests({events}).some(r=>r.response==='pending'))return {allowed:false,reason:'An approved support request still needs an answer or reviewed withdrawal.'}
+ return {allowed:true,reason:'Preparation, owner opportunity, and support/coverage review are recorded.'}
+}
+export function eligibleException(item,policy,now=new Date()){
+ return Boolean(policy?.workerEnabled&&item.risk?.complete&&item.risk.score>=policy.threshold&&escalationReadiness(item,policy,now).allowed)
+}
+export const recoveryExitOperations=(plan,today,schedule,scheduleVersion)=>(plan.operations||[]).filter(op=>op.targetDate>=today&&(!schedule||plan.activatedOverrides||scheduleVersion===undefined||scheduleVersion===plan.activatedScheduleVersion)&&(!schedule||!plan.activatedOverrides||JSON.stringify(schedule.routineOverrides?.[`${op.targetId}:${op.targetDate}`])===JSON.stringify(plan.activatedOverrides[`${op.targetId}:${op.targetDate}`]))&&(!schedule||schedule.routines?.some(r=>r.id===op.targetId))).map(op=>({...op,payload:{date:op.targetDate,cancelled:false},description:`End Recovery Mode: restore the dated routine on ${op.targetDate}. Standing ownership is unchanged.`}))
 export function supportRequests(entry){
  const events=entry?.events||[]
- return events.filter(e=>e.event==='request-support').map(e=>({...e,response:[...events].reverse().find(r=>r.requestId===e.id&&['accept-support','decline-support'].includes(r.event))?.event||'pending'}))
+ return events.filter(e=>e.event==='request-support').map(e=>({...e,response:[...events].reverse().find(r=>r.requestId===e.id&&['accept-support','decline-support','withdraw-support'].includes(r.event))?.event||'pending'}))
 }
-export function sharedCaseMember(entry,member){return supportRequests(entry).some(r=>r.recipient===member&&r.response!=='decline-support')||(entry?.events||[]).some(e=>e.event==='escalate'&&e.recipient===member)}
+export function sharedCaseMember(entry,member){return supportRequests(entry).some(r=>r.recipient===member&&!['decline-support','withdraw-support'].includes(r.response))||(entry?.events||[]).some(e=>e.event==='escalate'&&e.recipient===member)}
 export function governancePermission({operation,member,role,permissions}){
  if(!GOVERNANCE_TYPES.includes(operation.type))return null
  if(operation.type==='orchestration.preferences.update')return operation.targetId===member&&permissions?.planning?{allowed:true}:{allowed:false,reason:'Members may review only their own assistance preferences with planning access.'}
@@ -99,7 +122,7 @@ export function adaptationSummary(cases,member,preferences,now=new Date(),observ
  const relevant=cases.filter(c=>c.owners.includes(member)),events=relevant.flatMap(c=>c.events||[]).filter(e=>e.actor===member&&Date.parse(e.at)>=since)
  const strategies=events.filter(e=>e.event==='learn').map(e=>({at:e.at,note:e.note})).slice(-10)
  const samples=observations.filter(o=>o.member===member&&Date.parse(o.at)>=since),known=samples.filter(o=>o.state!=='unknown'),initiated=known.filter(o=>['in progress','completed','verified'].includes(o.state)),completed=known.filter(o=>['completed','verified'].includes(o.state)),response=samples.filter(o=>o.promptedAt&&o.acknowledgedAt&&Date.parse(o.acknowledgedAt)>=Date.parse(o.promptedAt)).map(o=>(Date.parse(o.acknowledgedAt)-Date.parse(o.promptedAt))/60000).sort((a,b)=>a-b)
- const metrics={initiationReliability:known.length?{initiated:initiated.length,observed:known.length}:null,completionReliability:known.length?{completed:completed.length,observed:known.length}:null,responseTime:response.length?{medianMinutes:response[Math.floor(response.length/2)],samples:response.length}:null}
+ const metrics={observedInitiation:known.length?{initiated:initiated.length,observed:known.length}:null,observedCompletion:known.length?{completed:completed.length,observed:known.length}:null,responseTime:response.length?{medianMinutes:response[Math.floor(response.length/2)],samples:response.length}:null}
  const promptingMethods=['checklist','options','prepared-draft'].map(style=>{const rows=samples.filter(o=>o.style===style&&o.promptedAt&&o.acknowledgedAt&&Date.parse(o.acknowledgedAt)>=Date.parse(o.promptedAt));return {style,responses:rows.length,averageMinutes:rows.length?rows.reduce((sum,o)=>sum+(Date.parse(o.acknowledgedAt)-Date.parse(o.promptedAt))/60000,0)/rows.length:null}})
  return {enabled:true,promptingMethods,windowDays:preferences.retentionDays,observedCases:relevant.length,acknowledgements:events.filter(e=>e.event==='acknowledge').length,retainedPreparations:events.filter(e=>e.event==='prepare').length,strategies,...metrics,notice:'Observed workflow states only, not a personal score. Unknown states are excluded from initiation and completion counts. Response time uses recorded in-app prompts and later acknowledgements; reading a prompt is not assumed.'}
 }
