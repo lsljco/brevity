@@ -13,7 +13,7 @@ export async function loadOrchestration({resources,session,date,includeBacklog=t
   results.forEach((result,i)=>{
     const key=keys[i],record=result.status==='fulfilled'?result.value:null
     const valid=record&&Number.isInteger(record.version)&&record.version>=0
-    sourceStates[key]=valid&&record.version>0&&!record.missing&&record.value!=null?'available':'unavailable'
+    sourceStates[key]=valid&&!record.missing&&record.value!=null?'available':'unavailable'
     if(valid){versions[key]=record.version;values[key]=record.value}
   })
   // No initialization during GET. Missing governance is an empty preview, not an error.

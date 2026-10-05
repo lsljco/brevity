@@ -285,3 +285,11 @@ test('retained unresolved cases survive the next day without using the wrong sou
  resources.data.get(olderKey).value.assignments[0].status='completed'
  assert.equal((await loadOrchestration({resources,date,session})).cases.some(c=>c.id===id),false)
 })
+
+test('existing version-zero sources remain available; explicitly missing sources stay unknown',async()=>{
+ const resources=fixture();resources.data.get(planKey).version=0;resources.data.get(scheduleKey).version=0
+ const model=await loadOrchestration({resources,date,session})
+ assert.equal(model.sourceStates[planKey],'available');assert.equal(model.sourceStates[scheduleKey],'available');assert.ok(model.cases.some(c=>c.sourceId==='a1'))
+ resources.data.get(scheduleKey).missing=true
+ assert.equal((await loadOrchestration({resources,date,session})).sourceStates[scheduleKey],'unavailable')
+})

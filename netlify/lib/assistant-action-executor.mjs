@@ -547,7 +547,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
         const [,member,date]=resource.split(':'),entry=await readStoreEntry(mealStorage(),nutritionKey(member,date)),value=entry?.data
         return{value:value||{member,date,entries:[]},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}
       }
-      if (resource.startsWith('shared:')) { const key=resource.slice(7), entry=await readStoreEntry(shared,sharedKey(key)),record=entry?.data; return { value:record?.value ? JSON.parse(record.value) : key===SHARED_KEYS.finance?{accounts:[],transactions:[]}:key===SHARED_KEYS.overrides||key===SHARED_KEYS.budget?{}:[], version:Number(record?.version||0), record, etag:entry?.etag||null } }
+      if (resource.startsWith('shared:')) { const key=resource.slice(7), entry=await readStoreEntry(shared,sharedKey(key)),record=entry?.data; return { value:record?.value ? JSON.parse(record.value) : key===SHARED_KEYS.finance?{accounts:[],transactions:[]}:key===SHARED_KEYS.overrides||key===SHARED_KEYS.budget?{}:[], version:Number(record?.version||0), missing:!record, record, etag:entry?.etag||null } }
       if (resource.startsWith('plan:')) {
         const date=resource.slice(5),entry=await readStoreEntry(plans,planKey(date)),value=entry?.data
         return { value:value||createEmptyDailyPlan(date), version:Number(value?.version||0), missing:!value, etag:entry?.etag||null }
