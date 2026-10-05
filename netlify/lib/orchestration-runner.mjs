@@ -46,12 +46,13 @@ export function createOrchestrationRunner({store,key,resources,now=()=>new Date(
    }
    const samePolicy=prior.policyRevision===policy.revision
    if(samePolicy&&Date.parse(prior.nextRunAt)>now().getTime()){await finish({});return {state:'waiting'}}
-   const model=await loadOrchestration({resources,session:{member:'Brevity',role:'admin'},date,trackedCases:[...(prior.messages||[]),...(prior.observations||[]).map(o=>({date:observationDate(o),caseId:o.caseId}))]})
+   const model=await loadOrchestration({resources,session:{member:'Brevity',role:'admin'},date,backlogCheckedAt:prior.backlogCheckedAt||{},trackedCases:[...(prior.trackedCases||[]),...(prior.messages||[]),...(prior.observations||[]).map(o=>({date:observationDate(o),caseId:o.caseId}))]})
    const liveCases=new Map(model.cases.filter(item=>item.stage!=='paused'&&item.sourceQuality==='available').map(item=>[item.id,item]))
-   const recipientsFor=item=>[...new Set([...item.owners,...item.requests.filter(r=>r.response==='pending').map(r=>r.recipient),...(eligibleException(item,policy,now())?[policy.decisionMaker]:[])])]
-   const previousMessages=(prior.messages||[]).filter(m=>m.policyRevision===policy.revision&&liveCases.has(m.caseId)&&recipientsFor(liveCases.get(m.caseId)).includes(m.recipient))
+   const recipientsFor=item=>item.kind==='care'?item.owners:[...new Set([...item.owners,...item.requests.filter(r=>r.response==='pending').map(r=>r.recipient),...(eligibleException(item,policy,now())?[policy.decisionMaker]:[])])]
+   const inspectedDates=new Set([date,...model.backlog.inspectedDates])
+   const previousMessages=(prior.messages||[]).filter(m=>m.policyRevision===policy.revision&&(!inspectedDates.has(m.date)||liveCases.has(m.caseId)&&recipientsFor(liveCases.get(m.caseId)).includes(m.recipient)))
    // Keep existing inbox items during quiet hours and while other cases get their turn.
-   const messages=new Map(previousMessages.map(m=>[m.id,m])),processed={}
+   const messages=new Map(previousMessages.map(m=>[m.id,m])),processed=Object.fromEntries(Object.entries(prior.processed||{}).filter(([id])=>(prior.trackedCases||[]).some(item=>item.caseId===id)))
    for(const id of liveCases.keys())if(prior.processed?.[id])processed[id]=prior.processed[id]
    const selected=[...liveCases.values()].sort((a,b)=>(Date.parse(processed[a.id])||0)-(Date.parse(processed[b.id])||0)||(b.risk.score||0)-(a.risk.score||0)||a.id.localeCompare(b.id)).slice(0,50)
    const currentMinute=getHouseholdMinuteOfDay(now()),at=now().toISOString()
@@ -59,7 +60,7 @@ export function createOrchestrationRunner({store,key,resources,now=()=>new Date(
     processed[item.id]=at
     for(const recipient of recipientsFor(item)){
      const pref=await getPrefs(recipient),id=`${item.date}:${item.id}:${recipient}`,existing=messages.get(id)
-     const exception=recipient===policy.decisionMaker&&eligibleException(item,policy,now())
+     const exception=item.kind!=='care'&&recipient===policy.decisionMaker&&eligibleException(item,policy,now())
      // Never retain an outdated leadership packet after the case loses escalation eligibility.
      if(existing?.exception&&!exception)messages.delete(id)
      if(currentMinute<minute(pref.startTime)||currentMinute>=minute(pref.endTime))continue
@@ -74,15 +75,17 @@ export function createOrchestrationRunner({store,key,resources,now=()=>new Date(
     const observation={...old,id,caseId:item.id,date:item.date,member,at:old.at||at,lastObservedAt:at,style:old.style||message?.style||null,state:item.state,sourceId:item.sourceId,kind:item.kind,promptedAt:old.promptedAt||message?.createdAt||message?.updatedAt||null,acknowledgedAt:item.events.find(e=>e.actor===member&&e.event==='acknowledge')?.at||null}
     if(i<0)observations.push(observation);else observations[i]=observation
    }
-   for(const [source,version] of Object.entries(Object.assign({},model.sourceVersions,...model.cases.map(item=>item.sourceVersions)))){
+   for(const [source,version] of Object.entries(Object.assign({},model.sourceVersions,...model.observedCases.map(item=>item.sourceVersions)))){
     // A missing independent source is reported, not allowed to disable known responsibilities.
     const record=await resources.read(source).catch(()=>null)
-    const required=model.sourceStates[source]==='available'||model.cases.some(item=>item.sourceResource===source&&item.sourceQuality==='available')
+    const required=model.sourceStates[source]==='available'||model.observedCases.some(item=>item.sourceResource===source&&item.sourceQuality==='available')
     if(required&&(!record||record.missing||record.value==null)||record&&record.version!==version)throw Error('Responsibility sources changed during follow-up.')
    }
    if((await resources.read(GOVERNANCE_RESOURCE)).version!==governance.version)throw Error('Policy or cases changed during follow-up.')
    const healthTrends=[...(prior.healthTrends||[]).filter(point=>point.date!==date&&Date.parse(point.date)>=now().getTime()-policy.recurrenceWindow*86400000),{date,at,open:model.cases.length,unknown:model.systemHealth.unknown,blocked:model.systemHealth.blocked,dependencies:model.systemHealth.unresolvedDependencies,pendingSupport:model.systemHealth.pendingSupport,acceptedSupport:model.systemHealth.acceptedSupport,conflicts:model.systemHealth.confirmedConflicts,recovery:model.systemHealth.recoveryPlans,unavailableSources:model.systemHealth.unavailableSources}]
-   const saved=await finish({processed,coverage:{processed:selected.length,available:liveCases.size,unavailableSources:model.systemHealth.unavailableSources},healthTrends,messages:[...messages.values()],policyRevision:policy.revision,lastRun:at,nextRunAt:new Date(now().getTime()+15*60000).toISOString(),error:model.systemHealth.unavailableSources?'Partial coverage: available responsibilities continue; review unavailable sources.':null,failures:0})
+   const trackedCases=[...(prior.trackedCases||[]).filter(item=>!model.closedCases.some(closed=>closed.id===item.caseId)),...model.cases.map(item=>({caseId:item.id,date:item.date}))]
+   const backlogCheckedAt=Object.fromEntries([...new Set([...trackedCases.map(item=>item.date),...Object.values(governance.value.cases||{}).map(item=>item.date)])].filter(day=>day<date).map(day=>[day,inspectedDates.has(day)?at:prior.backlogCheckedAt?.[day]||null]))
+   const saved=await finish({processed,trackedCases:[...new Map(trackedCases.map(item=>[item.caseId,item])).values()],backlogCheckedAt,coverage:{processed:selected.length,available:liveCases.size,unavailableSources:model.systemHealth.unavailableSources},healthTrends,messages:[...messages.values()],policyRevision:policy.revision,lastRun:at,nextRunAt:new Date(now().getTime()+15*60000).toISOString(),error:model.systemHealth.unavailableSources?'Partial coverage: available responsibilities continue; review unavailable sources.':null,failures:0})
    return saved?{state:'completed',messages:messages.size}:{state:'contended'}
   }catch{
    // Transient infrastructure failure is not a household policy change. Retry with bounded backoff.

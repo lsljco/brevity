@@ -119,11 +119,22 @@ export function scheduleConflicts(schedule,date,member,isAdmin){
 export function adaptationSummary(cases,member,preferences,now=new Date(),observations=[]){
  if(!preferences?.learning)return {enabled:false,notice:'Adaptive observations are off. Your stated preferences can still guide preparation.'}
  const since=now.getTime()-preferences.retentionDays*86400000
- const relevant=cases.filter(c=>c.owners.includes(member)),events=relevant.flatMap(c=>c.events||[]).filter(e=>e.actor===member&&Date.parse(e.at)>=since)
+ const relevant=cases.filter(c=>c.owners.includes(member)),events=relevant.flatMap(c=>c.events||[]).filter(e=>e.actor===member&&Date.parse(e.at)>=since&&Date.parse(e.at)<=now.getTime())
  const strategies=events.filter(e=>e.event==='learn').map(e=>({at:e.at,note:e.note})).slice(-10)
- const samples=observations.filter(o=>o.member===member&&Date.parse(o.date||o.id?.match(/\d{4}-\d{2}-\d{2}/)?.[0]||o.at)>=since),known=samples.filter(o=>o.state!=='unknown'),initiated=known.filter(o=>['in progress','completed','verified'].includes(o.state)),completed=known.filter(o=>['completed','verified'].includes(o.state)),response=samples.filter(o=>o.promptedAt&&o.acknowledgedAt&&Date.parse(o.acknowledgedAt)>=Date.parse(o.promptedAt)).map(o=>(Date.parse(o.acknowledgedAt)-Date.parse(o.promptedAt))/60000).sort((a,b)=>a-b)
- const metrics={observedInitiation:known.length?{initiated:initiated.length,observed:known.length}:null,observedCompletion:known.length?{completed:completed.length,observed:known.length}:null,responseTime:response.length?{medianMinutes:response[Math.floor(response.length/2)],samples:response.length}:null}
- const promptingMethods=['checklist','options','prepared-draft'].map(style=>{const rows=samples.filter(o=>o.style===style&&o.promptedAt&&o.acknowledgedAt&&Date.parse(o.acknowledgedAt)>=Date.parse(o.promptedAt));return {style,responses:rows.length,averageMinutes:rows.length?rows.reduce((sum,o)=>sum+(Date.parse(o.acknowledgedAt)-Date.parse(o.promptedAt))/60000,0)/rows.length:null}})
+ const validStates=['unknown','not started','in progress','blocked','missed','completed','verified']
+ const eligible=observations.filter(o=>o.member===member&&validStates.includes(o.state)&&Date.parse(o.date||o.id?.match(/\d{4}-\d{2}-\d{2}/)?.[0]||o.at)>=since&&Date.parse(o.date||o.at)<=now.getTime())
+ // One latest snapshot per responsibility; repeated polling is not another outcome.
+ const unique=new Map()
+ for(const [index,o] of eligible.entries()){
+  const key=o.caseId||o.id||`legacy-${index}`,previous=unique.get(key)
+  if(!previous||Date.parse(o.lastObservedAt||o.at)>=Date.parse(previous.lastObservedAt||previous.at))unique.set(key,o)
+ }
+ const samples=[...unique.values()],known=samples.filter(o=>o.state!=='unknown'),initiated=known.filter(o=>['in progress','completed','verified'].includes(o.state)),completed=known.filter(o=>['completed','verified'].includes(o.state))
+ const responded=o=>Number.isFinite(Date.parse(o.promptedAt))&&Number.isFinite(Date.parse(o.acknowledgedAt))&&Date.parse(o.acknowledgedAt)>=Date.parse(o.promptedAt)&&Date.parse(o.acknowledgedAt)<=now.getTime()
+ const response=samples.filter(responded).map(o=>(Date.parse(o.acknowledgedAt)-Date.parse(o.promptedAt))/60000).sort((a,b)=>a-b)
+ const median=response.length?(response[Math.floor((response.length-1)/2)]+response[Math.floor(response.length/2)])/2:null
+ const metrics={observedInitiation:known.length?{initiated:initiated.length,observed:known.length}:null,observedCompletion:known.length?{completed:completed.length,observed:known.length}:null,responseTime:response.length?{medianMinutes:median,samples:response.length}:null,evidence:known.length<5?'Limited observations; no reliable pattern established.':'Descriptive observations; no causal or character inference.'}
+ const promptingMethods=['checklist','options','prepared-draft'].map(style=>{const rows=samples.filter(o=>o.style===style&&responded(o));return {style,responses:rows.length,averageMinutes:rows.length?rows.reduce((sum,o)=>sum+(Date.parse(o.acknowledgedAt)-Date.parse(o.promptedAt))/60000,0)/rows.length:null}})
  return {enabled:true,promptingMethods,windowDays:preferences.retentionDays,observedCases:relevant.length,acknowledgements:events.filter(e=>e.event==='acknowledge').length,retainedPreparations:events.filter(e=>e.event==='prepare').length,strategies,...metrics,notice:'Observed workflow states only, not a personal score. Unknown states are excluded from initiation and completion counts. Response time uses recorded in-app prompts and later acknowledgements; reading a prompt is not assumed.'}
 }
 export function recoveryOperations(plan,schedule){

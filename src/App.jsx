@@ -277,6 +277,7 @@ export default function App() {
   const openPractices=({date='',tab='daily'}={})=>{setPracticeLocation({date,tab});navigateTo('household','household-practices')}
   const navigatePracticeArea=area=>{
     if(area==='finance')return navigateTo('finance','daily-alignment')
+    if(area==='care')return navigateTo('health','health-care')
     if(area==='meals')return navigateTo('health','meal-plan')
     if(area==='calendar')return navigateTo('household','family-calendar')
     setOperationsWorkspace(area==='inventory'?'inventory':'schedule')
