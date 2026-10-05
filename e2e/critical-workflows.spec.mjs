@@ -1494,7 +1494,7 @@ test('meal editor scrolls to its final fields while review stays in the viewport
  await expect(review).toBeInViewport({ratio:1})
 })
 
-test('weekly groceries add only selected quantities to the shared household list',async({page})=>{
+test('weekly groceries add only selected quantities to the shared household list',async({page},testInfo)=>{
  let saved={version:0,items:[],canEdit:true},posts=[]
  await page.route('**/.netlify/functions/grocery-list',async route=>{
   if(route.request().method()==='POST'){
@@ -1539,13 +1539,14 @@ test('weekly groceries add only selected quantities to the shared household list
  await page.getByRole('checkbox',{name:'Purchased oats',exact:true}).click()
  await page.getByLabel('Show items',{exact:true}).selectOption('Needed')
  await expect(page.getByLabel('Quantity for oats',{exact:true})).toHaveValue('3 bags')
+ await openMenuIfMobile(page,testInfo)
  await page.reload()
  await expect(page.locator('.app-shell')).toBeVisible()
- if(await page.getByRole('button',{name:'Menu',exact:true}).isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click()
+ await openMenuIfMobile(page,testInfo)
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
  await page.getByRole('button',{name:'Grocery List',exact:true}).click()
  await expect(page.getByLabel('Quantity for oats',{exact:true})).toHaveValue('3 bags')
- if(await page.getByRole('button',{name:'Close navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ await closeMenuIfMobile(page,testInfo)
  await page.screenshot({path:`test-results/grocery-list-${test.info().project.name}.png`,fullPage:true})
 })
 
