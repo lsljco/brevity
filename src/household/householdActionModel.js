@@ -162,7 +162,10 @@ function scheduleOperation(value, operation, context) {
     if (!state.routines.some(item=>item.id===operation.targetId)) throw new Error('That household routine no longer exists.')
     const date=assertDate(payload.date || operation.targetDate)
     if (date!==operation.targetDate) throw new Error('The routine occurrence date changed after review.')
-    if (!payload.cancelled) assertTimeRange(payload.startTime,payload.endTime)
+    if (!payload.cancelled) {
+      const effective={...state.routines.find(item=>item.id===operation.targetId),...state.routineOverrides[`${operation.targetId}:${date}`],...payload}
+      assertTimeRange(effective.startTime,effective.endTime)
+    }
     const key=`${operation.targetId}:${date}`
     const override={...(state.routineOverrides[key] || {}),...payload,updatedBy:actor,updatedAt:now}
     return normalizeHouseholdScheduleState({...state,routineOverrides:{...state.routineOverrides,[key]:override}})

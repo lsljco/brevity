@@ -1827,3 +1827,65 @@ test('Today coordinates dental care, maintenance and reviewed meal skipping',asy
  const op=prepared[0].operation||prepared[0].operations[0]
  expect(JSON.parse(op.payload.commandJson)).toEqual({kind:'skip',date:dateKey(),slot:'dinner'})
 })
+
+test('GOV-001 prepares useful assistance without assigning fallback or changing outcomes',async({page},testInfo)=>{
+ const {buildOrchestration}=await import('../src/governance/orchestration.js')
+ const date=dateKey(),versions={[`plan:${date}`]:1,'shared:brevity_household_schedule_v1':1,'shared:brevity_household_maintenance_v1':1}
+ const data={...buildOrchestration({date,plan:{...plan(),assignments:[{id:'gov-task',title:'Prepare dinner checklist',owner:'Terica',status:'pending'}]},schedule:{routines:[]},maintenance:{},sourceStates:Object.fromEntries(Object.keys(versions).map(key=>[key,'available'])),versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:0,canReview:true,caseStoreAvailable:true}
+ await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const panel=page.getByRole('region',{name:'Brevity can help',exact:true})
+ await panel.getByRole('combobox',{name:'Responsibility'}).selectOption(`assignment:${date}:gov-task`)
+ await expect(panel).toContainText('Owner: Terica')
+ await expect(panel).toContainText('Status: unknown')
+ await expect(panel.getByRole('heading',{name:'Prepared next steps'})).toBeVisible()
+ await panel.getByText('Decision-ready exception preview',{exact:true}).click()
+ await expect(panel).toContainText('Leadership routing has not been approved')
+ await expect(panel).toContainText('No persisted assistance attempts')
+ await panel.getByLabel('Optional shared coordination note').fill('Checklist ready for owner review.')
+ const prepared=[];let executed=0
+ page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed++})
+ await panel.getByRole('button',{name:'Review and retain preparation',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(1)
+ expect(prepared[0].operation.type).toBe('orchestration.case.update')
+ expect(prepared[0].operation.payload.sourceVersions).toEqual(versions)
+ expect(prepared[0].operation.payload.event).toBe('prepare')
+ expect(executed).toBe(0)
+ expect(prepared[0].operation.payload.owner).toBeUndefined()
+})
+
+test('GOV-001 policy, support and recovery controls produce reviewed requests on every viewport',async({page},testInfo)=>{
+ const {buildOrchestration}=await import('../src/governance/orchestration.js')
+ const {defaultPreferences}=await import('../src/governance/governanceModel.js')
+ const date=dateKey(),versions={[`plan:${date}`]:1,'shared:brevity_household_schedule_v1':2,'shared:brevity_household_maintenance_v1':1}
+ const configuration={effectiveDate:date,reviewDate:date,decisionMaker:'Larry',supportMembers:['Nyla'],workerEnabled:false,promptMinutes:240,threshold:64,recurrenceWindow:28,revision:1,approvedBy:'Lorenzo',approvedRevision:1}
+ const data={...buildOrchestration({date,plan:{...plan(),assignments:[{id:'gov-task',title:'Prepare dinner checklist',owner:'Terica',status:'blocked'}]},schedule:{routines:[]},maintenance:{},saved:{policy:configuration},sourceStates:Object.fromEntries(Object.keys(versions).map(key=>[key,'available'])),versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:2,canReview:true,caseStoreAvailable:true,configuration,policyActive:true,preferences:defaultPreferences(),preferenceVersion:0,routines:[],recovery:[],workload:[],conflicts:[]}
+ await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const panel=page.getByRole('region',{name:'Brevity can help',exact:true}),prepared=[]
+ page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
+ await panel.getByText('GOV-001 approval and authority controls',{exact:true}).click()
+ await expect(panel.getByLabel('Designated decision-maker')).toHaveValue('Larry')
+ await panel.getByText('My assistance preferences and learning consent',{exact:true}).click()
+ await panel.getByLabel('Preparation style').selectOption('options')
+ await panel.getByRole('button',{name:'Review my preferences',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(1)
+ expect(prepared[0].operation.payload.style).toBe('options');expect(prepared[0].expectedVersion).toBe(0)
+ // Preparing a proposal must not auto-execute; reload dismisses the review before the next independent flow.
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ await panel.getByRole('combobox',{name:'Responsibility'}).selectOption(`assignment:${date}:gov-task`)
+ await panel.getByText('Coordinate support, consequences and decisions',{exact:true}).click()
+ await panel.getByLabel('Approved support candidate').selectOption('Nyla')
+ await panel.getByRole('button',{name:'Review support request',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(2)
+ expect(prepared[1].operation.payload.recipient).toBe('Nyla');expect(prepared[1].operation.payload.event).toBe('request-support')
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ await panel.getByText('Recovery Mode',{exact:true}).click()
+ await panel.getByLabel('Capacity change and reason').fill('Temporary travel capacity change')
+ await panel.getByLabel('Essential outcomes and coverage to protect').fill('Protect meals and required care')
+ await panel.getByRole('button',{name:'Review recovery proposal',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(3)
+ expect(prepared[2].operation.type).toBe('orchestration.recovery.update');expect(prepared[2].operation.payload.intent).toBe('propose')
+ expect(prepared[2].operation.payload.scheduleVersion).toBe(2)
+ await expect(panel).toContainText('Nothing is saved until you confirm')
+})
