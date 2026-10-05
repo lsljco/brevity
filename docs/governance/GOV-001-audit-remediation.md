@@ -12,6 +12,8 @@ This release corrects the governance audit findings within the existing Action M
 - Resolve/decision closes assistance, not the source obligation. Reopening assistance requires review. Source completion remains authoritative. Completed cases support learning. Dependencies can be removed, and support requests withdrawn.
 - Policy review reminders and explicit authorization expiry are distinct. Legacy authorization retains its original expiration semantics. Defaults propose a 28-day review and 90-day authorization; both require actual review/ratification.
 - Risk factors include scoring guidance. Adaptive counts are described as observed initiation/completion, not a reliability rating or character score. The original prompting method is preserved when preferences change.
+- Missing linked dependencies remain unresolved until a visible source confirms closure.
+- Meal calendar dragging keeps its drag origin outside rendering state so beginning a drag does not move destination controls; busy-state and same-slot guards remain enforced.
 - Recovery review now forwards the per-resource expected versions through the client API.
 
 ## Validation and boundaries

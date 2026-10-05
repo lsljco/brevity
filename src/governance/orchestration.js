@@ -69,7 +69,8 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     base.dependencies=activeDependencies(events)
     base.resolved=caseResolved(events)
     base.risk=consequenceAssessment([...events].reverse().find(e=>e.event==='assess')?.factors||{})
-    if(events.some(e=>e.event==='escalate'))base.stage='ESCALATE'
+    const currentCycle=events.slice(events.findLastIndex(e=>e.event==='reopen')+1)
+    if(currentCycle.some(e=>e.event==='escalate'))base.stage='ESCALATE'
     else if(base.requests.length)base.stage='ORCHESTRATE'
     if(events.at(-1)?.event==='learn')base.stage='LEARN'
     if(paused)base.stage='paused'

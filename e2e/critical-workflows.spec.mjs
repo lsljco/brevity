@@ -1652,7 +1652,7 @@ test('household meal calendar reviews portions, a la carte meals and cross-date 
  expect(custom.servings).toBe(6)
  await cancelReview()
  const source=first.locator('.meal-calendar-slot').first(),target=page.locator('.meal-calendar-day').nth(3).locator('.meal-calendar-slot').nth(1)
- if(testInfo.project.name==='desktop-chromium')await source.locator('[draggable]').dragTo(target)
+ if(testInfo.project.name==='desktop-chromium')await source.locator('[draggable]').dragTo(target,{sourcePosition:{x:20,y:70},targetPosition:{x:20,y:30}})
  else{await source.getByRole('button',{name:'Move',exact:true}).click();await target.getByRole('button',{name:'Place here'}).click()}
  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
  expect(JSON.parse(prepared.at(-1).operation.payload.commandJson)).toEqual({kind:'move',date:'2026-11-01',slot:'breakfast',toDate:'2026-11-04',toSlot:'lunch'})
