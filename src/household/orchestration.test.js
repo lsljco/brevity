@@ -280,6 +280,8 @@ test('retained unresolved cases survive the next day without using the wrong sou
  assert.equal(retained.state,'blocked');assert.equal(retained.sourceVersions[olderKey],7)
  const op={type:'orchestration.case.update',targetId:id,targetDate:older,payload:{event:'acknowledge',note:'Review today',sourceVersions:retained.sourceVersions}}
  assert.equal((await reviewOperation(resources,op))[0].after.cases[id].events.length,2)
+ await assert.rejects(reviewOperation(resources,{...op,targetDate:date,payload:{...op.payload,sourceVersions:versions}}),/unavailable/)
+ await assert.rejects(reviewOperation(resources,{type:'orchestration.coordination.update',targetId:id,targetDate:date,payload:{event:'assess',note:'Review',factors,sourceVersions:versions}}),/different source date/)
  resources.data.get(olderKey).value.assignments[0].status='completed'
  assert.equal((await loadOrchestration({resources,date,session})).cases.some(c=>c.id===id),false)
 })

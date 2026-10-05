@@ -34,7 +34,7 @@ export async function validateGovernance({operation,resources,session,model,prop
  const keys=Object.keys(model.sourceVersions||{})
  if(keys.length!==3||keys.some(k=>p.sourceVersions[k]!==model.sourceVersions[k]))throw Error('The responsibility sources changed. Refresh before coordination.')
  const item=model.cases.find(c=>c.id===operation.targetId)
- if(!item)throw Error('This case is unavailable or outside your access.')
+ if(!item||item.date!==operation.targetDate)throw Error('This case is unavailable, has a different source date, or is outside your access.')
  const owns=session.role==='admin'||item.owners.includes(session.member)||item.coveredBy===session.member
  if(item.stage==='paused')throw Error('Resume this case before coordination.')
  if(['accept-support','decline-support'].includes(p.event)){
