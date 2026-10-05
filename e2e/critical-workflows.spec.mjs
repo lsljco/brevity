@@ -1062,6 +1062,7 @@ test('meal editor scales servings and prepares an exact recipe review without ap
   await page.route('**/.netlify/functions/meal-plans?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...mealPlanResponse(),libraryVersion:7})}))
   page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed.push(request)})
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+  await page.addStyleTag({content:'.meal-planner-controls .ti::before { content: "decorative-icon"; }'})
   await page.getByRole('button',{name:'Meal Library',exact:true}).click()
   await page.getByRole('button',{name:'View Eggs and Toast details',exact:true}).first().click()
   await page.getByRole('button',{name:'Edit meal',exact:true}).click()

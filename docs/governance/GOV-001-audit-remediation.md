@@ -14,6 +14,7 @@ This release corrects the governance audit findings within the existing Action M
 - Risk factors include scoring guidance. Adaptive counts are described as observed initiation/completion, not a reliability rating or character score. The original prompting method is preserved when preferences change.
 - Missing linked dependencies remain unresolved until a visible source confirms closure.
 - Meal calendar dragging keeps its drag origin outside rendering state so beginning a drag does not move destination controls; busy-state and same-slot guards remain enforced.
+- Decorative meal icons are excluded from accessible names so controls remain consistent when the icon font loads.
 - Recovery review now forwards the per-resource expected versions through the client API.
 
 ## Validation and boundaries
