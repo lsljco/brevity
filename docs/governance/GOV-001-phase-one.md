@@ -1,42 +1,40 @@
-# GOV-001 Phase 1 — implementation and release controls
+# GOV-001 — all three implementation phases
 
-Baseline: 1511811 (PR #296). Implementation plan approved by Larry in the project conversation on October 5, 2026. This is implementation approval, not a claim that Lorenzo approved unresolved household-policy decisions.
+Baseline: main 1511811 (PR #296). Larry approved the implementation plan, then explicitly authorized completing all phases, pushing and merging. Shipping software does not impersonate Lorenzo's household-policy ratification or any member's consent. This document supersedes the initial Phase 1 release notes.
 
-## Implemented scope
+## Phase 1: governed assistance foundation
 
-- Read-only authenticated orchestration endpoint and Ask Brevity read tool.
-- Case projections from exact assignment IDs, dated routine IDs, chore occurrence IDs and meal-readiness slots. Original records remain authoritative.
-- Separate responsibility state, source availability and orchestration stage. Unrecorded/pending work remains unknown; calendar time alone is not failure evidence.
-- Owner-scoped member view; household administrator view. Existing source ownership and accepted coverage are retained, with no fallback assignment.
-- Prepared checklists based on saved task standards, targeted clarification and structured, unsent exception previews.
-- Reviewed acknowledge, retain preparation, pause and resume case records; reviewed household pause control for the administrator. The retained preparation is an actual snapshot, not a claim of completed household work.
-- Existing Action Mode exact-version checks, immutable audit, recovery journal, duplicate-execution prevention and Undo. Source versions and ownership are rechecked before recording assistance.
-- Policy and authority descriptions in Today and Policies & Practices. Source workflow links preserve existing editing interfaces.
-- Explainable consequence assessment function requiring all four evidenced 1–4 factors; missing factors produce unknown, never a zero or assumed maximum. No threshold-based dispatch.
+GOV-001 preserves the Seven Pillars, owners, existing policies and source records. Seven principles and L0–L6 authority descriptions appear in Today and Policies & Practices. Assignments, living agreements, dated chores and meal readiness become source-linked cases. Missing tracking is unknown, never proof of failure. Completed and verified remain distinct and are removed from open cases. Exact case IDs distinguish same-title responsibilities.
 
-## Release gate
+Prepared checklists, owner questions, options, consequence evidence and complete exception packets are available without changing source outcomes. Reviewed acknowledgement, retained preparation, pause, resume and a 24-hour snooze use the existing Action Mode contract, version checks, recoverable journal, immutable audit and conflict-aware Undo. Snooze changes assistance timing, not the source deadline. The exported authority classifier does not grant permissions; operation-specific checks remain authoritative.
 
-`BREVITY_GOV001_PHASE1_ENABLED` must equal `true` to activate the pilot. It defaults off. Disabled reads return a policy/activation notice without reading responsibility sources. New orchestration mutations are rejected while disabled. Existing source workflows continue to operate.
+## Phase 2: durable coordination and bounded execution
 
-Enable only after the approved pilot scope and outstanding governing-policy decisions are recorded. Do not change existing permissions merely to make the feature accessible. Revoke the switch to stop new orchestration reads/mutations. Previously committed actions remain in Audit History; existing conflict-aware Undo remains available.
+- Administrator-reviewed policy configuration records effective/review dates, explicit decision-maker, approved support candidates, in-app follow-up enablement/cadence, consequence threshold and observation window. No decision-maker or support candidate is silently defaulted. Every configuration revision invalidates earlier ratification. Only signed-in Lorenzo with planning access can ratify the exact revision in Action Mode.
+- Support requests remain in Brevity. Only the invited adult can accept or decline. Acceptance shares coordination context, not source ownership or blanket edit rights. Existing coverage workflows remain authoritative.
+- Consequence assessment requires evidenced 1–4 values for urgency, impact, recurrence and cross-pillar effect. Their product is explainable; no missing factor is imputed. Routine leadership escalation requires retained assistance. Evidenced immediate urgency can bypass that preparation prerequisite. Ratified scheduled routing uses the explicit threshold; manual escalation still requires owner/admin review. Leaders receive all nine parts of the exception packet and can record a reviewed decision, not an automatic assignment.
+- The scheduled runner runs every 15 minutes using CAS leases and a bounded store. It carries unresolved retained cases across dates (up to seven recent retained case dates, with omitted dates disclosed), prioritizes up to 50 cases per run by evidenced consequence and blockers, and rebuilds in-app messages from current source cases, observes member prompting windows and cooldowns, rechecks source/policy versions, removes resolved messages, backs off after failures and stops after six failures. A reviewed and ratified new configuration revision resets the failure circuit. It never executes household source actions or sends email/text. The service's shared-source projection is read-only; it cannot obtain an authenticated human session or expand Action Mode permissions.
+- New shared Health create/update adapters read and write the existing care store through Action Mode, with own-member/admin permissions, CAS, audit and Undo. Ask Brevity receives owner/admin scoped care IDs and versions. The existing manual Health editor remains functional. A coordination record is not an appointment booking or clinical verification; private device-health data is not included.
+- Member-specific preferences include prompting window, preparation style, available minutes, support strategy and explicit learning consent. Preferences cannot be edited by another member, including an administrator. Existing administrator audit access is disclosed. Derived observations are opt-in, member scoped and trimmed to the selected window on worker runs. Disabling derived use never deletes immutable audit receipts.
 
-The household pause is a reviewed persisted control, separate from the deployment kill switch. It prevents new case events. It does not cancel responsibilities or undo completed source actions. Per-case pause prevents acknowledgement/preparation until a reviewed resume.
+## Phase 3: recovery and cross-pillar orchestration
 
-## Explicitly pending
+Recovery Mode requires an administrator to describe a disruption, essential outcomes and an explicit date window. Proposals select up to two optional routines and at most seven dated changes in a review. Activation bundles the exact saved proposal with dated Schedule deferrals in one recoverable Action Mode journal. Standing owners and recurrence are preserved. Early exit reviews restoration of remaining dates; past dates are unchanged. Expired plans display “review exit.” Newer Schedule edits block automatic restoration and require a revised review, rather than overwriting someone else's work.
 
-- Lorenzo's ratification of the policy and routing matrix, delegation boundary, prompt cadence, learning/retention rules, and Recovery Mode authority.
-- Background orchestration, accepted support request workflow, outbound delivery, standing grants, automatic escalation, adaptive profiles, recurrence analysis and capacity measurement.
-- Health Action Mode adapter, broader domain adapters, cross-pillar conflict graph and Recovery Mode.
-- Production activation and production data pilot. No health/private activity data is added to this projection.
+Dependency links use exact visible cases and reject cycles. Resolved dependencies are excluded from open counts. Cross-pillar conflicts use named Schedule attendance and overlapping time intervals. Options protect fixed commitments, request accepted support or surface a priority decision; Brevity does not choose household priorities by itself. External calendars and unassigned travel are explicitly outside this overlap calculation.
 
-Consequence previews remain incomplete where no evidenced severity factors exist; Phase 1 does not manufacture consequence scores. System Health currently reports only visible open/unknown/blocked/unassigned cases and source gaps. It does not claim to measure coverage stability or household capacity.
+System Health reports source gaps, unknown/blocked/unassigned cases, unresolved dependencies, pending/accepted support, coverage, recorded exceptions, conflict counts and active recovery plans. Per-member open counts are labeled as counts, not effort. Own scheduled minutes are deduplicated and compared with self-reported capacity. The worker retains bounded daily aggregate trends for administrators. No combined household or individual worth score is generated.
 
-## Verification
+Adaptive summaries describe known initiation/completion states, actual in-app prompt-to-acknowledgement times, observed preparation methods and explicitly reviewed helpful strategies. Unknown states are excluded from those denominators. Learning can reuse a member's stated helpful strategy in preparation but cannot infer motives, character, spiritual maturity or relationship quality. Method comparisons are observational, not causal claims. Sparse evidence stays unknown.
 
-- New unit coverage: feature-off no reads; unknown vs failure; owner visibility; source outages; evidenced risk; permission/stale-source denial; spoofed fields; completed source denial; pause controls; authenticated read-only API; real execution journal, retained preparation snapshot, duplicate execution and Undo.
-- Existing full regression suite, production build and bundle/source budgets.
-- Browser workflow on desktop, iPhone, iPad portrait and iPad landscape: source ownership, unknown status, useful preparation, exception preview and exact reviewed operation. Backend persistence and Undo tested independently through existing journal code; browser test does not send production messages or mutate household records.
+## Authority and runtime controls
 
-## Rollback
+The layer is available by default. `BREVITY_GOV001_PHASE1_ENABLED=false` is the backward-compatible deployment kill switch for orchestration reads/mutations and the runner. Household pause and per-case pause/snooze provide reviewed operational controls. Existing source workflows remain available. The runner stays inactive until configuration is ratified, effective, within its review date, explicitly worker-enabled and unpaused. Restricted purchases, payments, transfers, permission changes and sensitive external communications receive no new delegated authority.
 
-Disable the rollout switch. Preserve cases and immutable audit history. Do not delete existing data or reset source versions. Use ordinary reviewed Undo where applicable, allowing newer edits to block unsafe restoration.
+No production configuration, ratification, support acceptance, learning consent or household source changes are fabricated by this release. Those remain signed-in human decisions in the shipped controls. Unattended L4 source mutation and external delivery are deliberately not granted; per-action review is the supported L4 authorization mechanism. Broader adapters remain subject to their existing permissions and review requirements.
+
+## Verification and rollback
+
+Synthetic tests cover authorization, exact versions, unknown states, source outage, forged payloads, exact ratification, revocation, support acceptance, routing privacy, dependency cycles, consent, known-state metrics, cross-pillar overlaps, leases, cooldowns, bounded retries, source/policy races, resolved messages, timed snooze, recovery activation/exit, Health writes, duplicate execution, immutable audit and Undo after newer edits. Browser checks exercise assistance, preferences, support and recovery review preparation on desktop, iPhone, iPad portrait and landscape. The full repository regression suite, build and source/bundle budgets remain release gates.
+
+Disable the switch or review household pause to stop orchestration. Preserve source data, case events and audit history. Use existing conflict-aware Undo for reviewed mutations; never reset record versions or erase evidence. No external communications need compensating cancellation because this release delivers only in-app coordination.

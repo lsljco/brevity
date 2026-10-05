@@ -1,3 +1,5 @@
+import {CARE_RESOURCE,normalizeCareAction} from '../../src/health/healthCare.js'
+import {GOVERNANCE_TYPES,governancePermission,preferenceResource} from '../../src/governance/governanceModel.js'
 import {normalizeOrchestrationPayload} from '../../src/governance/orchestration.js'
 import {MEAL_CATEGORIES} from '../../src/meals/mealCategories.js'
 import {normalizeMealScheduleCommand,MEAL_SCHEDULE_RESOURCE} from '../../src/meals/householdMealPlanning.js'
@@ -19,6 +21,8 @@ import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-pla
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 export const ACTION_DOMAINS = ['planning', 'calendar', 'projects', 'finance']
 export const ACTION_TYPES = {
+  'health.care.create':'planning','health.care.update':'planning',
+  ...Object.fromEntries(GOVERNANCE_TYPES.map(type=>[type,'planning'])),
   'orchestration.case.update':'planning','orchestration.pause.update':'planning',
   ...Object.fromEntries(VENDOR_TYPES.map(type=>[type,'finance'])),
   'member.preference.set':'planning',
@@ -197,10 +201,13 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['apple.sources.update','activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['health.care.create','health.care.update',...GOVERNANCE_TYPES,'apple.sources.update','activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if(operation.type.startsWith('health.care.'))return CARE_RESOURCE
+  if(operation.type==='orchestration.preferences.update')return preferenceResource(operation.targetId)
+  if(operation.type.startsWith('orchestration.'))return 'shared:brevity_orchestration_v1'
   if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
   if(operation.type==='apple.sources.update')return APPLE_SOURCES_RESOURCE
   if(operation.type==='module.configuration.update')return MODULE_RESOURCE
@@ -306,6 +313,7 @@ function normalizeMeetingSessionCorrections(value){
 
 function normalizeActionPayload(type, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`The ${type} action details must be an object.`)
+  if(type.startsWith('health.care.'))return normalizeCareAction(input)
   if(type.startsWith('orchestration.'))return normalizeOrchestrationPayload(type,input)
   if (type.startsWith('plan.')) return normalizeDailyPlanActionPayload(type, input)
   const payload = input
@@ -536,7 +544,8 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'household.schedule.routine.create' && (!payload.title || !payload.startTime || !payload.endTime || !payload.days?.length)) throw new Error('A household routine requires a title, at least one day, and exact start and end times.')
   if (type === 'household.schedule.occurrence.update') {
     if (payload.date !== operation.targetDate) throw new Error('A household routine occurrence requires the exact reviewed date.')
-    if (!payload.cancelled && (!payload.startTime || !payload.endTime)) throw new Error('A changed routine occurrence requires exact start and end times.')
+    const restoreOnly=payload.cancelled===false&&Object.keys(payload).every(key=>['date','cancelled'].includes(key))
+    if (!payload.cancelled && !restoreOnly && (!payload.startTime || !payload.endTime)) throw new Error('A changed routine occurrence requires exact start and end times.')
   }
   if (type === 'household.maintenance.coverage.update' && payload.coveredBy && !HOUSEHOLD_MEMBERS.includes(payload.coveredBy)) throw new Error('Household coverage requires a recognized member.')
   if ((type === 'household.maintenance.chore.create' || type === 'household.maintenance.chore.update') && (!payload.title || !payload.date || !payload.owners?.length)) throw new Error('A household chore requires a title, date, and at least one owner.')
@@ -676,7 +685,8 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
   if (!operations.length) throw new Error('The assistant did not identify a supported Brevity action.')
   if (operations.filter(operation => operation.domain === 'calendar').length > 1) throw new Error('For safety, each Family Calendar confirmation can change only one event.')
   const resourceGroups = new Set(operations.map(resourceGroupForOperation))
-  if (resourceGroups.size > 1) throw new Error('For safety, each Action Mode confirmation must change one Brevity record group. Ask Brevity to prepare the remaining changes next.')
+  const recoveryBundle=operations.filter(op=>op.type==='orchestration.recovery.update'&&['activate','end'].includes(op.payload.intent)).length===1&&operations.every(op=>op.type==='orchestration.recovery.update'||op.type==='household.schedule.occurrence.update')
+  if (resourceGroups.size > 1&&!recoveryBundle) throw new Error('For safety, each Action Mode confirmation must change one Brevity record group. Ask Brevity to prepare the remaining changes next.')
   const risk = operations.some(operation => operation.risk === 'strong-confirmation') || operations.length > 1 ? 'strong-confirmation' : 'confirmation'
   return {
     id,
@@ -692,6 +702,8 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type.startsWith('health.care.'))return (role==='admin'||permissions?.planning&&operation.payload.member===member&&(operation.type==='health.care.create'||currentRecord?.member===member))?{allowed:true}:{allowed:false,reason:'Shared care changes require the member’s planning access or household administrator review.'}
+  const governance=governancePermission({operation,member,role,permissions});if(governance)return governance
   if(operation.type==='orchestration.pause.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Only the household administrator may pause household assistance.'}
   if(operation.type==='orchestration.case.update')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'Planning permission is required for reviewed assistance records.'}
   if(operation.type==='apple.sources.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Apple calendar connections require administrator review.'}

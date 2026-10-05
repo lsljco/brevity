@@ -1,3 +1,5 @@
+import {adaptationSummary} from '../../src/governance/governanceModel.js'
+import {readOrchestrationInbox} from '../lib/orchestration-job-repository.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import auth from '../lib/household-auth.cjs'
@@ -12,7 +14,14 @@ export function createOrchestrationHandler({readSession=auth.readSession,resourc
   try{
     const permissions=await (repository||productionAssistantActionRepository()).getPermissions()
     const model=await loadOrchestration({resources:resources||createProductionActionResources(),session:{...session,planning:permissions?.[session.member]?.planning===true},date:event.queryStringParameters?.date})
-    return reply(200,model)
+    const inbox=resources||!model.policyActive||model.paused||!model.configuration?.workerEnabled?{messages:[]}:await readOrchestrationInbox(session.member,{isAdmin:session.role==='admin'}).catch(()=>({messages:[],error:'Background inbox is temporarily unavailable.'}))
+    inbox.messages=inbox.messages.filter(message=>message.policyRevision===model.configuration?.revision&&model.cases.some(c=>c.id===message.caseId))
+    model.adaptation=adaptationSummary(model.observedCases||[],session.member,model.preferences,new Date(),inbox.observations||[])
+    model.healthTrends=inbox.healthTrends||[]
+    delete inbox.healthTrends
+    delete inbox.observations
+    delete model.observedCases
+    return reply(200,{...model,inbox})
   }catch{return reply(503,{error:'Assistance sources could not be verified. Refresh before relying on this view.'})}
 }}
 export default withLambda(createOrchestrationHandler())

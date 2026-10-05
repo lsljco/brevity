@@ -1,3 +1,7 @@
+import {CARE_RESOURCE,applyCareAction} from '../../src/health/healthCare.js'
+import {GOVERNANCE_TYPES,preferenceResource,applyGovernance} from '../../src/governance/governanceModel.js'
+import {validateGovernance} from './governance-service.mjs'
+import {loadOrchestration} from './household-orchestration.mjs'
 import {GOVERNANCE_RESOURCE,applyOrchestration} from '../../src/governance/orchestration.js'
 import {validateOrchestrationCase,phaseOneEnabled} from './household-orchestration.mjs'
 import {mealReadyForPlanning} from '../../src/meals/mealCategories.js'
@@ -48,6 +52,8 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type.startsWith('health.care.'))return CARE_RESOURCE
+  if(operation.type==='orchestration.preferences.update')return preferenceResource(operation.targetId)
   if(operation.type.startsWith('orchestration.'))return GOVERNANCE_RESOURCE
   if(operation.type.startsWith('vendor.'))return VENDOR_RESOURCE
   if(operation.type==='apple.sources.update')return APPLE_SOURCES_RESOURCE
@@ -80,6 +86,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type.startsWith('health.care.'))return value?.items?.find(item=>item.id===operation.targetId)||null
   if(operation.type.startsWith('orchestration.'))return value?.cases?.[operation.targetId]||null
   if(operation.type.startsWith('vendor.'))return value?.vendors?.find(v=>v.id===(operation.payload?.vendorId||operation.targetId))||null
   if(operation.type.startsWith('activity.'))return (value?.entries||[]).find(item=>item.id===operation.payload?.entryId)||null
@@ -110,6 +117,8 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type.startsWith('health.care.'))return {before,after:applyCareAction(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
+  if(GOVERNANCE_TYPES.includes(operation.type))return {before,after:applyGovernance(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,governanceContext:context.governanceContext})}
   if(operation.type.startsWith('orchestration.'))return {before,after:applyOrchestration(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,orchestrationCase:context.orchestrationCase})}
   if(operation.type.startsWith('vendor.'))return {before,after:applyVendorOperation(value,operation,createId)}
   if(operation.type==='apple.sources.update')return {before,after:normalizeAppleSources(operation.payload).sources}
@@ -501,11 +510,13 @@ const conditionalStoreJson=async(store,key,value,entry)=>{
   return result
 }
 
-export function createProductionActionResources({ now = () => new Date(), sharedStore, planStore, mealStore, sermonStore, vendorRepository } = {}) {
+export function createProductionActionResources({ now = () => new Date(), sharedStore, planStore, mealStore, sermonStore, vendorRepository, careStore } = {}) {
   const shared = sharedStore || getStore({ name:SHARED_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
   const plans = planStore || getStore({ name:PLAN_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN })
   let meals = mealStore
   const mealStorage = () => meals || (meals=getStore({ name:MEAL_STORE, consistency:'strong', siteID:process.env.NETLIFY_SITE_ID, token:process.env.NETLIFY_TOKEN }))
+  const careStorage=()=>careStore||(careStore=getStore({name:'brevity-health-care',consistency:'strong'}))
+  const careKey=`${HOUSEHOLD_ID}/care`
   const vendors = () => vendorRepository || (vendorRepository=productionVendorRepository())
   const sermons = sermonStore || plans
   const sharedKey = key => `${HOUSEHOLD_ID}/records/${key}`
@@ -518,6 +529,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
   const activeSermonKey = `${HOUSEHOLD_ID}/spiritual/active-sermon`
   return {
     async read(resource) {
+      if(resource===CARE_RESOURCE){const entry=await readStoreEntry(careStorage(),careKey),value=entry?.data;return {value:value||{items:[],audit:[]},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}}
       if(resource===VENDOR_RESOURCE)return vendors().read()
       if(resource.startsWith('activity:')){const [,member,date]=resource.split(':'),entry=await readStoreEntry(mealStorage(),activityKey(member,date)),value=entry?.data;return {value:value||{member,date,entries:[]},version:Number(value?.version||0),missing:!value,etag:entry?.etag||null}}
 
@@ -554,6 +566,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
     async write(resource, value, expectedVersion, actor, mutationId = '') {
       if(resource===VENDOR_RESOURCE)return vendors().write(value,expectedVersion,actor,mutationId)
       const occurredAt=nowIso(now)
+      if(resource===CARE_RESOURCE){const store=careStorage(),entry=await readStoreEntry(store,careKey),version=Number(entry?.data?.version||0);if(version!==expectedVersion)throw Object.assign(Error('Shared care changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'});const record={...value,version:version+1,updatedAt:occurredAt,updatedBy:actor,lastActionId:mutationId||''};await conditionalStoreJson(store,careKey,record,entry);return {value:record,version:record.version}}
       if(resource.startsWith('activity:')){
         const [,member,date]=resource.split(':'),store=mealStorage(),key=activityKey(member,date),entry=await readStoreEntry(store,key),version=Number(entry?.data?.version||0)
         if(version!==expectedVersion)throw Object.assign(Error('This activity log changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
@@ -629,7 +642,7 @@ const withoutManagedMetadata = value => {
   delete result.lastActionId
   return result
 }
-export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===MEAL_SCHEDULE_RESOURCE||resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===MEAL_SCHEDULE_RESOURCE||resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
+export const sameResourceValue=(resource,left,right)=>JSON.stringify(resource===CARE_RESOURCE||resource===MEAL_SCHEDULE_RESOURCE||resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(left):left)===JSON.stringify(resource===CARE_RESOURCE||resource===MEAL_SCHEDULE_RESOURCE||resource===RECIPE_RESOURCE||resource.startsWith('plan:')||resource.startsWith('meal:')||resource.startsWith('nutrition:')||resource.startsWith('nutrition-targets:')||resource.startsWith('member-context:')||resource.startsWith('activity:')||resource==='sermon:active'?withoutManagedMetadata(right):right)
 export const resourceLastWriter=(resource,current)=>resource===VENDOR_RESOURCE||resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.updatedBy:current?.value?.updatedBy
 export const resourceLastActionId=(resource,current)=>resource===VENDOR_RESOURCE||resource.startsWith('shared:')||resource==='sermon:active'?current?.record?.lastActionId:current?.value?.lastActionId
 
@@ -663,12 +676,13 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
     const reviewedVersion=proposal.expectedVersions[resource]
     if(Number(current.version)!==reviewedVersion)throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
     for(const operation of resourceOperations){
-      if(operation.type.startsWith('orchestration.')&&!phaseOneEnabled())throw Error('GOV-001 Phase 1 has not been activated.')
+      if(operation.type.startsWith('orchestration.')&&!phaseOneEnabled())throw Error('GOV-001 has not been activated.')
       const orchestrationCase=operation.type==='orchestration.case.update'?await validateOrchestrationCase({operation,resources,session}):null
       if(operation.type==='meal.schedule.update'){
         if(!operation.mealContext?.days||!operation.mealContext?.versions)throw Error('Refresh the meal calendar before reviewing this change.')
         for(const [dependency,version] of Object.entries(operation.mealContext.versions)){if((await resources.read(dependency)).version!==version)throw Object.assign(Error('A recipe or meal changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})}
       }
+      const governanceContext=GOVERNANCE_TYPES.includes(operation.type)?await validateGovernance({operation,resources,session,proposal,value,now:now(),model:operation.type==='orchestration.coordination.update'?await loadOrchestration({resources,session,date:operation.targetDate}):null}):null
       const record=recordForOperation(value,operation)
       const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:record})
       if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
@@ -694,7 +708,7 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
         const match=report.suggestions.find(row=>row.plan.id===operation.targetId&&row.occurrenceDate===operation.targetDate&&row.actual.id===evidence.actualId)
         if(!match||Object.keys(match.evidence).some(key=>match.evidence[key]!==evidence[key])) throw Object.assign(new Error('The planned or posted charge changed, was already reconciled, or no longer has a unique match. Refresh the reconciliation report.'),{code:'VERSION_CONFLICT'})
       }
-      const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version,orchestrationCase}); value=result.after
+      const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version,orchestrationCase,governanceContext}); value=result.after
     }
     prepared.push({resource,before:current.value,after:value,beforeVersion:current.version,afterVersion:current.version+1})
   }

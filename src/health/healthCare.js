@@ -10,3 +10,15 @@ export function normalizeCare(input){
  if(item.status==='Scheduled'&&!item.date)throw Error('Scheduled care needs an appointment date.')
  return item
 }
+export const CARE_RESOURCE='health:care'
+export function normalizeCareAction(payload){
+ if(!payload||Object.keys(payload).some(key=>!['title','member','type','status','priority','date','notes'].includes(key)))throw Error('Unsupported shared care fields.')
+ return normalizeCare(payload)
+}
+export function applyCareAction(value,operation,{actor,now,createId}){
+ const prior=value||{items:[],audit:[]},items=prior.items||[],before=items.find(item=>item.id===operation.targetId)
+ if(operation.type==='health.care.update'&&!before)throw Error('This care item no longer exists.')
+ if(operation.type==='health.care.create'&&before)throw Error('This care item already exists. Refresh before adding it.')
+ const at=now().toISOString(),saved={...normalizeCareAction(operation.payload),id:before?.id||operation.targetId||createId(),updatedAt:at,updatedBy:actor}
+ return {...prior,items:before?items.map(item=>item.id===before.id?saved:item):[...items,saved],audit:[...(prior.audit||[]),{at,actor,before:before||null,after:saved}].slice(-200)}
+}
