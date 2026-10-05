@@ -56,11 +56,11 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     const owners=[...new Set((item.owners||[]).filter(Boolean))]
     const id=caseId(item.kind,date,item.sourceId),retained=saved.cases?.[id]
     const assessment=consequenceAssessment([...(retained?.events||[])].reverse().find(e=>e.event==='assess')?.factors||{})
-    const automaticRecipient=policyActive(saved.policy,policyDate)&&saved.policy.decisionMaker===member&&eligibleException({risk:assessment,events:retained?.events||[]},saved.policy)&&!saved.paused
-    if(!isAdmin&&!owners.includes(member)&&item.coveredBy!==member&&!sharedCaseMember(retained,member)&&!automaticRecipient)return
     const events=(retained?.events||[]).filter(e=>e.policyId===GOV_POLICY.id)
     const lastControl=[...events].reverse().find(e=>['pause','resume','snooze'].includes(e.event))
     const paused=lastControl?.event==='pause'||lastControl?.event==='snooze'&&Date.parse(lastControl.snoozeUntil)>Date.now()
+    const automaticRecipient=policyActive(saved.policy,policyDate)&&saved.policy.decisionMaker===member&&eligibleException({state:item.state,risk:assessment,events},saved.policy)&&!paused&&!saved.paused
+    if(!isAdmin&&!owners.includes(member)&&item.coveredBy!==member&&!sharedCaseMember(retained,member)&&!automaticRecipient)return
     const base={...item,id,date,owners,sourceVersions:versions,sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
     base.assistance=assistance(base)
     base.events=events

@@ -392,3 +392,14 @@ test('consent revoked during a run prevents that member observations from being 
  await createOrchestrationRunner({resources,store,key:'test',now:()=>now})()
  assert.deepEqual(store.value.observations,[])
 })
+test('automatic leader visibility ends for completed and paused cases without an explicit sharing event',async()=>{
+ const resources=governed(),session={member:'Nyla',role:'member'}
+ resources.data.get(GOVERNANCE_RESOURCE).value.policy.decisionMaker='Nyla'
+ retain(resources,[{event:'assess',factors:{...factors,urgency:{value:4,evidence:'Immediate deadline'}}}])
+ assert.equal((await loadOrchestration({resources,date,session})).cases.some(c=>c.sourceId==='a1'),true)
+ resources.data.get(planKey).value.assignments[0].status='completed'
+ assert.equal((await loadOrchestration({resources,date,session})).closedCases.some(c=>c.sourceId==='a1'),false)
+ resources.data.get(planKey).value.assignments[0].status='pending'
+ resources.data.get(GOVERNANCE_RESOURCE).value.cases[operation().targetId].events.push({event:'pause',policyId:'GOV-001'})
+ assert.equal((await loadOrchestration({resources,date,session})).cases.some(c=>c.sourceId==='a1'),false)
+})
