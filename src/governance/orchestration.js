@@ -61,7 +61,7 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     const paused=lastControl?.event==='pause'||lastControl?.event==='snooze'&&Date.parse(lastControl.snoozeUntil)>Date.now()
     const automaticRecipient=policyActive(saved.policy,policyDate)&&saved.policy.decisionMaker===member&&eligibleException({state:item.state,risk:assessment,events},saved.policy)&&!paused&&!saved.paused
     if(!isAdmin&&!owners.includes(member)&&item.coveredBy!==member&&!sharedCaseMember(retained,member)&&!automaticRecipient)return
-    const base={...item,id,date,owners,sourceVersions:versions,sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
+    const base={...item,id,date,owners,sourceVersions:Object.fromEntries([item.sourceResource,...(item.kind==='practice'?['shared:brevity_household_schedule_v1']:[])].filter(key=>Number.isInteger(versions[key])).map(key=>[key,versions[key]])),sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
     base.assistance=assistance(base)
     base.events=events
     base.stage=paused?'paused':events.some(e=>e.event==='prepare')?'ASSIST':events.some(e=>e.event==='acknowledge')?'DIAGNOSE':'DETECT'
@@ -119,7 +119,7 @@ export function normalizeOrchestrationPayload(type,input) {
   }
   if(Object.keys(input).some(k=>!['event','note','sourceVersions','snoozeUntil'].includes(k))||!CASE_EVENTS.includes(input.event))throw Error('Choose a supported reviewed case event.')
   if(typeof input.note!=='string'||input.note.length>1000)throw Error('Case notes must be text of at most 1,000 characters.')
-  if(!input.sourceVersions||typeof input.sourceVersions!=='object'||Array.isArray(input.sourceVersions)||Object.keys(input.sourceVersions).length!==3||Object.entries(input.sourceVersions).some(([k,v])=>!(/^(plan:\d{4}-\d{2}-\d{2}|shared:brevity_household_(schedule|maintenance)_v1)$/.test(k))||!Number.isInteger(v)||v<0))throw Error('Refresh the exact source versions before review.')
+  if(!input.sourceVersions||typeof input.sourceVersions!=='object'||Array.isArray(input.sourceVersions)||(Object.keys(input.sourceVersions).length<1||Object.keys(input.sourceVersions).length>3)||Object.entries(input.sourceVersions).some(([k,v])=>!(/^(plan:\d{4}-\d{2}-\d{2}|shared:brevity_household_(schedule|maintenance)_v1)$/.test(k))||!Number.isInteger(v)||v<0))throw Error('Refresh the exact source versions before review.')
   if(input.event==='snooze'&&(!Number.isFinite(Date.parse(input.snoozeUntil))||Date.parse(input.snoozeUntil)<=Date.now()||Date.parse(input.snoozeUntil)>Date.now()+7*86400000))throw Error('Choose a future snooze within seven days.')
   if(input.event!=='snooze'&&input.snoozeUntil!==undefined)throw Error('Only snooze may include a snooze deadline.')
   return {event:input.event,note:input.note.trim(),sourceVersions:input.sourceVersions,...(input.event==='snooze'?{snoozeUntil:input.snoozeUntil}:{})}

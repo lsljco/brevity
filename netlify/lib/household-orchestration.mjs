@@ -56,11 +56,11 @@ export async function loadOrchestration({resources,session,date,includeBacklog=t
 export async function validateOrchestrationCase({operation,resources,session}) {
   const model=await loadOrchestration({resources,session,date:operation.targetDate})
   if(model.paused)throw Error('Household assistance is paused. Resume it before recording assistance.')
-  const keys=Object.keys(model.sourceVersions)
-  if(keys.length!==3||keys.some(key=>operation.payload.sourceVersions[key]!==model.sourceVersions[key]))throw Object.assign(Error('The responsibility sources changed. Refresh and prepare a new review.'),{code:'VERSION_CONFLICT'})
   const item=model.cases.find(x=>x.id===operation.targetId)
-  if(item&&!item.owners.includes(session.member)&&item.coveredBy!==session.member&&session.role!=='admin')throw Object.assign(Error('Only the responsible member can record this assistance event.'),{code:'FORBIDDEN'})
   if(!item||item.date!==operation.targetDate)throw Object.assign(Error('This responsibility is unavailable, completed, or outside your ownership. Refresh the source.'),{code:'FORBIDDEN'})
+  const keys=Object.keys(item?.sourceVersions||{})
+  if(item&&(!keys.length||keys.some(key=>operation.payload.sourceVersions[key]!==item.sourceVersions[key])))throw Object.assign(Error('The responsibility sources changed. Refresh and prepare a new review.'),{code:'VERSION_CONFLICT'})
+  if(item&&!item.owners.includes(session.member)&&item.coveredBy!==session.member&&session.role!=='admin')throw Object.assign(Error('Only the responsible member can record this assistance event.'),{code:'FORBIDDEN'})
   if(item.stage==='paused'&&!['resume','pause'].includes(operation.payload.event))throw Error('Resume this case before recording assistance.')
   return item
 }

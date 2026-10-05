@@ -1848,7 +1848,7 @@ test('GOV-001 prepares useful assistance without assigning fallback or changing 
  await panel.getByRole('button',{name:'Review and retain preparation',exact:true}).click()
  await expect.poll(()=>prepared.length).toBe(1)
  expect(prepared[0].operation.type).toBe('orchestration.case.update')
- expect(prepared[0].operation.payload.sourceVersions).toEqual(versions)
+ expect(prepared[0].operation.payload.sourceVersions).toEqual({[`plan:${date}`]:1})
  expect(prepared[0].operation.payload.event).toBe('prepare')
  expect(executed).toBe(0)
  expect(prepared[0].operation.payload.owner).toBeUndefined()

@@ -403,3 +403,13 @@ test('automatic leader visibility ends for completed and paused cases without an
  resources.data.get(GOVERNANCE_RESOURCE).value.cases[operation().targetId].events.push({event:'pause',policyId:'GOV-001'})
  assert.equal((await loadOrchestration({resources,date,session})).cases.some(c=>c.sourceId==='a1'),false)
 })
+test('reviewed assistance depends on its actual sources, not an unrelated unavailable source',async()=>{
+ const resources=governed();resources.data.delete(scheduleKey)
+ const model=await loadOrchestration({resources,date,session})
+ const item=model.cases.find(c=>c.sourceId==='a1')
+ assert.deepEqual(item.sourceVersions,{[planKey]:1})
+ const op={...operation(),payload:{...operation().payload,sourceVersions:item.sourceVersions}}
+ assert.equal((await reviewOperation(resources,op))[0].after.cases[item.id].events.at(-1).event,'prepare')
+ resources.data.get(planKey).version++
+ await assert.rejects(reviewOperation(resources,op),/sources changed/)
+})

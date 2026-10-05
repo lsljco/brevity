@@ -32,10 +32,10 @@ export async function validateGovernance({operation,resources,session,model,prop
   }else if(saved.status!=='active')throw Error('Only an active recovery plan can be ended.')
   return {}
  }
- const keys=Object.keys(model.sourceVersions||{})
- if(keys.length!==3||keys.some(k=>p.sourceVersions[k]!==model.sourceVersions[k]))throw Error('The responsibility sources changed. Refresh before coordination.')
  const item=[...model.cases,...(model.closedCases||[])].find(c=>c.id===operation.targetId)
  if(!item||item.date!==operation.targetDate)throw Error('This case is unavailable, has a different source date, or is outside your access.')
+ const keys=Object.keys(item?.sourceVersions||{})
+ if(item&&(!keys.length||keys.some(k=>p.sourceVersions[k]!==item.sourceVersions[k])))throw Error('The responsibility sources changed. Refresh before coordination.')
  if((caseResolved(item.events)||['completed','verified'].includes(item.state))&&!['learn','reopen','remove-dependency'].includes(p.event))throw Error('This case is closed. Record learning or review reopening assistance.')
  const owns=session.role==='admin'||item.owners.includes(session.member)||item.coveredBy===session.member
  if(item.stage==='paused')throw Error('Resume this case before coordination.')
