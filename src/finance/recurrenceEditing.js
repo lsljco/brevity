@@ -25,7 +25,7 @@ export function editRecurringOccurrence(original, updated, occurrenceDate, scope
   assertReviewedOccurrence(base, occurrenceDate, scope === 'future')
 
   if (destinationDate < occurrenceDate && scope === 'future') {
-    throw new Error('A future series cannot begin before the occurrence where the reviewed change takes effect.')
+    throw new Error('A future series cannot begin before the selected occurrence. To move this charge earlier, choose “This item only”; future charges will keep their scheduled dates.')
   }
 
   if (base.freq === 'once') {

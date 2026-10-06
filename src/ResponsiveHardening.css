@@ -478,7 +478,10 @@
   cursor: not-allowed;
 }
 .finance-root .toast,
-.finance-storage-error { z-index: 1750 !important; }
+.finance-storage-error { z-index: 1750 !important; box-sizing: border-box; overflow-wrap: anywhere; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.finance-storage-error > span { min-width: 0; }
+.finance-storage-error > button { flex-shrink: 0; min-width: 32px; min-height: 32px; }
+.calendar-scope-dialog button:disabled, .finance-calendar-move-dialog button:disabled { opacity: .45; cursor: not-allowed; }
 
 @media (max-width: 1100px) {
   .finance-budget-summary,
