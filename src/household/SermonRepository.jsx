@@ -31,7 +31,7 @@ export default function SermonRepository({notes,source}){
     if(!reviewedActive){setPublishState('error');setPublishMessage('Review and activate the current sermon before creating repository files.');return}
     setPublishState('saving');setPublishMessage('')
     try{
-      const result=await archiveSermonDocuments({activeVersion,sourceHash})
+      const result=await archiveSermonDocuments({activeVersion,sourceHash,includeWord:true})
       const document=result.document
       setDocuments(current=>[document,...current.filter(item=>item.id!==document.id)])
       setPublishMessage(`Created local files from reviewed active-sermon version ${document.activeVersion}. No external files were changed.`)

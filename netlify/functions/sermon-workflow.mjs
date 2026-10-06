@@ -57,7 +57,7 @@ export function createSermonWorkflowHandler({
     if (!title) return json(422, { error:'The reviewed active sermon needs a title before documents can be created.' })
     const sermonDate = clean(source.sermonDate || notes.sermonDate) || now().toISOString().slice(0, 10)
     const id = sermonArtifactId({ sermonDate, title, sourceHash, activeVersion })
-    const baseName = sermonGuideBaseName(title, sermonDate), pdfOnly = source.sourceKind === 'notes'
+    const baseName = sermonGuideBaseName(title, sermonDate), pdfOnly = source.sourceKind === 'notes' && body.includeWord !== true
     await workflowStart(id, { title, sermonDate, member:session.member, sourceKind:source.sourceKind || 'transcript', sourceHash, activeVersion })
     await workflowUpdate(id, 'notes', 'complete', { sourceKind:source.sourceKind || 'transcript', reviewedActive:true, sourceHash, activeVersion })
     try {
