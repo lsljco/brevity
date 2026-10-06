@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 // Word styles live in their own document: app themes cannot recolor the notes.
-const FRAME = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: blob:; font-src data: blob:"><style>body{margin:0;background:#ddd} .docx-wrapper{padding:12px!important} @media(max-width:700px){.docx-wrapper>section.docx{width:100%!important;padding:24px!important;box-sizing:border-box}table{max-width:100%}.docx p{line-height:normal!important}}</style></head><body></body></html>'
+const FRAME = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: blob:; font-src data: blob:"><style>body{margin:0;background:#ddd} .docx-wrapper{padding:12px!important} .docx p{line-height:normal!important} @media(max-width:700px){.docx-wrapper>section.docx{width:100%!important;padding:24px!important;box-sizing:border-box}table{max-width:100%}}</style></head><body></body></html>'
 export default function SermonWordDocument({ url, frameRef, fallback }) {
   const [state, setState] = useState('loading')
   const localRef = useRef(null)

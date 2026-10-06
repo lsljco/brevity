@@ -1978,7 +1978,7 @@ test('Spiritual reading preserves note contrast, full screen, and the saved Elev
 
 test('Spiritual reader renders the original Word file in an isolated full-screen document',async({page},testInfo)=>{
   const {buildTimesSermonDocx}=await import('../netlify/lib/sermon-times-documents.mjs')
-  const notes={documentTitle:'Original Word Teaching',primaryScriptures:[{reference:'Genesis 2:7',explanation:'Original Word content.'}],prayer:['Word prayer.']}
+  const notes={documentTitle:'Church Triumphant Teaching Document: The Marred Vessel and the Work of Reformation',primaryScriptures:[{reference:'Genesis 2:7',explanation:'Original Word content.'}],prayer:['Word prayer.']}
   const bytes=await buildTimesSermonDocx(notes,{sermonDate:'2026-10-04'})
   await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:{...plan(),spiritual:{...plan().spiritual,sermonNotes:notes,sermonSource:{...plan().spiritual.sermonSource,document:{files:{docx:'/.netlify/functions/sermon-documents?id=test&format=docx'}}}}}}}))
   let originalDownloads=0
@@ -1998,6 +1998,12 @@ test('Spiritual reader renders the original Word file in an isolated full-screen
   await expect(page.frameLocator('iframe[title="Sermon notes Word document"]').getByText('Genesis 2:7 — Original Word content.',{exact:true})).toHaveCSS('color','rgb(31, 31, 31)')
   await expect.poll(()=>originalDownloads).toBeGreaterThan(0)
   const documentFrame=page.frameLocator('iframe[title="Sermon notes Word document"]')
+  const titleLines=await documentFrame.getByText(notes.documentTitle.toUpperCase(),{exact:true}).evaluate(node=>{
+    const range=node.ownerDocument.createRange();range.selectNodeContents(node)
+    return [...range.getClientRects()].filter(rect=>rect.height>0).map(rect=>({top:rect.top,height:rect.height})).filter((rect,index,all)=>!all.slice(0,index).some(other=>Math.abs(other.top-rect.top)<1)).sort((a,b)=>a.top-b.top)
+  })
+  expect(titleLines.length).toBeGreaterThan(1)
+  expect(titleLines.every((line,index)=>index===0||line.top>=titleLines[index-1].top+titleLines[index-1].height*.9)).toBe(true)
   expect(await documentFrame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth+2)).toBe(true)
   await page.screenshot({path:`test-results/spiritual-word-${testInfo.project.name}.png`})
   await page.keyboard.press('Escape')
