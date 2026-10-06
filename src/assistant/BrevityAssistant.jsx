@@ -1,3 +1,4 @@
+import { READING_EVENT } from './readingText.js'
 import SavedTask from './SavedTask.jsx'
 import {taskReceiptText} from '../../netlify/lib/task-receipt.mjs'
 import {voiceReviewText,voiceApprovalCommand,assertVoiceApproval} from './voiceActionReview.js'
@@ -137,6 +138,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   }
   const undoAction=async auditId=>{setBusy(true);setError('');try{const result=await undoAssistantAction({auditId,confirmation:'CONFIRM'});if(result.conversation)useConversation(result.conversation);setActionCenter(await getActionMode());await onActionCompleted?.()}catch(actionError){setError(actionError.message)}finally{setBusy(false)}}
   const updatePermissions=async(permissions,expectedVersion,confirmation)=>{setBusy(true);setError('');try{const result=await saveActionPermissions(permissions,expectedVersion,confirmation);if(result.conversation)useConversation(result.conversation);setActionCenter(await getActionMode());await onActionCompleted?.()}catch(actionError){setError(actionError.message)}finally{setBusy(false)}}
+  useEffect(()=>{const interrupt=event=>{if(event.detail!=='assistant')stopVoiceMode()};window.addEventListener(READING_EVENT,interrupt);return()=>window.removeEventListener(READING_EVENT,interrupt)},[])
   const stopPlayback=()=>{
     setPlaybackBlocked(false);voiceApprovalRef.current=null;setVoiceReady(false);voiceGenerationRef.current+=1;playbackPendingRef.current=false;speechRequestRef.current?.abort();speechRequestRef.current=null
     if(audioRef.current){audioRef.current.onended=null;audioRef.current.onerror=null;audioRef.current.pause();audioRef.current.removeAttribute?.('src');audioRef.current.load?.();audioRef.current=null}
@@ -205,10 +207,12 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   }
   startListeningRef.current=startListening
   const toggleListening=()=>{
+    window.dispatchEvent(new CustomEvent(READING_EVENT,{detail:'assistant'}))
     if(voiceModeRef.current){stopVoiceMode();return}
     voiceRecoveryRef.current=0;voiceModeRef.current=true;setVoiceMode(true);setError('');stopPlayback();primeAudio(reusableAudioRef);voiceTranscriptRef.current='';voiceFinalTranscriptRef.current='';setDraft('');startListening()
   }
   const playResponse=async(content,index,automatic=false,onCompleted)=>{
+    window.dispatchEvent(new CustomEvent(READING_EVENT,{detail:'assistant'}))
     stopPlayback();clearTimeout(voiceTimerRef.current);voiceFinishRef.current?.();voiceFinishRef.current=null;retireRecognition(recognitionRef);setListening(false)
     playbackPendingRef.current=true
     const generation=voiceGenerationRef.current;setSpeakingMessage(index);if(voiceModeRef.current)setVoiceStatus('Preparing spoken response…');setError('')

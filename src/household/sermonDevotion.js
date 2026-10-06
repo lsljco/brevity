@@ -14,7 +14,7 @@ export function sermonDevotionForDate({ notes = {}, source = {}, targetDate = ''
   const start = parseDateKey(sermonDate)
   const target = parseDateKey(targetDate)
   const diff = start != null && target != null ? Math.floor((target - start) / 86400000) : 0
-  const index = Math.max(0, Math.min(days.length - 1, Number.isFinite(diff) ? diff : 0))
+  const index = Math.max(0, Math.min(days.length - 1, Number.isFinite(diff) ? diff - 1 : 0))
   const day = days[index] || days[0]
   const paragraphs = [...values(day?.description), ...values(day?.paragraphs), ...values(day?.details)].map(clean).filter(Boolean)
   const steps = [...values(day?.steps), ...values(day?.actions), ...values(day?.items)]

@@ -103,10 +103,10 @@ export async function applySermonActivation({proposalId,confirmation}){
   return parse(response)
 }
 
-export async function archiveSermonDocuments({activeVersion,sourceHash}){
+export async function archiveSermonDocuments({activeVersion,sourceHash,includeWord=false}){
   const response=await fetch('/.netlify/functions/sermon-workflow',{
     method:'POST',credentials:'include',headers:{'content-type':'application/json'},
-    body:JSON.stringify({activeVersion,sourceHash})
+    body:JSON.stringify({activeVersion,sourceHash,...(includeWord?{includeWord:true}:{})})
   })
   return parse(response)
 }

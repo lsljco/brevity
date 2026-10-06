@@ -108,3 +108,23 @@ test('the Spiritual Maturity UI preserves the active sermon while a candidate aw
   assert.match(studio,/Generate Sermon Slides \+ 7 Devotions/)
   assert.match(studio,/slides\.devotionsDownload/)
 })
+
+test('imported notes keep PDF-only default but explicitly requested Word uses the same reviewed source',async()=>{
+  const store=artifactStore(),builds=[]
+  const handler=createSermonWorkflowHandler({
+    readSessionFn:async()=>session,sourceRepository:{active:async()=>({value:{...active,source:{...active.source,sourceKind:'notes'}},version:3,exists:true})},actionRepository:actionRepository(true),documentStore:store,
+    buildDocx:async notes=>{builds.push(notes.documentTitle);return Buffer.from('docx')},buildPdf:async()=>Buffer.from('pdf'),workflowStart:async()=>{},workflowUpdate:async()=>{},
+  })
+  const request=includeWord=>({httpMethod:'POST',body:JSON.stringify({activeVersion:3,sourceHash:hash,includeWord})})
+  const pdf=await handler(request(false))
+  assert.equal(pdf.statusCode,200)
+  assert.equal(JSON.parse(pdf.body).document.files.docx,undefined)
+  assert.equal(builds.length,0)
+  const word=await handler(request(true))
+  assert.equal(word.statusCode,200)
+  assert.match(JSON.parse(word.body).document.files.docx,/format=docx/)
+  assert.deepEqual(builds,['Retained Word'])
+  const denied=await handler({httpMethod:'POST',body:JSON.stringify({activeVersion:2,sourceHash:hash,includeWord:true})})
+  assert.equal(denied.statusCode,409)
+  assert.equal(builds.length,1)
+})

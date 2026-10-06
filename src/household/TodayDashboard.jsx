@@ -1,3 +1,4 @@
+import ReadAloud from '../assistant/ReadAloud.jsx'
 import OrchestrationPanel from '../governance/OrchestrationPanel.jsx'
 import HealthCare from '../health/HealthCare.jsx'
 import TodayMaintenance from './TodayMaintenance.jsx'
@@ -159,7 +160,7 @@ function TodayDevotionHero({ plan, onOpenPillar }) {
   return <section className={`today-devotion-hero${imageUrl&&!imageFailed?' has-image':''}`} data-pillar="spiritual">
     {imageUrl&&!imageFailed&&<img src={imageUrl} alt={`Today’s devotion: ${title}`} onError={()=>setImageFailed(true)} />}
     <div className="today-devotion-shade" />
-    <div className="today-devotion-copy"><span>Pillar 1 · Spiritual Maturity{devotion?` · Day ${devotion.dayNumber} of 7`:''}</span><h2>{title}</h2>{scripture&&<strong>{scripture}</strong>}<p>{focus}</p><button type="button" onClick={()=>onOpenPillar?.('spiritual')}>Open Today’s Devotion <i className="ti ti-arrow-right" /></button></div>
+    <div className="today-devotion-copy"><span>Pillar 1 · Spiritual Maturity{devotion?` · Day ${devotion.dayNumber} of 7`:''}</span><h2>{title}</h2>{scripture&&<strong>{scripture}</strong>}<p>{focus}</p><ReadAloud getText={()=>[title,scripture,focus].filter(Boolean).join("\n\n")} label="Read today’s devotion aloud" contentKey={plan.date+title}/><button type="button" onClick={()=>onOpenPillar?.('spiritual')}>Open Today’s Devotion <i className="ti ti-arrow-right" /></button></div>
     {!imageUrl||imageFailed?<small className="today-devotion-visual-status">Devotion visual becomes available after the sermon package is generated.</small>:null}
   </section>
 }

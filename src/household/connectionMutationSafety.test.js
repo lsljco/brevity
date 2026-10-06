@@ -108,6 +108,6 @@ test('OneDrive UI reports the connection while automatic sermon uploads remain u
   assert.match(repository,/OneDrive connected/)
   assert.match(repository,/oneDrive\.connected&&oneDrive\.connection\?\.folderWebUrl/)
   assert.match(repository,/onClick=\{createCurrent\}/)
-  assert.match(repository,/archiveSermonDocuments\(\{activeVersion,sourceHash\}\)/)
+  assert.match(repository,/archiveSermonDocuments\(\{activeVersion,sourceHash,includeWord:true\}\)/)
   assert.doesNotMatch(repository,/publishCurrent|Publish current sermon/)
 })

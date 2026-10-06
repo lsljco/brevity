@@ -1,3 +1,6 @@
+import { cleanSermonImport, retainOriginalWord } from '../lib/sermon-original.mjs'
+import { sermonFormationPermission } from './sermon-formation-start.mjs'
+import { productionAssistantActionRepository } from '../lib/assistant-action-repository.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import mammoth from 'mammoth'
@@ -7,11 +10,12 @@ import householdAuth from '../lib/household-auth.cjs'
 const {readSession}=householdAuth
 const MAX_FILE_BYTES=4_500_000
 const json=(statusCode,body)=>({statusCode,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(body)})
-const clean=text=>String(text||'').replace(/\r/g,'').replace(/[ \t]+\n/g,'\n').replace(/\n{4,}/g,'\n\n\n').trim()
+const clean=cleanSermonImport
 
-const handler=async event=>{
+export function createSermonNotesImportHandler({readSessionFn=readSession,actionRepository,retainWord=retainOriginalWord}={}){
+return async event=>{
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
-  const session=await readSession(event).catch(()=>null)
+  const session=await readSessionFn(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to import sermon notes.'})
   let body={}
   try{body=JSON.parse(event.body||'{}')}catch{return json(400,{error:'Invalid document upload.'})}
@@ -25,12 +29,20 @@ const handler=async event=>{
     const extracted=extension==='docx'?(await mammoth.extractRawText({buffer})).value:(await pdf(buffer)).text
     const text=clean(extracted)
     if(text.length<80)return json(422,{error:'Brevity could not find enough readable text in this document. If it is a scanned PDF, export it as a searchable PDF or Word document first.'})
-    return json(200,{text,fileName:name,sourceKind:'notes',characters:text.length})
+    let originalDocument=null
+    if(extension==='docx'){
+      const permissions=(await (actionRepository||productionAssistantActionRepository()).getPermissions())?.[session.member]
+      if(sermonFormationPermission({session,permissions}).allowed)originalDocument=await retainWord({buffer,text,fileName:name,member:session.member})
+    }
+    return json(200,{text,fileName:name,sourceKind:'notes',characters:text.length,originalDocument})
   }catch(error){
     console.error('[sermon-notes-import]',error)
     return json(422,{error:'Brevity could not extract readable sermon notes from this file. Try saving it again as a Word document or searchable PDF.'})
   }
 }
+
+}
+const handler=createSermonNotesImportHandler()
 
 export const config={path:'/.netlify/functions/sermon-notes-import'}
 
