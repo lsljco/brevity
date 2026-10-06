@@ -48,20 +48,21 @@ function assistance(item) {
   ] : item.steps?.length ? item.steps : ['Confirm the required outcome and completion standard.','Identify the smallest next step and any missing information.','Confirm a realistic time and accepted support if needed.']
   return {title:`Preparation for ${item.title}`,checklist:[...new Set(checklist)],questions:item.state==='unknown'?['What is the current status? Missing tracking does not establish a missed responsibility.']:item.state==='blocked'?['What is preventing progress, and what help would make the next step possible?']:['What preparation would help finish this outcome?'],options:item.state==='blocked'?blockedOptions:['Keep the agreed owner and confirm the next step.','Review timing or accepted coverage in the existing source workflow.'],recommendation:item.owners.length?'Prepare the next step with the existing owner; use the source workflow for reviewed changes.':'Confirm an accountable owner before proposing assignment or coverage.'}
 }
-export function buildOrchestration({date,policyDate=date,plan,schedule,maintenance,sourceStates={},versions={},saved={},member,isAdmin=false}={}) {
+export function buildOrchestration({date,policyDate=date,plan,schedule,maintenance,care,caseDates={},sourceStates={},versions={},saved={},member,isAdmin=false}={}) {
   if(!validPracticeDate(date))throw Error('Choose a valid household date.')
   const candidates=[],observedCases=[],closedCases=[]
   const add=item=>{
     if(!item.sourceId||item.closed)return
     const owners=[...new Set((item.owners||[]).filter(Boolean))]
-    const id=caseId(item.kind,date,item.sourceId),retained=saved.cases?.[id]
+    const id=item.kind==='care'?`care:${encodeURIComponent(item.sourceId)}`:caseId(item.kind,date,item.sourceId),retained=saved.cases?.[id]
+    if(item.kind==='care'&&!isAdmin&&!owners.includes(member))return
     const assessment=consequenceAssessment([...(retained?.events||[])].reverse().find(e=>e.event==='assess')?.factors||{})
     const events=(retained?.events||[]).filter(e=>e.policyId===GOV_POLICY.id)
     const lastControl=[...events].reverse().find(e=>['pause','resume','snooze'].includes(e.event))
     const paused=lastControl?.event==='pause'||lastControl?.event==='snooze'&&Date.parse(lastControl.snoozeUntil)>Date.now()
     const automaticRecipient=policyActive(saved.policy,policyDate)&&saved.policy.decisionMaker===member&&eligibleException({state:item.state,risk:assessment,events},saved.policy)&&!paused&&!saved.paused
     if(!isAdmin&&!owners.includes(member)&&item.coveredBy!==member&&!sharedCaseMember(retained,member)&&!automaticRecipient)return
-    const base={...item,id,date,owners,sourceVersions:Object.fromEntries([item.sourceResource,...(item.kind==='practice'?['shared:brevity_household_schedule_v1']:[])].filter(key=>Number.isInteger(versions[key])).map(key=>[key,versions[key]])),sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
+    const base={...item,id,date:item.kind==='care'?(retained?.date||caseDates[id]||date):date,owners,sourceVersions:Object.fromEntries([item.sourceResource,...(item.kind==='practice'?['shared:brevity_household_schedule_v1']:[])].filter(key=>Number.isInteger(versions[key])).map(key=>[key,versions[key]])),sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
     base.assistance=assistance(base)
     base.events=events
     base.stage=paused?'paused':events.some(e=>e.event==='prepare')?'ASSIST':events.some(e=>e.event==='acknowledge')?'DIAGNOSE':'DETECT'
@@ -75,7 +76,7 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     if(events.at(-1)?.event==='learn')base.stage='LEARN'
     if(paused)base.stage='paused'
     base.exception={issue:base.title,owner:owners.join(', ')||'Unresolved — no fallback assigned',requiredOutcome:base.outcome,whatHappened:base.evidence,attempts:events.length?events.map(e=>`${e.at}: ${e.actor} reviewed ${e.event}${e.note?` — ${e.note}`:''}`):['No persisted assistance attempts. A preview is not an executed action.'],risk:base.risk.complete?`Reviewed consequence score: ${base.risk.score}/256. Factors: ${Object.entries(base.risk.factors).map(([k,v])=>`${k} ${v.value}: ${v.evidence}`).join('; ')}`:'Consequence factors require evidence; no severity or escalation is inferred.',options:base.assistance.options,recommendation:base.assistance.recommendation,decision:base.owners.length?'Confirm the next step or request support.':'Confirm accountable ownership.',deadline:base.due||'Not established — confirm an intervention deadline.',recipient:policyActive(saved.policy,policyDate)?saved.policy.decisionMaker:null,routing:policyActive(saved.policy,policyDate)?`Designated decision-maker: ${saved.policy.decisionMaker}. Sharing requires reviewed escalation or explicitly approved in-app follow-up.`:'Leadership routing has not been approved. This is a preview; nothing has been sent.'}
-    base.automaticException=policyActive(saved.policy,policyDate)&&eligibleException(base,saved.policy)&&!paused&&!saved.paused
+    base.automaticException=item.kind!=='care'&&policyActive(saved.policy,policyDate)&&eligibleException(base,saved.policy)&&!paused&&!saved.paused
     observedCases.push(base)
     if(!['completed','verified'].includes(base.state)&&!base.resolved)candidates.push(base)
     else {base.stage=base.resolved?'RESOLVED':'LEARN';closedCases.push(base)}
@@ -104,6 +105,13 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
       add({kind:'chore',sourceId:task.occurrenceId,sourceResource:'shared:brevity_household_maintenance_v1',title:task.title,owners:task.owners.filter(x=>x!=='Everyone'),coveredBy:occurrence.coveredBy,state:explicitState(occurrence),outcome:task.standard||task.title,evidence:`Recorded chore status: ${occurrence.status||'unrecorded'}${occurrence.exception?` — ${occurrence.exception}`:''}.`,due:task.endTime||task.timing||'',steps:task.details||[],pillar:'household'})
     }
   }
+  if(sourceStates['health:care']==='available')for(const item of care?.items||[]){
+    if(!item.id||!item.member||!['Needs scheduling','Scheduled','Needs review','Completed'].includes(item.status))continue
+    if(item.status==='Completed'&&!saved.cases?.[`care:${encodeURIComponent(item.id)}`]&&!caseDates[`care:${encodeURIComponent(item.id)}`])continue
+    // Care is a coordination record, never evidence of a diagnosis or clinical verification.
+    if(item.date&&item.date>new Date(Date.parse(`${date}T12:00:00Z`)+7*86400000).toISOString().slice(0,10))continue
+    add({kind:'care',sourceId:item.id,sourceResource:'health:care',title:item.title,owners:[item.member],state:item.status==='Completed'?'completed':item.status==='Scheduled'?'in progress':item.status==='Needs scheduling'?'not started':'unknown',outcome:`Review the next step for ${item.type||'shared care'}.`,evidence:`Shared care status: ${item.status}. An elapsed date alone does not establish a missed appointment.`,due:item.date||'',steps:['Confirm scheduling or review needs with the member.','Prepare appointment options for human review.','Update the shared care record after the outcome is known.'],pillar:'health'})
+  }
   return {date,policy:GOV_POLICY,cases:candidates,closedCases,observedCases,sourceStates,sourceVersions:versions,paused:saved.paused===true,systemHealth:{visibleOpenCases:candidates.length,unknown:candidates.filter(x=>x.state==='unknown').length,blocked:candidates.filter(x=>x.state==='blocked').length,unassigned:candidates.filter(x=>!x.owners.length).length,unavailableSources:Object.values(sourceStates).filter(x=>x!=='available').length,scope:isAdmin?'Household source records':'Your owned or covered responsibilities',notice:'Visible operational indicators, not a household performance score. Missing evidence remains unknown.'}}
 }
 export function normalizeOrchestrationPayload(type,input) {
@@ -119,7 +127,7 @@ export function normalizeOrchestrationPayload(type,input) {
   }
   if(Object.keys(input).some(k=>!['event','note','sourceVersions','snoozeUntil'].includes(k))||!CASE_EVENTS.includes(input.event))throw Error('Choose a supported reviewed case event.')
   if(typeof input.note!=='string'||input.note.length>1000)throw Error('Case notes must be text of at most 1,000 characters.')
-  if(!input.sourceVersions||typeof input.sourceVersions!=='object'||Array.isArray(input.sourceVersions)||(Object.keys(input.sourceVersions).length<1||Object.keys(input.sourceVersions).length>3)||Object.entries(input.sourceVersions).some(([k,v])=>!(/^(plan:\d{4}-\d{2}-\d{2}|shared:brevity_household_(schedule|maintenance)_v1)$/.test(k))||!Number.isInteger(v)||v<0))throw Error('Refresh the exact source versions before review.')
+  if(!input.sourceVersions||typeof input.sourceVersions!=='object'||Array.isArray(input.sourceVersions)||(Object.keys(input.sourceVersions).length<1||Object.keys(input.sourceVersions).length>3)||Object.entries(input.sourceVersions).some(([k,v])=>!(/^(plan:\d{4}-\d{2}-\d{2}|shared:brevity_household_(schedule|maintenance)_v1|health:care)$/.test(k))||!Number.isInteger(v)||v<0))throw Error('Refresh the exact source versions before review.')
   if(input.event==='snooze'&&(!Number.isFinite(Date.parse(input.snoozeUntil))||Date.parse(input.snoozeUntil)<=Date.now()||Date.parse(input.snoozeUntil)>Date.now()+7*86400000))throw Error('Choose a future snooze within seven days.')
   if(input.event!=='snooze'&&input.snoozeUntil!==undefined)throw Error('Only snooze may include a snooze deadline.')
   return {event:input.event,note:input.note.trim(),sourceVersions:input.sourceVersions,...(input.event==='snooze'?{snoozeUntil:input.snoozeUntil}:{})}

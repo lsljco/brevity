@@ -413,3 +413,94 @@ test('reviewed assistance depends on its actual sources, not an unrelated unavai
  resources.data.get(planKey).version++
  await assert.rejects(reviewOperation(resources,op),/sources changed/)
 })
+
+test('Shared Health cases preserve member privacy, unknown outcomes, stable identity and exact review versions',async()=>{
+ const resources=governed()
+ resources.data.set('health:care',{version:4,value:{items:[{id:'dental',title:'Teeth cleaning',member:'Terica',type:'Dental',status:'Needs scheduling',date:'',notes:'Private details'},{id:'eye',title:'Eye visit',member:'Nyla',type:'Eye care',status:'Scheduled',date:'2026-10-04'},{id:'later',title:'Later visit',member:'Terica',status:'Scheduled',date:'2026-12-01'}]}})
+ const own=await loadOrchestration({resources,date,session:{member:'Terica',role:'member'}})
+ const care=own.cases.find(c=>c.kind==='care')
+ assert.equal(care.id,'care:dental');assert.equal(care.state,'not started');assert.deepEqual(care.sourceVersions,{'health:care':4})
+ assert.equal(own.cases.some(c=>c.sourceId==='eye'||c.sourceId==='later'),false)
+ assert.equal(JSON.stringify(care).includes('Private details'),false)
+ const admin=await loadOrchestration({resources,date,session})
+ assert.equal(admin.cases.find(c=>c.sourceId==='eye').state,'in progress')
+ const op={type:'orchestration.case.update',targetId:care.id,targetDate:date,payload:{event:'prepare',note:'Prepare options',sourceVersions:care.sourceVersions}}
+ const changes=await reviewOperation(resources,op,{member:'Terica',role:'member'})
+ resources.data.get(GOVERNANCE_RESOURCE).value=changes[0].after
+ assert.equal((await loadOrchestration({resources,date:'2026-10-06',session})).cases.filter(c=>c.id==='care:dental').length,1)
+ const support={...op,type:'orchestration.coordination.update',payload:{event:'request-support',recipient:'Nyla',note:'Help',sourceVersions:care.sourceVersions}}
+ await assert.rejects(reviewOperation(resources,support,{member:'Terica',role:'member'}),/Broader sharing/)
+ resources.data.get('health:care').version++
+ await assert.rejects(reviewOperation(resources,op,{member:'Terica',role:'member'}),/sources changed/)
+})
+
+test('assistance closure does not resolve a dependency until source outcome is completed',async()=>{
+ const resources=governed(),id=operation().targetId,other=`assignment:${date}:a2`
+ resources.data.get(planKey).value.assignments.push({id:'a2',title:'Next step',owner:'Terica',status:'pending',pillar:'education'})
+ const governance=resources.data.get(GOVERNANCE_RESOURCE).value
+ governance.cases={[id]:{id,date,events:[{event:'resolve',note:'No more assistance',policyId:'GOV-001'}]},[other]:{id:other,date,events:[{event:'dependency',dependencyId:id,dependencyTitle:'Preparation',policyId:'GOV-001'}]}}
+ let model=await loadOrchestration({resources,date,session})
+ assert.equal(model.systemHealth.closedAssistanceOutstanding,1);assert.equal(model.systemHealth.unresolvedDependencies,1)
+ resources.data.get(planKey).value.assignments[0].status='completed'
+ model=await loadOrchestration({resources,date,session})
+ assert.equal(model.systemHealth.closedAssistanceOutstanding,0);assert.equal(model.systemHealth.unresolvedDependencies,0)
+})
+
+test('durable tracking rotates beyond seven dates without learning consent or new prompts',async()=>{
+ const resources=governed(),trackedCases=[]
+ for(let day=20;day<=29;day++){
+  const d=`2026-09-${day}`,id=`assignment:${d}:old-${day}`
+  resources.data.set(`plan:${d}`,{version:1,value:{date:d,assignments:[{id:`old-${day}`,title:'Retained obligation',owner:'Terica',status:'pending'}]}})
+  trackedCases.push({caseId:id,date:d})
+ }
+ const store=jobStore({trackedCases}),now=new Date(`${date}T16:00:00Z`)
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now})
+ assert.equal((await run()).state,'completed')
+ assert.equal(store.value.trackedCases.filter(c=>c.caseId.includes('old-')).length,10)
+ assert.equal(store.value.observations.length,0)
+ now.setMinutes(now.getMinutes()+16);await run()
+ assert.ok(store.value.backlogCheckedAt['2026-09-20'])
+ assert.equal(store.value.trackedCases.filter(c=>c.caseId.includes('old-')).length,10)
+})
+
+test('adaptive measures deduplicate outcomes, exclude invalid or future states, and calculate even medians',()=>{
+ const now=new Date(`${date}T16:00:00Z`),prefs={...defaultPreferences(),learning:true}
+ const a={caseId:'one',member:'Terica',date,at:`${date}T14:00:00Z`,promptedAt:`${date}T14:00:00Z`,acknowledgedAt:`${date}T14:10:00Z`,state:'in progress',style:'checklist'}
+ const b={...a,caseId:'two',state:'completed',acknowledgedAt:`${date}T14:30:00Z`}
+ const result=adaptationSummary([],'Terica',prefs,now,[a,{...a,state:'completed',lastObservedAt:`${date}T15:00:00Z`},b,{...a,caseId:'bad',state:'invented'},{...a,caseId:'future',date:'2026-10-06'}])
+ assert.deepEqual(result.observedCompletion,{completed:2,observed:2})
+ assert.deepEqual(result.responseTime,{medianMinutes:20,samples:2})
+ assert.match(result.evidence,/Limited observations/)
+ assert.equal(adaptationSummary([],'Terica',{...prefs,learning:false},now,[a]).enabled,false)
+})
+
+test('source outages preserve durable case tracking and Health prompts remain owner-only',async()=>{
+ const resources=governed(),store=jobStore(),now=new Date(`${date}T16:00:00Z`)
+ resources.data.set('health:care',{version:1,value:{items:[{id:'care-one',member:'Terica',title:'Arrange care',status:'Needs review'}]}})
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now})
+ await run()
+ assert.deepEqual(store.value.messages.filter(m=>m.caseId==='care:care-one').map(m=>m.recipient),['Terica'])
+ assert.ok(store.value.trackedCases.some(c=>c.caseId===operation().targetId))
+ resources.data.delete(planKey);now.setMinutes(now.getMinutes()+16);await run()
+ assert.ok(store.value.trackedCases.some(c=>c.caseId===operation().targetId))
+ assert.equal(store.value.messages.some(m=>m.caseId===operation().targetId),false)
+ resources.data.get('health:care').value.items[0].status='Completed';resources.data.get('health:care').version++
+ now.setMinutes(now.getMinutes()+16);await run()
+ assert.equal(store.value.messages.some(m=>m.caseId==='care:care-one'),false)
+ assert.equal(store.value.trackedCases.some(c=>c.caseId==='care:care-one'),false)
+})
+
+test('undated Health cases retain their original observation date and one prompt across days',async()=>{
+ const resources=governed(),store=jobStore();let now=new Date(`${date}T16:00:00Z`)
+ resources.data.set('health:care',{version:1,value:{items:[{id:'undated',member:'Terica',title:'Arrange care',status:'Needs scheduling'}]}})
+ resources.data.set(preferenceResource('Terica'),{version:1,value:{...defaultPreferences(),learning:true}})
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now});await run()
+ now=new Date('2026-10-06T16:00:00Z');resources.data.set('plan:2026-10-06',{version:1,value:{date:'2026-10-06',assignments:[]}});await run()
+ const messages=store.value.messages.filter(m=>m.caseId==='care:undated')
+ assert.equal(messages.length,1);assert.equal(messages[0].date,date)
+ assert.equal(store.value.observations.find(o=>o.caseId==='care:undated').date,date)
+ resources.data.get('health:care').value.items[0].status='Completed';resources.data.get('health:care').version++
+ now=new Date('2026-10-07T16:00:00Z');await run()
+ now=new Date('2026-11-07T16:00:00Z');await run()
+ assert.equal(store.value.observations.some(o=>o.caseId==='care:undated'),false)
+})

@@ -34,6 +34,7 @@ export async function validateGovernance({operation,resources,session,model,prop
  }
  const item=[...model.cases,...(model.closedCases||[])].find(c=>c.id===operation.targetId)
  if(!item||item.date!==operation.targetDate)throw Error('This case is unavailable, has a different source date, or is outside your access.')
+ if(item.kind==='care'&&['request-support','escalate','decision','dependency'].includes(p.event))throw Error('Shared Health assistance stays with the member and existing administrators. Broader sharing requires a separate authorization workflow.')
  const keys=Object.keys(item?.sourceVersions||{})
  if(item&&(!keys.length||keys.some(k=>p.sourceVersions[k]!==item.sourceVersions[k])))throw Error('The responsibility sources changed. Refresh before coordination.')
  if((caseResolved(item.events)||['completed','verified'].includes(item.state))&&!['learn','reopen','remove-dependency'].includes(p.event))throw Error('This case is closed. Record learning or review reopening assistance.')
@@ -59,6 +60,7 @@ export async function validateGovernance({operation,resources,session,model,prop
  if(p.event==='reopen'&&['completed','verified'].includes(item.state))throw Error('Reopen the responsibility in its source workflow first. Learning remains available.')
  if(p.event==='dependency'){
   const dependency=model.cases.find(c=>c.id===p.dependencyId)
+  if(dependency?.kind==='care')throw Error('Shared Health cannot be shared through a dependency link.')
   if(!dependency||dependency.id===item.id)throw Error('Choose a different responsibility you can access.')
   const visited=new Set(),reaches=id=>{if(id===item.id)return true;if(visited.has(id))return false;visited.add(id);return activeDependencies(value.cases?.[id]?.events||[]).some(e=>reaches(e.id))}
   if(reaches(dependency.id))throw Error('This dependency would create a cycle.')

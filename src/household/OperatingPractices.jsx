@@ -234,7 +234,7 @@ export default function OperatingPracticesWorkspace({ currentMember, canEditPlan
   const meals = rolling.data?.days?.find(day => day.date === date)?.resolvedMeals || {}
   return <div className="practice-workspace"><header className="practice-workspace-header"><div><span>Household Management</span><h1>Policies &amp; Practices</h1><p>Daily finance · Household schedule · Meals and procurement</p></div><label><span>Household date</span><input type="date" value={date} onChange={event => { if (event.target.value) setDate(event.target.value) }} /></label></header>
     <nav className="practice-tabs" aria-label="Practice views">{[['daily', 'Daily readiness'], ['policies', 'Agreements & routines'], ['weekly', 'Weekly family review']].map(([id, title]) => <button type="button" key={id} className={tab === id ? 'active' : ''} aria-pressed={tab === id} onClick={() => setTab(id)}>{title}</button>)}<button type="button" onClick={() => setDate(currentDailyPlanDate())}>Today</button><button type="button" onClick={() => setDate(shiftPracticeDate(currentDailyPlanDate(), 1))}>Tomorrow</button></nav>
-    <OrchestrationPanel date={date} currentMember={currentMember} readOnly={!canEditPlanning} onOpenSource={kind=>onNavigate?.(kind==='meal'?'meals':'schedule')} />
+    <OrchestrationPanel date={date} currentMember={currentMember} readOnly={!canEditPlanning} onOpenSource={kind=>onNavigate?.(kind==='meal'?'meals':kind==='care'?'care':'schedule')} />
     <OperatingPracticesPanel key={date} plan={daily.plan} planState={daily.state} planError={daily.error} meals={meals} mealState={rolling.state} currentMember={currentMember} canEditPlanning={canEditPlanning} mode={tab} onNavigate={onNavigate} onReload={daily.reload} />
   </div>
 }

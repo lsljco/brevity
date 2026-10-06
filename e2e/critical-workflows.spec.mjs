@@ -1917,3 +1917,25 @@ test('GOV-001 audit fixes keep completed learning and paused recovery exit revie
  expect(prepared[1].operation.payload.intent).toBe('end')
  expect(prepared[1].expectedVersions['shared:brevity_household_schedule_v1']).toBe(9)
 })
+
+test('GOV-001 Health follow-up keeps review, explicit closure and private source controls',async({page},testInfo)=>{
+ const {buildOrchestration}=await import('../src/governance/orchestration.js')
+ const date=dateKey(),versions={'health:care':4},configuration={effectiveDate:date,reviewDate:date,decisionMaker:'Larry',supportMembers:['Nyla'],workerEnabled:false,promptMinutes:240,threshold:64,recurrenceWindow:28,revision:1}
+ const data={...buildOrchestration({date,care:{items:[{id:'care-follow',title:'Arrange teeth cleaning',member:'Larry',type:'Dental',status:'Needs scheduling'}]},sourceStates:{'health:care':'available'},versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:2,canReview:true,caseStoreAvailable:true,configuration,policyActive:true,routines:[],recovery:[],workload:[],conflicts:[]}
+ await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const panel=page.getByRole('region',{name:'Brevity can help',exact:true}),prepared=[]
+ let executed=0
+ page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed++})
+ await panel.getByRole('combobox',{name:'Responsibility'}).selectOption('care:care-follow')
+ await panel.getByText('Coordinate support, consequences and decisions',{exact:true}).click()
+ await expect(panel).toContainText('They do not complete or verify the source responsibility')
+ await expect(panel.getByLabel('Approved support candidate')).toHaveCount(0)
+ await panel.getByLabel('Follow-up delay').selectOption('48')
+ await panel.getByRole('button',{name:'Review snooze 48 hours',exact:true}).click()
+ await expect.poll(()=>prepared.length).toBe(1)
+ expect(prepared[0].operation.payload.sourceVersions).toEqual({'health:care':4})
+ expect(prepared[0].operation.payload.event).toBe('snooze')
+ expect(Date.parse(prepared[0].operation.payload.snoozeUntil)-Date.now()).toBeGreaterThan(47*3600000)
+ expect(executed).toBe(0)
+})
