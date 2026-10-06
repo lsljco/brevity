@@ -668,9 +668,6 @@
   .finance-calendar-move-dialog { max-height: calc(100vh - 32px) !important; }
 }
 
-/* Reviewed payer creation keeps the transaction draft open beneath Action Mode. */
-body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevity-assistant-backdrop { z-index: 1790; }
-body:has(.finance-calendar-editor-overlay, .finance-insight-edit-overlay) .brevity-assistant-drawer { z-index: 1800; }
 
 .finance-calendar-intro > .finance-calendar-simple-guide { color:var(--soft-white); font-size:14px; line-height:1.6; letter-spacing:normal; text-transform:none; }
 .finance-calendar-explanation { margin-top:12px; color:var(--muted); line-height:1.6; }
