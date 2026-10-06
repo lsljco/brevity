@@ -1,0 +1,9 @@
+.brevity-read-aloud{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:12px 0;color:var(--white,#eee)}
+.brevity-read-aloud button,.sermon-reader-toolbar>button{display:inline-flex;gap:8px;align-items:center;padding:10px 14px;border:1px solid #9b824f;border-radius:10px;background:#252117;color:#f4e8ce;font:inherit;cursor:pointer;min-height:44px}
+.brevity-read-aloud small{color:var(--muted,#bbb);font-size:13px}.brevity-read-aloud p{flex-basis:100%;color:#ffc2bc}
+.sermon-reader-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;background:#10181d;color:#f4e8ce;flex:none}
+.sermon-reader-dialog{position:fixed;inset:0;margin:0;width:100vw;max-width:none;height:100dvh;max-height:none;padding:0;border:0;background:#10181d;color:#eee;box-sizing:border-box}
+.sermon-reader-dialog[open]{display:flex;flex-direction:column}.sermon-reader-dialog::backdrop{background:#000c}.sermon-reader-scroll{overflow:auto;min-height:0;flex:1;padding:16px;overscroll-behavior:contain}.sermon-reader-scroll>.sermon-teaching-document{max-width:1000px;margin:0 auto}
+.sermon-word-frame{display:block;width:100%;height:75vh;min-height:360px;border:0;background:#fff}.sermon-reader-scroll .sermon-word-frame{height:100%;min-height:360px}.sermon-word-status{padding:12px;color:var(--white,#eee)}
+
+.sermon-word-frame[hidden]{display:none}

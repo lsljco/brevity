@@ -184,7 +184,8 @@ test('preferences are own-member only; learning is opt-in and unknowns do not co
  const result=adaptationSummary([],'Terica',{...defaultPreferences(),learning:true},new Date(`${date}T16:00:00Z`),observations)
  assert.deepEqual(result.observedCompletion,{completed:1,observed:1});assert.equal(result.responseTime.medianMinutes,30)
 })
-test('Recovery Mode activation and early exit use exact dated changes, audit and safe Undo',async()=>{
+test('Recovery Mode activation and early exit use exact dated changes, audit and safe Undo',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date(`${date}T16:00:00Z`)})
  const resources=governed(),repository=memoryRepository(),permissions=defaultActionPermissions('admin')
  resources.data.get(scheduleKey).value={routines:[{id:'r1',title:'Optional project time',owner:'Terica',days:[1],enabled:true,startTime:'16:00',endTime:'17:00'}],routineOverrides:{}}
  const recovery={type:'orchestration.recovery.update',targetId:'recovery-test',targetDate:date,payload:{intent:'propose',title:'Travel coverage',reason:'Reduced capacity',essential:'Protect meals and required care',startsOn:date,endsOn:date,routineIds:['r1'],scheduleVersion:2}}

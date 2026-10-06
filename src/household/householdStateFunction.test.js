@@ -607,7 +607,7 @@ test('Today fails closed when active-sermon storage is unavailable', async () =>
   assert.equal(withoutSermon.spiritual.devotionFocus, 'Retained')
 })
 
-test('a missing future plan still receives the reviewed Sunday-through-Saturday sermon authority', async () => {
+test('a missing future plan still receives the reviewed Monday-through-Sunday sermon authority', async () => {
   const active = {
     version:4,
     activatedAt:'2026-09-06T15:00:00.000Z',
@@ -624,9 +624,9 @@ test('a missing future plan still receives the reviewed Sunday-through-Saturday 
   assert.equal(plan.version, 0)
   assert.equal(plan.spiritual.sermonNotes.documentTitle, 'Weekly Word')
   assert.equal(plan.spiritual.sermonSource.activeVersion, 4)
-  assert.equal(plan.spiritual.devotionDay, 7)
+  assert.equal(plan.spiritual.devotionDay, 6)
   assert.equal(plan.spiritual.devotionDate, '2026-09-12')
-  assert.equal(plan.spiritual.todayFocus, 'Day 7')
+  assert.equal(plan.spiritual.todayFocus, 'Day 6')
 })
 
 test('daily generator context distinguishes missing prior data from a Blob outage', async () => {

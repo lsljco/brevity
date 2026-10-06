@@ -112,7 +112,7 @@ function sermonDevotion(activeSermon, date) {
   const days = rawDays.map((day, index) => {
     const paragraphs = [...values(day?.description), ...values(day?.paragraphs), ...values(day?.details)].map(itemText).filter(Boolean)
     const practices = [...values(day?.steps), ...values(day?.actions), ...values(day?.items)].map(itemText).filter(Boolean)
-    return sharedSpiritualValue({ day: index + 1, date: addDays(sermonDate, index), title: clean(day?.title) || `Day ${index + 1}`, scripture: dayScripture(day, activeSermon, index), devotionFocus: paragraphs.join('\n\n') || clean(day?.description || day?.detail), prayerFocus: practices.slice(0, 3), discussionPrompts: values(day?.discussionPrompts).map(itemText).filter(Boolean), obedienceAction: practices[0] || '', requiredOutput: practices[1] || practices[0] || '' })
+    return sharedSpiritualValue({ day: index + 1, date: addDays(sermonDate, index + 1), title: clean(day?.title) || `Day ${index + 1}`, scripture: dayScripture(day, activeSermon, index), devotionFocus: paragraphs.join('\n\n') || clean(day?.description || day?.detail), prayerFocus: practices.slice(0, 3), discussionPrompts: values(day?.discussionPrompts).map(itemText).filter(Boolean), obedienceAction: practices[0] || '', requiredOutput: practices[1] || practices[0] || '' })
   })
   const exact = days.find(day => day.date === date)
   if (exact) return exact

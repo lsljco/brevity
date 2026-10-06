@@ -1,3 +1,5 @@
+import ReadAloud from '../assistant/ReadAloud.jsx'
+import { readableText } from '../assistant/readingText.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { archiveSermonDocuments, clearPendingSermonAnalysis, generateSermonFormation, generateSermonSlides, getOneDriveStatus, getPendingSermonAnalysis, getSermonSlideStatus, importSermonNotes, ONEDRIVE_REPOSITORY_SHARE_URL, prepareSermonActivation, resumeSermonFormation } from './sermonFormationApi.js'
 import { ACTION_COMPLETED_EVENT, requestActionReview } from '../assistant/actionEvents.js'
@@ -9,6 +11,7 @@ const toLines=value=>Array.isArray(value)?value:splitEditableLines(String(value|
 const joinLines=value=>joinEditableLines(Array.isArray(value)?value:[])
 
 export default function SpiritualFormationStudio({draft,update}){
+  const readingRef = useRef(null)
   const spiritual=draft.spiritual||{}
   const existingSource=spiritual.sermonSource||{}
   const [transcript,setTranscript]=useState('')
@@ -168,7 +171,8 @@ export default function SpiritualFormationStudio({draft,update}){
     }catch(err){setSlides({state:'error',id,error:err.message||'Could not start sermon slides and devotions.'})}
   }
 
-  return <div className="spiritual-studio">
+  return <div className="spiritual-studio" ref={readingRef}>
+    <ReadAloud getText={()=>readableText(readingRef.current)} label="Read Spiritual Maturity aloud" contentKey={draft.date}/>
     <section className="sermon-source-card">
       <div className="sermon-source-heading">
         <div><span>Sermon Source</span><h3>{hasGenerated?'Active teaching':'Upload the Word that will govern the formation cycle'}</h3><p>{hasGenerated?`${sourceLabel}. This reviewed sermon remains active until a household member explicitly reviews and applies a replacement.`:'Start with a transcript or sermon notes you already have. Brevity will analyze it as a draft; the active teaching changes only after Action Mode review.'}</p></div>
@@ -221,7 +225,7 @@ export default function SpiritualFormationStudio({draft,update}){
         <div><span>Sermon Package</span><strong>Reviewed Sermon Notes, Slides &amp; Seven-Day Devotions</strong>{archivedDocument?<small className="sermon-cloud-ready"><i className="ti ti-device-floppy"/> Teaching documents generated from active version {archivedDocument.activeVersion}.</small>:null}{oneDrive.connected&&<small className="sermon-cloud-ready"><i className="ti ti-cloud-check"/> OneDrive connected{oneDrive.connection?.account?` · ${oneDrive.connection.account}`:''}</small>}<small><i className="ti ti-shield-check"/> Generate Sermon Package creates the Word/PDF teaching documents, a PowerPoint deck, seven devotion images, and a seven-day devotion guide from the reviewed active sermon.</small>{slides.state==='generating'&&<small className="sermon-cloud-ready"><i className="ti ti-photo"/> Creating cinematic sermon slides + seven devotion images{slides.total?` · ${slides.completed||0} of ${slides.total} visuals`:''}…</small>}{slides.state==='error'&&<small>{slides.error}</small>}{archiveError&&<small>{archiveError}</small>}</div>
         <div>{archivedDocument&&<>{archivedDocument.files?.docx&&<a href={archivedDocument.files.docx}><i className="ti ti-file-type-docx"/> Word</a>}{archivedDocument.files?.pdf&&<a href={archivedDocument.files.pdf}><i className="ti ti-file-type-pdf"/> Sermon PDF</a>}</>}{slides.state==='ready'&&<><a href={slides.download}><i className="ti ti-file-type-ppt"/> PowerPoint</a>{slides.devotionsDownload&&<a href={slides.devotionsDownload}><i className="ti ti-book-2"/> 7-Day Devotions</a>}</>}{reviewedActive&&slides.state!=='ready'&&<button type="button" disabled={slides.state==='generating'||archiveState==='saving'} onClick={createSlides}><i className={`ti ${slides.state==='generating'||archiveState==='saving'?'ti-loader-2':'ti-presentation'}`}/> {slides.state==='generating'?'Generating sermon package…':archiveState==='saving'?'Preparing source documents…':'Generate Sermon Slides + 7 Devotions'}</button>}<span className="sermon-cloud-status"><i className="ti ti-lock"/> Automatic uploads not enabled</span><a href={ONEDRIVE_REPOSITORY_SHARE_URL} target="_blank" rel="noreferrer"><i className="ti ti-brand-onedrive"/> Open repository</a><button type="button" disabled={archiveState==='saving'||!reviewedActive} onClick={archiveCurrent}><i className={`ti ${archiveState==='saving'?'ti-loader-2':'ti-device-floppy'}`}/> {archiveState==='saving'?'Creating…':archivedDocument?'Recreate teaching documents':'Create teaching documents only'}</button></div>
       </section>
-      <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>Full Church Triumphant teaching-document framework</small></summary><SermonNotesView notes={spiritual.sermonNotes}/></details>
+      <details className="sermon-notes-panel"><summary><span>Permanent Sermon Notes</span><small>Full Church Triumphant teaching-document framework</small></summary><SermonNotesView notes={spiritual.sermonNotes} documentUrl={archivedDocument?.files?.docx || existingSource.document?.files?.docx}/></details>
     </>}
 
     <details className="spiritual-manual-edit" open={!hasGenerated}>

@@ -1,3 +1,5 @@
+import ReadAloud from '../assistant/ReadAloud.jsx'
+import { readableText } from '../assistant/readingText.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CALENDAR_STALE_AFTER_MS } from '../family/calendarSnapshot.js'
 import { useRollingMealPlan } from '../meals/useRollingMealPlan.js'
@@ -148,6 +150,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
 
   const analysis=analysisSourceReady&&result?.pillar===pillar.id && result?.date===plan?.date && sameMember(result?.member,currentMember) && result?.contextSignature===contextSignature ? result.analysis : null
   const visibleError=errorScopeRef.current===currentScopeKey?error:''
+  const readingRef=useRef(null)
   const compactSpiritual=pillar.id==='spiritual'&&result?.quality?.status==='evidence-fallback'&&analysis?.headline===(plan?.spiritual?.todayFocus||plan?.spiritual?.devotionTitle||plan?.spiritual?.devotionFocus)&&Boolean(plan?.spiritual?.scripture?.length||plan?.spiritual?.scriptureFocus)
   const focusSummary=compactSpiritual&&plan?.spiritual?.devotionFocus?plan.spiritual.devotionFocus:analysis?.executiveSummary
   const decisions=analysis?.decisions || []
@@ -155,7 +158,8 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
   const negativeDay=financeSummary?.operatingForecast?.firstNegative
   const unplanned=financeSummary?.unplannedSpending
   const dollars=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)
-  return <div className="pillar-analysis-page">
+  return <div className="pillar-analysis-page" ref={readingRef}>
+    {pillar.id==='spiritual'&&<ReadAloud getText={()=>readableText(readingRef.current)} label="Read Spiritual Maturity aloud" contentKey={plan?.date+pillar.id}/>}
     <header className="pillar-analysis-hero">
       <div className="pillar-analysis-icon"><i className={`ti ${pillar.icon}`} /></div>
       <div className="pillar-analysis-title"><span>Seven Pillars · AI Analysis</span><h1>{pillar.label}</h1><p>{pillar.description}</p></div>
