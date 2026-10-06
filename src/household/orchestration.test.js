@@ -489,3 +489,18 @@ test('source outages preserve durable case tracking and Health prompts remain ow
  assert.equal(store.value.messages.some(m=>m.caseId==='care:care-one'),false)
  assert.equal(store.value.trackedCases.some(c=>c.caseId==='care:care-one'),false)
 })
+
+test('undated Health cases retain their original observation date and one prompt across days',async()=>{
+ const resources=governed(),store=jobStore();let now=new Date(`${date}T16:00:00Z`)
+ resources.data.set('health:care',{version:1,value:{items:[{id:'undated',member:'Terica',title:'Arrange care',status:'Needs scheduling'}]}})
+ resources.data.set(preferenceResource('Terica'),{version:1,value:{...defaultPreferences(),learning:true}})
+ const run=createOrchestrationRunner({resources,store,key:'test',now:()=>now});await run()
+ now=new Date('2026-10-06T16:00:00Z');resources.data.set('plan:2026-10-06',{version:1,value:{date:'2026-10-06',assignments:[]}});await run()
+ const messages=store.value.messages.filter(m=>m.caseId==='care:undated')
+ assert.equal(messages.length,1);assert.equal(messages[0].date,date)
+ assert.equal(store.value.observations.find(o=>o.caseId==='care:undated').date,date)
+ resources.data.get('health:care').value.items[0].status='Completed';resources.data.get('health:care').version++
+ now=new Date('2026-10-07T16:00:00Z');await run()
+ now=new Date('2026-11-07T16:00:00Z');await run()
+ assert.equal(store.value.observations.some(o=>o.caseId==='care:undated'),false)
+})

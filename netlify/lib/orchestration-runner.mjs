@@ -59,12 +59,13 @@ export function createOrchestrationRunner({store,key,resources,now=()=>new Date(
    for(const item of selected){
     processed[item.id]=at
     for(const recipient of recipientsFor(item)){
-     const pref=await getPrefs(recipient),id=`${item.date}:${item.id}:${recipient}`,existing=messages.get(id)
+     const pref=await getPrefs(recipient),id=`${item.id}:${recipient}`,existing=messages.get(id)||[...messages.values()].find(message=>message.caseId===item.id&&message.recipient===recipient)
      const exception=item.kind!=='care'&&recipient===policy.decisionMaker&&eligibleException(item,policy,now())
      // Never retain an outdated leadership packet after the case loses escalation eligibility.
-     if(existing?.exception&&!exception)messages.delete(id)
+     if(existing?.exception&&!exception)messages.delete(existing.id)
      if(currentMinute<minute(pref.startTime)||currentMinute>=minute(pref.endTime))continue
      if(existing&&Date.parse(existing.updatedAt)>now().getTime()-policy.promptMinutes*60000&&Boolean(existing.exception)===exception)continue
+     if(existing&&existing.id!==id)messages.delete(existing.id)
      messages.set(id,{id,date:item.date,caseId:item.id,recipient,title:item.title,owner:item.owners.join(', ')||'Unresolved',stage:item.stage,createdAt:existing?.createdAt||at,updatedAt:at,style:pref.style,authority:exception?'L5 in-app exception':'L1 in-app prompt',exception:exception?item.exception:null,preparation:item.assistance,policyRevision:policy.revision})
     }
    }

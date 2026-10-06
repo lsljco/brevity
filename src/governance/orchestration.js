@@ -48,7 +48,7 @@ function assistance(item) {
   ] : item.steps?.length ? item.steps : ['Confirm the required outcome and completion standard.','Identify the smallest next step and any missing information.','Confirm a realistic time and accepted support if needed.']
   return {title:`Preparation for ${item.title}`,checklist:[...new Set(checklist)],questions:item.state==='unknown'?['What is the current status? Missing tracking does not establish a missed responsibility.']:item.state==='blocked'?['What is preventing progress, and what help would make the next step possible?']:['What preparation would help finish this outcome?'],options:item.state==='blocked'?blockedOptions:['Keep the agreed owner and confirm the next step.','Review timing or accepted coverage in the existing source workflow.'],recommendation:item.owners.length?'Prepare the next step with the existing owner; use the source workflow for reviewed changes.':'Confirm an accountable owner before proposing assignment or coverage.'}
 }
-export function buildOrchestration({date,policyDate=date,plan,schedule,maintenance,care,sourceStates={},versions={},saved={},member,isAdmin=false}={}) {
+export function buildOrchestration({date,policyDate=date,plan,schedule,maintenance,care,caseDates={},sourceStates={},versions={},saved={},member,isAdmin=false}={}) {
   if(!validPracticeDate(date))throw Error('Choose a valid household date.')
   const candidates=[],observedCases=[],closedCases=[]
   const add=item=>{
@@ -62,7 +62,7 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
     const paused=lastControl?.event==='pause'||lastControl?.event==='snooze'&&Date.parse(lastControl.snoozeUntil)>Date.now()
     const automaticRecipient=policyActive(saved.policy,policyDate)&&saved.policy.decisionMaker===member&&eligibleException({state:item.state,risk:assessment,events},saved.policy)&&!paused&&!saved.paused
     if(!isAdmin&&!owners.includes(member)&&item.coveredBy!==member&&!sharedCaseMember(retained,member)&&!automaticRecipient)return
-    const base={...item,id,date:item.kind==='care'?(retained?.date||date):date,owners,sourceVersions:Object.fromEntries([item.sourceResource,...(item.kind==='practice'?['shared:brevity_household_schedule_v1']:[])].filter(key=>Number.isInteger(versions[key])).map(key=>[key,versions[key]])),sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
+    const base={...item,id,date:item.kind==='care'?(retained?.date||caseDates[id]||date):date,owners,sourceVersions:Object.fromEntries([item.sourceResource,...(item.kind==='practice'?['shared:brevity_household_schedule_v1']:[])].filter(key=>Number.isInteger(versions[key])).map(key=>[key,versions[key]])),sourceVersion:versions[item.sourceResource],sourceQuality:sourceStates[item.sourceResource]||'unavailable',state:item.state||'unknown',policyId:GOV_POLICY.id,policyVersion:GOV_POLICY.version}
     base.assistance=assistance(base)
     base.events=events
     base.stage=paused?'paused':events.some(e=>e.event==='prepare')?'ASSIST':events.some(e=>e.event==='acknowledge')?'DIAGNOSE':'DETECT'
@@ -107,6 +107,7 @@ export function buildOrchestration({date,policyDate=date,plan,schedule,maintenan
   }
   if(sourceStates['health:care']==='available')for(const item of care?.items||[]){
     if(!item.id||!item.member||!['Needs scheduling','Scheduled','Needs review','Completed'].includes(item.status))continue
+    if(item.status==='Completed'&&!saved.cases?.[`care:${encodeURIComponent(item.id)}`]&&!caseDates[`care:${encodeURIComponent(item.id)}`])continue
     // Care is a coordination record, never evidence of a diagnosis or clinical verification.
     if(item.date&&item.date>new Date(Date.parse(`${date}T12:00:00Z`)+7*86400000).toISOString().slice(0,10))continue
     add({kind:'care',sourceId:item.id,sourceResource:'health:care',title:item.title,owners:[item.member],state:item.status==='Completed'?'completed':item.status==='Scheduled'?'in progress':item.status==='Needs scheduling'?'not started':'unknown',outcome:`Review the next step for ${item.type||'shared care'}.`,evidence:`Shared care status: ${item.status}. An elapsed date alone does not establish a missed appointment.`,due:item.date||'',steps:['Confirm scheduling or review needs with the member.','Prepare appointment options for human review.','Update the shared care record after the outcome is known.'],pillar:'health'})
