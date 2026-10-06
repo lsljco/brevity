@@ -2009,3 +2009,48 @@ test('Spiritual reader renders the original Word file in an isolated full-screen
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
 })
+
+test('Projected expenses can be edited unassigned and vendor review stays above the retained editor',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),prepared=[]
+  finance.transactions=[{id:'rental',name:'National Car Rental fixture',type:'expense',amount:1240,acct:'a1',freq:'monthly',start:dateKey(),end:'',cat:'Transportation'}]
+  records.lslj_finance_v9.value=JSON.stringify(finance);records.plaid_actuals_cache.value='[]'
+  let writes=0
+  await page.route('**/.netlify/functions/household-state*',route=>{if(route.request().method()!=='GET')writes++;return route.fulfill({json:{records,serverTime:new Date().toISOString()}})})
+  await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[],links:{}}}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes++})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  // A containing layout must not trap Action Mode below body-level Finance overlays.
+  await page.addStyleTag({content:'.app-shell{isolation:isolate}'})
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const agenda=page.locator('.finance-calendar-mobile-agenda')
+  if(await agenda.isVisible()){
+    const row=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    if(await row.getAttribute('aria-expanded')!=='true')await row.click()
+  }else{
+    const cell=page.locator('.cal-cell.is-today')
+    if(!(await cell.getAttribute('class')||'').includes('is-selected'))await cell.locator('.finance-calendar-day-number').click()
+  }
+  await page.locator('.finance-card').filter({has:page.locator('.finance-calendar-day-header')}).getByText('National Car Rental fixture',{exact:true}).click()
+  const editor=page.locator('.finance-calendar-editor-dialog')
+  await expect(editor).toContainText('Vendor (optional)')
+  await editor.locator('input[type="number"]').fill('1250')
+  await editor.getByRole('combobox',{name:'Expense vendor',exact:true}).fill('Rental vendor fixture')
+  await editor.getByRole('button',{name:'Create new: Rental vendor fixture',exact:true}).click()
+  const review=page.locator('.brevity-action-review')
+  await expect(review).toContainText('Create vendor Rental vendor fixture')
+  const cancel=review.getByRole('button',{name:'Cancel',exact:true})
+  await cancel.scrollIntoViewIfNeeded()
+  expect(await cancel.evaluate(node=>{const r=node.getBoundingClientRect();return node.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})).toBe(true)
+  await page.screenshot({path:`test-results/vendor-review-above-editor-${testInfo.project.name}.png`})
+  await cancel.click()
+  await page.getByRole('dialog',{name:'Brevity Assistant',exact:true}).getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+  await expect(editor.locator('input[type="number"]')).toHaveValue('1250')
+  await expect(editor.getByRole('combobox',{name:'Expense vendor',exact:true})).toHaveValue('')
+  await editor.getByRole('button',{name:'Review scheduled change',exact:true}).click()
+  await page.getByRole('button',{name:/This item only/}).click()
+  await expect.poll(()=>prepared.length).toBe(2)
+  expect(prepared[1].operation.targetId).toBe('rental')
+  expect(prepared[1].operation.payload.amount).toBe(1250)
+  expect(prepared[1].operation.payload.vendorId||'').toBe('')
+  expect(writes).toBe(0)
+})

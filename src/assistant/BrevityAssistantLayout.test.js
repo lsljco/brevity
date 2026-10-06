@@ -11,6 +11,10 @@ test('keeps the mobile Ask Brevity launcher above the fixed navigation', () => {
 })
 
 test('keeps the assistant drawer above mobile navigation and overlays', () => {
-  assert.match(css, /\.brevity-assistant-backdrop\{[^}]*z-index:1590/)
-  assert.match(css, /\.brevity-assistant-drawer\{[^}]*z-index:1600/)
+  const backdrop=Number(css.match(/\.brevity-assistant-backdrop\{[^}]*z-index:(\d+)/)?.[1])
+  const drawer=Number(css.match(/\.brevity-assistant-drawer\{[^}]*z-index:(\d+)/)?.[1])
+  const responsive=readFileSync(new URL('../ResponsiveHardening.css', import.meta.url), 'utf8')
+  const finance=Number(responsive.match(/\.finance-insight-edit-overlay\s*\{\s*z-index:\s*(\d+)/)?.[1])
+  assert.ok(backdrop>finance)
+  assert.ok(drawer>backdrop)
 })

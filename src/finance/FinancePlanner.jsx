@@ -1053,7 +1053,6 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
   const [customCatMode, setCustomCatMode] = useState(() => !!(tx?.cat && !CATS.includes(tx.cat)))
 
   const save = async () => {
-    if (form.type === 'expense' && !form.vendorId) { alert('Choose a vendor for this expense. Add vendors under Finance → Vendors.'); return }
     if (!form.name || !form.amount) { alert('Name and amount are required.'); return }
     if (form.type === 'transfer' && !form.transferTo) { alert('Please select a destination account.'); return }
     if (!form.start) { alert('A transaction date is required.'); return }
