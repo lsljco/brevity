@@ -64,8 +64,16 @@ function SermonNotesContent({notes}){
 }
 
 
-export default function SermonNotesView({ notes, documentUrl = '' }) {
+export default function SermonNotesView({ notes, documentUrl = '', sourceHash = '' }) {
   const [expanded, setExpanded] = useState(false)
+  const [original, setOriginal] = useState(null)
+  useEffect(()=>{
+    const controller=new AbortController()
+    setOriginal(null)
+    if(/^[a-f0-9]{64}$/.test(sourceHash))fetch(`/.netlify/functions/sermon-original?sourceHash=${sourceHash}`,{credentials:'include',signal:controller.signal}).then(response=>response.ok?response.json():null).then(value=>{if(!controller.signal.aborted&&value?.documentUrl)setOriginal({...value,sourceHash})}).catch(()=>{})
+    return()=>controller.abort()
+  },[sourceHash])
+  const readingUrl=original?.sourceHash===sourceHash?original.documentUrl:documentUrl
   const dialog = useRef(null), content = useRef(null), frame = useRef(null), opener = useRef(null)
   useEffect(() => {
     if (!expanded) return
@@ -82,13 +90,13 @@ export default function SermonNotesView({ notes, documentUrl = '' }) {
     return word && !word.hidden ? word.contentDocument?.body?.innerText || '' : readableText(content.current)
   }
   const documentView = <div ref={content} className="sermon-reader-scroll">
-    {documentUrl ? <SermonWordDocument url={documentUrl} frameRef={frame} fallback={<SermonNotesContent notes={notes}/>}/> : <SermonNotesContent notes={notes}/>}
+    {readingUrl ? <SermonWordDocument url={readingUrl} frameRef={frame} fallback={<SermonNotesContent notes={notes}/>}/> : <SermonNotesContent notes={notes}/>}
   </div>
   return <div className="sermon-reader">
     <div className="sermon-reader-toolbar">
       <button type="button" ref={opener} onClick={open}>Open sermon notes full screen</button>
       {!expanded && <ReadAloud getText={getText} label="Read sermon notes aloud" contentKey={notes}/>}
-      {documentUrl && <a href={documentUrl}>Download original Word document</a>}
+      {readingUrl && <a href={readingUrl}>Download Word document</a>}
     </div>
     {!expanded && <div onClick={event => { if (!event.target.closest('a,button,iframe')) open() }}>{documentView}</div>}
     {expanded && createPortal(<dialog ref={dialog} className="sermon-reader-dialog" aria-label="Sermon notes full screen" onCancel={close}>

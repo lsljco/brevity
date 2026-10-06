@@ -1981,6 +1981,11 @@ test('Spiritual reader renders the original Word file in an isolated full-screen
   const notes={documentTitle:'Original Word Teaching',primaryScriptures:[{reference:'Genesis 2:7',explanation:'Original Word content.'}],prayer:['Word prayer.']}
   const bytes=await buildTimesSermonDocx(notes,{sermonDate:'2026-10-04'})
   await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:{...plan(),spiritual:{...plan().spiritual,sermonNotes:notes,sermonSource:{...plan().spiritual.sermonSource,document:{files:{docx:'/.netlify/functions/sermon-documents?id=test&format=docx'}}}}}}}))
+  let originalDownloads=0
+  await page.route('**/.netlify/functions/sermon-original?**',route=>{
+    if(new URL(route.request().url()).searchParams.get('download')==='1'){originalDownloads++;return route.fulfill({contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',body:bytes})}
+    return route.fulfill({json:{documentUrl:`/.netlify/functions/sermon-original?sourceHash=${'a'.repeat(64)}&download=1`}})
+  })
   await page.route('**/.netlify/functions/sermon-documents?**',route=>route.fulfill({contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',body:bytes}))
   await page.reload()
   await openMenuIfMobile(page,testInfo)
@@ -1991,6 +1996,7 @@ test('Spiritual reader renders the original Word file in an isolated full-screen
   await expect(dialog.locator('iframe')).toBeVisible()
   await expect(page.frameLocator('iframe[title="Sermon notes Word document"]').getByText('Genesis 2:7 — Original Word content.',{exact:true})).toBeVisible()
   await expect(page.frameLocator('iframe[title="Sermon notes Word document"]').getByText('Genesis 2:7 — Original Word content.',{exact:true})).toHaveCSS('color','rgb(31, 31, 31)')
+  await expect.poll(()=>originalDownloads).toBeGreaterThan(0)
   const documentFrame=page.frameLocator('iframe[title="Sermon notes Word document"]')
   expect(await documentFrame.locator('body').evaluate(node=>node.scrollWidth<=node.clientWidth+2)).toBe(true)
   await page.screenshot({path:`test-results/spiritual-word-${testInfo.project.name}.png`})
