@@ -133,7 +133,7 @@ async function getPlan(date, dataStore = store()) {
   if (!devotion) return { ...value, spiritual:retained }
   return { ...value, spiritual: { ...retained, scripture: devotion.scripture, devotionFocus: devotion.devotionFocus, prayerFocus: devotion.prayerFocus, discussionPrompts: devotion.discussionPrompts, obedienceAction: devotion.obedienceAction, requiredOutput: devotion.requiredOutput, todayFocus: devotion.title, devotionDay: devotion.day, devotionDate: devotion.date, devotionTitle: devotion.title } }
 }
-function daysStart(activeSermon) { const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(sermonDate) ? sermonDate : '' }
+function daysStart(activeSermon) { const sermonDate = String(activeSermon?.source?.sermonDate || activeSermon?.sermonNotes?.sermonDate || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(sermonDate) ? addDays(sermonDate, 1) : '' }
 async function readPlanEntry(dataStore, date) {
   const entry = await dataStore.getWithMetadata(planKey(date), { type:'json' })
   return entry ? { plan:entry.data, etag:entry.etag || '' } : { plan:null, etag:'' }

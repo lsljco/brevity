@@ -624,6 +624,7 @@ test('a missing future plan still receives the reviewed Monday-through-Sunday se
   assert.equal(plan.version, 0)
   assert.equal(plan.spiritual.sermonNotes.documentTitle, 'Weekly Word')
   assert.equal(plan.spiritual.sermonSource.activeVersion, 4)
+  assert.equal(plan.spiritual.sermonSource.devotionStartDate, '2026-09-07')
   assert.equal(plan.spiritual.devotionDay, 6)
   assert.equal(plan.spiritual.devotionDate, '2026-09-12')
   assert.equal(plan.spiritual.todayFocus, 'Day 6')
