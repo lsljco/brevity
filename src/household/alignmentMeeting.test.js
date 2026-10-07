@@ -42,7 +42,7 @@ test('Today and Tomorrow alignment screens expose meeting capture while preservi
   assert.match(source,/AlignmentMeetingCapture plan=\{draft\} timing=\{timing\}/)
   assert.match(source,/applyAlignmentMeetingResult\(current,result,\{financeReadOnly\}\)/)
   assert.match(source,/Review & Complete Alignment/)
-  for(const label of ['Start Meeting','End Meeting','Import Otter','Save recording','Analyze with Brevity','Apply Suggestions to Draft'])assert.match(capture,new RegExp(label))
+  for(const label of ['Start Meeting','Stop Meeting','Import Otter','Save recording','Analyze with Brevity','Apply Suggestions to Draft'])assert.match(capture,new RegExp(label))
   assert.match(endpoint,/readSession\(event\)/)
   assert.match(endpoint,/proposed local draft and does not change the shared plan/)
 })

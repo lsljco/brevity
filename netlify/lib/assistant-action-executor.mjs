@@ -253,7 +253,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:next }
   }
   if (operation.type === 'assignment.create') {
-    const item = { id:createId(), title:payload.title || operation.description, notes:payload.notes || '', owner:payload.owner || 'Family', participants:payload.participants || [], status:payload.status || 'pending', date:operation.targetDate || payload.date || '', priority:payload.priority || 'normal', calendarSync:false, createdAt:new Date().toISOString() }
+    const item = { id:createId(), title:payload.title || operation.description, notes:payload.notes || '', owner:payload.owner || 'Family', participants:payload.participants || [], status:payload.status || 'pending', date:operation.targetDate || payload.date || '', priority:payload.priority || 'normal', ...(payload.startTime?{startTime:payload.startTime}:{}), ...(payload.endTime?{endTime:payload.endTime}:{}), ...(payload.pillar?{pillar:payload.pillar}:{}), ...(payload.source?{source:payload.source}:{}), calendarSync:false, createdAt:new Date().toISOString() }
     return { before, after:{ ...value, assignments:[...(value?.assignments || []), item] }, createdId:item.id }
   }
   if (operation.type === 'assignment.update') {

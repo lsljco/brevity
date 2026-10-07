@@ -77,6 +77,8 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const [calendarData, setCalendarData] = useState(cachedCalendar)
   const [householdSignals, setHouseholdSignals] = useState(() => signalsForDate(plan.date))
   const [householdChores, setHouseholdChores] = useState(() => choresForDate(plan.date))
+  const [alignmentChores, setAlignmentChores] = useState(() => choresForDate(alignmentDate))
+  const calendarEvents = useMemo(() => [...(calendarData?.events || []).filter(event => !String(event.sourceId || '').startsWith('project-')), ...projectEvents], [calendarData?.events, projectEvents])
   const planWithMeals = useMemo(() => applyRollingMeals(plan, mealPlan.data), [mealPlan.data, plan])
   const alignmentPlanWithMeals = useMemo(() => applyRollingMeals(alignmentPlan, mealPlan.data), [alignmentPlan, mealPlan.data])
   const todayMeals = useMemo(
@@ -134,13 +136,14 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
       if (event?.type === 'storage' && ![HOUSEHOLD_MAINTENANCE_STORAGE_KEY,HOUSEHOLD_INVENTORY_STORAGE_KEY].includes(event.key)) return
       if (event?.type === SHARED_STATE_EVENT && !event.detail?.keys?.some(key=>[HOUSEHOLD_MAINTENANCE_STORAGE_KEY,HOUSEHOLD_INVENTORY_STORAGE_KEY].includes(key))) return
       setHouseholdChores(choresForDate(plan.date))
+      setAlignmentChores(choresForDate(alignmentDate))
       setHouseholdSignals(signalsForDate(plan.date))
     }
     refreshChores()
     window.addEventListener('storage', refreshChores)
     window.addEventListener(SHARED_STATE_EVENT, refreshChores)
     return () => { window.removeEventListener('storage', refreshChores); window.removeEventListener(SHARED_STATE_EVENT, refreshChores) }
-  }, [plan.date])
+  }, [plan.date, alignmentDate])
 
   useEffect(() => {
     let active=true
@@ -228,11 +231,11 @@ export default function HouseholdToday({ currentMember = 'Larry', canEditPlannin
   const todayReadiness = () => readiness(planWithMeals, state, todayMeals, error, reload)
   const tomorrowReadiness = () => readiness(alignmentPlanWithMeals, alignmentState, tomorrowMeals, alignmentError, reloadAlignment)
 
-  if (mode === 'today-alignment') return <WorkflowBoundary><div className="household-today-workspace">{todayReadiness()}<MorningAlignment timing="today" plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} /></div></WorkflowBoundary>
+  if (mode === 'today-alignment') return <WorkflowBoundary><div className="household-today-workspace">{todayReadiness()}<MorningAlignment timing="today" plan={planWithMeals} currentMember={currentMember} meals={todayMeals} mealDay={mealPlan.data?.days?.find(day=>day.date===planWithMeals.date)} mealLibrary={mealPlan.data?.library || []} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} calendarEvents={calendarEvents} calendarHealth={calendarHealth} householdChores={householdChores} onOpenCalendar={onOpenCalendar} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeTodayAlignment} /></div></WorkflowBoundary>
   if (mode === 'alignment' && alignmentState === 'loading') return <div className="household-today-workspace"><div className="today-sync-banner"><i className="ti ti-cloud-download" /> Loading tomorrow’s shared household plan…</div></div>
   if (mode === 'alignment' && alignmentError) return <div className="household-today-workspace"><div className="today-sync-banner today-sync-banner--error"><div><strong>Tomorrow’s plan could not be loaded</strong><span>{alignmentError}</span></div><button onClick={reloadAlignment}>Retry</button><button onClick={() => setMode('today')}>Return to Today</button></div></div>
-  if (mode === 'alignment') return <WorkflowBoundary><div className="household-today-workspace">{tomorrowReadiness()}<MorningAlignment plan={alignmentPlanWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} /></div></WorkflowBoundary>
-  if (mode === 'recap') return <WorkflowBoundary><div className="household-today-workspace">{todayReadiness()}<EveningRecap plan={planWithMeals} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} /></div></WorkflowBoundary>
+  if (mode === 'alignment') return <WorkflowBoundary><div className="household-today-workspace">{tomorrowReadiness()}<MorningAlignment plan={alignmentPlanWithMeals} currentMember={currentMember} meals={tomorrowMeals} mealDay={mealPlan.data?.days?.find(day=>day.date===alignmentPlanWithMeals.date)} mealLibrary={mealPlan.data?.library || []} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} calendarEvents={calendarEvents} calendarHealth={calendarHealth} householdChores={alignmentChores} onOpenCalendar={onOpenCalendar} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} financeReadOnly={!isAdministrator} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={reviewCalendarItem} onCancel={() => setMode('today')} onComplete={completeAlignment} /></div></WorkflowBoundary>
+  if (mode === 'recap') return <WorkflowBoundary><div className="household-today-workspace">{todayReadiness()}<EveningRecap plan={planWithMeals} currentMember={currentMember} meals={todayMeals} mealDay={mealPlan.data?.days?.find(day=>day.date===planWithMeals.date)} mealLibrary={mealPlan.data?.library || []} mealPlanState={mealPlan.state} mealPlanError={mealPlan.error} calendarEvents={calendarEvents} calendarHealth={calendarHealth} householdChores={householdChores} onOpenCalendar={onOpenCalendar} readOnly={!canEditPlanning} readOnlyMessage={planningAccessMessage} onCancel={() => setMode('today')} onComplete={completeRecap} /></div></WorkflowBoundary>
   if (mode === 'tomorrow') return <WorkflowBoundary><div className="evening-recap"><header className="morning-alignment-header"><div><span>Tomorrow</span><h1>Prepare the Next Day</h1><p>Today is closed. Review a proposed brief only if it helps the household prepare intentionally.</p></div><button type="button" onClick={() => setMode('today')}>Return to Today</button></header>{tomorrowReadiness()}<TomorrowProposal plan={planWithMeals} targetPlan={alignmentPlan} readOnly={!isAdministrator} /></div></WorkflowBoundary>
   if (mode === 'schedule') return <WorkflowBoundary><UpcomingSchedule today={plan.date} calendarData={{...calendarData,events:[...(calendarData?.events||[]).filter(event=>!String(event.sourceId||'').startsWith('project-')),...projectEvents]}} currentMember={currentMember} canViewFinance={isAdministrator} onBack={() => setMode('today')} onOpenPillar={onOpenPillar} onOpenCalendar={onOpenCalendar} onOpenMealPlan={onOpenMealPlan} /></WorkflowBoundary>
 

@@ -52,3 +52,13 @@
   .alignment-step-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .alignment-step-nav button { min-height: 58px; }
 }
+
+.alignment-day-preview.today-dashboard { padding: 0; min-width: 0; background: transparent; }
+.alignment-day-preview > * { min-width: 0; }
+.alignment-adjust-heading { margin: 30px 0 18px; font: 400 26px/1.2 var(--font-serif); color: var(--gold); }
+@media(max-width:640px) {
+  .alignment-workspace { padding: 14px; }
+  .alignment-day-preview .today-section { padding: 16px; }
+  .alignment-footer { position: static; grid-template-columns: 1fr 1fr; box-shadow: none; }
+  .alignment-footer > div { display: none; }
+}

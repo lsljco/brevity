@@ -1,3 +1,5 @@
+import { AlignmentPillarPreview } from './TodayDashboard.jsx'
+import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
 import TimedCommitmentsEditor from './TimedCommitmentsEditor.jsx'
@@ -65,7 +67,7 @@ function MemberChecks({ selected = [], onChange }) {
 function HealthStep({ draft, update, onOpenMealPlan }) {
   const value = draft.health
   return <><HealthAlertBanner/><div className="alignment-form-grid alignment-form-grid--two">
-    {value.mealPlanSource === 'rolling' && <div className="alignment-meal-plan-notice"><div><i className="ti ti-calendar-check" /><span><strong>Brevity supplied today’s meals.</strong><small>Use the rolling plan to choose from the household Meal Library.</small></span></div><button type="button" onClick={onOpenMealPlan}>Open Meal Plan</button></div>}
+    {value.mealPlanSource === 'rolling' && <div className="alignment-meal-plan-notice"><div><i className="ti ti-calendar-check" /><span><strong>Meals for {formatDailyPlanDate(draft.date)}.</strong><small>Use the rolling plan to choose from the household Meal Library.</small></span></div><button type="button" onClick={onOpenMealPlan}>Open Meal Plan</button></div>}
     <Field label="Breakfast"><input readOnly={value.mealPlanSource === 'rolling'} value={value.breakfast} onChange={e => update('health', { breakfast: e.target.value })} /></Field>
     <Field label="Lunch"><input readOnly={value.mealPlanSource === 'rolling'} value={value.lunch} onChange={e => update('health', { lunch: e.target.value })} /></Field>
     <Field label="Dinner"><input readOnly={value.mealPlanSource === 'rolling'} value={value.dinner} onChange={e => update('health', { dinner: e.target.value })} /></Field>
@@ -138,7 +140,7 @@ function MinistryStep({ draft, update, onReviewCalendarItem }) {
 
 const STEP_COMPONENTS = { spiritual: SpiritualFormationStudio, health: HealthStep, fitness: FitnessStep, household: HouseholdStep, education: EducationStep, finance: FinanceStep, ministry: MinistryStep }
 
-export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly = false, readOnlyMessage = '', financeReadOnly = false, onCancel, onComplete, onOpenMealPlan, onReviewCalendarItem }) {
+export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly = false, readOnlyMessage = '', financeReadOnly = false, onCancel, onComplete, onOpenMealPlan, onReviewCalendarItem, currentMember = 'Larry', meals = {}, mealDay, mealLibrary = [], mealPlanState = 'loading', mealPlanError = '', calendarEvents = [], calendarHealth, householdChores = [], onOpenCalendar }) {
   const openedVersionRef = useRef(Number(plan?.version || 0))
   const [draft, setDraft] = useState(() => loadLocalAlignmentDraft(globalThis.localStorage, plan, openedVersionRef.current))
   const latestDraftRef = useRef(draft)
@@ -250,7 +252,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
       <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${readOnly ? 'readonly' : draftSaveState}`}>{readOnly?'View only':draftSaveState==='pending'?'Saving on this device…':draftSaveState==='reviewing'?'Review opened · draft retained':draftSaveState==='error'?'Local draft needs attention':'Draft saved on this device'}</span><button type="button" disabled={saving} onClick={readOnly ? onCancel : saveAndExit}>{readOnly ? 'Return to Today' : 'Save Local Draft & Exit'}</button></div>
     </header>
     <WeatherHeader date={draft.date} compact />
-    <AlignmentMeetingCapture plan={draft} timing={timing} readOnly={readOnly} financeReadOnly={financeReadOnly} onApply={applyMeetingResult} />
+    <AlignmentMeetingCapture plan={draft} timing={timing} currentMember={currentMember} readOnly={readOnly} financeReadOnly={financeReadOnly} onApply={applyMeetingResult} />
     {readOnly && <div className="alignment-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>This alignment is view-only</strong><span>{readOnlyMessage || 'Plans & decisions permission is required to change the shared household plan.'}</span></div></div>}
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
     <nav className="alignment-step-nav" aria-label="Alignment progress">
@@ -259,6 +261,8 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
     <section className="alignment-workspace">
       <div className="alignment-workspace-heading"><div className="alignment-step-icon"><i className={`ti ${icon}`} /></div><div><span>Pillar {stepIndex + 1} of {STEPS.length}</span><h2>{label}</h2></div></div>
       {id === 'finance' && financeReadOnly && !readOnly && <div className="alignment-read-only-notice alignment-read-only-notice--section" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Finance is view-only</strong><span>Only the household administrator can change financial details in Morning Alignment. You can continue editing every planning section your permission allows.</span></div></div>}
+      <AlignmentPillarPreview key={`${draft.date}-${id}`} pillar={id} plan={draft} currentMember={currentMember} meals={meals} mealDay={mealDay} mealLibrary={mealLibrary} mealPlanState={mealPlanState} mealPlanError={mealPlanError} calendarAppointments={calendarAppointmentsForPlan(draft, calendarEvents)} calendarHealth={calendarHealth} householdChores={householdChores} canViewFinance={!financeReadOnly} onOpenMealPlan={onOpenMealPlan} onOpenCalendar={onOpenCalendar} />
+      <h3 className="alignment-adjust-heading">Discuss &amp; adjust the plan</h3>
       <fieldset className="alignment-step-fields" disabled={stepReadOnly} aria-disabled={stepReadOnly}>
         <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={onReviewCalendarItem} />
       </fieldset>
