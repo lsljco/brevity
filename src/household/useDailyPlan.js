@@ -60,7 +60,7 @@ export function useDailyPlan(date = currentDailyPlanDate()) {
   useEffect(() => {
     const refreshAfterReviewedAction = event => {
       const operations = event?.detail?.audit?.operations || []
-      if (!operations.some(operation => operation.targetDate === date && (operation.domain === 'planning' || operation.type?.startsWith('plan.')))) return
+      if (!operations.some(operation => operation.targetDate <= date && (operation.domain === 'planning' || operation.type?.startsWith('plan.')))) return
       reload()
     }
     window.addEventListener(ACTION_COMPLETED_EVENT, refreshAfterReviewedAction)
