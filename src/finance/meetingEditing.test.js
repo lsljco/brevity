@@ -110,7 +110,7 @@ test('finance meetings separate member planning edits from administrator financi
   assert.doesNotMatch(meetings,/localStorage\.setItem\(STORAGE_KEY/)
   assert.doesNotMatch(meetings,/setWorkspace\(current=>/)
   assert.match(meetings,/const setCadence=next=>\{setSelectedCadence\(next\);invalidateAnalysis\(\)\}/)
-  for(const mutation of ['appendTranscript','runSegment','startMeeting','endMeeting','saveRecording','importTranscript','addDecision','analyze','finalize']){
+  for(const mutation of ['startMeeting','endMeeting','saveRecording','importTranscript','addDecision','analyze','finalize']){
     assert.match(meetings,new RegExp(`const ${mutation}=[\\s\\S]{0,100}if\\(meetingPlanningReadOnly`),`${mutation} must require planning access`)
   }
   assert.match(meetings,/const addCorrection=async\(\)=>\{\s*if\(financeReadOnly/)

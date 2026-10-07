@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+test.use({launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']},permissions:['microphone']})
 
 const dateKey=()=>{
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]))
@@ -242,7 +243,7 @@ test('Today and Tomorrow alignment include Finance-style meeting capture and rev
     await capture.getByRole('button',{name:'Apply Suggestions to Draft'}).click()
     const steps=page.getByRole('navigation',{name:'Alignment progress'})
     await steps.getByRole('button',{name:'Health & Nutrition'}).click()
-    await expect(page.getByLabel('Lunch')).toHaveValue('Alignment meeting lunch')
+    await expect(page.getByLabel('Lunch',{exact:true})).toHaveValue('Alignment meeting lunch')
     await steps.getByRole('button',{name:'Ministry & Fellowship'}).click()
     await expect(page.getByRole('button',{name:'Review & Complete Alignment'})).toBeVisible()
     await page.getByRole('button',{name:'Save Local Draft & Exit'}).click()
@@ -2126,4 +2127,86 @@ test('Apple source filters isolate Family, Terica and Nyla in Today and Family C
   await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Agenda',exact:true}).click()
   await verify(page.locator('.family-calendar-mobile-agenda'))
+})
+
+test('alignment presents the selected date meals, workout and calendar using Today cards',async({page})=>{
+  const tomorrow=new Date(`${dateKey()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1);const next=tomorrow.toISOString().slice(0,10)
+  const image='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"><rect width="30" height="30" fill="gold"/></svg>')
+  const days=[dateKey(),next].map((date,index)=>({date,version:1,meals:{},resolvedMeals:Object.fromEntries(['breakfast','lunch','dinner'].map(slot=>[slot,{id:`${index}-${slot}`,name:`${index?'Tomorrow':'Today'} ${slot} fixture`,image,macros:{calories:350,proteinGrams:30,carbohydrateGrams:20,fatGrams:12}}]))}))
+  await page.route('**/.netlify/functions/meal-plans**',route=>route.fulfill({json:{startDate:dateKey(),days,library:days.flatMap(day=>Object.values(day.resolvedMeals))}}))
+  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{connected:true,syncedAt:new Date().toISOString(),events:[{id:'next-day-visit',date:next,title:'Tomorrow family appointment fixture',time:'10:30 AM',source:'icloud',appleCalendarId:'family-source',appleCalendarOwner:'Family',owner:'Family'}]}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  for(const [timing,date] of [['Today',dateKey()],['Tomorrow',next]]){
+    await page.getByRole('button',{name:`Start ${timing}’s Alignment`}).click()
+    const steps=page.getByRole('navigation',{name:'Alignment progress'})
+    await steps.getByRole('button',{name:'Health & Nutrition'}).click()
+    const preview=page.locator('.alignment-day-preview')
+    await expect(preview.locator('.today-meal-card img')).toHaveCount(3)
+    await expect(preview).toContainText(`${timing} breakfast fixture`)
+    await expect(preview).not.toContainText(`${timing==='Today'?'Tomorrow':'Today'} breakfast fixture`)
+    await expect(preview.getByLabel('Breakfast nutrition')).toContainText('protein')
+    await steps.getByRole('button',{name:'Physical Fitness'}).click()
+    await expect(preview.locator('.today-fitness-exercise')).not.toHaveCount(0)
+    await expect(preview.locator('.today-fitness-exercise').first().locator('img')).toBeVisible()
+    if(timing==='Tomorrow'){
+      await steps.getByRole('button',{name:'Household Operations'}).click()
+      await expect(preview).toContainText('Tomorrow family appointment fixture')
+      await expect(preview.locator('.today-household-chores')).toBeVisible()
+    }
+    await page.getByRole('button',{name:'Save Local Draft & Exit'}).click()
+  }
+})
+
+test.describe('persistent meeting recording',()=>{
+  test('recording survives Meal Plan and Finance navigation and replays after reload',async({page},testInfo)=>{
+    test.setTimeout(60000)
+    const archive=new Map(),audio=new Map()
+    await page.route('**/.netlify/functions/meeting-recordings*',async route=>{
+      const request=route.request(),url=new URL(request.url()),id=url.searchParams.get('id'),chunk=url.searchParams.get('chunk')
+      if(request.method()==='POST'){audio.set(`${id}/${chunk}`,request.postDataBuffer());return route.fulfill({json:{saved:true}})}
+      if(request.method()==='PUT'){archive.set(id,request.postDataJSON());return route.fulfill({json:{saved:true}})}
+      if(chunk!==null)return route.fulfill({contentType:'audio/webm',body:audio.get(`${id}/${chunk}`)})
+      if(id)return route.fulfill({json:{record:archive.get(id),chunks:[...audio.keys()].filter(key=>key.startsWith(id+'/')).map(key=>Number(key.split('/')[1]))}})
+      return route.fulfill({json:{meetings:[...archive.values()]}})
+    })
+    await page.route('**/.netlify/functions/finance-meeting-transcribe*',route=>route.fulfill({json:{text:'Recorded household meeting segment.'}}))
+    await page.getByRole('button',{name:'Start Tomorrow’s Alignment'}).click()
+    await page.getByLabel(/Alignment meeting capture$/).getByRole('button',{name:'Start Meeting',exact:true}).click()
+    const hub=page.getByRole('region',{name:'Meeting recorder'})
+    await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
+    await page.getByRole('navigation',{name:'Alignment progress'}).getByRole('button',{name:'Health & Nutrition'}).click()
+    await page.locator('.alignment-day-preview').getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+    await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
+    await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+    await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
+    await expect.poll(()=>audio.size,{timeout:20000}).toBeGreaterThan(0)
+    await hub.getByRole('button',{name:'Stop Meeting',exact:true}).click()
+    await expect.poll(()=>[...archive.values()].some(row=>row.status==='stopped'&&row.transcript.includes('Recorded household')),{timeout:15000}).toBe(true)
+    await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+    await hub.getByRole('button',{name:'Meeting History',exact:true}).click()
+    const history=page.getByRole('dialog',{name:'Meeting History'})
+    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:/Tomorrow’s Alignment/}).click()
+    await expect(history).toContainText('Recorded household meeting segment.')
+    const player=history.getByLabel('Meeting playback')
+    await expect(player).toBeVisible()
+    await expect.poll(()=>player.evaluate(audio=>audio.readyState),{timeout:10000}).toBeGreaterThan(0)
+    await player.evaluate(audio=>audio.play())
+    await expect.poll(()=>player.evaluate(audio=>audio.currentTime)).toBeGreaterThan(0)
+    await history.getByRole('button',{name:'Close Meeting History'}).click()
+    await expect(hub.getByRole('button',{name:'Stop Meeting'})).toHaveCount(0)
+  })
+})
+
+test('Today shows four responsibility blocks and reviews Schedule A without calendar operations',async({page})=>{
+ const rhythm=page.getByRole('region',{name:'Daily rhythm'})
+ await expect(rhythm).toBeVisible()
+ for(const name of ['Anchor Time','Focus Time','Flex Time','Wind Down'])await expect(rhythm.getByText(name,{exact:true})).toBeVisible()
+ await rhythm.locator('.rhythm-reference > summary').click()
+ await expect(rhythm).toContainText('04:36')
+ const request=page.waitForRequest(request=>request.url().includes('brevity-assistant-actions')&&request.method()==='POST'&&request.postData()?.includes('assignment.create'))
+ await rhythm.getByRole('button',{name:/Review Schedule A for Larry/}).click()
+ const payload=(await request).postDataJSON()
+ expect(JSON.stringify(payload)).toContain('schedule-a:Larry:04:36')
+ expect(JSON.stringify(payload)).not.toContain('calendar.create')
+ await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
 })

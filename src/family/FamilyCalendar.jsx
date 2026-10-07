@@ -270,8 +270,8 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     const from=new Date(`${range.from}T12:00:00`),to=new Date(`${range.to}T12:00:00`)
     const span=Math.max(1,Math.ceil((to-from)/86400000)+1)
     return [
-      ...householdScheduleCalendarEvents(scheduleState,{start:range.from,days:span}),
-      ...householdOperationCalendarEvents(maintenanceState,{start:from,weeks:Math.ceil((span+7)/7)}),
+      ...householdScheduleCalendarEvents({...scheduleState,routines:[]},{start:range.from,days:span}),
+      // Daily chores and recurring routines remain in Today, outside appointments.
     ].map(normalizeLegacy)
   },[scheduleState,maintenanceState,range])
   const allEvents=useMemo(()=>{
