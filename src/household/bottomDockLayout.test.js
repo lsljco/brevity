@@ -13,7 +13,7 @@ test('desktop and tablet reserve a real viewport lane for Ask Brevity', () => {
 })
 
 test('phone layout reserves both the command lane and the mobile navigation lane', () => {
-  const phone = css.slice(css.indexOf('@media(max-width:640px)'))
+  const phone = css.slice(css.indexOf('@media (max-width: 640px), (max-width: 960px)'))
   assert.match(phone, /var\(--brevity-mobile-nav-reserve\)/)
   assert.match(phone, /bottom:calc\(var\(--brevity-mobile-nav-reserve\) \+ env\(safe-area-inset-bottom\)\)!important/)
 })
@@ -30,7 +30,7 @@ test('every global refresh state stays in the command lane instead of covering p
 })
 
 test('expanded phone refresh details become a bounded drawer above both bottom lanes', () => {
-  const phone = css.slice(css.indexOf('@media(max-width:640px)'))
+  const phone = css.slice(css.indexOf('@media (max-width: 640px), (max-width: 960px)'))
   assert.match(phone, /\.app-main\.has-expanded-refresh\{[\s\S]*?padding-bottom:calc\(min\(55dvh, 460px\) \+ 36px\)!important/)
   assert.match(phone, /\.app-main \.app-refresh-status\.is-expanded,[\s\S]*?bottom:calc\(var\(--brevity-mobile-nav-reserve\) \+ var\(--brevity-command-dock-height\)/)
   assert.match(phone, /max-height:min\(55dvh, 460px\)!important/)
