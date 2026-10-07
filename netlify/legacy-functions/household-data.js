@@ -1,3 +1,4 @@
+const { resolveDailyOutcomes } = require('../lib/daily-outcomes.cjs')
 const { getStore } = require('../lib/scoped-store.cjs')
 const { isDeepStrictEqual } = require('node:util')
 const { readSession } = require('../lib/household-auth.cjs')
@@ -120,7 +121,7 @@ function sermonDevotion(activeSermon, date) {
   return days[days.length - 1]
 }
 async function getPlan(date, dataStore = store()) {
-  const storedValue = await readOptionalJSON(dataStore, planKey(date))
+  const storedValue = await resolveDailyOutcomes(dataStore, HOUSEHOLD_ID, date, await readOptionalJSON(dataStore, planKey(date)))
   const activeSermonRecord = await readOptionalJSON(dataStore, ACTIVE_SERMON_KEY), activeSermon=activeSermonRecord?.deleted?null:activeSermonRecord
   if (!storedValue && !activeSermon?.sermonNotes) return null
   // A future daily-plan record may not exist yet. Return an unpersisted version-zero
