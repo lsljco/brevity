@@ -93,3 +93,15 @@ test('an already skipped first occurrence cannot be edited as an item but remain
   assert.deepEqual(future.deleteIds, [weekly.id])
   assert.equal(future.upserts[0].id, 'future-series')
 })
+
+
+test('moving a monthly rental earlier changes only the chosen charge and preserves future dates', () => {
+  const rental = { id:'rental', name:'National Car Rental', type:'expense', amount:1240, freq:'monthly', start:'2026-09-07', end:'', skips:[] }
+  const result = editRecurringOccurrence(rental, {}, '2026-10-07', 'one', ()=>'moved-rental', '2026-10-06')
+  assert.equal(result.upserts[0].start, '2026-09-07')
+  assert.deepEqual(result.upserts[0].skips, ['2026-10-07'])
+  assert.equal(result.upserts[1].start, '2026-10-06')
+  assert.equal(result.upserts[1].freq, 'once')
+  assert.equal(result.upserts[1].amount, 1240)
+  assert.throws(() => editRecurringOccurrence(rental, {}, '2026-10-07', 'future', ()=>'invalid', '2026-10-06'), /choose “This item only”/)
+})

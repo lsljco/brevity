@@ -56,7 +56,7 @@ async function mockBackend(page) {
       } else body = { records:{}, serverTime:new Date().toISOString() }
     }
     else if (path.endsWith('/household-data')) body = { householdId:'lslj-family', plan:plan(url.searchParams.get('date') || today()) }
-    else if (path.endsWith('/icloud-calendar')) body = { events:[{ id:'doctor-appointment', uid:'doctor-appointment', source:'icloud', title:'Doctor appointment', date:today(), time:'2:30 PM', owner:'Family' }], connected:true, syncedAt:new Date().toISOString() }
+    else if (path.endsWith('/icloud-calendar')) body = { events:[{ id:'doctor-appointment', uid:'doctor-appointment', source:'icloud', appleCalendarId:'larry-calendar', appleCalendarOwner:'Larry', title:'Doctor appointment', date:today(), time:'2:30 PM', owner:'Family' }], connected:true, syncedAt:new Date().toISOString() }
     else if (path.endsWith('/meal-plans')) body = mealPlanResponse(url.searchParams.get('startDate') || today())
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-transactions')) body = { transactions:[], errors:[] }
@@ -103,7 +103,7 @@ test('Today displays every recorded Pillar 7 prayer request', async ({ page }) =
 test('Today can browse tomorrow and the next seven days without changing a plan', async ({ page }) => {
   const tomorrow=new Date(`${today()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1)
   const tomorrowKey=tomorrow.toISOString().slice(0,10)
-  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({events:[{id:'tomorrow-visit',uid:'tomorrow-visit',source:'icloud',title:'Tomorrow appointment',date:tomorrowKey,time:'2:30 PM',owner:'Family'}],connected:true,syncedAt:new Date().toISOString()})}))
+  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({events:[{id:'tomorrow-visit',uid:'tomorrow-visit',source:'icloud',appleCalendarId:'larry-calendar',appleCalendarOwner:'Larry',title:'Tomorrow appointment',date:tomorrowKey,time:'2:30 PM',owner:'Family'}],connected:true,syncedAt:new Date().toISOString()})}))
   await page.reload()
   await page.getByRole('button',{name:'View Next 7 Days'}).click()
   const picker=page.getByRole('combobox',{name:'Choose a day'})

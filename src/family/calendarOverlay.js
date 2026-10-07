@@ -70,6 +70,7 @@ export function calendarAppointmentFromEvent(event) {
     owner: clean(event.owner) || 'Family',
     ownershipKnown: event.ownershipKnown,
     appleCalendarName:event.appleCalendarName,
+    appleCalendarOwner:event.appleCalendarOwner,
     appleCalendarId:event.appleCalendarId,
     calendarScope: event.calendarScope,
     pillar: event.pillar,

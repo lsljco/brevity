@@ -280,7 +280,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
   },[legacyEvents,meetingEvents,householdDerivedEvents,icloudEvents,projectEvents])
   const filtered=useMemo(()=>allEvents.filter(event=>{
     const eventDate=event.date||event.start
-    const sharedFamilyEvent=includeFamily&&(event.owner||'Family')==='Family'
+    const sharedFamilyEvent=includeFamily&&matchesCalendarScopes(event,['Family'])
     const memberMatches=matchesCalendarScopes(event,lockMember?[member]:selectedCalendars)||sharedFamilyEvent
     return memberMatches&&(event.endDate||event.end||eventDate)>=range.from&&eventDate<=range.to
   }),[allEvents,member,selectedCalendars,lockMember,includeFamily,range])

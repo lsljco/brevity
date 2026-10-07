@@ -3335,7 +3335,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ FORMS ══════════ */}
       {!readOnly && view === 'tx-form'   && <div className="finance-inner"><TxForm   tx={editTx}   accounts={data.accounts} onSave={updateTx}   onCancel={() => setView('transactions')} /></div>}
 
-      {storageError && (
+      {storageError && createPortal(
         <div className="finance-storage-error" role="alert" style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 1200,
           display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10,
           maxWidth: 620, width: 'calc(100% - 32px)', padding: '12px 16px', borderRadius: 12,
@@ -3343,7 +3343,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           fontSize: 12, lineHeight: 1.5, boxShadow: '0 12px 36px rgba(0,0,0,.45)' }}>
           <span>{storageError}</span>
           <button type="button" aria-label="Dismiss finance error" onClick={() => setStorageError('')} style={{ marginLeft:12, border:0, background:'transparent', color:'inherit', cursor:'pointer', fontSize:18, lineHeight:1 }}>×</button>
-        </div>
+        </div>, document.body
       )}
       {toast && <div className="toast">{toast}</div>}
 
@@ -4613,7 +4613,8 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
             <h2 id="calendar-scope-title">{pendingScope.action === 'edit' ? 'Apply this edit to…' : 'Delete…'}</h2>
             <p>{pendingScope.original.name} · {fmtDateLabel(pendingScope.occurrenceDate)}</p>
             <button onClick={() => applyScope('one')}><strong>This item only</strong><span>The rest of the recurring series stays unchanged.</span></button>
-            <button onClick={() => applyScope('future')}><strong>This and future items</strong><span>Past records remain unchanged.</span></button>
+            <button disabled={pendingScope.action === 'edit' && pendingScope.updated.start < pendingScope.occurrenceDate} onClick={() => applyScope('future')}><strong>This and future items</strong><span>Past records remain unchanged. Future dates follow the new start date.</span></button>
+            {pendingScope.action === 'edit' && pendingScope.updated.start < pendingScope.occurrenceDate && <p role="status">To move this charge earlier, choose “This item only”. Future charges will keep their scheduled dates.</p>}
             <button className="calendar-scope-cancel" onClick={() => setPendingScope(null)}>Cancel</button>
           </div>
         </div>
@@ -4635,11 +4636,12 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                 <div style={{ fontWeight: 600 }}>Move just {fmtDateLabel(pendingMove.fromDate)}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Only this occurrence moves · series continues as normal</div>
               </button>
-              <button onClick={() => handleMoveSeries(pendingMove)}
+              <button disabled={pendingMove.toDate < pendingMove.fromDate} onClick={() => handleMoveSeries(pendingMove)}
                 style={{ padding: '11px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'var(--white)', cursor: 'pointer', fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
                 <div style={{ fontWeight: 600 }}>Move all future occurrences</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Series anchor shifts to {fmtDateLabel(pendingMove.toDate)}</div>
               </button>
+              {pendingMove.toDate < pendingMove.fromDate && <p role="status">To move this charge earlier, choose “Move just {fmtDateLabel(pendingMove.fromDate)}”. Future charges will keep their scheduled dates.</p>}
               <button onClick={() => setPendingMove(null)}
                 style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>
                 Cancel

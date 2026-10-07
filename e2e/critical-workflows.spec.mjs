@@ -957,6 +957,7 @@ test('Family Calendar opens the exact authoritative project and preserves unrela
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   if(testInfo.project.name!=='iphone')await page.getByRole('button',{name:'Agenda',exact:true}).click()
+  await page.getByRole('group',{name:'Calendars to show'}).getByRole('button',{name:'All',exact:true}).click()
   const agenda=page.locator('.family-calendar-mobile-agenda')
   await expect(agenda.getByText('Kitchen refresh',{exact:true})).toHaveCount(2)
   await agenda.getByRole('button',{name:'Open project Kitchen refresh',exact:true}).click()
@@ -2053,4 +2054,76 @@ test('Projected expenses can be edited unassigned and vendor review stays above 
   expect(prepared[1].operation.payload.amount).toBe(1250)
   expect(prepared[1].operation.payload.vendorId||'').toBe('')
   expect(writes).toBe(0)
+})
+
+test('Cash Forecast earlier moves use one occurrence and errors remain readable above navigation',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),prepared=[]
+  finance.transactions=[{id:'rental',name:'National Car Rental fixture',type:'expense',amount:1240,acct:'a1',freq:'monthly',start:dateKey(),end:'',cat:'Transportation'}]
+  records.lslj_finance_v9.value=JSON.stringify(finance);records.plaid_actuals_cache.value='[]'
+  let writes=0
+  await page.route('**/.netlify/functions/household-state*',route=>{if(route.request().method()!=='GET')writes++;return route.fulfill({json:{records,serverTime:new Date().toISOString()}})})
+  await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[],links:{}}}))
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes++})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  // A containing layout must not trap Action Mode below body-level Finance overlays.
+  await page.addStyleTag({content:'.app-shell{isolation:isolate}'})
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const agenda=page.locator('.finance-calendar-mobile-agenda')
+  if(await agenda.isVisible()){
+    const row=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    if(await row.getAttribute('aria-expanded')!=='true')await row.click()
+  }else{
+    const cell=page.locator('.cal-cell.is-today')
+    if(!(await cell.getAttribute('class')||'').includes('is-selected'))await cell.locator('.finance-calendar-day-number').click()
+  }
+  await page.locator('.finance-card').filter({has:page.locator('.finance-calendar-day-header')}).getByText('National Car Rental fixture',{exact:true}).click()
+  const editor=page.locator('.finance-calendar-editor-dialog')
+  const earlier=new Date(`${dateKey()}T12:00:00Z`);earlier.setUTCDate(earlier.getUTCDate()-1)
+  const destination=earlier.toISOString().slice(0,10)
+  await editor.locator('input[type="date"]').nth(1).fill(destination)
+  await editor.getByRole('button',{name:'Review scheduled change',exact:true}).click()
+  const scope=page.getByRole('dialog',{name:'Apply this edit to…'})
+  await expect(scope.getByRole('button',{name:/This and future items/})).toBeDisabled()
+  await expect(scope).toContainText('To move this charge earlier')
+  await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>route.fulfill({status:400,json:{error:'Test preparation error. Your charge has not moved. Choose This item only to keep future charges unchanged.'}}))
+  await scope.getByRole('button',{name:/This item only/}).click()
+  const alert=page.locator('.finance-storage-error')
+  await expect(alert).toContainText('Your charge has not moved')
+  expect(await alert.evaluate(node=>{const r=node.getBoundingClientRect();return node.parentElement===document.body&&r.left>=0&&r.right<=innerWidth&&node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})).toBe(true)
+  await page.screenshot({path:`test-results/finance-earlier-move-error-${testInfo.project.name}.png`})
+  await alert.getByRole('button',{name:'Dismiss finance error'}).click()
+  await expect(scope).toBeVisible()
+  expect(prepared[0].operation.payload.date).toBe(destination)
+  expect(prepared[0].operation.targetDate).toBe(dateKey())
+  expect(prepared[0].operation.allowedScopes).toEqual(['this-item'])
+  expect(writes).toBe(0)
+})
+
+test('Apple source filters isolate Family, Terica and Nyla in Today and Family Calendar',async({page},testInfo)=>{
+  const events=[
+    {id:'family-only',title:'Shared source fixture',appleCalendarOwner:'Family',owner:'Larry',participants:['Nyla']},
+    {id:'terica-only',title:'Terica source fixture',appleCalendarOwner:'Terica',owner:'Terica',participants:['Nyla','Larry']},
+    {id:'nyla-only',title:'Nyla source fixture',appleCalendarOwner:'Nyla',owner:'Nyla'},
+  ].map(row=>({...row,source:'icloud',appleCalendarId:`source-${row.id}`,date:dateKey(),time:'10:00 AM'}))
+  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events,connected:true,syncedAt:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  const verify=async(container)=>{
+    const filter=page.getByRole('group',{name:'Calendars to show'})
+    for(const owner of ['Family','Terica','Nyla','All']){
+      await filter.getByRole('button',{name:'All',exact:true}).click()
+      if(owner!=='All')await filter.getByRole('button',{name:owner,exact:true}).click()
+      for(const event of events){
+        if(owner==='All'||event.appleCalendarOwner===owner)await expect(container).toContainText(event.title)
+        else await expect(container).not.toContainText(event.title)
+      }
+    }
+  }
+  await verify(page.locator('.today-calendar-agenda'))
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Family Calendar',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Agenda',exact:true}).click()
+  await verify(page.locator('.family-calendar-mobile-agenda'))
 })

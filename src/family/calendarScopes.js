@@ -1,15 +1,20 @@
 import { HOUSEHOLD_MEMBERS } from '../household/dailyPlan.js'
 export const CHURCH_CALENDAR = 'Church Triumphant'
 export const CALENDAR_SCOPES = ['All','Family',...HOUSEHOLD_MEMBERS,CHURCH_CALENDAR]
-// Ownership and explicit participant IDs only. Titles and descriptions never
-// determine which member or ministry an event belongs to.
+// Apple source membership is independent of an event's organizer/participants.
+// Never infer calendar membership from its title or display name.
 export function matchesCalendarScopes(event, selected) {
   if (selected.includes('All')) return true
-  const church = event?.owner === CHURCH_CALENDAR || event?.calendarScope === 'church-triumphant' || (!event?.appleCalendarId && event?.pillar === 'ministry')
+  const apple = event?.source === 'icloud' || event?.calendarSource === 'icloud' || Boolean(event?.appleCalendarId)
+  if (apple) {
+    const owner = event.appleCalendarOwner || (event.appleCalendarId ? event.owner : 'Family')
+    return selected.includes(owner)
+  }
+  const church = event?.owner === CHURCH_CALENDAR || event?.calendarScope === 'church-triumphant' || event?.pillar === 'ministry'
   if (church) return selected.includes(CHURCH_CALENDAR)
-  if (selected.includes('Family')) return true
+  if (event?.owner === 'Family') return selected.includes('Family') && event?.ownershipKnown !== false
   const participants = [...(event?.participants || []),...(event?.members || [])]
-  return selected.some(member => HOUSEHOLD_MEMBERS.includes(member) && (event?.owner === member || participants.includes(member) || (event?.owner === 'Family' && event?.ownershipKnown !== false)))
+  return selected.some(member => HOUSEHOLD_MEMBERS.includes(member) && (event?.owner === member || participants.includes(member)))
 }
 export function toggleCalendarScope(selected, scope) {
   if (scope === 'All' || scope === 'Family') return selected.length === 1 && selected[0] === scope ? [] : [scope]

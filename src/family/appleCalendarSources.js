@@ -26,6 +26,7 @@ export function mapAppleSourceEvent(event, source) {
     originalSourceId:event.sourceId || '',
     appleCalendarId:source.id,
     appleCalendarName:source.name,
+    appleCalendarOwner:source.owner,
     sourceReadOnly:true,
     owner:source.owner,
     ownershipKnown:true,

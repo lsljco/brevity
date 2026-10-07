@@ -581,7 +581,7 @@ export const createICloudCalendarHandler = ({
       // Fail closed on any missing source. Do not publish a fresh but incomplete
       // snapshot that silently removes someone's commitments.
       const results = await Promise.all([eventLister(calendar), ...additional.map(source=>eventLister(source))]);
-      const events = [...results[0].events, ...additional.flatMap((source,index)=>results[index+1].events.map(item=>mapAppleSourceEvent(item,source)))];
+      const events = [...results[0].events.map(item=>({...item,appleCalendarId:primaryId,appleCalendarName:calendar.name,appleCalendarOwner:"Family"})), ...additional.flatMap((source,index)=>results[index+1].events.map(item=>mapAppleSourceEvent(item,source)))];
       return json(200, { calendar:[calendar.name,...additional.map(item=>item.name)].join(", "), syncMode:"action-reviewed", discoveryMode:calendar.discoveryMode, recurrenceMode:results[0].recurrenceMode, events });
     }
     if (!["POST", "PUT", "DELETE"].includes(event.httpMethod)) return json(405, { error:"Method not allowed." });
