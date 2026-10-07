@@ -957,6 +957,7 @@ test('Family Calendar opens the exact authoritative project and preserves unrela
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   if(testInfo.project.name!=='iphone')await page.getByRole('button',{name:'Agenda',exact:true}).click()
+  await page.getByRole('group',{name:'Calendars to show'}).getByRole('button',{name:'All',exact:true}).click()
   const agenda=page.locator('.family-calendar-mobile-agenda')
   await expect(agenda.getByText('Kitchen refresh',{exact:true})).toHaveCount(2)
   await agenda.getByRole('button',{name:'Open project Kitchen refresh',exact:true}).click()
@@ -2096,4 +2097,33 @@ test('Cash Forecast earlier moves use one occurrence and errors remain readable 
   expect(prepared[0].operation.targetDate).toBe(dateKey())
   expect(prepared[0].operation.allowedScopes).toEqual(['this-item'])
   expect(writes).toBe(0)
+})
+
+test('Apple source filters isolate Family, Terica and Nyla in Today and Family Calendar',async({page},testInfo)=>{
+  const events=[
+    {id:'family-only',title:'Shared source fixture',appleCalendarOwner:'Family',owner:'Larry',participants:['Nyla']},
+    {id:'terica-only',title:'Terica source fixture',appleCalendarOwner:'Terica',owner:'Terica',participants:['Nyla','Larry']},
+    {id:'nyla-only',title:'Nyla source fixture',appleCalendarOwner:'Nyla',owner:'Nyla'},
+  ].map(row=>({...row,source:'icloud',appleCalendarId:`source-${row.id}`,date:dateKey(),time:'10:00 AM'}))
+  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events,connected:true,syncedAt:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  const verify=async(container)=>{
+    const filter=page.getByRole('group',{name:'Calendars to show'})
+    for(const owner of ['Family','Terica','Nyla','All']){
+      await filter.getByRole('button',{name:'All',exact:true}).click()
+      if(owner!=='All')await filter.getByRole('button',{name:owner,exact:true}).click()
+      for(const event of events){
+        if(owner==='All'||event.appleCalendarOwner===owner)await expect(container).toContainText(event.title)
+        else await expect(container).not.toContainText(event.title)
+      }
+    }
+  }
+  await verify(page.locator('.today-calendar-agenda'))
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Family Calendar',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Agenda',exact:true}).click()
+  await verify(page.locator('.family-calendar-mobile-agenda'))
 })
