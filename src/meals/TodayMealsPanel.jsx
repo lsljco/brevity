@@ -33,7 +33,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
   },[currentMember,today])
   const verified = nutrition?.member === currentMember
   const targets = verified ? nutrition.targets : {}
-  const personal = personalMealPlan(meals,targets)
+  const personal = personalMealPlan(meals,targets,{day:mealDay,member:currentMember})
   const reviewSwap = async () => {
     setBusy(true);setSwapError('')
     try {

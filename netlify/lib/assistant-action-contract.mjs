@@ -719,7 +719,12 @@ export function permissionForOperation({ operation, member, role, permissions, c
 
   if(operation.type==='member.preference.set')return operation.targetId===member?{allowed:true}:{allowed:false,reason:'Members can change only their own preferences.'}
   if(operation.type.startsWith('improvement.'))return improvementPermission({operation,member,role,permissions,currentRecord})
-  if(operation.type==='meal.schedule.update')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'planning actions are not enabled for this member.'}
+  if(operation.type==='meal.schedule.update'){
+    const command=normalizeMealScheduleCommand(operation.payload.commandJson)
+    if(command.kind==='skip'&&command.scope==='self')return command.member===member?{allowed:true}:{allowed:false,reason:'You can skip meals only for yourself.'}
+    if(command.kind==='skip'||command.kind==='push')return ['Larry','Terica'].includes(member)?{allowed:true}:{allowed:false,reason:'Only Larry and Terica may skip for the household or push meals.'}
+    return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'planning actions are not enabled for this member.'}
+  }
   if(operation.type==='meal.recipe.create')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'Recipe creation requires household planning access.'}
   if(operation.type==='meal.recipe.update')return currentRecord&&(role==='admin'||permissions?.planning)?{allowed:true}:{allowed:false,reason:'Recipe changes require an existing recipe and household planning access.'}
   if(operation.type==='nutrition.meal.log' && operation.targetId!==member)return {allowed:false,reason:'Members can log only their own meals.'}

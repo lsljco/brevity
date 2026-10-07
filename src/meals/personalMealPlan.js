@@ -6,7 +6,9 @@ export function mealTotals(meals) {
   return Object.fromEntries(MACRO_FIELDS.map(key => [key, values.every(meal => valid(meal.macros?.[key]))
     ? round(values.reduce((sum, meal) => sum + meal.macros[key], 0)) : null]))
 }
-export function personalMealPlan(meals, targets = {}) {
+export function personalMealPlan(meals, targets = {}, {day,member} = {}) {
+  const excluded=new Set([...Object.keys(day?.skippedSlots||{}).filter(slot=>day.skippedSlots[slot]),...Object.keys(day?.skippedMembers||{}).filter(slot=>day.skippedMembers[slot]?.includes(member))])
+  meals={...meals,...Object.fromEntries(Object.entries(day?.skippedMealBasis||{}).filter(([,meal])=>meal))}
   const main = Object.fromEntries(['breakfast','lunch','dinner'].map(key => [key, meals?.[key]]))
   const mainTotals = mealTotals(main)
   const snacks = mealTotals({snack1:meals?.snack1,snack2:meals?.snack2})
@@ -24,7 +26,7 @@ export function personalMealPlan(meals, targets = {}) {
     factor = Math.floor(factor * 100) / 100
   }
   const planned = Object.fromEntries(Object.entries(meals || {}).map(([slot, meal]) => {
-    if (!meal) return [slot, meal]
+    if (!meal || excluded.has(slot)) return [slot, null]
     const multiplier = slot.startsWith('snack') ? 1 : factor
     return [slot, {...meal, portionMultiplier:multiplier, baseServing:meal.serving,
       macros:Object.fromEntries(MACRO_FIELDS.map(key => [key, valid(meal.macros?.[key]) ? round(meal.macros[key] * multiplier) : null]))}]

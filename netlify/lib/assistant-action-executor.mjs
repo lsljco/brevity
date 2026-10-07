@@ -776,7 +776,7 @@ export async function captureExpectedVersions(proposal, resources) {
         for(const date of dates)days[date]={...days[date],meals:Object.fromEntries(Object.entries(generated[date]).map(([slot,meal])=>[slot,meal?.id||null]))}
       }
       const after=applyMealScheduleCommand(snapshots.get(resource).value,command,days)
-      const mealReview=scheduleCommandDates(command,snapshots.get(resource).value).map(date=>{const day=resolveMealDay(effectiveMealDay(days[date],after),library);return `${date}: ${Object.entries(day.resolvedMeals).map(([slot,meal])=>`${slot}: ${meal?.name||'No meal'} (${day.servings?.[slot]??6} people)`).join('; ')}`})
+      const mealReview=scheduleCommandDates(command,snapshots.get(resource).value).map(date=>{const day=resolveMealDay(effectiveMealDay(days[date],after),library);return `${date}: ${Object.entries(day.resolvedMeals).map(([slot,meal])=>`${slot}: ${meal?.name||'No meal'} (${day.servings?.[slot]??6} people)${day.skippedMembers?.[slot]?.length?`; skipped for: ${day.skippedMembers[slot].join(', ')}`:''}`).join('; ')}`})
       operations.push({...operation,mealContext:{days,versions},mealReview});continue
     }
     // This identity comes from the same stored version used at execution, never

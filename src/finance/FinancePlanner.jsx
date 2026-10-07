@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { buildMetricTrends } from './metricTrends.js'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
 import AutoReconciliationReport from './AutoReconciliationReport.jsx'
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
@@ -92,13 +93,8 @@ function Sparkline({ data = [], color = '#C5A46D', height = 40, fullWidth = fals
     x: (i / (data.length - 1)) * W,
     y: H - ((v - min) / range) * (H - 8) - 4,
   }))
-  // Smooth cubic bezier path
-  const lineParts = pts.map((p, i) => {
-    if (i === 0) return `M${p.x},${p.y}`
-    const prev = pts[i - 1]
-    const cpx = (prev.x + p.x) / 2
-    return `C${cpx},${prev.y} ${cpx},${p.y} ${p.x},${p.y}`
-  }).join(' ')
+  // Straight segments preserve observed changes without invented smoothing.
+  const lineParts = pts.map((p,i)=>`${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ')
   const areaPath = `${lineParts} L${W},${H} L0,${H} Z`
   const gradId = `spk-${color.replace(/[^a-z0-9]/gi, '').slice(0,8)}-${data.length}`
   return (
@@ -1636,67 +1632,17 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     })
   }, [cashForecastPostedActuals, forecastCanReconstructHistory, forecastScope.accounts])
 
-  // ── Historical monthly sparkline data (last 12 months) ──────────────────
-  const monthlyHistory = useMemo(() => {
-    const now = getHouseholdCalendarDate()
-    const months = []
-    for (let i = 11; i >= 0; i--) {
-      const year  = now.getMonth() - i < 0
-        ? now.getFullYear() - 1 + Math.floor((now.getMonth() - i + 12) / 12)
-        : now.getFullYear()
-      const month = ((now.getMonth() - i) % 12 + 12) % 12
-      const daysInMonth = new Date(year, month + 1, 0).getDate()
-      let income = 0, expense = 0
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dt = new Date(year, month, day, 0, 0, 0, 0)
-        fd.transactions.forEach(tx => {
-          if (txOccursOnDate(tx, dt)) {
-            const amt = parseFloat(tx.amount || 0)
-            if (tx.type === 'income') income += amt
-            else if (tx.type === 'expense') expense += amt
-            else if (tx.type === 'transfer') {
-              const sourceSelected = activeAcctIds.has(tx.acct)
-              const destinationSelected = activeAcctIds.has(tx.transferTo)
-              if (sourceSelected && !destinationSelected) expense += amt
-              if (!sourceSelected && destinationSelected) income += amt
-            }
-          }
-        })
-      }
-      months.push({ income, expense, net: income - expense })
-    }
-    return months
-  }, [fd.transactions, activeAcctIds])
-
-  // Reconstruct historical running balance by walking backward from today
-  const sparkBalance = useMemo(() => {
-    const bals = []
-    let bal = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
-    for (let i = monthlyHistory.length - 1; i >= 0; i--) {
-      bals.unshift(parseFloat(bal.toFixed(2)))
-      bal -= monthlyHistory[i].net
-    }
-    return bals
-  }, [monthlyHistory, fd.accounts])
-
-  const selectedCashFlowHistory = useMemo(() => {
-    const now = getHouseholdCalendarDate()
-    return Array.from({ length: 12 }, (_, index) => {
-      const month = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1)
-      const totals = calculateMonthlyCashFlow(fd.transactions, month)
-      return { income: totals.income, expense: totals.recurringExpenses, net: totals.cashFlow }
-    })
-  }, [fd.transactions])
-  const sparkIncome  = selectedCashFlowHistory.map(m => m.income)
-  const sparkExpense = selectedCashFlowHistory.map(m => m.expense)
-  const sparkNet     = selectedCashFlowHistory.map(m => m.net)
-
-  // Future 90-day balance sampled at ~8-day intervals for the floor card
-  const sparkFloor = []
-  for (let i = 0; i <= 90; i += 12) {
-    const pt = proj.get(toISO(addDays(getHouseholdCalendarDate(), i)))
-    if (pt) sparkFloor.push(pt.bal)
-  }
+  // Balance history is only comparable when every selected account is in the
+  // verified cash scope. Never reconstruct history from scheduled transactions.
+  const sparkBalance = useMemo(() => forecastScope.accounts.length === fd.accounts.length
+    ? Object.entries(historicalBals).sort(([a],[b])=>a.localeCompare(b)).slice(-90).map(([,balance])=>balance)
+    : [], [historicalBals, forecastScope.accounts.length, fd.accounts.length])
+  const metricTrends = useMemo(() => buildMetricTrends({scheduled:fd.transactions,actuals:timeframeActuals,range:financeRange,posted:showActuals}), [fd.transactions,timeframeActuals,financeRange,showActuals])
+  const sparkIncome = metricTrends.map(point=>point.income)
+  const sparkExpense = metricTrends.map(point=>point.expenses)
+  const sparkNet = metricTrends.map(point=>point.net)
+  // Retain every forecast day, including the actual minimum and day 90.
+  const sparkFloor = Array.from({length:91},(_,i)=>proj.get(toISO(addDays(getHouseholdCalendarDate(),i)))?.bal).filter(Number.isFinite)
 
   const showToast = (msg) => {
     setToast(msg)
@@ -2505,11 +2451,11 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           {/* ── 5 KPI Cards ── */}
           <div className="kpi-grid">
             {[
-              { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'current balance', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
-              { label: showActuals ? 'Realized Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(isRealizedIncomeTransaction).length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted income' : 'selected timeframe', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', realizedIncomeOnly:true, label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
-              { label: showActuals ? 'Posted Expenses' : 'Projected Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${postedTimeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} posted transactions` : `${projectedExpenseSources.length} projected item${projectedExpenseSources.length === 1 ? '' : 's'}`, trend:showActuals ? 'pending excluded' : 'selected timeframe', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', postedOnly:true, label:'Posted expenses' }) : openScheduledTransactions({ direction:'expense', label:'Projected expenses' }) },
-              { label: showActuals ? 'Posted Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Posted cash inflows minus posted outflows; transfers excluded' : 'Expected income minus expected outflow', trend:'selected timeframe', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ excludeTransfers:true, postedOnly:true, label:'Posted cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
-              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'selected-account forecast', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) { setSelDay(toISO(minDay)); setCalMonth(minDay.getMonth()); setCalYear(minDay.getFullYear()) } setView('calendar') } },
+              { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'Verified balance history', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
+              { label: showActuals ? 'Realized Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(isRealizedIncomeTransaction).length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted income · cumulative' : 'Expected income · cumulative', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', realizedIncomeOnly:true, label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
+              { label: showActuals ? 'Posted Expenses' : 'Projected Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${postedTimeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} posted transactions` : `${projectedExpenseSources.length} projected item${projectedExpenseSources.length === 1 ? '' : 's'}`, trend:showActuals ? 'Posted expenses · cumulative' : 'Projected expenses · cumulative', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', postedOnly:true, label:'Posted expenses' }) : openScheduledTransactions({ direction:'expense', label:'Projected expenses' }) },
+              { label: showActuals ? 'Posted Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Posted cash inflows minus posted outflows; transfers excluded' : 'Expected income minus expected outflow', trend:'Cumulative cash flow', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ excludeTransfers:true, postedOnly:true, label:'Posted cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
+              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'Daily balance · next 90 days', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) { setSelDay(toISO(minDay)); setCalMonth(minDay.getMonth()); setCalYear(minDay.getFullYear()) } setView('calendar') } },
             ].map((kpi, i) => {
               const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
               return (
@@ -2519,11 +2465,11 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
                   <div className="kpi-value">{kpi.value}</div>
                   <div className="kpi-sub">{kpi.sub}</div>
                   {/* Full-width sparkline flush to card bottom */}
-                  <div className="kpi-sparkline">
-                    <Sparkline data={kpi.spark} color={spkColor} height={44} fullWidth />
+                  <div className="kpi-sparkline" role="img" aria-label={`${kpi.label}: ${kpi.trend}${i > 0 && i < 4 ? ` · ${financeRange.from} to ${financeRange.to}` : ''}${kpi.spark.length > 1 ? ` · ${kpi.spark.map(value=>fmtMoney(value)).join(', ')}` : ': not enough history'}`}>
+                    {kpi.spark.length > 1 ? <Sparkline data={kpi.spark} color={spkColor} height={44} fullWidth /> : <small>Not enough history for a trend</small>}
                   </div>
                   <div className="kpi-trend">
-                    <span className="kpi-trend-val">{kpi.good ? '↑' : '↓'}</span>
+                    <span className="kpi-trend-val">{kpi.spark.length < 2 ? '—' : kpi.spark.at(-1) > kpi.spark[0] ? '↑' : kpi.spark.at(-1) < kpi.spark[0] ? '↓' : '→'}</span>
                     <span className="kpi-trend-sep">·</span>
                     <span>{kpi.trend}</span>
                   </div>

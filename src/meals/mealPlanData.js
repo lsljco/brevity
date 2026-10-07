@@ -67,6 +67,7 @@ export function resolveMealDay(day, library = MEAL_LIBRARY) {
   return {
     ...day,
     meals: mealIdsForDay(day),
+    skippedMealBasis: Object.fromEntries(Object.entries(day.skippedSlots||{}).filter(([,value])=>value).map(([slot,value])=>[slot,value.recipe||byId.get(value.mealId)||null])),
     resolvedMeals: Object.fromEntries(MEAL_TYPES.map(mealType => [mealType, day.recipes?.[mealType] ? {...day.recipes[mealType],id:`scheduled-${day.date}-${mealType}`} : byId.get(mealIdsForDay(day)[mealType]) || null])),
   }
 }
