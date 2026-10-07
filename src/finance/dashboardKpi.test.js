@@ -48,12 +48,12 @@ test('fresh household data treats property taxes as an annual obligation', () =>
 test('dashboard baselines, budget health, and sparklines follow the selected account scope', () => {
   assert.match(source, /calculateMonthlyCashFlow\(fd\.transactions, todayKey\)/)
   assert.match(source, /const incomeSources = fd\.transactions/)
-  assert.match(source, /calculateMonthlyCashFlow\(fd\.transactions, month\)/)
+  assert.match(source, /buildMetricTrends\(\{scheduled:fd\.transactions,actuals:timeframeActuals,range:financeRange,posted:showActuals\}/)
   assert.match(source, /buildScheduledTransactionRows\(fd\.transactions, financeRange/)
 })
 
 test('realized-income labels consistently describe posted income only', () => {
-  assert.match(source, /trend:showActuals \? 'posted income'/)
+  assert.match(source, /trend:showActuals \? 'posted income · cumulative'/)
   assert.match(source, /transactionFilter\?\.realizedIncomeOnly[\s\S]*posted income transaction/)
   assert.doesNotMatch(source, /realized transactions[^\n]+posted and pending/)
 })

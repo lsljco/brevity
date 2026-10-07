@@ -1827,9 +1827,11 @@ test('Today coordinates dental care, maintenance and reviewed meal skipping',asy
  page.on('request',r=>{if(r.url().includes('action=prepare-direct'))prepared.push(r.postDataJSON())})
  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
  await page.getByRole('button',{name:`Skip Dinner on ${dateKey()}`,exact:true}).click()
+ await page.getByLabel('Who is skipping?').selectOption('household')
+ await page.getByRole('button',{name:'Review skip',exact:true}).click()
  await expect.poll(()=>prepared.length).toBe(1)
  const op=prepared[0].operation||prepared[0].operations[0]
- expect(JSON.parse(op.payload.commandJson)).toEqual({kind:'skip',date:dateKey(),slot:'dinner'})
+ expect(JSON.parse(op.payload.commandJson)).toEqual({kind:'skip',date:dateKey(),slot:'dinner',scope:'household'})
 })
 
 test('GOV-001 prepares useful assistance without assigning fallback or changing outcomes',async({page},testInfo)=>{
@@ -2252,4 +2254,63 @@ test('device layout audit covers compact phones, rotation, tablets and wide desk
     expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(height)
     await history.getByRole('button',{name:'Close Meeting History'}).click()
   }
+})
+
+
+test('Meal Plan separates household skip and push with next meal and next day reviews',async({page})=>{
+ const captured=[]
+ page.on('request',r=>{if(r.url().includes('action=prepare-direct'))captured.push(r.postDataJSON())})
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ await expect(page.getByText('Skip / push to tomorrow',{exact:true})).toHaveCount(0)
+ const calendar=page.getByRole('region',{name:'Meal calendar'})
+ await calendar.getByRole('button',{name:`Skip Dinner on ${dateKey()}`,exact:true}).click()
+ await page.getByLabel('Who is skipping?').selectOption('self')
+ await page.getByRole('button',{name:'Review skip',exact:true}).click()
+ await expect.poll(()=>captured.length).toBe(1)
+ expect(JSON.parse(captured[0].operation.payload.commandJson)).toEqual({kind:'skip',date:dateKey(),slot:'dinner',scope:'self',member:'Larry'})
+ await page.getByRole('dialog',{name:'Review proposed Brevity changes'}).getByRole('button',{name:'Cancel',exact:true}).click()
+ await page.getByRole('dialog',{name:'Brevity Assistant',exact:true}).getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+ await calendar.getByRole('button',{name:`Push Dinner on ${dateKey()}`,exact:true}).click()
+ await page.getByRole('combobox',{name:'Push to',exact:true}).selectOption('next-meal')
+ await page.getByRole('button',{name:'Review push',exact:true}).click()
+ await expect.poll(()=>captured.length).toBe(2)
+ expect(JSON.parse(captured[1].operation.payload.commandJson)).toEqual({kind:'push',date:dateKey(),slot:'dinner',destination:'next-meal'})
+ await page.getByRole('dialog',{name:'Review proposed Brevity changes'}).getByRole('button',{name:'Cancel',exact:true}).click()
+ await page.getByRole('dialog',{name:'Brevity Assistant',exact:true}).getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+ await calendar.getByRole('button',{name:'Push all meals',exact:true}).first().click()
+ await page.getByRole('button',{name:'Review push',exact:true}).click()
+ await expect.poll(()=>captured.length).toBe(3)
+ expect(JSON.parse(captured[2].operation.payload.commandJson)).toEqual({kind:'push',date:dateKey(),slot:'all',destination:'next-day'})
+})
+
+test('Meal Plan member skip is personal and household push controls are absent',async({page})=>{
+ await page.route('**/.netlify/functions/household-auth?action=session',route=>route.fulfill({json:{authenticated:true,member:'Nyla',role:'member',bootstrapRequired:false}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ const captured=[];page.on('request',r=>{if(r.url().includes('action=prepare-direct'))captured.push(r.postDataJSON())})
+ await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
+ const calendar=page.getByRole('region',{name:'Meal calendar'})
+ await expect(calendar.getByRole('button',{name:/^Push/})).toHaveCount(0)
+ await calendar.getByRole('button',{name:`Skip Dinner on ${dateKey()}`,exact:true}).click()
+ await expect(page.getByLabel('Who is skipping?')).toHaveCount(0)
+ await page.getByRole('button',{name:'Review skip',exact:true}).click()
+ await expect.poll(()=>captured.length).toBe(1)
+ expect(JSON.parse(captured[0].operation.payload.commandJson)).toEqual({kind:'skip',date:dateKey(),slot:'dinner',scope:'self',member:'Nyla'})
+})
+
+test('Finance hero cards keep graphs and captions separate and expose a page scrollbar',async({page},testInfo)=>{
+ await openMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await openMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Dashboard',exact:true}).click()
+ await closeMenuIfMobile(page,testInfo)
+ await expect(page.locator('.finance-root .kpi-card')).toHaveCount(5)
+ for(const card of await page.locator('.finance-root .kpi-card').all()){
+  const boxes=await card.evaluate(e=>Object.fromEntries(['kpi-sub','kpi-sparkline','kpi-trend'].map(name=>{const r=e.querySelector(`.${name}`).getBoundingClientRect();return[name,{top:r.top,bottom:r.bottom}]})))
+  expect(boxes['kpi-sparkline'].top).toBeGreaterThanOrEqual(boxes['kpi-sub'].bottom)
+  expect(boxes['kpi-trend'].top).toBeGreaterThanOrEqual(boxes['kpi-sparkline'].bottom)
+ }
+ await expect.poll(()=>page.locator('.app-main').evaluate(e=>e.scrollWidth-e.clientWidth)).toBeLessThanOrEqual(1)
+ await page.screenshot({path:`test-results/finance-hero-${testInfo.project.name}.png`,fullPage:true})
+ const scroll=await page.locator('.app-main').evaluate(e=>{e.scrollTop=e.scrollHeight;return{top:e.scrollTop,style:getComputedStyle(e).overflowY,color:getComputedStyle(e).scrollbarColor}})
+ expect(scroll.style).toBe('scroll');expect(scroll.top).toBeGreaterThan(0);expect(scroll.color).not.toBe('auto')
 })

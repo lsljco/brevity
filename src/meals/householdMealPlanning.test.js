@@ -4,7 +4,7 @@ import {refreshAutomaticDay,effectiveMealDay,automaticMeals,automaticMealAllowed
 import {createRollingMealDay,resolveMealDay,addMealDays} from './mealPlanData.js'
 import {proposeWeeklyGroceries} from '../household/groceryData.js'
 import {captureExpectedVersions,prepareRecordOperations,createProductionActionResources,commitPreparedRecordOperations} from '../../netlify/lib/assistant-action-executor.mjs'
-import {normalizeActionProposal} from '../../netlify/lib/assistant-action-contract.mjs'
+import {normalizeActionProposal,permissionForOperation} from '../../netlify/lib/assistant-action-contract.mjs'
 import {bindRecipeOperation} from '../../netlify/lib/recipe-library-actions.mjs'
 test('automatic meals meet household exclusions and variety across months, years and cycle boundaries',()=>{
  let previous=new Set()
@@ -117,8 +117,8 @@ test('automatic snacks start empty while deliberate snack choices survive refres
  const saved=effectiveMealDay(cleared,edited)
  assert.equal(saved.meals.snack1,'snack-envy-apple');assert.equal(saved.servings.snack1,1);assert.equal(saved.meals.snack2,null)
 })
-test('skipping dinner inserts an empty day and shifts dinners with portions across the week boundary',()=>{
- const c={kind:'skip',date:'2026-10-05',slot:'dinner'},schedule={days:{'2026-10-12':{meals:{dinner:'saved-potroast'},servings:{dinner:4},recipes:{dinner:{name:'Custom roast',image:'photo'}}}}}
+test('pushing dinner inserts an empty day and shifts dinners with portions across the week boundary',()=>{
+ const c={kind:'push',date:'2026-10-05',slot:'dinner',destination:'next-day'},schedule={days:{'2026-10-12':{meals:{dinner:'saved-potroast'},servings:{dinner:4},recipes:{dinner:{name:'Custom roast',image:'photo'}}}}}
  const dates=scheduleCommandDates(c,schedule),base=Object.fromEntries(dates.map(date=>[date,createRollingMealDay(date)]))
  schedule.days['2026-10-12'].meals={...base['2026-10-12'].meals,dinner:'saved-potroast'}
  const result=applyMealScheduleCommand(schedule,c,base)
@@ -129,4 +129,63 @@ test('skipping dinner inserts an empty day and shifts dinners with portions acro
  assert.equal(result.days['2026-10-13'].recipes.dinner.image,'photo')
  for(const date of dates){assert.equal(result.days[date].meals.breakfast,base[date].meals.breakfast);assert.equal(result.days[date].meals.lunch,base[date].meals.lunch)}
  assert.throws(()=>normalizeMealScheduleCommand({...c,slot:'invalid'}))
+})
+
+test('skip affects only its date and requested people, without changing other portions',async()=>{
+ const {personalMealPlan}=await import('./personalMealPlan.js')
+ const date='2026-10-05',base={[date]:createRollingMealDay(date)}
+ const self=applyMealScheduleCommand({}, {kind:'skip',date,slot:'dinner',scope:'self',member:'Nyla'},base)
+ assert.deepEqual(Object.keys(self.days),[date]);assert.equal(self.days[date].meals.dinner,base[date].meals.dinner)
+ const day=resolveMealDay(effectiveMealDay(base[date],self)),targets={proteinGrams:240}
+ const before=personalMealPlan(day.resolvedMeals,targets),nyla=personalMealPlan(day.resolvedMeals,targets,{day,member:'Nyla'}),larry=personalMealPlan(day.resolvedMeals,targets,{day,member:'Larry'})
+ assert.equal(nyla.meals.dinner,null);assert.deepEqual(nyla.meals.breakfast,before.meals.breakfast);assert.deepEqual(larry.totals,before.totals)
+ assert.ok(Math.abs(nyla.totals.calories-(before.totals.calories-before.meals.dinner.macros.calories))<0.2)
+ const household=applyMealScheduleCommand(self,{kind:'skip',date,slot:'lunch',scope:'household'},base)
+ const skipped=resolveMealDay(effectiveMealDay(base[date],household))
+ assert.equal(skipped.resolvedMeals.lunch,null)
+ const after=personalMealPlan(skipped.resolvedMeals,targets,{day:skipped,member:'Larry'})
+ assert.deepEqual(after.meals.breakfast,before.meals.breakfast);assert.equal(after.meals.lunch,null)
+ assert.equal(personalMealPlan(skipped.resolvedMeals,targets,{day:skipped,member:'Nyla'}).meals.dinner,null)
+})
+test('meal permissions distinguish personal skipping from household skip and push',()=>{
+ const date='2026-10-05',allowed=(member,command)=>permissionForOperation({member,role:'member',permissions:{planning:false},operation:{type:'meal.schedule.update',payload:{commandJson:JSON.stringify(command)}}}).allowed
+ const self={kind:'skip',date,slot:'dinner',scope:'self',member:'Nyla'}
+ assert.equal(allowed('Nyla',self),true);assert.equal(allowed('Javin',self),false)
+ for(const member of ['Larry','Terica','Lorenzo','Nyla','Javin'])for(const command of [{kind:'skip',date,slot:'dinner',scope:'household'},{kind:'push',date,slot:'all',destination:'next-day'}])assert.equal(allowed(member,command),['Larry','Terica'].includes(member))
+ assert.throws(()=>normalizeMealScheduleCommand({kind:'skip',date,slot:'dinner'}),/who/)
+})
+test('push crosses dates while personal skips stay on their original date',()=>{
+ const c={kind:'push',date:'2026-10-05',slot:'dinner',destination:'next-meal'},dates=scheduleCommandDates(c),base=Object.fromEntries(dates.map(date=>[date,createRollingMealDay(date)]))
+ const self=applyMealScheduleCommand({}, {kind:'skip',date:c.date,slot:'dinner',scope:'self',member:'Nyla'},base)
+ const pushed=applyMealScheduleCommand(self,c,base),tomorrow=dates[1]
+ assert.equal(pushed.days[c.date].meals.dinner,null);assert.equal(pushed.days[tomorrow].meals.breakfast,base[c.date].meals.dinner)
+ assert.deepEqual(pushed.days[tomorrow].skippedMembers.breakfast||[],[])
+ assert.deepEqual(pushed.days[c.date].skippedMembers.dinner,['Nyla'])
+ assert.equal(pushed.days[tomorrow].meals.lunch,base[tomorrow].meals.breakfast)
+ assert.equal(pushed.days[c.date].meals.lunch,base[c.date].meals.lunch)
+})
+test('push all meals preserves occupied destinations for next day and next meal',()=>{
+ for(const destination of ['next-day','next-meal']){
+ const c={kind:'push',date:'2026-10-05',slot:'all',destination},dates=scheduleCommandDates(c),base=Object.fromEntries(dates.map(date=>[date,createRollingMealDay(date)])),result=applyMealScheduleCommand({},c,base)
+ assert.equal(result.days[c.date].meals.breakfast,null)
+ if(destination==='next-day')for(const slot of ['breakfast','lunch','dinner'])assert.equal(result.days[dates[1]].meals[slot],base[c.date].meals[slot])
+ else{assert.equal(result.days[c.date].meals.lunch,base[c.date].meals.breakfast);assert.equal(result.days[dates[1]].meals.breakfast,base[c.date].meals.dinner)}
+ }
+})
+
+test('member skip saves and reloads through Action Mode and rejects cross-member edits',async()=>{
+ const {createMealPlanRepository}=await import('../../netlify/lib/meal-plan-store.mjs')
+ const records=new Map(),tags=new Map();let sequence=0
+ const store={get:async key=>structuredClone(records.get(key)||null),getWithMetadata:async key=>records.has(key)?{data:structuredClone(records.get(key)),etag:tags.get(key)}:null,setJSON:async(key,value,options={})=>{if(options.onlyIfNew&&records.has(key)||options.onlyIfMatch&&options.onlyIfMatch!==tags.get(key))return {modified:false};records.set(key,structuredClone(value));tags.set(key,String(++sequence));return {modified:true}}}
+ const resources=createProductionActionResources({mealStore:store,sharedStore:store,planStore:store,sermonStore:store}),session={member:'Nyla',role:'member'},date='2026-10-07'
+ const command={kind:'skip',date,slot:'dinner',scope:'self',member:'Nyla'}
+ const proposal=await captureExpectedVersions(normalizeActionProposal({summary:'Skip my dinner',operations:[{type:'meal.schedule.update',targetId:'household-meal-calendar',targetDate:date,description:'Only Nyla skips dinner',payload:{commandJson:JSON.stringify(command)}}]},session),resources)
+ await assert.rejects(prepareRecordOperations({proposal,session:{member:'Javin',role:'member'},permissions:{planning:false},resources}),/only for yourself/)
+ const before=await resources.read(MEAL_SCHEDULE_RESOURCE),prepared=await prepareRecordOperations({proposal,session,permissions:{planning:false},resources})
+ await commitPreparedRecordOperations({prepared:prepared.prepared,session,resources,mutationId:'self-skip-test'})
+ const repository=createMealPlanRepository({store,householdId:'lslj-family'}),window=await repository.getWindowReadOnly({startDate:date,count:1})
+ assert.deepEqual(window.days[0].skippedMembers.dinner,['Nyla']);assert.ok(window.days[0].resolvedMeals.dinner)
+ await assert.rejects(prepareRecordOperations({proposal,session,permissions:{planning:false},resources}),/changed after your review/)
+ await resources.write(MEAL_SCHEDULE_RESOURCE,before.value,1,'Nyla','undo-self-skip')
+ assert.equal((await repository.getWindowReadOnly({startDate:date,count:1})).days[0].skippedMembers?.dinner,undefined)
 })

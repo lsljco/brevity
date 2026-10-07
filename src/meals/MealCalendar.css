@@ -16,3 +16,5 @@
  .meal-calendar-grid:not(.is-month) .meal-calendar-slot{scroll-snap-align:start}
  .meal-week-scroll-hint{display:block;font-size:13px;color:#c2c9c9}
 }
+
+.meal-calendar-action-panel{margin:18px 0;padding:18px;border:1px solid var(--gold);border-radius:12px;min-width:0;background:#171510;color:var(--white)}.meal-calendar-action-panel legend{color:var(--gold);padding:0 8px}.meal-calendar-action-panel p{line-height:1.5}.meal-calendar-action-panel label{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.meal-calendar-action-panel button,.meal-calendar-action-panel select,.meal-calendar-day>button{min-height:44px;padding:10px 14px;margin:8px 8px 0 0;background:#211d15;border:1px solid #655537;border-radius:8px;color:var(--gold)}
