@@ -1,3 +1,4 @@
+import dailyOutcomes from './daily-outcomes.cjs'
 import {CARE_RESOURCE,applyCareAction} from '../../src/health/healthCare.js'
 import {GOVERNANCE_TYPES,preferenceResource,applyGovernance} from '../../src/governance/governanceModel.js'
 import {validateGovernance} from './governance-service.mjs'
@@ -170,6 +171,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   }
   if (operation.type === 'plan.overview.update') {
     const after = { ...(value || {}), ...clone(payload.patch) }
+    if (Object.hasOwn(payload.patch, 'topPriorities')) { after.household = { ...(after.household || {}), priorities:clone(payload.patch.topPriorities) }; after.outcomesReviewed = true; delete after.outcomesInheritedFrom }
     if (payload.origin === 'generated-draft') after.generatedBy = 'brevity-daily-household-plan'
     if (JSON.stringify(after) === JSON.stringify(value)) throw new Error('The daily-plan overview already has the reviewed values. Refresh before preparing another change.')
     return { before, after }
@@ -182,7 +184,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       ? { ...current, ...patch, isaiah:{ ...(current.isaiah || {}), ...patch.isaiah } }
       : { ...current, ...patch }
     const after = { ...(value || {}), [pillar]:nextPillar }
-    if (pillar === 'household' && Object.hasOwn(patch, 'priorities')) after.topPriorities = clone(patch.priorities)
+    if (pillar === 'household' && Object.hasOwn(patch, 'priorities')) { after.topPriorities = clone(patch.priorities); after.outcomesReviewed = true; delete after.outcomesInheritedFrom }
     if (payload.origin === 'generated-draft') after.generatedBy = 'brevity-daily-household-plan'
     if (JSON.stringify(after) === JSON.stringify(value)) throw new Error(`The ${pillar} daily plan already has the reviewed values. Refresh before preparing another change.`)
     return { before, after }
@@ -550,7 +552,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
       if (resource.startsWith('shared:')) { const key=resource.slice(7), entry=await readStoreEntry(shared,sharedKey(key)),record=entry?.data; return { value:record?.value ? JSON.parse(record.value) : key===SHARED_KEYS.finance?{accounts:[],transactions:[]}:key===SHARED_KEYS.overrides||key===SHARED_KEYS.budget?{}:[], version:Number(record?.version||0), missing:!record, record, etag:entry?.etag||null } }
       if (resource.startsWith('plan:')) {
         const date=resource.slice(5),entry=await readStoreEntry(plans,planKey(date)),value=entry?.data
-        return { value:value||createEmptyDailyPlan(date), version:Number(value?.version||0), missing:!value, etag:entry?.etag||null }
+        return { value:(await dailyOutcomes.resolveDailyOutcomes(plans,HOUSEHOLD_ID,date,value))||createEmptyDailyPlan(date), version:Number(value?.version||0), missing:!value, etag:entry?.etag||null }
       }
       if(resource.startsWith('meal:')){
         const date=resource.slice(5),entry=await readStoreEntry(mealStorage(),mealKey(date)),value=entry?.data

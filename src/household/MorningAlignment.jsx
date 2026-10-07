@@ -95,7 +95,6 @@ function FitnessStep({ draft, update }) {
 function HouseholdStep({ draft, update, onReviewCalendarItem }) {
   const value = draft.household
   return <div className="alignment-form-grid">
-    <Field label="Today's Top 3 Outcomes" hint="One outcome per line; enter up to three"><textarea value={joinLines(value.priorities.map(item => typeof item === 'string' ? item : item.title))} onChange={e => update('household', { priorities: splitLines(e.target.value).slice(0,3).map((title, index) => ({ id: `household-priority-${index}`, title, owner: 'Family', status: 'pending' })) })} /></Field>
     <Field label="Appointments" hint="Selected items open a separate Family Calendar review after the daily plan is approved.">
       <TimedCommitmentsEditor items={value.appointments} planDate={draft.date} prefix="appointment" onChange={appointments => update('household', { appointments })} onReviewCalendar={item=>onReviewCalendarItem?.(item,draft.date)} />
     </Field>
@@ -261,7 +260,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
     <section className="alignment-workspace">
       <div className="alignment-workspace-heading"><div className="alignment-step-icon"><i className={`ti ${icon}`} /></div><div><span>Pillar {stepIndex + 1} of {STEPS.length}</span><h2>{label}</h2></div></div>
       {id === 'finance' && financeReadOnly && !readOnly && <div className="alignment-read-only-notice alignment-read-only-notice--section" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Finance is view-only</strong><span>Only the household administrator can change financial details in Morning Alignment. You can continue editing every planning section your permission allows.</span></div></div>}
-      <AlignmentPillarPreview key={`${draft.date}-${id}`} pillar={id} plan={draft} currentMember={currentMember} meals={meals} mealDay={mealDay} mealLibrary={mealLibrary} mealPlanState={mealPlanState} mealPlanError={mealPlanError} calendarAppointments={calendarAppointmentsForPlan(draft, calendarEvents)} calendarHealth={calendarHealth} householdChores={householdChores} canViewFinance={!financeReadOnly} onOpenMealPlan={onOpenMealPlan} onOpenCalendar={onOpenCalendar} />
+      <AlignmentPillarPreview key={`${draft.date}-${id}`} pillar={id} plan={draft} currentMember={currentMember} meals={meals} mealDay={mealDay} mealLibrary={mealLibrary} mealPlanState={mealPlanState} mealPlanError={mealPlanError} calendarAppointments={calendarAppointmentsForPlan(draft, calendarEvents)} calendarHealth={calendarHealth} householdChores={householdChores} canViewFinance={!financeReadOnly} onOpenMealPlan={onOpenMealPlan} onOpenCalendar={onOpenCalendar} outcomesReadOnly={readOnly} onChangeOutcomes={priorities => update('household', { priorities })} />
       <h3 className="alignment-adjust-heading">Discuss &amp; adjust the plan</h3>
       <fieldset className="alignment-step-fields" disabled={stepReadOnly} aria-disabled={stepReadOnly}>
         <Step draft={draft} update={update} onOpenMealPlan={onOpenMealPlan} onReviewCalendarItem={onReviewCalendarItem} />
