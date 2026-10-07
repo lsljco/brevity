@@ -13,7 +13,7 @@ const seedTomorrow = (sourcePlan, targetPlan) => {
   const source = normalizeDailyPlan(sourcePlan)
   const targetDate = nextDateKey(source.date)
   const next = targetPlan?.date === targetDate ? normalizeDailyPlan(targetPlan) : createEmptyDailyPlan(targetDate)
-  next.topPriorities = (source.recap.carryovers || []).slice(0, 3).map((title, index) => createPlanItem({ id: `carryover-${targetDate}-${index}`, title, owner: 'Family', status: 'pending' }))
+  next.topPriorities = (source.recap.carryovers || []).map((title, index) => createPlanItem({ id: `carryover-${targetDate}-${index}`, title, owner: 'Family', status: 'pending' }))
   next.recap.tomorrowPrep = [...(source.recap.tomorrowPrep || [])]
   return next
 }
