@@ -107,14 +107,21 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
     stopPlayback();clearTimeout(voiceTimerRef.current);voiceFinishRef.current?.();voiceFinishRef.current=null;retireRecognition(recognitionRef);setListening(false);voiceTranscriptRef.current='';voiceFinalTranscriptRef.current='';voiceFinalizingRef.current=false
     const requestGeneration=memberGeneration.current
     let spokenReply=null
-    const next=[...messagesRef.current,{role:'user',content}];messagesRef.current=next;setMessages(next);setDraft('');draftRef.current='';busyRef.current=true;setBusy(true);setError('')
+    const previous=messagesRef.current
+    const next=[...previous,{role:'user',content}];messagesRef.current=next;setMessages(next);setDraft('');draftRef.current='';busyRef.current=true;setBusy(true);setError('')
     if(voiceModeRef.current)setVoiceStatus('Thinking…')
     try{
       const result=await askBrevityAssistant({messages:next,conversationVersion,image:attachment,member:currentMember,activeView,activePillar,pageLabel})
       if(requestGeneration!==memberGeneration.current)return
       setAttachment(null);if(result.conversation){useConversation(result.conversation);localStorage.removeItem(historyKey)}else{messagesRef.current=[...next,{role:'assistant',content:result.message,proposal:result.proposal||null}];setMessages(messagesRef.current)}
       if(voiceModeRef.current)spokenReply={content:result.message,index:messagesRef.current.length-1,proposal:voiceReviewText(result.proposal,currentMember)?result.proposal:null}
-    }catch(requestError){if(requestGeneration===memberGeneration.current){setError(requestError.message||'Brevity Assistant could not answer right now.');if(/changed on another device/.test(requestError.message)){try{useConversation(await conversationRequest());setDraft(content);draftRef.current=content}catch{}}}}
+    }catch(requestError){if(requestGeneration===memberGeneration.current){
+      stopVoiceMode()
+      messagesRef.current=previous;setMessages(previous)
+      if(!draftRef.current.trim()){setDraft(content);draftRef.current=content}
+      setError(`${requestError.message||'Brevity Assistant could not answer right now.'} Your request is back in the text box; you can retry.`)
+      if(/changed on another device/.test(requestError.message)){try{const data=await conversationRequest();if(requestGeneration===memberGeneration.current)useConversation(data)}catch{}}
+    }}
     finally{if(requestGeneration===memberGeneration.current){busyRef.current=false;setBusy(false);if(voiceModeRef.current){if(spokenReply?.proposal)beginVoiceReview(spokenReply.proposal);else if(spokenReply)void playResponse(spokenReply.content,spokenReply.index,true);else startListeningRef.current?.()}}}
   }
   sendRef.current=send

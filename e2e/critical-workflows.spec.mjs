@@ -2316,3 +2316,23 @@ test('Finance hero cards keep graphs and captions separate and expose a page scr
  const scroll=await page.locator('.app-main').evaluate(e=>{e.scrollTop=e.scrollHeight;return{top:e.scrollTop,style:getComputedStyle(e).overflowY,color:getComputedStyle(e).scrollbarColor}})
  expect(scroll.style).toBe('scroll');expect(scroll.top).toBeGreaterThan(0);expect(scroll.color).not.toBe('auto')
 })
+
+test('Assistant restores failed requests and retries without duplicating messages',async({page})=>{
+ let attempts=0;const captured=[]
+ // Simulate an obsolete deferred module URL after a deployment. Sending must
+ // use the context code already loaded with the assistant.
+ await page.route('**/assets/assistantContext-*.js',route=>route.abort())
+ await page.route('**/.netlify/functions/brevity-assistant',route=>{captured.push(route.request().postDataJSON());attempts++;return route.fulfill(attempts===1?{status:503,json:{error:'Assistant temporarily unavailable.'}}:{json:{message:'I can help organize that household chore.'}})})
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const assistant=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ const draft=assistant.locator('textarea')
+ await draft.fill('Add a daily chore to clear one tote each day.')
+ await assistant.getByRole('button',{name:'Send message',exact:true}).click()
+ await expect(assistant.getByRole('alert')).toContainText('Your request is back in the text box')
+ await expect(draft).toHaveValue('Add a daily chore to clear one tote each day.')
+ await expect(assistant.locator('.is-user')).toHaveCount(0)
+ await assistant.getByRole('button',{name:'Send message',exact:true}).click()
+ await expect(assistant.getByText('I can help organize that household chore.',{exact:true})).toBeVisible()
+ await expect(assistant.locator('.is-user')).toHaveCount(1)
+ expect(captured[1].messages.filter(m=>m.role==='user'&&m.content==='Add a daily chore to clear one tote each day.')).toHaveLength(1)
+})
