@@ -203,7 +203,7 @@ function TodayFitnessWorkout({ date, currentMember, fitness, onOpenPillar }) {
 }
 
 // Alignment presents the same cards as Today, using the reviewed day's draft.
-export function AlignmentPillarPreview({ pillar, plan, currentMember, meals, mealDay, mealLibrary, mealPlanState, mealPlanError, calendarAppointments = [], calendarHealth, householdChores = [], canViewFinance, onOpenMealPlan, onOpenCalendar }) {
+export function AlignmentPillarPreview({ pillar, plan, currentMember, meals, mealDay, mealLibrary, mealPlanState, mealPlanError, calendarAppointments = [], calendarHealth, householdChores = [], canViewFinance, onOpenMealPlan, onOpenCalendar, outcomesReadOnly = true, onChangeOutcomes }) {
   const [selectedCalendars, setSelectedCalendars] = useState(['All'])
   const visible = calendarAppointments.filter(item => matchesCalendarScopes(item, selectedCalendars))
   const model = buildTodayReadModel({ plan, calendarAppointments:visible, calendarHealth, currentMember })
@@ -221,7 +221,19 @@ export function AlignmentPillarPreview({ pillar, plan, currentMember, meals, mea
       <section className="today-focus-card"><div><span>Daily Focus</span><h2>{plan.household?.keyFocus || 'No focus has been set for this day.'}</h2></div></section>
       <TodayHouseholdChores chores={householdChores} browsingDate />
       <TodayCalendarAgenda filters={<CalendarScopeFilter selected={selectedCalendars} onChange={setSelectedCalendars}/>} commitments={model.commitments} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate />
-      <section className="today-section today-outcomes"><div className="today-section-heading"><h2>Top 3 Outcomes</h2></div><ol className="today-top-three">{[0,1,2].map(index=><li key={index}>{model.outcomes[index]?.title || 'Outcome not set'}</li>)}</ol></section>
+      <section className="today-section today-outcomes"><div className="today-section-heading"><h2>Top 3 Outcomes</h2><small>{outcomesReadOnly ? 'View only' : 'Enter up to three outcomes for this day. Review & Complete Alignment applies your changes.'}</small></div><ol className="today-top-three">{[0,1,2].map(index => {
+        const priority = plan.household?.priorities?.[index]
+        const title = typeof priority === 'string' ? priority : priority?.title || ''
+        return <li key={index}><label className="today-outcome-field"><span>Outcome {index + 1}</span><input aria-label={`Outcome ${index + 1}`} value={title} readOnly={outcomesReadOnly} placeholder="Enter an outcome" onChange={event => {
+          if (outcomesReadOnly || !onChangeOutcomes) return
+          const priorities = Array.from({ length: 3 }, (_, slot) => {
+            const existing = plan.household?.priorities?.[slot]
+            return typeof existing === 'object' && existing ? { ...existing } : { id: `household-priority-${slot}`, title: existing || '', owner: 'Family', status: 'pending' }
+          })
+          priorities[index] = { ...priorities[index], title: event.target.value }
+          onChangeOutcomes(priorities)
+        }} /></label></li>
+      })}</ol></section>
     </>}
     {pillar === 'education' && <PillarBrief number={5} pillar="education" {...education} />}
     {pillar === 'finance' && <TodayFinanceBrief date={plan.date} finance={plan.finance} canViewFinance={canViewFinance} />}
@@ -300,7 +312,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
       <OrchestrationPanel date={dailyPlan.date} currentMember={currentMember} readOnly={readOnly} onOpenSource={kind=>kind==='meal'?onOpenMealPlan?.():onOpenPillar?.(kind==='care'?'health':'household')} />
       <TodayMaintenance date={dailyPlan.date} onOpenPillar={onOpenPillar} />
       <TodayCalendarAgenda filters={<CalendarScopeFilter selected={selectedCalendars} onChange={selected=>setCalendarSelection({member:currentMember,selected})}/>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
-      <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>{browsingDate ? 'Top 3 Outcomes' : 'Today’s Top 3'}</h2></div><small>Outcomes that make this day successful—not a general task list.</small></div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
+      <section className="today-section today-outcomes"><div className="today-section-heading"><div><span>Daily Outcomes</span><h2>{browsingDate ? 'Top 3 Outcomes' : 'Today’s Top 3'}</h2></div><small>Outcomes that make this day successful—not a general task list.</small>{!readOnly && <button type="button" className="today-focus-edit" onClick={onStartTodayAlignment} disabled={todayAlignmentUnavailable}>Edit Top 3 in Alignment</button>}</div><ol className="today-top-three">{[0,1,2].map(index => <li key={index} className={readModel.outcomes[index] ? '' : 'today-top-three--empty'}>{readModel.outcomes[index]?.title || 'Outcome not set'}{readModel.outcomes[index]?.owner && <span>{readModel.outcomes[index].owner}</span>}</li>)}</ol></section>
       <section className="today-section today-actions"><div className="today-section-heading"><div><span>Personal View</span><h2>{currentMember}'s Actions</h2></div><small>Assignment edits open Action Mode review before changing the shared plan.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <AssignmentEditor key={item.id} assignment={item} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => onReviewAssignment?.(item.id, updated, version)} />)}</div> : <div className="today-empty">{readModel.memberOutcomes.length ? `${currentMember} owns ${readModel.memberOutcomes.length} outcome${readModel.memberOutcomes.length===1?'':'s'} in Today’s Top 3, with no separate unresolved assignment.` : `No unresolved assignments or Top 3 outcomes currently involve ${currentMember}.`}</div>}</section>
     </section>
 
