@@ -2210,3 +2210,46 @@ test('Today shows four responsibility blocks and reviews Schedule A without cale
  expect(JSON.stringify(payload)).not.toContain('calendar.create')
  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
 })
+
+test('device layout audit covers compact phones, rotation, tablets and wide desktop',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='desktop-chromium','one explicit viewport matrix')
+  test.setTimeout(120000)
+  for(const [width,height] of [[320,568],[390,844],[844,390],[768,1024],[1024,768],[1440,900],[1920,1080]]){
+    await page.setViewportSize({width,height})
+    await expect(page.getByRole('heading',{name:'Today',exact:true})).toBeVisible()
+    const mobile=width<=640||(width<=960&&height<=500)
+    await expect(page.getByRole('navigation',{name:'Primary mobile navigation'})).toBeVisible({visible:mobile})
+    if(mobile){
+      await page.getByRole('navigation',{name:'Primary mobile navigation'}).getByRole('button',{name:/Menu/}).click()
+      await expect(page.getByRole('button',{name:'Close navigation',exact:true})).toBeVisible()
+      await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Today',exact:true}).click()
+      await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+      await expect(page.getByRole('button',{name:'Close navigation',exact:true})).toHaveCount(0)
+    }
+    if(!mobile&&width<=1180){
+      const toggle=page.getByRole('button',{name:'Expand navigation',exact:true})
+      if(await toggle.isVisible())await toggle.click()
+      const lanes=await page.evaluate(()=>({sidebar:document.querySelector('.app-sidebar').getBoundingClientRect().right,main:document.querySelector('.app-main').getBoundingClientRect().left}))
+      expect(lanes.main).toBeGreaterThanOrEqual(lanes.sidebar-1)
+    }
+    const rhythm=page.getByRole('region',{name:'Daily rhythm',exact:true})
+    await rhythm.locator('.personal-reminders > summary').click()
+    const status=page.locator('.app-refresh-status:not(.is-expanded)')
+    if(await status.isVisible()){
+      const statusBox=await status.boundingBox(),mainBox=await page.locator('.app-main').boundingBox()
+      expect(statusBox.y).toBeGreaterThanOrEqual(mainBox.y+mainBox.height-1)
+    }
+    const target=await rhythm.getByRole('button',{name:'Enable / save reminders'}).boundingBox()
+    expect(target.height).toBeGreaterThanOrEqual(44)
+    await page.screenshot({path:`test-results/device-rhythm-${width}.png`})
+    await expect.poll(()=>page.locator('.app-main').evaluate(e=>e.scrollWidth-e.clientWidth),`Today overflow at ${width}`).toBeLessThanOrEqual(1)
+    await rhythm.locator('.personal-reminders > summary').click()
+    await page.getByRole('region',{name:'Meeting recorder'}).getByRole('button',{name:'Meeting History'}).click()
+    const history=page.getByRole('dialog',{name:'Meeting History'})
+    await expect(history).toBeVisible()
+    const box=await history.boundingBox()
+    expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width)
+    expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(height)
+    await history.getByRole('button',{name:'Close Meeting History'}).click()
+  }
+})

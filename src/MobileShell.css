@@ -10,7 +10,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   .app-sidebar {
     position: fixed;
     inset: 0 auto auto 0;
@@ -139,7 +139,7 @@
 }
 
 @supports not (height: 100dvh) {
-  @media (max-width: 640px) {
+  @media (max-width: 640px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
     .app-shell,
     .app-sidebar {
       height: -webkit-fill-available !important;

@@ -39,7 +39,7 @@ const SermonWorkspace = lazy(() => import('./ministry/SermonWorkspace.jsx'))
 const FINANCE_VIEWS = new Set(['dashboard','daily-alignment','scenario-modeling','transactions','calendar','accounts','debts','vendors','budget','recurring','reporting'])
 // Only phones use a dismissible drawer. Tablets retain the user's explicit
 // sidebar preference across navigation, rotation, and reloads.
-const MOBILE_NAVIGATION_QUERY = '(max-width: 640px)'
+const MOBILE_NAVIGATION_QUERY = '(max-width: 640px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape)'
 const SIDEBAR_STATE_KEY = 'brevity_sidebar_state'
 const isCompactNavigation = () => typeof window !== 'undefined' && window.matchMedia(MOBILE_NAVIGATION_QUERY).matches
 const savedDesktopSidebarState = () => {

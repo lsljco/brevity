@@ -30,8 +30,7 @@ button, input, select, textarea { font: inherit; }
   -webkit-overflow-scrolling: touch;
 }
 
-/* Tablet includes iPad landscape: expanded navigation overlays instead of
-   squeezing data-heavy workspaces into a narrow desktop column. */
+/* Tablets retain a docked sidebar and adapt content within the remaining lane. */
 @media (min-width: 641px) and (max-width: 1180px) {
   .app-main { min-width: 0; }
   :where(.today-dashboard,.pillar-analysis-page,.family-calendar,.finance-root,.meal-planner,.home-hq,.estate-workspace,.settings-page,.edu-tutor) {
@@ -50,7 +49,7 @@ button, input, select, textarea { font: inherit; }
 }
 
 /* Phone layout: readable controls, safe insets, one-column forms and cards. */
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
   :root { --brevity-page-gutter: 14px; }
   :where(input,select,textarea) { font-size: 16px !important; }
   :where(button,[role="button"],a) { -webkit-tap-highlight-color: rgba(197,164,109,.18); }
@@ -108,3 +107,47 @@ button, input, select, textarea { font: inherit; }
     transition-duration: .01ms !important;
   }
 }
+
+/* Keep long reading rows comfortable on large monitors. */
+.today-dashboard { max-width: 1600px; margin-inline: auto; }
+
+/* Newly added meeting and daily-rhythm surfaces follow the available column,
+   including an iPad with its navigation expanded. */
+.daily-rhythm { container-type: inline-size; }
+.rhythm-now { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rhythm-now > div, .rhythm-block, .meeting-hub > div { min-width: 0; }
+.rhythm-now strong, .meeting-hub strong { overflow-wrap: anywhere; }
+.daily-rhythm :is(button,select,input:not([type="checkbox"])),
+.meeting-hub button, .meeting-history button { min-height: 44px; }
+.daily-rhythm :is(button,input,select) { box-sizing: border-box; max-width: 100%; }
+@container (max-width: 560px) {
+  .rhythm-now { grid-template-columns: minmax(0, 1fr); }
+  .rhythm-block > summary { flex-direction: column; gap: 4px; }
+  .personal-reminders label, .daily-rhythm form label { display: flex; flex-wrap: wrap; }
+}
+.meeting-history-backdrop {
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.meeting-history { max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom))); overscroll-behavior: contain; }
+.meeting-history header { position: sticky; top: -1px; z-index: 1; padding-block: 8px; background: #10100f; align-items: flex-start; }
+.meeting-history header > div { min-width: 0; }
+.meeting-history header > button { flex-shrink: 0; }
+@media (max-width: 700px) {
+  .meeting-history-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px), (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+  .app-shell :is(input,select,textarea), .meeting-history :is(input,select,textarea) { font-size: 16px !important; }
+  .alignment-meeting-title { flex-direction: column; align-items: stretch; }
+  .alignment-meeting-title > div:last-child, .alignment-meeting-start, .alignment-meeting-stop { width: 100%; }
+  .alignment-meeting-recording { flex-wrap: wrap; }
+  .alignment-meeting-recording small { width: 100%; margin-left: 0; }
+  .meeting-hub.is-recording > div:first-child > span { display: none; }
+}
+/* Status summaries stay in the reserved lane at every width. */
+.app-main .app-refresh-status:not(.is-expanded),
+.app-sidebar.is-expanded ~ .app-main .app-refresh-status:not(.is-expanded) {
+  height: var(--brevity-command-dock-height) !important;
+  max-height: var(--brevity-command-dock-height) !important;
+}
+.personal-reminders label:has(input[type="checkbox"]) { flex-direction: row; flex-wrap: nowrap; }
+.personal-reminders input[type="checkbox"] { width: 18px; min-width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0; }

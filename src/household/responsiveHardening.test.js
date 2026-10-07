@@ -98,7 +98,7 @@ test('Budget, Reporting, Cash Flow, Accounts, and dashboard footer have responsi
 })
 
 test('tablet navigation stays docked and reserves dismissal for phones', () => {
-  assert.match(appSource, /MOBILE_NAVIGATION_QUERY\s*=\s*'\(max-width:\s*640px\)'/)
+  assert.match(appSource, /MOBILE_NAVIGATION_QUERY\s*=\s*'\(max-width: 640px\), \(max-width: 960px\) and \(max-height: 500px\) and \(orientation: landscape\)'/)
   const tabletStyles=mobileShellCss.slice(mobileShellCss.indexOf('@media (min-width: 641px)'),mobileShellCss.indexOf('@media (max-width: 640px)'))
   assert.match(tabletStyles, /\.app-sidebar\.is-expanded\s*\{[^}]*width:\s*240px;/)
   assert.doesNotMatch(tabletStyles, /mobile-sidebar-backdrop|margin-right:/)
