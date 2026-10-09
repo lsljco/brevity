@@ -2198,7 +2198,7 @@ test.describe('persistent meeting recording',()=>{
     await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
     await hub.getByRole('button',{name:'Meeting History',exact:true}).click()
     const history=page.getByRole('dialog',{name:'Meeting History'})
-    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:'Edit tomorrow’s plan'}).click()
+    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:'Tomorrow’s Alignment'}).click()
     await expect(history).toContainText('Recorded household meeting segment.')
     const player=history.getByLabel('Meeting playback')
     await expect(player).toBeVisible()
