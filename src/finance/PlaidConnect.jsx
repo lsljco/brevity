@@ -70,6 +70,8 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
     try { return localStorage.getItem('plaid_synced_at') || null } catch { return null }
   })
   const [syncing, setSyncing]           = useState(false)
+  const [appSyncing, setAppSyncing] = useState(false)
+  const syncBusy = syncing || appSyncing
   // Startup refresh owns automatic synchronization. Remounts render cached state.
   const [initialChecking]               = useState(false)
   const [error, setError]               = useState(null)
@@ -84,13 +86,16 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
   useEffect(() => {
     const handleStarted = event => {
       if (!event.detail?.bankUpdateRequested) return
-      setSyncing(true)
+      setAppSyncing(true)
       setError(null)
       setSyncNotice('')
     }
     const handleCompleted = event => {
-      if (!event.detail?.bankRefresh?.requested) return
-      setSyncing(false)
+      // Every app refresh completion settles its spinner, even failed attempts
+      // with incomplete bank metadata. A separate manual sync retains its state.
+      setAppSyncing(false)
+      const issue=event.detail?.issues?.find(item=>item.source==='Finance & Plaid')
+      if(issue)setError(issue.message)
       try {
         const savedConnections = JSON.parse(localStorage.getItem('plaid_connections') || '[]')
         const savedAt = localStorage.getItem('plaid_synced_at') || null
@@ -314,7 +319,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
             </div>
             <button
               onClick={() => syncAccounts({ refreshTransactions:true })}
-              disabled={syncing}
+              disabled={syncBusy}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '5px 14px', borderRadius: 8, cursor: 'pointer',
@@ -325,10 +330,10 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
             >
               <i
                 className="ti ti-refresh"
-                style={{ fontSize: 12, animation: syncing ? 'spin 0.8s linear infinite' : 'none' }}
+                style={{ fontSize: 12, animation: syncBusy ? 'spin 0.8s linear infinite' : 'none' }}
                 aria-hidden="true"
               />
-              {syncing ? 'Syncing…' : 'Sync now'}
+              {syncBusy ? 'Syncing…' : 'Sync now'}
             </button>
             {syncedAt && (
               <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.04em' }}>
@@ -348,7 +353,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
             <button
               type="button"
               onClick={() => syncAccounts({ refreshTransactions:true })}
-              disabled={syncing}
+              disabled={syncBusy}
               title="Checks for an existing server-managed bank connection without adding or changing one."
               style={{display:'flex',alignItems:'center',gap:7,padding:'8px 18px',borderRadius:10,cursor:syncing?'wait':'pointer',background:'rgba(197,164,109,0.09)',border:'1px solid rgba(197,164,109,0.28)',color:'#C5A46D',fontSize:11,fontWeight:600,fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase'}}
             >

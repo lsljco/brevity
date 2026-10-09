@@ -9,9 +9,9 @@ const financePlanner=readFileSync(new URL('./FinancePlanner.jsx',import.meta.url
 
 test('Accounts mirrors the application-wide Plaid refresh state',()=>{
   assert.match(plaidConnect,/APP_REFRESH_STARTED_EVENT/)
-  assert.match(plaidConnect,/event\.detail\?\.bankUpdateRequested[\s\S]*setSyncing\(true\)/)
-  assert.match(plaidConnect,/APP_REFRESH_EVENT[\s\S]*setSyncing\(false\)/)
-  assert.match(plaidConnect,/syncing \? 'Syncing…' : 'Sync now'/)
+  assert.match(plaidConnect,/event\.detail\?\.bankUpdateRequested[\s\S]*setAppSyncing\(true\)/)
+  assert.match(plaidConnect,/APP_REFRESH_EVENT[\s\S]*setAppSyncing\(false\)/)
+  assert.match(plaidConnect,/syncBusy \? 'Syncing…' : 'Sync now'/)
 })
 const financeRefresh=readFileSync(new URL('./financeRefresh.js',import.meta.url),'utf8')
 

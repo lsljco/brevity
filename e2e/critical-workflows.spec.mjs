@@ -2319,6 +2319,13 @@ test('Finance hero cards keep graphs and captions separate and expose a page scr
  await page.getByRole('button',{name:'Dashboard',exact:true}).click()
  await closeMenuIfMobile(page,testInfo)
  await expect(page.locator('.finance-root .kpi-card')).toHaveCount(5)
+ const dashboardLayout=await page.locator('.dash-header').evaluate(e=>{const greeting=e.firstElementChild.getBoundingClientRect(),actions=e.querySelector('.dash-actions').getBoundingClientRect();return {column:getComputedStyle(e).flexDirection==='column',greetingHeight:greeting.height,gap:actions.top-greeting.bottom}})
+ if(dashboardLayout.column){expect(dashboardLayout.greetingHeight).toBeLessThan(150);expect(dashboardLayout.gap).toBeLessThan(60)}
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-app-refresh-started',{detail:{bankUpdateRequested:true}})))
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-app-refreshed',{detail:{issues:[{source:'Finance & Plaid',message:'Bank refresh timed out (504).'}]}})))
+ await expect(page.getByRole('button',{name:'Syncing…',exact:true})).toHaveCount(0)
+ await expect(page.locator('.plaid-connect')).toContainText('Bank refresh timed out (504).')
+
  for(const card of await page.locator('.finance-root .kpi-card').all()){
   const boxes=await card.evaluate(e=>Object.fromEntries(['kpi-sub','kpi-sparkline','kpi-trend'].map(name=>{const r=e.querySelector(`.${name}`).getBoundingClientRect();return[name,{top:r.top,bottom:r.bottom}]})))
   expect(boxes['kpi-sparkline'].top).toBeGreaterThanOrEqual(boxes['kpi-sub'].bottom)

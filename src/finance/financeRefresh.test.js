@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { BALANCE_FRESHNESS_MAX_AGE_MS, buildPlaidBalanceSourceCandidate, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidBalances, mergePlaidBalancesWithDiagnostics, mergePlaidTransactionResponse, mergePlaidTransactionSnapshots, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, refreshFinanceData, scopePlaidTransactionsByAccount, transactionResponseFingerprint, transactionSnapshotFingerprint, waitForPlaidTransactionRefresh } from './financeRefresh.js'
+import { financeResponseError, BALANCE_FRESHNESS_MAX_AGE_MS, buildPlaidBalanceSourceCandidate, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, fetchLatestPlaidTransactions, invalidateLatestBalanceRefreshStatus, mergePlaidBalances, mergePlaidBalancesWithDiagnostics, mergePlaidTransactionResponse, mergePlaidTransactionSnapshots, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, refreshFinanceData, scopePlaidTransactionsByAccount, transactionResponseFingerprint, transactionSnapshotFingerprint, waitForPlaidTransactionRefresh } from './financeRefresh.js'
 
 const liveAccountPayload = payload => ({
   balanceMode:'live',
@@ -1072,4 +1072,12 @@ test('bank completion polling shares one deadline instead of three full request 
   assert.deepEqual(calls,[18500])
   assert.equal(clock,20000)
   assert.deepEqual(result,{refresh})
+})
+
+test('gateway timeouts explain retained data without claiming a fresh sync',()=>{
+ const error=financeResponseError({},504)
+ assert.equal(error.status,504)
+ assert.match(error.message,/timed out/)
+ assert.match(error.message,/freshness is unverified/)
+ assert.match(error.message,/Retry Sync now/)
 })
