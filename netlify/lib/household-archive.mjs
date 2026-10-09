@@ -52,7 +52,7 @@ export function createHouseholdArchive({plans,shared,archive,meetings,actions,ho
    if(date<cutoff&&!protectedRow)continue
    if((from&&date<start)||date>end||(!from&&date<start&&!protectedRow))continue
    if(member&&!JSON.stringify(row).includes(member))continue
-   const content=pillar?row.plan?.[pillar]:row
+   const content=pillar==='household'?(row.plan?.household||row.chores?.length||row.schedule?.length||row.calendar?.length?{household:row.plan?.household,chores:row.chores,schedule:row.schedule,calendar:row.calendar}:null):pillar?row.plan?.[pillar]:row
    if(pillar&&!content)continue
    if(query&&!JSON.stringify(content).toLowerCase().includes(String(query).slice(0,200).toLowerCase()))continue
    rows.push(kind==='meeting'?{...row,kind:'meeting',recordingKind:row.kind,coverage:'Owner-only meeting transcript and notes. Audio remains in Meeting History.'}:row)
