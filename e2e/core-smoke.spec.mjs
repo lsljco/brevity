@@ -588,18 +588,11 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
    await expect(dialog.getByRole('button',{name:'Review swap'})).toBeEnabled()
    await dialog.getByRole('button',{name:'Cancel'}).click()
  })
- test('Today calendar supports multi-member, church, Family and All selection',async({page})=>{
-   const filter=page.getByRole('group',{name:'Calendars to show'})
-   await expect(filter.getByRole('button',{name:'Larry',exact:true})).toHaveAttribute('aria-pressed','true')
-   await filter.getByRole('button',{name:'Lorenzo',exact:true}).click()
-   await expect(filter.getByRole('button',{name:'Larry',exact:true})).toHaveAttribute('aria-pressed','true')
-   await expect(filter.getByRole('button',{name:'Lorenzo',exact:true})).toHaveAttribute('aria-pressed','true')
-   await filter.getByRole('button',{name:'Church Triumphant',exact:true}).click()
-   await expect(filter.getByRole('button',{name:'Church Triumphant',exact:true})).toHaveAttribute('aria-pressed','true')
-   await filter.getByRole('button',{name:'Family',exact:true}).click()
-   await expect(filter.getByRole('button',{name:'Church Triumphant',exact:true})).toHaveAttribute('aria-pressed','false')
-   await filter.getByRole('button',{name:'All',exact:true}).click()
-   await expect(filter.getByRole('button',{name:'All',exact:true})).toHaveAttribute('aria-pressed','true')
+ test('Today calendar is scoped to Family and the signed-in member',async({page})=>{
+   const calendar=page.locator('.today-calendar-agenda')
+   await expect(calendar).toContainText('Family calendar and Larry’s calendar')
+   await expect(calendar.getByRole('group',{name:'Calendars to show'})).toHaveCount(0)
+   await expect(calendar.getByRole('button',{name:'Open Family Calendar',exact:true})).toBeVisible()
  })
 
 test('startup retries a generic institution failure and does not retain its stale alert',async({page})=>{
