@@ -2347,3 +2347,34 @@ test('Assistant restores failed requests and retries without duplicating message
  await expect(assistant.locator('.is-user')).toHaveCount(1)
  expect(captured[1].messages.filter(m=>m.role==='user'&&m.content==='Add a daily chore to clear one tote each day.')).toHaveLength(1)
 })
+
+test('Chart the Course starts and speaks with one tap while Today stays visible',async({page},testInfo)=>{
+ await page.clock.setFixedTime(new Date(`${dateKey()}T12:00:00Z`))
+ const spoken=[],saved=[]
+ await page.addInitScript(()=>{
+  localStorage.setItem('brevity_el_voice_v1','chosen-meeting-voice')
+  window.RTCPeerConnection=class {
+   connectionState='new'; addTrack(){}; createDataChannel(){return this.channel={readyState:'open',send(){},close(){}}}
+   async createOffer(){return {type:'offer',sdp:'v=0\r\n'}}
+   async setLocalDescription(){}
+   async setRemoteDescription(){this.connectionState='connected';setTimeout(()=>this.channel.onopen?.(),0)}
+   close(){this.connectionState='closed'}
+  }
+ })
+ const wav=Buffer.alloc(16044);wav.write('RIFF',0);wav.writeUInt32LE(16036,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(16000,40)
+ await page.route('**/elevenlabs-tts',async route=>{spoken.push(route.request().postDataJSON());await route.fulfill({contentType:'audio/wav',body:wav})})
+ await page.route('**/.netlify/functions/evening-recap-voice',route=>route.fulfill({contentType:'application/sdp',body:'v=0\r\n'}))
+ await page.route('**/.netlify/functions/meeting-recordings*',async route=>{if(route.request().method()==='PUT')saved.push(route.request().postDataJSON());await route.fulfill({json:{saved:true,meetings:[]}})})
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Start Chart the Course',exact:true}).click()
+ const session=page.getByRole('region',{name:'Chart the Course conversation'})
+ await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
+ await expect(page.getByRole('region',{name:'Agreed priorities'})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Remember the plan. Start together.'})).toHaveCount(0)
+ await expect.poll(()=>spoken.length).toBe(1)
+ expect(spoken[0].voiceId).toBe('chosen-meeting-voice');expect(spoken[0].text).toContain('Protect the household rhythm')
+ await expect(session.getByRole('button',{name:'Stop recording',exact:true})).toBeVisible()
+ await session.getByRole('button',{name:'Stop recording',exact:true}).click()
+ await expect.poll(()=>saved.some(x=>x.title==='Chart the Course'&&x.transcript.includes('Protect the household rhythm'))).toBe(true)
+ await expect(page.locator('.today-dashboard')).toBeVisible()
+})
