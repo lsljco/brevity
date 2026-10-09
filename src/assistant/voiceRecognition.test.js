@@ -33,3 +33,22 @@ test('startup and missing-result watchdogs are bounded and retirement cancels re
  const stale=callback
  retireRecognition(ref);stale();assert.equal(stalls,1);assert.ok(cleared>0)
 })
+
+test('replacement waits for asynchronous native release and ignores late transcript',async()=>{
+ let finish,callbacks=0,released=false
+ const recognition={onresult:()=>callbacks++,abort(){finish=this.onend}}
+ const ref={current:recognition}
+ const pending=retireRecognition(ref).then(()=>{released=true})
+ await Promise.resolve()
+ assert.equal(released,false);assert.equal(ref.current,null)
+ recognition.onresult?.();assert.equal(callbacks,0)
+ finish();await pending;assert.equal(released,true)
+ finish();assert.equal(recognition.onend,null)
+})
+test('native release is bounded when abort never emits end',async()=>{
+ let timeout,released=false
+ const ref={current:{abort(){}}}
+ const pending=retireRecognition(ref,{setTimer:fn=>{timeout=fn;return 1},clearTimer(){}}).then(()=>{released=true})
+ await Promise.resolve();assert.equal(released,false)
+ timeout();await pending;assert.equal(released,true)
+})
