@@ -1,3 +1,4 @@
+const { reservePaidCalls, uniqueConnections } = require('../lib/plaid-cost-control.cjs')
 const { forEachPlaidConnection } = require('../lib/plaid-connections.cjs')
 const { getTokens } = require('./storage')
 const { readSession } = require('../lib/household-auth.cjs')
@@ -35,7 +36,7 @@ const timedOut = error => error?.code === 'ECONNABORTED'
   || /timed?\s*out|timeout/i.test(String(error?.message || ''))
 
 exports.handler = async (event) => {
-  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json' }
+  const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json', 'Cache-Control':'no-store' }
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
 
   const params = new URLSearchParams(event.rawQuery || '')
@@ -44,10 +45,12 @@ exports.handler = async (event) => {
   try {
     const session = await readSession(event)
     if (!session) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Sign in to view financial accounts.' }) }
-    const tokens = await getTokens(event)
+    const tokens = uniqueConnections(await getTokens(event) || [])
     if (!Array.isArray(tokens) || tokens.length === 0) {
       return { statusCode: 200, headers, body: JSON.stringify({ accounts: [], connected: false }) }
     }
+
+    if (liveBalance) await reservePaidCalls({ event, session, product:'balance', tokens })
 
     const allAccounts = []
     const requiresUpdate = []  // items whose bank session has expired
@@ -146,6 +149,6 @@ exports.handler = async (event) => {
     }
   } catch (err) {
     console.error('Plaid accounts error:', err.message)
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to fetch accounts', detail: err.message }) }
+    return { statusCode: err.statusCode || 500, headers, body: JSON.stringify({ error: 'Failed to fetch accounts', detail: err.message, code:err.code }) }
   }
 }

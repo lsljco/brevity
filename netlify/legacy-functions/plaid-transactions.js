@@ -1,3 +1,4 @@
+const { reservePaidCalls, uniqueConnections } = require('../lib/plaid-cost-control.cjs')
 const { forEachPlaidConnection } = require('../lib/plaid-connections.cjs')
 const crypto = require('crypto')
 const { getTokens, getTransactionSyncState, setTransactionSyncState } = require('./storage')
@@ -302,7 +303,7 @@ exports.handler = async event => {
   try {
     const session = await readSession(event)
     if (!session) return { statusCode:401, headers, body:JSON.stringify({ error:'Sign in to view financial transactions.' }) }
-    const tokens = await getTokens(event)
+    const tokens = uniqueConnections(await getTokens(event) || [])
     if (!Array.isArray(tokens) || tokens.length === 0) {
       return { statusCode:200, headers, body:JSON.stringify(responseBody({ connected:false, refresh:{ requested:requestRefresh, accepted:0, errors:[] } })) }
     }
@@ -329,6 +330,8 @@ exports.handler = async event => {
         refresh:{ requested:true, requestedAt, accepted:tokens.length, completed, stillProcessing:completed < tokens.length, errors, statuses },
       })) }
     }
+
+    if (requestRefresh) await reservePaidCalls({ event, session, product:'transactions', tokens })
 
     const changedTransactions = []
     const removedTransactionIds = new Set()
@@ -413,7 +416,7 @@ exports.handler = async event => {
       })),
     }
   } catch (error) {
-    return { statusCode:500, headers, body:JSON.stringify({ error:'Failed to fetch transactions', detail:error.message }) }
+    return { statusCode:error.statusCode || 500, headers, body:JSON.stringify({ error:'Failed to fetch transactions', detail:error.message, code:error.code }) }
   }
 }
 

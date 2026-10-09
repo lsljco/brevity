@@ -14,9 +14,6 @@ export const ICLOUD_CACHE_KEY = 'brevity_icloud_calendar_cache_v1'
 export const applicationRefreshDate = (now = new Date()) => getHouseholdDateKey(now)
 
 let activeRefresh = null
-// Run one live Plaid update when an administrator opens the app. Internal
-// refreshes reuse that attempt; an explicit Refresh all always requests again.
-let automaticBankRefreshRequested = false
 
 const readCalendarCache = () => {
   return readCurrentCalendarSnapshot()
@@ -58,9 +55,9 @@ const publishCalendarSnapshot = snapshot => {
   return published
 }
 
-export function shouldRequestBankUpdate({ requestBankUpdate = false, financeReadOnly = false, automaticAlreadyRequested = false } = {}) {
+export function shouldRequestBankUpdate({ requestBankUpdate = false, financeReadOnly = false } = {}) {
   if (financeReadOnly) return false
-  return Boolean(requestBankUpdate || !automaticAlreadyRequested)
+  return Boolean(requestBankUpdate)
 }
 
 export function buildBankRefreshState(finance, { requested = false, financeReadOnly = false } = {}) {
@@ -110,7 +107,7 @@ export function buildRefreshIssues({ financeResult, planResult, calendar, health
       id:'finance-bank-refresh',
       source:'Finance & Plaid',
       message:`${message}${lastSuccess}`,
-      action:'The prior verified bank snapshot remains visible. Use Finance > Accounts > Sync now only if the automatic retry does not recover.',
+      action:'The prior verified bank snapshot remains visible. Use Finance > Accounts > Refresh bank now if you need a paid on-demand update.',
     })
   }
 
@@ -127,19 +124,18 @@ async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdat
   const bankUpdateRequested = shouldRequestBankUpdate({
     requestBankUpdate,
     financeReadOnly,
-    automaticAlreadyRequested:automaticBankRefreshRequested,
   })
-  const automaticBankUpdate = bankUpdateRequested && !requestBankUpdate
-  if (automaticBankUpdate) automaticBankRefreshRequested = true
   window.dispatchEvent(new CustomEvent(APP_REFRESH_STARTED_EVENT, {
     detail:{ bankUpdateRequested, financeReadOnly, startedAt:new Date().toISOString() },
   }))
 
-  const financePromise = retryRefresh(()=>refreshFinanceData(window.localStorage,{
+  const refreshFinance = ()=>refreshFinanceData(window.localStorage,{
     requestBankUpdate:bankUpdateRequested,
-    suppressRefreshRequestErrors:automaticBankUpdate,
+    suppressRefreshRequestErrors:false,
     persist:!financeReadOnly,
-  }))
+  })
+  // Never retry a paid request: a timeout may still have incurred a charge.
+  const financePromise = bankUpdateRequested ? refreshFinance() : retryRefresh(refreshFinance)
   const planPromise = retryRefresh(()=>fetchDailyPlan(date))
   const healthPromise = retryRefresh(()=>fetchSystemHealth())
   const calendarPromise = retryRefresh(()=>fetchICloudCalendarEvents())
@@ -147,7 +143,6 @@ async function runApplicationRefresh({ currentMember = 'Larry', requestBankUpdat
     .catch(error => publishCalendarSnapshot(stampCalendarFailure(readCalendarCache(), error)))
 
   const [financeResult, planResult, healthResult] = await Promise.allSettled([financePromise, planPromise, healthPromise])
-  if (automaticBankUpdate && financeResult.status === 'rejected') automaticBankRefreshRequested = false
   const plan = planResult.status === 'fulfilled' ? planResult.value : null
   const calendar = await calendarPromise
   const calendarAwarePlan = plan?.date && !calendar?.error ? mergeCalendarEventsIntoPlan(plan, calendar.events) : plan

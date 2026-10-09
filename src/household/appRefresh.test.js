@@ -8,8 +8,8 @@ test('application refresh requests the authoritative household date across UTC b
   assert.equal(applicationRefreshDate(new Date('2026-09-07T04:30:00.000Z')), '2026-09-07')
 })
 
-test('app startup requests Plaid once while explicit actions can always request again', () => {
-  assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:false,financeReadOnly:false }), true)
+test('app startup never requests paid Plaid updates; only explicit authorized actions do', () => {
+  assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:false,financeReadOnly:false }), false)
   assert.equal(shouldRequestBankUpdate({ automaticAlreadyRequested:true,financeReadOnly:false }), false)
   assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true,automaticAlreadyRequested:true,financeReadOnly:false }), true)
   assert.equal(shouldRequestBankUpdate({ requestBankUpdate:true,automaticAlreadyRequested:false,financeReadOnly:true }), false)

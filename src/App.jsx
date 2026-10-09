@@ -290,7 +290,7 @@ export default function App() {
     setOperationsWorkspace(area==='inventory'?'inventory':'schedule')
     navigateTo('household','household-maintenance')
   }
-  const handleRefreshStatus=()=>{setActionPermissionRevision(value=>value+1);return refreshAll(currentMember,{requestBankUpdate:true})}
+  const handleRefreshStatus=()=>{setActionPermissionRevision(value=>value+1);return refreshAll(currentMember)}
   const activePillarRecord=visiblePillars.find(pillar=>pillar.id===activePillar)
   const activeItem=activePillarRecord?.items.find(item=>item.id===activeView)
   const assistantPageLabel=activeView==='today'?'Today':activeView==='settings'?'Settings':activeView==='enhancements'?'Enhancements':activeItem?.label||activePillarRecord?.label||activeView
