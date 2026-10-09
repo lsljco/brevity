@@ -1,3 +1,4 @@
+import {assertMeetingVoiceApproval} from '../../src/assistant/meetingVoiceReview.js'
 import {GOVERNANCE_TYPES} from '../../src/governance/governanceModel.js'
 import {captureExpectedVersions} from '../lib/assistant-action-executor.mjs'
 import { mealIdsForDay } from '../../src/meals/mealPlanData.js'
@@ -730,7 +731,7 @@ const handler=async event=>{
       let operations,executingMember
       if(proposal.state==='pending'){
         if(new Date(proposal.expiresAt)<=new Date())return json(410,{error:'This proposal expired. Ask Brevity to prepare a current version.'})
-        if(body.voiceApproval){try{assertVoiceApproval({proposal,member:session.member,voiceApproval:body.voiceApproval,selections:body.selections})}catch(error){return json(400,{error:error.message})}}
+        if(body.voiceApproval){try{(body.voiceApproval.mode==='meeting'?assertMeetingVoiceApproval:assertVoiceApproval)({proposal,member:session.member,voiceApproval:body.voiceApproval,selections:body.selections})}catch(error){return json(400,{error:error.message})}}
         operations=proposal.operations.map(operation=>selectedOperation(operation,body.selections?.[operation.id]))
         assertExecutableProposalVersions(proposal,operations)
         const strong=proposal.risk==='strong-confirmation'||operations.some(operation=>operation.risk==='strong-confirmation')

@@ -11,10 +11,12 @@ export default async function handler(){
  const shared=getStore({name:'brevity-household-state',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
  const [savedPlan,scheduleRecord,maintenanceRecord]=await Promise.all([data.get(`${root}daily-plans/${date}`,{type:'json'}),shared.get(`${root}records/brevity_household_schedule_v1`,{type:'json'}),shared.get(`${root}records/brevity_household_maintenance_v1`,{type:'json'})])
  const parse=record=>typeof record?.value==='string'?JSON.parse(record.value):record?.value||{}
- const routines=routineOccurrencesForDate(normalizeHouseholdScheduleState(parse(scheduleRecord)),date)
+ const schedule=normalizeHouseholdScheduleState(parse(scheduleRecord))
+ const routines=routineOccurrencesForDate(schedule,date)
+ const blocks=schedule.blocks.filter(block=>block.date===date).map(block=>({...block,participants:(block.participants||[]).filter(member=>block.attendance?.[member]==='accepted')}))
  const maintenance=normalizeHouseholdMaintenanceState(parse(maintenanceRecord))
  const chores=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),maintenance).find(day=>day.date===date)?.tasks||[]
- const plan={...(savedPlan||{}),date,assignments:[...(savedPlan?.assignments||[]),...routines,...chores.map(chore=>{const occurrence=householdOccurrence(maintenance,chore);return {...chore,id:chore.occurrenceId,status:occurrenceStatus(chore,occurrence),owners:occurrence.coveredBy?[occurrence.coveredBy]:chore.owners}})]}
+ const plan={...(savedPlan||{}),date,assignments:[...(savedPlan?.assignments||[]),...routines,...blocks,...chores.map(chore=>{const occurrence=householdOccurrence(maintenance,chore);return {...chore,id:chore.occurrenceId,status:occurrenceStatus(chore,occurrence),owners:occurrence.coveredBy?[occurrence.coveredBy]:chore.owners}})]}
  const keys=await vapidKeys(store)
  for await(const page of store.list({prefix:`${root}devices/`,paginate:true})){
   await Promise.all(page.blobs.map(async row=>{
