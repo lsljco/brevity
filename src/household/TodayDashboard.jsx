@@ -271,8 +271,8 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
   const ministryCard=ministryBrief(ministry)
 
   return <div className="today-dashboard">
+    <WeatherHeader date={dailyPlan.date}/>
     {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
-    <details className="today-supporting" open={browsingDate||undefined}><summary>Weather</summary><WeatherHeader date={dailyPlan.date}/></details>
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} />
 
     <HealthCare currentMember={currentMember} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly} compact />
