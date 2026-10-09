@@ -1,3 +1,14 @@
+async function openTodayDetails(page) {
+  await expect(page.locator('.today-dashboard')).toBeVisible()
+  const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
+  const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
+  if(restore)await collapse.click()
+  for (const title of ['Weather','Household details & responsibility updates','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+    const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
+    if(await summary.count())await summary.click()
+  }
+  if(restore)await page.getByRole('button',{name:'Menu',exact:true}).click()
+}
 import { SNACK_LIBRARY } from '../src/meals/snackLibrary.js'
 import { test, expect } from '@playwright/test'
 
@@ -69,6 +80,7 @@ test.beforeEach(async ({ page }) => {
   await mockBackend(page)
   await page.goto('/')
   await expect(page.locator('.app-shell')).toBeVisible()
+  await openTodayDetails(page)
 })
 
 test('seven pillars remain in the approved order', async ({ page }) => {
@@ -92,7 +104,7 @@ test('Today displays every recorded Pillar 7 prayer request', async ({ page }) =
     householdPlan.ministry = { ...householdPlan.ministry, contentFocus:'Serve together', prayerNeeds:prayers }
     await route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ householdId:'lslj-family', plan:householdPlan }) })
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   const ministry = page.locator('.today-pillar-brief[data-pillar="ministry"]')
   await expect(ministry).toContainText('14 prayer needs')
   await ministry.getByText('View all 14 prayer needs').click()
@@ -104,8 +116,8 @@ test('Today can browse tomorrow and the next seven days without changing a plan'
   const tomorrow=new Date(`${today()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1)
   const tomorrowKey=tomorrow.toISOString().slice(0,10)
   await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({events:[{id:'tomorrow-visit',uid:'tomorrow-visit',source:'icloud',appleCalendarId:'larry-calendar',appleCalendarOwner:'Larry',title:'Tomorrow appointment',date:tomorrowKey,time:'2:30 PM',owner:'Family'}],connected:true,syncedAt:new Date().toISOString()})}))
-  await page.reload()
-  await page.getByRole('button',{name:'View Next 7 Days'}).click()
+  await page.reload();await openTodayDetails(page)
+  await page.getByRole('button',{name:'Next 7 days'}).click()
   const picker=page.getByRole('combobox',{name:'Choose a day'})
   await expect(picker.locator('option')).toHaveCount(8)
   await expect(page.locator('.upcoming-schedule .today-dashboard')).toBeVisible()
@@ -125,11 +137,11 @@ test('Today can browse tomorrow and the next seven days without changing a plan'
   await picker.selectOption(last)
   await expect(page.locator('.upcoming-schedule .today-hero h1')).toContainText(new Date(`${last}T12:00:00`).toLocaleDateString('en-US',{month:'long',day:'numeric'}))
   await page.getByRole('button',{name:'Back to Today'}).click()
-  await expect(page.getByRole('heading',{name:'Today',exact:true})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Good (morning|afternoon|evening),/})).toBeVisible()
 })
 
 test('Top Outcomes retains spaces while typing before Alignment review', async ({ page }) => {
-  await page.getByRole('button',{name:/Today’s Alignment/}).click()
+  await openTodayDetails(page);await page.getByRole('button',{name:'Edit today’s plan'}).click()
   await page.getByRole('button',{name:/Next Pillar/}).click()
   await page.getByRole('button',{name:/Next Pillar/}).click()
   await page.getByRole('button',{name:/Next Pillar/}).click()
@@ -334,7 +346,7 @@ test('Today Finance displays stored cash and scheduled obligations without claim
   const dueDate=[tomorrow.getFullYear(),String(tomorrow.getMonth()+1).padStart(2,'0'),String(tomorrow.getDate()).padStart(2,'0')].join('-')
   const financeData={accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:1250}],transactions:[{id:'bill',name:'Mortgage',amount:900,type:'expense',freq:'once',start:dueDate,acct:'cash'}]}
   await page.route('**/.netlify/functions/household-state*', route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records:{lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(financeData),version:1,updatedAt:new Date().toISOString()}}})}))
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   const finance=page.locator('.today-finance-brief')
   await expect(finance).toContainText('Daily Finance Brief')
   await expect(finance).toContainText('$1,250')
@@ -378,7 +390,7 @@ for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt wh
       pause(){}
     }
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
@@ -479,7 +491,7 @@ test('assistant shows honest elapsed progress across close and renders safe form
     await held
     await r.fulfill({json:{message:'**Today**\n\n\n- **Meeting:** 2 PM\n- <img src=x onerror=alert(1)>',proposal:null}})
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await page.clock.install({time:new Date('2026-09-30T12:00:00Z')})
@@ -506,7 +518,7 @@ test('assistant comparisons render accessible tables and safe source links witho
   const message='**Label comparison**\n| Food | Calories | Protein | Carbs | Fat | Sodium | Calcium | Potassium |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n| **Cup** | 80 | 16g | 5g | 0g | 55mg | 180mg | 230mg |\n| Tub portion | 135 | 27g | 7.5g | 0g | 97.5mg | 300mg | 390mg |\n[Manufacturer source](https://usa.fage/products/yogurt/fage-total-0)\n[Unsafe](javascript:alert(1))\n![Not loaded](https://example.com/private.png)\n<img src=x onerror=alert(1)>'
   await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:0,messages:[]}}))
   await page.route('**/.netlify/functions/brevity-assistant',r=>r.fulfill({json:{message,proposal:null}}))
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await dialog.locator('textarea').fill('Compare these labels without saving anything.')
@@ -545,7 +557,7 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
       pause(){}
     }
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
@@ -600,14 +612,14 @@ test('startup retries a generic institution failure and does not retain its stal
       ? {status:502,json:{error:'Transaction sync failed for every connected institution.',errors:[{institution:'Fixture Bank',code:'INSTITUTION_DOWN',message:'Transactions could not be refreshed for this institution.'}]}}
       : {status:200,json:{connected:false,transactions:[],errors:[]}})
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await expect.poll(()=>attempts).toBeGreaterThanOrEqual(2)
   await expect(page.locator('body')).not.toContainText('Transaction sync failed for every connected institution.')
 })
 
 test('persistent transaction failures disclose a safe cause and release the refresh spinner',async({page})=>{
   await page.route('**/.netlify/functions/plaid-transactions*',async route=>route.fulfill({status:502,json:{error:'Transaction sync failed for every connected institution.',errors:[{institution:'Fixture Bank',code:'PLAID_CURSOR_READ_FAILED',message:'The transaction checkpoint could not be read.'}]}}))
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   const details=page.getByRole('button',{name:'View details',exact:true})
   await expect(details).toBeVisible({timeout:15000})
   await details.click()
@@ -622,20 +634,20 @@ test('Today reflects inventory source exceptions and clears them after a newer s
     const key='brevity_household_inventory_v1'
     return route.fulfill({status:200,json:{records:{[key]:{key,version:quantity,value:JSON.stringify({items:[{id:'inventory-audit-source',name:'Audit paper towels',quantity,parLevel:4,unit:'rolls'}],waste:[]}),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}})
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await expect(page.locator('.today-attention')).toContainText('Replenish Audit paper towels')
   await expect(page.locator('.today-attention')).not.toContainText('No household items need attention')
   await page.locator('.today-attention').getByRole('button').first().click()
   await expect(page.getByRole('heading',{name:'Household Cleaning Plan',exact:true})).toBeVisible()
   await page.getByRole('button',{name:'Back to Today',exact:true}).click()
   quantity=5
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await expect(page.locator('.today-attention')).not.toContainText('Replenish Audit paper towels')
 })
 
 test('an open Today calendar ages from verified to stale without losing appointments',async({page})=>{
   await page.clock.install({time:new Date()})
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await expect(page.locator('.today-calendar-health')).toContainText('Calendar verified')
   await page.clock.fastForward(31*60*1000)
   await expect(page.locator('.today-calendar-health')).toContainText('Refresh before relying')
@@ -650,7 +662,7 @@ test('Next 7 Days sends the selected meal date to Brevity',async({page})=>{
     requests.push(route.request().postDataJSON())
     await route.fulfill({json:{message:'The selected date is ready for review.',proposal:null}})
   })
-  await page.getByRole('button',{name:'View Next 7 Days'}).click()
+  await page.getByRole('button',{name:'Next 7 days'}).click()
   const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
   await expect(page.locator('.today-snack-card')).toHaveCount(2)
   await page.getByRole('button',{name:'Balance my meals with Brevity'}).click()
@@ -666,8 +678,8 @@ test('Next 7 Days refreshes shared chores and ages calendar verification while o
   let source={customChores:[]},version=1
   const key='brevity_household_maintenance_v1'
   await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{[key]:{key,version,value:JSON.stringify(source),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
-  await page.reload()
-  await page.getByRole('button',{name:'View Next 7 Days'}).click()
+  await page.reload();await openTodayDetails(page)
+  await page.getByRole('button',{name:'Next 7 days'}).click()
   await expect(page.locator('.today-calendar-health')).toContainText('Calendar verified')
   const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
   source={customChores:[{id:'shared-future-chore',title:'Updated future source chore',date,owners:['Larry']}]};version++
@@ -683,7 +695,7 @@ test('Next 7 Days refreshes shared chores and ages calendar verification while o
 test('Today consumed macros compare all saved goals and update after review',async({page},testInfo)=>{
    let member='Larry',date=today(),totals={calories:650,proteinGrams:45.5,carbohydrateGrams:90,fatGrams:80},targets={calories:2200,proteinGrams:160,carbohydrateGrams:80,fatGrams:80},failed=false
    await page.route('**/.netlify/functions/nutrition-records',route=>route.fulfill({status:failed?503:200,contentType:'application/json',body:JSON.stringify({member,date,targets,days:[{member,date,totals,entries:totals.calories?[{id:'saved-meal'}]:[]}]})}))
-   await page.reload()
+   await page.reload();await openTodayDetails(page)
    const section=page.getByRole('region',{name:'Macro goals versus consumed'})
    await expect(section).toContainText('650 cal / 2,200 cal')
    await expect(section).toContainText('1,550 cal below goal')
@@ -725,7 +737,7 @@ test('voice recovers a stalled microphone after read aloud and preserves a draft
       load(){window.voiceTest.loads++}
     }
   })
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await expect(dialog.getByText('Ready for your next question.',{exact:true})).toBeVisible()

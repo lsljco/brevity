@@ -55,12 +55,12 @@ function runSegment(source,id){
  recorder.onerror=()=>publish({error:'Live transcription was interrupted. The audio recording remains available.'})
  recorder.start();timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop()},25000)
 }
-export async function startMeeting({member,date,timing='today',kind='alignment',title}){
+export async function startMeeting({member,date,timing='today',kind='alignment',title,audioStream,externalTranscription=false}){
  if(state.recording||state.starting||state.saving||state.transcribing){publish({error:'Finish the active meeting and its transcription before starting another.'});return}
  const generation=++epoch
  publish({starting:true,error:''})
  try{
-  const source=await navigator.mediaDevices.getUserMedia({audio:true})
+  const source=audioStream||await navigator.mediaDevices.getUserMedia({audio:true})
   if(generation!==epoch){source.getTracks().forEach(track=>track.stop());return}
   stream=source;master=recorderFor(source);const id=crypto.randomUUID(),now=new Date().toISOString()
   segments=[];manualTranscript='';sequence=0;chunkIndex=0
@@ -83,7 +83,7 @@ export async function startMeeting({member,date,timing='today',kind='alignment',
    localQueue.finally(()=>{publish({saving:false});resolveStop?.();resolveStop=null})
   }
   source.getTracks().forEach(track=>track.addEventListener('ended',()=>{if(state.recording)stopMeeting('interrupted')},{once:true}))
-  master.start(5000);runSegment(source,id);persist()
+  master.start(5000);if(!externalTranscription)runSegment(source,id);persist()
  }catch(cause){stream?.getTracks().forEach(track=>track.stop());stream=null;publish({starting:false,recording:false,error:cause.message||'Could not start the microphone.'})}
 }
 export async function stopMeeting(reason='stopped'){
@@ -114,4 +114,10 @@ if(typeof window!=='undefined'){
  window.addEventListener('pagehide',detachMeeting)
  window.addEventListener('beforeunload',event=>{if(state.recording||state.saving){event.preventDefault();event.returnValue=''}})
  window.addEventListener('online',()=>{if(state.record)persist()})
+}
+
+export function appendMeetingTurn(role,text){
+ if(!state.record||!state.recording||!String(text||'').trim())return
+ manualTranscript=[manualTranscript,`${role}: ${String(text).trim()}`].filter(Boolean).join('\n')
+ updateRecord({transcript:manualTranscript})
 }

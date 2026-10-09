@@ -1,3 +1,14 @@
+async function openTodayDetails(page) {
+  await expect(page.locator('.today-dashboard')).toBeVisible()
+  const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
+  const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
+  if(restore)await collapse.click()
+  for (const title of ['Weather','Household details & responsibility updates','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+    const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
+    if(await summary.count())await summary.click()
+  }
+  if(restore)await page.getByRole('button',{name:'Menu',exact:true}).click()
+}
 import { test, expect } from '@playwright/test'
 import { createEmptyDailyPlan } from '../src/household/dailyPlan.js'
 import { blankMealReadiness, emptyPracticeDay, practiceRoutineNotes, shiftPracticeDate } from '../src/household/operatingPractices.js'
@@ -49,7 +60,7 @@ async function backend(page, { readonly = false, activated = false } = {}) {
   return { date, plans, prepared, writes, schedule }
 }
 async function enter(page) {
-  await page.goto('/')
+  await page.goto('/');await openTodayDetails(page)
   await expect(page.locator('.app-shell')).toBeVisible()
   await page.getByTestId('operating-practices').getByRole('button', { name: 'Policies & Practices', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Policies & Practices', exact: true })).toBeVisible()
@@ -62,13 +73,13 @@ async function fits(page) {
 
 test('Today readiness stays compact and routes to authoritative controls', async ({ page }, testInfo) => {
   await backend(page, { activated: true })
-  await page.goto('/')
+  await page.goto('/');await openTodayDetails(page)
   const panel = page.getByTestId('operating-practices')
   await expect(panel).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Policies & Practices', exact: true })).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Meal plan', exact: true })).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Calendar', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Start Today’s Alignment/ })).toBeAttached()
+  await expect(page.getByRole('button', { name: /Edit today’s plan/ })).toBeAttached()
   await expect(page.getByRole('button', { name: /Open Meal Plan/ })).toBeAttached()
   const height = await panel.evaluate(element => element.getBoundingClientRect().height)
   expect(height).toBeLessThanOrEqual(testInfo.project.name === 'iphone' ? 280 : 230)

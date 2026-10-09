@@ -4,6 +4,8 @@ import test from 'node:test'
 
 const householdTodaySource = readFileSync(new URL('./HouseholdToday.jsx', import.meta.url), 'utf8')
 const dashboardSource = readFileSync(new URL('./TodayDashboard.jsx', import.meta.url), 'utf8')
+const overviewSource = readFileSync(new URL('./TodayOverview.jsx', import.meta.url), 'utf8')
+const meetingSource = readFileSync(new URL('./EveningRecapConversation.jsx', import.meta.url), 'utf8')
 const alignmentSource = readFileSync(new URL('./MorningAlignment.jsx', import.meta.url), 'utf8')
 
 test('alignment loads the next daily plan and stages its exact reviewed version', () => {
@@ -15,8 +17,8 @@ test('alignment loads the next daily plan and stages its exact reviewed version'
 })
 
 test('the dashboard and alignment screen identify tomorrow as the target', () => {
-  assert.match(dashboardSource, /Start Tomorrow’s Alignment/)
-  assert.match(dashboardSource, /Review Tomorrow’s Alignment/)
+  assert.match(overviewSource, /Start Evening Recap/)
+  assert.match(meetingSource, /nextDailyPlanDate\(plan.date\)/)
   assert.match(alignmentSource, /Next-Day Alignment/)
   assert.match(alignmentSource, /formatDailyPlanDate\(draft\.date\)/)
 })
@@ -29,8 +31,8 @@ test('alignment flushes the latest local draft when the screen unmounts or the p
 })
 
 test('today alignment is a separate reviewed action scoped only to today', () => {
-  assert.match(dashboardSource, /Start Today’s Alignment/)
-  assert.match(dashboardSource, /Adjust Today’s Alignment/)
+  assert.match(overviewSource, /Chart the Course/)
+  assert.match(meetingSource, /do not close the day or create an evening recap/)
   assert.match(householdTodaySource, /mode === 'today-alignment'/)
   assert.match(householdTodaySource, /timing="today" plan=\{planWithMeals\}/)
   assert.match(householdTodaySource, /onComplete=\{completeTodayAlignment\}/)

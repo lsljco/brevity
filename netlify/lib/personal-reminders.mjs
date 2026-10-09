@@ -29,14 +29,14 @@ export function inQuietHours(prefs,minute){
 export function dueReminders(plan,member,prefs,now=new Date()){
  const clock=householdClock(now)
  if(!plan||plan.date!==clock.date||inQuietHours(prefs,clock.minute))return []
- const items=(plan.assignments||[]).filter(x=>namedFor(x,member)&&!isFinished(x)).map(x=>({...x,time:x.startTime}))
+ const items=(plan.assignments||[]).filter(x=>namedFor(x,member)&&!isFinished(x)&&!x.cancelled).map(x=>({...x,time:x.startTime}))
  // Explicit participants only: a default gym field must never alert the whole household.
  if(plan.fitness?.participants?.includes(member)&&plan.fitness.departureTime)items.push({id:'fitness-departure',time:plan.fitness.departureTime,title:`Depart for ${plan.fitness.location||'the gym'}`})
- for(const block of plan.dayparts||[])for(const [i,item] of (block.items||[]).entries())if(item.owner===member)items.push({...item,id:`daypart-${block.id}-${i}`})
+ for(const block of plan.dayparts||[])for(const [i,item] of (block.items||[]).entries())if(namedFor(item,member)&&!isFinished(item))items.push({...item,id:`daypart-${block.id}-${i}`})
  return items.flatMap(item=>{const start=minuteOfDay(item.time);if(start===null)return []
  const delta=start-clock.minute
  if(delta>prefs.leadMinutes||delta<prefs.leadMinutes-2||delta<0)return []
- return [{key:deviceId(`${plan.date}:${item.id}:${item.time}:${item.title}`),title:'Brevity · Your next responsibility',body:`${item.title}${delta?` in ${delta} minutes`:' now'}. Open Today for details.`,url:'/?reminder=1#daily-rhythm',tag:`brevity-${item.id}`,remaining:delta}]
+ return [{key:deviceId(`${plan.date}:${item.id}:${item.time}:${item.title}`),title:`Brevity · ${item.title}`,body:`${item.title}${delta?` begins in ${delta} minutes`:' begins now'}. ${item.location?`Location: ${item.location}. `:''}Wrap up your current activity and get ready. Open Today for details.`,url:'/?reminder=1#daily-rhythm',tag:`brevity-${item.id}`,remaining:delta}]
  })
 }
 export async function deliverReminder(subscription,message,keys){

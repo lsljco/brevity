@@ -8,6 +8,7 @@ const today = read('./HouseholdToday.jsx')
 const dashboard = read('./TodayDashboard.jsx')
 const alignment = read('./MorningAlignment.jsx')
 const recap = read('./EveningRecap.jsx')
+const conversation = read('./EveningRecapConversation.jsx')
 const generatorEndpoint = read('../../netlify/functions/daily-household-plan-background.mjs')
 const generator = read('../../netlify/lib/household-plan-generator.mjs')
 
@@ -31,8 +32,8 @@ test('Today remains navigable but every plan mutation is reviewed and permission
   assert.doesNotMatch(today, /savePlan\(|persistAndSync|onSaveDraft/)
   assert.match(dashboard, /if \(readOnly\) throw new Error\('Plans & decisions permission is required to update the shared decision queue\.'\)/)
   assert.match(dashboard, /disabled=\{readOnly \|\| !canGeneratePlan \|\| generationState === 'generating'\}/)
-  assert.match(dashboard, /readOnly \? 'View Today’s Alignment'/)
-  assert.match(dashboard, /readOnly \? 'View Recap'/)
+  assert.match(conversation, /if\(readOnly\|\|active.current\)return/)
+  assert.match(conversation, /disabled=\{readOnly\|\|active.current\}/)
 })
 
 test('Morning Alignment blocks revoked planning and protects the embedded finance section for every nonadministrator', () => {

@@ -1,3 +1,14 @@
+async function openTodayDetails(page) {
+  await expect(page.locator('.today-dashboard')).toBeVisible()
+  const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
+  const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
+  if(restore)await collapse.click()
+  for (const title of ['Weather','Household details & responsibility updates','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+    const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
+    if(await summary.count())await summary.click()
+  }
+  if(restore)await page.getByRole('button',{name:'Menu',exact:true}).click()
+}
 import { test, expect } from '@playwright/test'
 test.use({launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']},permissions:['microphone']})
 
@@ -140,7 +151,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 async function closeMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click();await expect(drawer).not.toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible()})
+test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible();await openTodayDetails(page)})
 
 test('expanded side panel remains expanded while navigating until its toggle is used',async({page},testInfo)=>{
   const drawer=page.locator('#primary-navigation-drawer')
@@ -171,11 +182,11 @@ test('iPad sidebar stays open after content taps, rotation, and reload until exp
   expect(bounds.main).toBeGreaterThanOrEqual(bounds.sidebar-1)
   await page.setViewportSize(testInfo.project.name==='tablet'?{width:1194,height:834}:{width:834,height:1194})
   await expect(drawer).toHaveClass(/is-expanded/)
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await expect(drawer).toHaveClass(/is-expanded/)
   await page.getByRole('button',{name:'Collapse navigation'}).click()
   await expect(drawer).not.toHaveClass(/is-expanded/)
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await expect(drawer).not.toHaveClass(/is-expanded/)
   await page.getByRole('button',{name:'Expand navigation'}).click()
   await expect(drawer).toHaveClass(/is-expanded/)
@@ -222,18 +233,18 @@ test('Today and daily alignments show current and daypart weather',async({page})
   await expect(todayWeather).toContainText('Morning')
   await expect(todayWeather).toContainText('Afternoon')
   await expect(todayWeather).toContainText('35% chance')
-  await page.getByRole('button',{name:"Start Today’s Alignment"}).click()
+  await openTodayDetails(page);await page.getByRole('button',{name:"Edit today’s plan"}).click()
   await expect(page.getByRole('heading',{name:"Today’s Alignment"})).toBeVisible()
   await expect(page.getByLabel('Weather for Johns Creek, GA')).toContainText('Current conditions')
   await page.getByRole('button',{name:'Save Local Draft & Exit'}).click()
-  await page.getByRole('button',{name:"Start Tomorrow’s Alignment"}).click()
+  await openTodayDetails(page);await page.getByRole('button',{name:"Edit tomorrow’s plan"}).click()
   await expect(page.getByRole('heading',{name:'Next-Day Alignment'})).toBeVisible()
   await expect(page.getByLabel('Weather for Johns Creek, GA')).toContainText('Morning')
 })
 
 test('Today and Tomorrow alignment include Finance-style meeting capture and reviewed draft application',async({page})=>{
-  for(const [button,heading,transcriptLabel] of [["Start Today’s Alignment","Today’s Alignment","Today’s Alignment transcript"],["Start Tomorrow’s Alignment","Next-Day Alignment","Tomorrow’s Alignment transcript"]]){
-    await page.getByRole('button',{name:button}).click()
+  for(const [button,heading,transcriptLabel] of [["Edit today’s plan","Today’s Alignment","Today’s Alignment transcript"],["Edit tomorrow’s plan","Next-Day Alignment","Tomorrow’s Alignment transcript"]]){
+    await openTodayDetails(page);await page.getByRole('button',{name:button}).click()
     await expect(page.getByRole('heading',{name:heading})).toBeVisible()
     const capture=page.getByLabel(/Alignment meeting capture$/)
     await expect(capture.getByRole('button',{name:'Start Meeting'})).toBeVisible()
@@ -427,7 +438,7 @@ test('Meal Library bulk import reviews several images and saves selected meals i
 test('Review change opens Action Mode for a custom meal replacement',async({page})=>{
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await page.evaluate(async()=>fetch('/.netlify/functions/meal-plans',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mealType:'breakfast',name:'Saturday Pancakes',description:'Golden pancakes',ingredients:['2 cups pancake mix'],prepMinutes:5,cookMinutes:15,totalMinutes:20,serving:'1 pancake',macros:{calories:168,proteinGrams:2,carbohydrateGrams:21,fatGrams:8}})}))
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await page.locator('.meal-calendar-day').first().getByRole('button',{name:'Customize',exact:true}).first().click()
   const replace=page.getByRole('dialog',{name:'Customize this meal'})
@@ -442,7 +453,7 @@ test('Review change opens Action Mode for a custom meal replacement',async({page
 })
 
 test('Next-Day Alignment retains the active weekly sermon instead of asking for another upload',async({page})=>{
-  await page.getByRole('button',{name:/Tomorrow’s Alignment/}).click()
+  await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click()
   await expect(page.getByRole('heading',{name:'Active teaching'})).toBeVisible()
   await expect(page.getByText('Weekly Word',{exact:true}).first()).toBeVisible()
   await expect(page.getByRole('heading',{name:'Upload the Word that will govern the formation cycle'})).toHaveCount(0)
@@ -796,7 +807,7 @@ test('iPad landscape Family Calendar keeps all seven columns inside its content 
 
 test('Settings remains operational when optional integration payloads are empty',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Settings'}).click();await expect(page.getByRole('heading',{name:'Settings',exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Recovery Mode');await expect(page.locator('body')).not.toContainText('Cannot read properties of undefined')})
 
-test('iPhone alignment keeps Next Pillar above fixed bottom navigation',async({page},testInfo)=>{test.skip(testInfo.project.name!=='iphone','iPhone layout contract');await page.getByRole('button',{name:/Start Today’s Alignment/}).click();const next=page.getByRole('button',{name:'Next Pillar'}),bottomNav=page.locator('.mobile-app-nav'),main=page.locator('.app-main');await expect(next).toBeVisible();await expect(bottomNav).toBeVisible();await main.evaluate(element=>{element.scrollTop=element.scrollHeight});await expect.poll(async()=>{const nextBox=await next.boundingBox(),navBox=await bottomNav.boundingBox();return nextBox&&navBox?Math.round(navBox.y-(nextBox.y+nextBox.height)):-999},{timeout:5000}).toBeGreaterThanOrEqual(0)})
+test('iPhone alignment keeps Next Pillar above fixed bottom navigation',async({page},testInfo)=>{test.skip(testInfo.project.name!=='iphone','iPhone layout contract');await openTodayDetails(page);await page.getByRole('button',{name:/Edit today’s plan/}).click();const next=page.getByRole('button',{name:'Next Pillar'}),bottomNav=page.locator('.mobile-app-nav'),main=page.locator('.app-main');await expect(next).toBeVisible();await expect(bottomNav).toBeVisible();await main.evaluate(element=>{element.scrollTop=element.scrollHeight});await expect.poll(async()=>{const nextBox=await next.boundingBox(),navBox=await bottomNav.boundingBox();return nextBox&&navBox?Math.round(navBox.y-(nextBox.y+nextBox.height)):-999},{timeout:5000}).toBeGreaterThanOrEqual(0)})
 
 test('saved task opens its exact dated record after reload and detects Undo',async({page})=>{
   await mockBackend(page)
@@ -808,7 +819,7 @@ test('saved task opens its exact dated record after reload and detects Undo',asy
     return route.fulfill({json:{plan:{...plan(date),assignments:date===task.date&&!removed?[task]:[]}}})
   })
   await page.goto('/')
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   await page.getByRole('button',{name:'Open task: Inspect garage',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Saved task',exact:true})
@@ -1542,7 +1553,7 @@ test('weekly groceries add only selected quantities to the shared household list
  await page.getByLabel('Show items',{exact:true}).selectOption('Needed')
  await expect(page.getByLabel('Quantity for oats',{exact:true})).toHaveValue('3 bags')
  await openMenuIfMobile(page,testInfo)
- await page.reload()
+ await page.reload();await openTodayDetails(page)
  await expect(page.locator('.app-shell')).toBeVisible()
  await openMenuIfMobile(page,testInfo)
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
@@ -1754,7 +1765,7 @@ test('Meal Library previews CSV imports and saves favorite and seasonal filters 
  await expect(page.locator('.meal-library-grid article')).toHaveCount(0)
  await page.getByLabel('Filter by season').selectOption('Winter')
  await expect(page.locator('.meal-library-grid article')).toHaveCount(1)
- await page.reload()
+ await page.reload();await openTodayDetails(page)
  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
  await page.getByRole('button',{name:'Meal Library',exact:true}).click()
  await page.getByRole('button',{name:'★ Favorites',exact:true}).click()
@@ -1812,7 +1823,7 @@ test('Today coordinates dental care, maintenance and reviewed meal skipping',asy
  let care={version:0,items:[]};const prepared=[]
  await page.route('**/.netlify/functions/health-care',route=>{if(route.request().method()==='POST'){const body=route.request().postDataJSON();care={version:care.version+1,items:[{...body.item,id:'care-1'}]}}return route.fulfill({json:care})})
  await page.route('**/.netlify/functions/estate?*',route=>route.fulfill({json:{workspace:{maintenanceEvents:[{id:'service-1',workOrderId:'work-1',scheduledFor:'2026-01-01',status:'due'}],workOrders:[{id:'work-1',title:'Replace HVAC filters',status:'due'}],maintenancePlans:[]}}}))
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  const health=page.getByRole('region',{name:'Health priorities',exact:true})
  await health.getByRole('button',{name:'Add dental cleaning',exact:true}).click()
  await health.getByRole('combobox',{name:'Household member',exact:true}).selectOption('Terica')
@@ -1839,7 +1850,7 @@ test('GOV-001 prepares useful assistance without assigning fallback or changing 
  const date=dateKey(),versions={[`plan:${date}`]:1,'shared:brevity_household_schedule_v1':1,'shared:brevity_household_maintenance_v1':1}
  const data={...buildOrchestration({date,plan:{...plan(),assignments:[{id:'gov-task',title:'Prepare dinner checklist',owner:'Terica',status:'pending'}]},schedule:{routines:[]},maintenance:{},sourceStates:Object.fromEntries(Object.keys(versions).map(key=>[key,'available'])),versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:0,canReview:true,caseStoreAvailable:true}
  await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  const panel=page.getByRole('region',{name:'Brevity can help',exact:true})
  await panel.getByRole('combobox',{name:'Responsibility'}).selectOption(`assignment:${date}:gov-task`)
  await expect(panel).toContainText('Owner: Terica')
@@ -1867,7 +1878,7 @@ test('GOV-001 policy, support and recovery controls produce reviewed requests on
  const configuration={effectiveDate:date,reviewDate:date,decisionMaker:'Larry',supportMembers:['Nyla'],workerEnabled:false,promptMinutes:240,threshold:64,recurrenceWindow:28,revision:1,approvedBy:'Lorenzo',approvedRevision:1}
  const data={...buildOrchestration({date,plan:{...plan(),assignments:[{id:'gov-task',title:'Prepare dinner checklist',owner:'Terica',status:'blocked'}]},schedule:{routines:[]},maintenance:{},saved:{policy:configuration},sourceStates:Object.fromEntries(Object.keys(versions).map(key=>[key,'available'])),versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:2,canReview:true,caseStoreAvailable:true,configuration,policyActive:true,preferences:defaultPreferences(),preferenceVersion:0,routines:[],recovery:[],workload:[],conflicts:[]}
  await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  const panel=page.getByRole('region',{name:'Brevity can help',exact:true}),prepared=[]
  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
  await panel.getByText('GOV-001 approval and authority controls',{exact:true}).click()
@@ -1878,14 +1889,14 @@ test('GOV-001 policy, support and recovery controls produce reviewed requests on
  await expect.poll(()=>prepared.length).toBe(1)
  expect(prepared[0].operation.payload.style).toBe('options');expect(prepared[0].expectedVersion).toBe(0)
  // Preparing a proposal must not auto-execute; reload dismisses the review before the next independent flow.
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  await panel.getByRole('combobox',{name:'Responsibility'}).selectOption(`assignment:${date}:gov-task`)
  await panel.getByText('Coordinate support, consequences and decisions',{exact:true}).click()
  await panel.getByLabel('Approved support candidate').selectOption('Nyla')
  await panel.getByRole('button',{name:'Review support request',exact:true}).click()
  await expect.poll(()=>prepared.length).toBe(2)
  expect(prepared[1].operation.payload.recipient).toBe('Nyla');expect(prepared[1].operation.payload.event).toBe('request-support')
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  await panel.getByText('Recovery Mode',{exact:true}).click()
  await panel.getByLabel('Capacity change and reason').fill('Temporary travel capacity change')
  await panel.getByLabel('Essential outcomes and coverage to protect').fill('Protect meals and required care')
@@ -1902,7 +1913,7 @@ test('GOV-001 audit fixes keep completed learning and paused recovery exit revie
  const configuration={effectiveDate:date,reviewDate:date,decisionMaker:'Larry',supportMembers:['Nyla'],workerEnabled:false,promptMinutes:240,threshold:64,recurrenceWindow:28,revision:1}
  const data={...buildOrchestration({date,plan:{...plan(),assignments:[{id:'done-task',title:'Completed dinner preparation',owner:'Larry',status:'completed'}]},schedule:{routines:[]},maintenance:{},sourceStates:Object.fromEntries(Object.keys(versions).map(key=>[key,'available'])),versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:2,canReview:true,caseStoreAvailable:true,configuration,policyActive:true,preferenceVersion:0,routines:[],recovery:[],workload:[],conflicts:[]}
  await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  const panel=page.getByRole('region',{name:'Brevity can help',exact:true}),prepared=[]
  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
  await panel.getByRole('combobox',{name:'Responsibility'}).selectOption(`assignment:${date}:done-task`)
@@ -1913,7 +1924,7 @@ test('GOV-001 audit fixes keep completed learning and paused recovery exit revie
  expect(prepared[0].operation.payload.event).toBe('learn')
  data.paused=true;data.policyActive=false
  data.recovery=[{id:'recovery-audit',title:'Travel recovery',startsOn:date,endsOn:date,status:'active',displayStatus:'active',essential:'Protect care',operations:[],exitOperations:[]}]
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  await panel.getByText('Recovery Mode',{exact:true}).click()
  await expect(panel.getByRole('button',{name:'Review recovery exit',exact:true})).toBeEnabled()
  await panel.getByRole('button',{name:'Review recovery exit',exact:true}).click()
@@ -1927,7 +1938,7 @@ test('GOV-001 Health follow-up keeps review, explicit closure and private source
  const date=dateKey(),versions={'health:care':4},configuration={effectiveDate:date,reviewDate:date,decisionMaker:'Larry',supportMembers:['Nyla'],workerEnabled:false,promptMinutes:240,threshold:64,recurrenceWindow:28,revision:1}
  const data={...buildOrchestration({date,care:{items:[{id:'care-follow',title:'Arrange teeth cleaning',member:'Larry',type:'Dental',status:'Needs scheduling'}]},sourceStates:{'health:care':'available'},versions,member:'Larry',isAdmin:true}),enabled:true,isAdmin:true,version:2,canReview:true,caseStoreAvailable:true,configuration,policyActive:true,routines:[],recovery:[],workload:[],conflicts:[]}
  await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:data}))
- await page.reload();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await closeMenuIfMobile(page,testInfo);await openTodayDetails(page)
  const panel=page.getByRole('region',{name:'Brevity can help',exact:true}),prepared=[]
  let executed=0
  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))executed++})
@@ -1950,7 +1961,7 @@ test('Spiritual reading preserves note contrast, full screen, and the saved Elev
   await page.addInitScript(()=>{localStorage.setItem('brevity_el_voice_v1','chosen-voice');HTMLMediaElement.prototype.play=function(){return Promise.resolve()};HTMLMediaElement.prototype.pause=function(){}})
   const requests=[]
   await page.route('**/elevenlabs-tts',route=>{requests.push(route.request().postDataJSON());return route.fulfill({contentType:'audio/wav',body:Buffer.from('UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQIAAAAAAA==','base64')})})
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Spiritual Maturity',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -1991,7 +2002,7 @@ test('Spiritual reader renders the original Word file in an isolated full-screen
     return route.fulfill({json:{documentUrl:`/.netlify/functions/sermon-original?sourceHash=${'a'.repeat(64)}&download=1`}})
   })
   await page.route('**/.netlify/functions/sermon-documents?**',route=>route.fulfill({contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',body:bytes}))
-  await page.reload()
+  await page.reload();await openTodayDetails(page)
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Spiritual Maturity',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -2109,7 +2120,7 @@ test('Apple source filters isolate Family, Terica and Nyla in Today and Family C
     {id:'nyla-only',title:'Nyla source fixture',appleCalendarOwner:'Nyla',owner:'Nyla'},
   ].map(row=>({...row,source:'icloud',appleCalendarId:`source-${row.id}`,date:dateKey(),time:'10:00 AM'}))
   await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events,connected:true,syncedAt:new Date().toISOString()}}))
-  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await openTodayDetails(page)
   const verify=async(container)=>{
     const filter=page.getByRole('group',{name:'Calendars to show'})
     for(const owner of ['Family','Terica','Nyla','All']){
@@ -2139,7 +2150,7 @@ test('alignment presents the selected date meals, workout and calendar using Tod
   await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{connected:true,syncedAt:new Date().toISOString(),events:[{id:'next-day-visit',date:next,title:'Tomorrow family appointment fixture',time:'10:30 AM',source:'icloud',appleCalendarId:'family-source',appleCalendarOwner:'Family',owner:'Family'}]}}))
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   for(const [timing,date] of [['Today',dateKey()],['Tomorrow',next]]){
-    await page.getByRole('button',{name:`Start ${timing}’s Alignment`}).click()
+    await openTodayDetails(page);await page.getByRole('button',{name:`Edit ${timing.toLowerCase()}’s plan`}).click()
     const steps=page.getByRole('navigation',{name:'Alignment progress'})
     await steps.getByRole('button',{name:'Health & Nutrition'}).click()
     const preview=page.locator('.alignment-day-preview')
@@ -2172,7 +2183,7 @@ test.describe('persistent meeting recording',()=>{
       return route.fulfill({json:{meetings:[...archive.values()]}})
     })
     await page.route('**/.netlify/functions/finance-meeting-transcribe*',route=>route.fulfill({json:{text:'Recorded household meeting segment.'}}))
-    await page.getByRole('button',{name:'Start Tomorrow’s Alignment'}).click()
+    await openTodayDetails(page);await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click()
     await page.getByLabel(/Alignment meeting capture$/).getByRole('button',{name:'Start Meeting',exact:true}).click()
     const hub=page.getByRole('region',{name:'Meeting recorder'})
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
@@ -2187,7 +2198,7 @@ test.describe('persistent meeting recording',()=>{
     await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
     await hub.getByRole('button',{name:'Meeting History',exact:true}).click()
     const history=page.getByRole('dialog',{name:'Meeting History'})
-    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:/Tomorrow’s Alignment/}).click()
+    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:'Tomorrow’s Alignment'}).click()
     await expect(history).toContainText('Recorded household meeting segment.')
     const player=history.getByLabel('Meeting playback')
     await expect(player).toBeVisible()
@@ -2218,7 +2229,7 @@ test('device layout audit covers compact phones, rotation, tablets and wide desk
   test.setTimeout(120000)
   for(const [width,height] of [[320,568],[390,844],[844,390],[768,1024],[1024,768],[1440,900],[1920,1080]]){
     await page.setViewportSize({width,height})
-    await expect(page.getByRole('heading',{name:'Today',exact:true})).toBeVisible()
+    await expect(page.getByRole('heading',{name:/Good (morning|afternoon|evening),/})).toBeVisible()
     const mobile=width<=640||(width<=960&&height<=500)
     await expect(page.getByRole('navigation',{name:'Primary mobile navigation'})).toBeVisible({visible:mobile})
     if(mobile){
