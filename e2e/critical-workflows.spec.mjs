@@ -2235,7 +2235,7 @@ test('device layout audit covers compact phones, rotation, tablets and wide desk
     if(mobile){
       await page.getByRole('navigation',{name:'Primary mobile navigation'}).getByRole('button',{name:/Menu/}).click()
       await expect(page.getByRole('button',{name:'Close navigation',exact:true})).toBeVisible()
-      await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:/Good (morning|afternoon|evening),/}).click()
+      await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Today',exact:true}).click()
       await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
       await expect(page.getByRole('button',{name:'Close navigation',exact:true})).toHaveCount(0)
     }
