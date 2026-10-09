@@ -1,3 +1,4 @@
+import {HOUSEHOLD_NAME_GUIDANCE} from '../../src/shared/householdNames.js'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
@@ -21,7 +22,7 @@ const handler = async event => {
   const timing=body.timing==='today'?'today':'tomorrow'
   const plan=JSON.stringify(body.plan||{}).slice(0,24000)
   const notes=String(body.notes||'').slice(0,8000)
-  const prompt=`You are Brevity's Seven Pillars Alignment reconciliation engine. Analyze a household meeting for ${timing} and return ONLY valid JSON.
+  const prompt=`You are Brevity's Seven Pillars Alignment reconciliation engine. ${HOUSEHOLD_NAME_GUIDANCE} Analyze a household meeting for ${timing} and return ONLY valid JSON.
 
 Rules:
 1. Extract only details actually stated. Never invent meals, owners, times, dollar amounts, scripture, decisions, or commitments.
