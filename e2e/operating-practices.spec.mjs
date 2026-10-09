@@ -1,8 +1,13 @@
 async function openTodayDetails(page) {
+  await expect(page.locator('.today-dashboard')).toBeVisible()
+  const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
+  const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
+  if(restore)await collapse.click()
   for (const title of ['Weather','Household details & responsibility updates','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }
+  if(restore)await page.getByRole('button',{name:'Menu',exact:true}).click()
 }
 import { test, expect } from '@playwright/test'
 import { createEmptyDailyPlan } from '../src/household/dailyPlan.js'
