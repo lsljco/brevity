@@ -453,7 +453,7 @@ test('Review change opens Action Mode for a custom meal replacement',async({page
 })
 
 test('Next-Day Alignment retains the active weekly sermon instead of asking for another upload',async({page})=>{
-  await page.getByRole('button',{name:/Tomorrow’s Alignment/}).click()
+  await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click()
   await expect(page.getByRole('heading',{name:'Active teaching'})).toBeVisible()
   await expect(page.getByText('Weekly Word',{exact:true}).first()).toBeVisible()
   await expect(page.getByRole('heading',{name:'Upload the Word that will govern the formation cycle'})).toHaveCount(0)
@@ -2198,7 +2198,7 @@ test.describe('persistent meeting recording',()=>{
     await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
     await hub.getByRole('button',{name:'Meeting History',exact:true}).click()
     const history=page.getByRole('dialog',{name:'Meeting History'})
-    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:/Tomorrow’s Alignment/}).click()
+    await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:'Edit tomorrow’s plan'}).click()
     await expect(history).toContainText('Recorded household meeting segment.')
     const player=history.getByLabel('Meeting playback')
     await expect(player).toBeVisible()
