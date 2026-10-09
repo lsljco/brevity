@@ -47,7 +47,10 @@ import { requestActionReview } from '../assistant/actionEvents.js'
 import { getHouseholdCalendarDate, getHouseholdDateKey, getHouseholdDateLabel, getHouseholdDateTimeLabel, getHouseholdGreeting, getHouseholdTimeLabel } from './financeTime.js'
 import { buildScheduledActionPayload, scheduledActionScope } from './scheduledActionReview.js'
 import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
-import CashForecastAgenda, { CashForecastIntro } from './CashForecastAgenda.jsx'
+import CashForecastBalances from './CashForecastBalances.jsx'
+import { buildOutstandingCashForecast } from './outstandingCashForecast.js'
+const CashForecastAgenda = lazy(() => import('./CashForecastAgenda.jsx'))
+const CashForecastIntro = lazy(() => import('./CashForecastAgenda.jsx').then(module => ({ default:module.CashForecastIntro })))
 import { USER_SIDEPANEL_IMAGE } from './financeAssets.js'
 import { DEBT_STORAGE_KEY, normalizeDebts } from './debtModel.js'
 
@@ -1384,11 +1387,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     // remain anchored to source-managed account balances and planned activity.
     return buildProjection(fd.accounts, fd.transactions, 365, {}, 365, todayAnchor)
   }, [fd])
-  const cashForecastProjection = useMemo(() => {
-    if (!forecastScope.accounts.length) return new Map()
-    const todayAnchor = forecastScope.accounts.reduce((sum, account) => sum + parseFloat(account.balance || 0), 0)
-    return buildProjection(forecastScope.accounts, forecastScope.transactions, 365, {}, 365, todayAnchor)
-  }, [forecastScope])
+
 
   // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
   const fetchActuals = useCallback(async () => {
@@ -1504,7 +1503,6 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     : linkedForecastAccountCount > 0
       ? 'a mix of last stored linked-account values and unlinked household values'
       : 'stored household values that are not currently linked to a unique bank source'
-  const forecastTodayPlanUnresolved = forecastScope.transactions.some(transaction => txOccursOnDate(transaction, getHouseholdCalendarDate()))
 
   const actualAccountScope = useMemo(
     () => scopePlaidTransactionsByAccount(plaidActuals || [], plaidIdToLocal, activeAcctIds, {
@@ -1530,6 +1528,11 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),vendorDirectory,'posted',vendorOrder),
     [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder],
   )
+  const cashForecastProjection = useMemo(() => {
+    if (!forecastScope.accounts.length) return new Map()
+    return buildOutstandingCashForecast(forecastScope.accounts, forecastScope.transactions, cashForecastActuals)
+  }, [forecastScope, cashForecastActuals])
+  const forecastTodayPlanUnresolved = Boolean(cashForecastProjection.get(toISO(getHouseholdCalendarDate()))?.unmatchedCount)
   const cashForecastPostedActuals = useMemo(
     () => balanceActuals.filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),
     [balanceActuals, forecastScope.accountIds, plaidIdToLocal],
@@ -2575,7 +2578,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
                           {showActuals && hasPending && <div style={{ fontSize: 9, color: 'rgba(197,164,109,0.65)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pending</div>}
                         </div>
                       )}
-                      {!showActuals && pt && <div style={{ fontSize: 14, fontWeight: 600, color: isToday ? 'var(--gold)' : 'rgba(197,164,109,0.75)', lineHeight: 1, marginTop: 3 }}>{fmtK(pt.bal)}</div>}
+                      {!showActuals && pt && <div style={{ fontSize: 14, fontWeight: 600, color: isToday ? 'var(--gold)' : 'rgba(197,164,109,0.75)', lineHeight: 1, marginTop: 3 }}>{isToday ? 'Projected ' : ''}{fmtK(pt.bal)}</div>}
                     </div>
                   )
                 })}
@@ -4599,7 +4602,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
 
       </div>, document.body)}
 
-      <CashForecastIntro
+      <Suspense fallback={<p>Loading cash forecast…</p>}><CashForecastIntro
         monthName={monthName}
         showBankActivity={showActuals}
         error={actualsError}
@@ -4612,7 +4615,9 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
         balanceSource={balanceSource}
         balanceVerifiedLive={balanceVerifiedLive}
         todayPlanUnresolved={todayPlanUnresolved}
-      />
+      /></Suspense>
+
+      <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
 
       {/* ── Month navigation and bank-activity overlay ── */}
       <div className="finance-calendar-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -4640,7 +4645,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
         </button>
       </div>
 
-      <CashForecastAgenda vendorOrder={vendorOrder}
+      <Suspense fallback={<p>Loading forecast days…</p>}><CashForecastAgenda vendorOrder={vendorOrder}
         cells={cells}
         projection={proj}
         actualsByDate={actualsByDate}
@@ -4654,7 +4659,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
         todayPlanUnresolved={todayPlanUnresolved}
         hasCashAccounts={viewAcctIds.size > 0}
         onSelectDay={setSelDay}
-      />
+      /></Suspense>
 
       {/* ── Day-of-week headers ── */}
       <div className="cal-grid finance-calendar-month-head" style={{ marginBottom: 4 }}>
@@ -4677,7 +4682,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           const isNeg        = pt && pt.bal < 0
           // Historical balances are reconstructed by walking backward from the
           // latest source-managed balance; they are not bank statement balances.
-          const reconstructedBal = (isPast || isToday) && historicalBals[key] !== undefined ? historicalBals[key] : undefined
+          const reconstructedBal = isPast && historicalBals[key] !== undefined ? historicalBals[key] : undefined
           // Plaid actuals for this cell (only meaningful on past/today dates)
           const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
@@ -4771,11 +4776,11 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                       {fmtK(reconstructedBal)}
                     </span>
                   ) : pt ? (
-                    <span title={isPast ? `Estimated historical cash balance from ${balanceSource}` : isToday ? `${balanceVerifiedLive ? 'Current bank liquidity' : 'Latest stored cash balance'} from ${balanceSource}; today’s scheduled-item completion is unresolved` : todayPlanUnresolved ? `Projected from ${balanceSource}; today’s scheduled-item completion is unresolved` : `Projected from ${balanceSource}`}
+                    <span title={isPast ? `Estimated historical cash balance from ${balanceSource}` : isToday ? `Projected after today’s activity from ${balanceSource}` : todayPlanUnresolved ? `Projected from ${balanceSource}; today’s scheduled-item completion is unresolved` : `Projected from ${balanceSource}`}
                       style={{ fontSize: 9, fontWeight: 700,
                         color: isNeg ? 'var(--expense-color)' : 'rgba(197,164,109,0.85)',
                         opacity: isPast || isToday ? 0.75 : 1 }}>
-                      {fmtK(pt.bal)}
+                      {isToday ? 'Projected ' : ''}{fmtK(pt.bal)}
                     </span>
                   ) : null}
                 </div>
@@ -4811,7 +4816,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                 const balLabel   = selReconstructedBal !== undefined
                   ? 'Reconstructed end-of-day balance'
                   : isSelToday
-                    ? `${balanceVerifiedLive ? 'Current bank liquidity' : 'Latest stored cash balance'} · today’s plan unresolved`
+                    ? 'Projected after today’s activity'
                     : isSelPast
                       ? `Estimated from ${balanceSource}`
                       : todayPlanUnresolved
