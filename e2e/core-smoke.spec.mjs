@@ -844,6 +844,7 @@ test('routine source review shows proposals without silently saving them', async
  if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Menu'}).click()
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
  await page.getByRole('button',{name:'Household Operations',exact:true}).click()
+ if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
  await page.getByRole('button',{name:'Routines',exact:true}).click()
  const review=page.getByRole('region',{name:'Build routines from household records'})
  await review.getByRole('button',{name:'Review chores & calendars'}).click()
