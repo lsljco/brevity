@@ -1,3 +1,4 @@
+import {rankDirectionPriorities} from './priorityDirection.js'
 import {todayCalendarAppointments} from './todayCalendar.js'
 import {DAILY_BLOCKS,minuteOfDay,isFinished,namedFor} from './dailyRhythm.js'
 import {routineOccurrencesForDate,normalizeHouseholdScheduleState} from './householdScheduleData.js'
@@ -10,6 +11,6 @@ export function buildDailyAgenda({plan={},schedule={},chores=[],appointments=[],
  const pending=items.filter(x=>!isFinished(x)&&!x.cancelled),completed=items.filter(x=>isFinished(x)&&!['deferred','cancelled'].includes(String(x.status).toLowerCase()))
  const gaps=pending.filter(x=>x.sourceKind!=='appointment'&&(![x.owner,...(x.owners||[]),...(x.participants||[])].some(n=>n&&n!=='Family')||minuteOfDay(x.startTime)===null))
  const priorityRecords=plan.topPriorities?.length?plan.topPriorities.map((x,i)=>({...x,id:x.id||`priority-${i}`,sourceKind:'priority'})):records.filter(x=>['assignment','timeline'].includes(x.sourceKind))
- const priorities=priorityRecords.filter(x=>!isFinished(x)&&!x.cancelled)
+ const priorities=rankDirectionPriorities(priorityRecords.filter(x=>!isFinished(x)&&!x.cancelled))
  return {items,pending,completed,gaps,priorities,next:pending.find(x=>minuteOfDay(x.startTime)!==null&&minuteOfDay(x.startTime)>=minute),routines}
 }
