@@ -809,3 +809,16 @@ test('manual microphone restart waits for native release, preserves speech, and 
   await page.clock.fastForward(30000)
   expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(2)
 })
+
+test('Today has one focus editor in the focus card and does not repeat the primary priority',async({page})=>{
+  await openTodayDetails(page)
+  const focus=page.getByRole('region',{name:'Today’s focus',exact:true})
+  await expect(focus).toBeVisible()
+  await expect(focus.getByRole('button',{name:'Edit focus',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Set today’s focus',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'Edit focus',exact:true})).toHaveCount(1)
+  const priorities=page.getByRole('region',{name:'Agreed priorities',exact:true})
+  await expect(priorities.getByRole('button',{name:'Edit focus',exact:true})).toHaveCount(0)
+  const title=await focus.getByRole('heading',{level:2}).innerText()
+  await expect(priorities.getByText(title,{exact:true})).toHaveCount(0)
+})

@@ -2,3 +2,5 @@
 
 /* Today source errors belong beside their content; never cover the final details controls. */
 .app-main .household-today-workspace>.today-sync-banner--error{position:static!important;inset:auto!important;z-index:auto!important;margin:12px 24px!important;max-height:none!important;min-height:0!important;width:auto!important}
+
+.today-next-step .today-focus-edit{background:transparent;color:var(--gold-light);flex-shrink:0}
