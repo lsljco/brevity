@@ -9,7 +9,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['read_meal_calendar','get_member_preferences','get_module_configuration','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['read_meal_calendar','get_member_preferences','get_module_configuration','search_household_archive','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
