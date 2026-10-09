@@ -11,15 +11,15 @@ export function CashForecastIntro({ monthName, showBankActivity, error, freshnes
       <section className="finance-calendar-intro" aria-labelledby="cash-forecast-title">
         <p>Finance planning</p>
         <h1 id="cash-forecast-title">Cash Forecast</h1>
-        <p className="finance-calendar-simple-guide">Today shows your latest bank balance. Future dates show what may remain after scheduled income and bills. Scheduled items are plans, not proof of payment.</p>
-        {todayPlanUnresolved && <p className="finance-calendar-simple-guide">Some of today’s scheduled items have not been matched to bank activity. Future balances may change after those items are confirmed.</p>}
+        <p className="finance-calendar-simple-guide">Today separates your bank balance from your projected balance after pending and remaining scheduled activity. Future dates carry that projection forward. Scheduled items are plans, not proof of payment.</p>
+        {todayPlanUnresolved && <p className="finance-calendar-simple-guide">Some of today’s scheduled items have not been matched to bank activity. They remain in the projection as expected activity until matched.</p>}
         <details className="finance-calendar-explanation"><summary>How this forecast works</summary><span>
           Scheduled activity, reconstructed posted closes, and forward cash-balance projections for {monthName}.
           {showBankActivity ? ' Bank activity is shown separately from the plan.' : ' Turn on bank activity to compare posted and pending transactions with the plan.'}
           {excludedAccountCount ? ` ${excludedAccountCount} selected non-cash account${excludedAccountCount === 1 ? ' is' : 's are'} excluded; this forecast includes checking and savings only.` : ''}
           {unmappedTransactionCount ? ` Across all bank history, ${unmappedTransactionCount} transaction${unmappedTransactionCount === 1 ? ' is' : 's are'} not linked to one unique Brevity account and ${unmappedTransactionCount === 1 ? 'is' : 'are'} excluded from this forecast.` : ''}
           {` The balance anchor uses ${balanceSource}.`}
-          {todayPlanUnresolved ? ` Today’s balance value is ${balanceVerifiedLive ? 'a live intraday bank snapshot' : 'the latest stored cash anchor, not a verified live bank reading'}. Because Brevity cannot yet prove which scheduled items have cleared, today’s plan is not automatically reapplied; future balances carry that uncertainty.` : ''}
+          {' Posted items are already in the bank balance. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.'}
         </span></details>
       </section>
       {(error || freshnessMessage || balanceMessage || unmappedTransactionCount > 0) && (
@@ -70,9 +70,10 @@ export default function CashForecastAgenda({
       const bank = orderRows(showBankActivity && key <= todayKey ? (actualsByDate?.[key] || []) : [])
       const postedBank = bank.filter(transaction => !transaction?.pending)
       const pendingBank = bank.filter(transaction => transaction?.pending)
-      const reconstructedBalance = key <= todayKey ? historicalBalances[key] : undefined
+      const reconstructedBalance = key < todayKey ? historicalBalances[key] : undefined
       return {
         key,
+        currentBalance:point?.currentBalance,
         planned,
         bank,
         plannedNet:Number(point?.delta || 0),
@@ -135,7 +136,7 @@ export default function CashForecastAgenda({
           : day.key < todayKey
             ? 'Past balance unavailable'
             : day.key === todayKey
-              ? balanceVerifiedLive ? 'Current bank balance' : 'Last saved bank balance'
+              ? 'Projected after today’s activity'
               : todayPlanUnresolved
                 ? 'Forecast balance · payments need confirmation'
                 : 'Forecast balance'
@@ -165,6 +166,7 @@ export default function CashForecastAgenda({
             </span>
             {day.balance !== undefined && (
               <span className="finance-calendar-agenda-values" title={`Balance anchor: ${balanceSource}`}>
+                {day.currentBalance !== undefined && <small>{balanceVerifiedLive ? 'Current bank balance' : 'Last saved bank balance'}: {fmtMoney(day.currentBalance)}</small>}
                 <small>{balanceKind}</small>
                 <strong>{fmtMoney(day.balance)}</strong>
               </span>

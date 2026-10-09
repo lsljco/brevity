@@ -2389,3 +2389,23 @@ test('Chart the Course starts and speaks with one tap while Today stays visible'
  await expect.poll(()=>saved.some(x=>x.title==='Chart the Course'&&x.transcript.includes('Protect the household rhythm'))).toBe(true)
  await expect(page.locator('.today-dashboard')).toBeVisible()
 })
+
+
+test('Cash Forecast separates current cash from outstanding expenses and pending activity',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  finance.accounts[0].balance=4500;finance.accounts[0].plaidCurrentBalance=4600
+  finance.transactions=[{id:'hoa',name:'HOA Dues',type:'expense',amount:1375,acct:'a1',freq:'once',start:dateKey()}]
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value=JSON.stringify([{id:'pending-fuel',accountId:'plaid-operating',name:'Fuel hold',amount:100,date:dateKey(),pending:true}])
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const summary=page.getByRole('region',{name:'Current and projected cash'})
+  await expect(summary).toBeVisible()
+  await expect(summary).toContainText('$4,600.00')
+  await expect(summary).toContainText('−$100.00')
+  await expect(summary).toContainText('−$1,375.00')
+  await expect(summary).toContainText('$3,125.00')
+  await summary.getByText('What is included in today’s projection?',{exact:true}).click()
+  await expect(summary).toContainText('HOA Dues: not matched — included in projection')
+})
