@@ -2409,3 +2409,36 @@ test('Cash Forecast separates current cash from outstanding expenses and pending
   await summary.getByText('What is included in today’s projection?',{exact:true}).click()
   await expect(summary).toContainText('HOA Dues: not matched — included in projection')
 })
+
+test('Enhancements captures a spoken idea and screenshot, then shares discussion and manager updates',async({page},testInfo)=>{
+  const {createEnhancementRepository}=await import('../netlify/lib/enhancement-requests.mjs')
+  const {createEnhancementHandler}=await import('../netlify/functions/enhancement-requests.mjs')
+  const records=new Map(),versions=new Map()
+  const store={async get(key){return structuredClone(records.get(key)||null)},async getWithMetadata(key){return records.has(key)?{data:structuredClone(records.get(key)),etag:String(versions.get(key)||0)}:null},async setJSON(key,value,options={}){if(options.onlyIfNew&&records.has(key)||options.onlyIfMatch&&options.onlyIfMatch!==String(versions.get(key)||0))return {modified:false};records.set(key,structuredClone(value));versions.set(key,(versions.get(key)||0)+1);return {modified:true}},async list({prefix}){return {blobs:[...records.keys()].filter(key=>key.startsWith(prefix)).map(key=>({key}))}}}
+  let member='Larry'
+  const repo=createEnhancementRepository({store,root:'e2e/'})
+  const handler=createEnhancementHandler({authenticate:async()=>({member,role:member==='Larry'?'admin':'member'}),repository:()=>repo,draft:async()=>({title:'Meal prep reminders the night before',area:'Meals'})})
+  await page.route('**/.netlify/functions/enhancement-requests*',async route=>{const url=new URL(route.request().url());const result=await handler({httpMethod:route.request().method(),queryStringParameters:Object.fromEntries(url.searchParams),body:route.request().postData()||''});await route.fulfill({status:result.statusCode,headers:result.headers,body:result.body})})
+  await page.route('**/.netlify/functions/finance-meeting-transcribe*',route=>route.fulfill({json:{text:'Remind me tonight if tomorrow’s dinner needs to thaw.'}}))
+  async function board(){await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Enhancements',exact:true}).click();await closeMenuIfMobile(page,testInfo);await expect(page.getByRole('heading',{name:'Enhancements',exact:true})).toBeVisible()}
+  await board();await page.getByRole('button',{name:'Share an idea',exact:true}).click()
+  await page.getByRole('button',{name:'Speak your idea',exact:true}).click();await page.getByRole('button',{name:'Stop and transcribe',exact:true}).click()
+  await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Meal prep reminders the night before')
+  await expect(page.getByLabel('Your idea',{exact:true})).toHaveValue(/tomorrow’s dinner/)
+  await page.getByLabel('Attach a screenshot (optional)',{exact:true}).setInputFiles('public/icons/icon-192x192.png')
+  await expect(page.getByRole('img',{name:'Screenshot to attach'})).toBeVisible()
+  await page.getByRole('button',{name:'Submit request',exact:true}).click()
+  await expect(page.getByRole('region',{name:'Request details'})).toContainText('Received')
+  await page.getByRole('button',{name:'View screenshot',exact:true}).click();await expect(page.getByRole('img',{name:'Screenshot for Meal prep reminders the night before'})).toBeVisible()
+  await page.getByLabel('Add a comment',{exact:true}).fill('A reminder after dinner would help.');await page.getByRole('button',{name:'Post comment',exact:true}).click();await expect(page.getByRole('region',{name:'Request details'})).toContainText('A reminder after dinner would help.')
+  member='Terica'
+  await page.route('**/.netlify/functions/household-auth?action=session',route=>route.fulfill({json:{authenticated:true,member,role:'member',bootstrapRequired:false}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await board()
+  await page.getByRole('button',{name:'Meal prep reminders the night before',exact:true}).click()
+  await page.getByText('Manage status & priority',{exact:true}).click();await page.getByLabel('Status',{exact:true}).selectOption('Planned');await page.getByLabel('Priority',{exact:true}).selectOption('High');await page.getByLabel('Update note',{exact:true}).fill('Include in our next review.');await page.getByRole('button',{name:'Save update',exact:true}).click()
+  await expect(page.getByRole('region',{name:'Request details'}).locator('.enh-status')).toHaveText('Planned')
+  member='Nyla';await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await board()
+  await page.getByRole('button',{name:'Meal prep reminders the night before',exact:true}).click();await expect(page.getByText('Manage status & priority',{exact:true})).toHaveCount(0)
+  await page.getByRole('region',{name:'Request details'}).getByRole('button',{name:'Support · 1',exact:true}).click();await expect(page.getByRole('region',{name:'Request details'}).getByRole('button',{name:'Supported · 2',exact:true})).toBeVisible()
+  await page.screenshot({path:`test-results/enhancements-${testInfo.project.name}.png`})
+})
