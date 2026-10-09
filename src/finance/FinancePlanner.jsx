@@ -1390,16 +1390,16 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
 
   // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
-  const fetchActuals = useCallback(async () => {
+  const fetchActuals = useCallback(async ({ requestBankUpdate = false } = {}) => {
     if (readOnly) {
       showToast('Finance is read-only for this household member')
       return { error: 'Finance is read-only for this household member' }
     }
     setActualsLoading(true)
     setActualsError(null)
-    setActualsNotice('Requesting the latest transactions from your bank…')
+    setActualsNotice(requestBankUpdate ? 'Requesting a paid transaction update…' : 'Loading Plaid’s latest available transactions…')
     try {
-      let json = await fetchLatestPlaidTransactions({ requestBankUpdate: true })
+      let json = await fetchLatestPlaidTransactions({ requestBankUpdate })
       // A successful HTTP response may still be a partial multi-institution
       // snapshot. Retain the last-known rows for failed institutions instead
       // of silently erasing them from KPIs and reconciliation.
@@ -2439,7 +2439,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
               <div className="dash-date">{todayLabel}</div>
             </div>
             <div className="dash-actions">
-              {!readOnly && <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={fetchActuals} onReviewAccountLinks={() => setView('accounts')} />}
+              {!readOnly && <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onReviewAccountLinks={() => setView('accounts')} />}
               <div className="dash-search">
                 <i className="ti ti-search" />
                 <input aria-label="Search transactions" placeholder="Search transactions…" value={dashboardSearch} onChange={event => setDashboardSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && dashboardSearch.trim()) openFilteredTransactions({ query: dashboardSearch.trim(), label: `Search: ${dashboardSearch.trim()}` }) }} />
@@ -3047,7 +3047,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             </p>
             <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
               {showActuals&&!readOnly&&<button type="button" onClick={() => { setTransactionRuleInitial(null); setShowTransactionRules(true) }} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className="ti ti-wand" aria-hidden="true"/>Categorization rules{txRules.length ? ` · ${txRules.length}` : ''}</button>}
-              {showActuals&&!readOnly&&<button type="button" onClick={fetchActuals} disabled={actualsLoading} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:actualsLoading?'default':'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className={`ti ${actualsLoading?'ti-loader-2':'ti-refresh'}`} style={{animation:actualsLoading?'spin .8s linear infinite':'none'}} aria-hidden="true"/>{actualsLoading?'Checking bank…':'Refresh bank data'}</button>}
+              {showActuals&&!readOnly&&<button type="button" onClick={fetchActuals} disabled={actualsLoading} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 13px',cursor:actualsLoading?'default':'pointer',borderRadius:10,border:'1px solid rgba(197,164,109,.3)',background:'rgba(197,164,109,.08)',color:'var(--gold)',fontSize:12,fontWeight:600,fontFamily:'inherit'}}><i className={`ti ${actualsLoading?'ti-loader-2':'ti-refresh'}`} style={{animation:actualsLoading?'spin .8s linear infinite':'none'}} aria-hidden="true"/>{actualsLoading?'Checking bank…':'Sync available transactions'}</button>}
               {!readOnly && <button onClick={() => { setEditTx(null); setView('tx-form') }}
                 style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', cursor: 'pointer', borderRadius: 10, border: 'none', background: '#C5A46D', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
                 <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" /> Add transaction

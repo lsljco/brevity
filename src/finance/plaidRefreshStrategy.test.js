@@ -11,7 +11,7 @@ test('Accounts mirrors the application-wide Plaid refresh state',()=>{
   assert.match(plaidConnect,/APP_REFRESH_STARTED_EVENT/)
   assert.match(plaidConnect,/event\.detail\?\.bankUpdateRequested[\s\S]*setAppSyncing\(true\)/)
   assert.match(plaidConnect,/APP_REFRESH_EVENT[\s\S]*setAppSyncing\(false\)/)
-  assert.match(plaidConnect,/syncBusy \? 'Syncing…' : 'Sync now'/)
+  assert.match(plaidConnect,/syncBusy \? 'Syncing…' : 'Refresh bank now'/)
 })
 const financeRefresh=readFileSync(new URL('./financeRefresh.js',import.meta.url),'utf8')
 
@@ -34,8 +34,8 @@ test('automatic account refresh is cached while Sync now explicitly requests liv
   assert.match(plaidConnect,/transaction refresh continues separately/)
   assert.match(plaidConnect,/\[balanceHasIssue \? '' : balanceSummary, transactionSummary\]/)
   assert.match(plaidConnect,/No cached bank connection on this device/)
-  assert.match(plaidConnect,/Check existing connection/)
-  assert.match(plaidConnect,/Checks for an existing server-managed bank connection without adding or changing one/)
+  assert.match(plaidConnect,/Refresh bank now/)
+  assert.match(plaidConnect,/Requests a paid update from existing bank connections/)
   assert.match(plaidConnect,/onClick=\{\(\) => syncAccounts\(\{ refreshTransactions:true \}\)\}/)
   assert.match(plaidConnect,/Bank changes unavailable/)
   assert.doesNotMatch(plaidConnect,/balances are manual/i)
@@ -71,7 +71,7 @@ test('explicit transaction refresh requests a Plaid institution update without b
   assert.match(financeRefresh,/waitForPlaidTransactionRefresh/)
   assert.match(financePlanner,/Brevity is waiting for the bank to confirm completion/)
   assert.match(plaidConnect,/const transactionHasIssue = \['failed','partial'\]\.includes\(transactionState\)/)
-  assert.match(financePlanner,/Refresh bank data/)
+  assert.match(financePlanner,/Sync available transactions/)
 })
 
 test('manual Finance refresh preserves failed-institution history and discloses partial results',()=>{

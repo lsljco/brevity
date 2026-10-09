@@ -333,7 +333,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
                 style={{ fontSize: 12, animation: syncBusy ? 'spin 0.8s linear infinite' : 'none' }}
                 aria-hidden="true"
               />
-              {syncBusy ? 'Syncing…' : 'Sync now'}
+              {syncBusy ? 'Syncing…' : 'Refresh bank now'}
             </button>
             {syncedAt && (
               <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.04em' }}>
@@ -354,17 +354,18 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
               type="button"
               onClick={() => syncAccounts({ refreshTransactions:true })}
               disabled={syncBusy}
-              title="Checks for an existing server-managed bank connection without adding or changing one."
+              title="Requests a paid update from existing bank connections. Shared cost limits apply."
               style={{display:'flex',alignItems:'center',gap:7,padding:'8px 18px',borderRadius:10,cursor:syncing?'wait':'pointer',background:'rgba(197,164,109,0.09)',border:'1px solid rgba(197,164,109,0.28)',color:'#C5A46D',fontSize:11,fontWeight:600,fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase'}}
             >
               <i className="ti ti-refresh" style={{fontSize:14,animation:syncing?'spin 0.8s linear infinite':'none'}} aria-hidden="true"/>
-              {syncing ? 'Checking…' : 'Check existing connection'}
+              {syncing ? 'Checking…' : 'Refresh bank now'}
             </button>
             <button type="button" disabled title="Adding or changing bank connections is disabled in this release." style={{display:'flex',alignItems:'center',gap:7,padding:'8px 18px',borderRadius:10,cursor:'not-allowed',background:'rgba(197,164,109,0.05)',border:'1px solid rgba(197,164,109,0.16)',color:'#888884',fontSize:11,fontWeight:600,fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase'}}><i className="ti ti-lock" style={{fontSize:14}} aria-hidden="true"/>Bank changes unavailable</button>
           </div>
         )}
       </div>
 
+      <p role="note" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.5}}>Normal transaction updates are included in the subscription. Refresh bank now requests paid balance and transaction updates: estimated $0.22 per connection, with a six-hour cooldown and a shared $5 monthly allowance. Subscription fees are separate. Existing balances retain their last verified check time.</p>
       {syncNotice && <p role="status" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>{syncNotice}</p>}
 
       <p className="plaid-connection-safety-note" role="note" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>Existing connected sources can still sync. Adding, reauthorizing, or disconnecting an institution is disabled in this release. Mapping a returned account to an existing Brevity account uses reviewed Action Mode and does not change bank credentials.</p>

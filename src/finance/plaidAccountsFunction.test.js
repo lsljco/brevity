@@ -33,8 +33,9 @@ const creditAccount = ({ id = 'credit-1', current = 450, available = 3_550 } = {
   balances:{ current, available },
 })
 
-function installHandler({ client, tokens, session = { householdId:'household-test' } }) {
+function installHandler({ client, tokens, session = { householdId:'household-test', role:'admin' }, reservePaidCalls = async () => ({}) }) {
   const mockedModules = new Map([
+    [require.resolve('../../netlify/lib/plaid-cost-control.cjs'), { reservePaidCalls, uniqueConnections:tokens => tokens }],
     [plaidPath, {
       Configuration:class Configuration {},
       PlaidApi:class PlaidApi {
@@ -316,4 +317,27 @@ test('a slow bank does not delay starting another independent balance check', as
     if(priorSecret===undefined)delete process.env.BREVITY_SOURCE_RECEIPT_KEY
     else process.env.BREVITY_SOURCE_RECEIPT_KEY=priorSecret
   }
+})
+
+test('shared spending refusal prevents every live bank call', async () => {
+  let paidCalls = 0, reservations = 0
+  const handler = installHandler({
+    client:{accountsBalanceGet:async()=>{paidCalls++}},
+    tokens:[{access_token:'one',item_id:'one'}],
+    reservePaidCalls:async()=>{reservations++;throw Object.assign(new Error('Monthly limit reached'),{statusCode:429,code:'PLAID_PAID_BUDGET'})},
+  })
+  const response = await handler(request('live=1'))
+  assert.equal(response.statusCode,429)
+  assert.equal(bodyOf(response).code,'PLAID_PAID_BUDGET')
+  assert.equal(paidCalls,0)
+  assert.equal(reservations,1)
+})
+
+test('normal account checks bypass paid reservations', async () => {
+  const handler = installHandler({
+    client:{accountsGet:async()=>({data:{accounts:[checkingAccount()]}})},
+    tokens:[{access_token:'one',item_id:'one'}],
+    reservePaidCalls:async()=>{throw new Error('Normal sync must not reserve spend')},
+  })
+  assert.equal((await handler(request(''))).statusCode,200)
 })

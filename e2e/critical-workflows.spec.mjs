@@ -765,7 +765,7 @@ test('iPhone account-link repair turns an unmatched balance warning into a compa
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Dashboard',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:/Check existing connection|Sync now/i}).click()
+  await page.getByRole('button',{name:'Refresh bank now'}).click()
   const warning=page.getByRole('alert')
   await expect(warning).toContainText('returned bank accounts are available for reviewed linkage')
   await warning.getByRole('button',{name:'Review account links'}).click()
@@ -782,7 +782,7 @@ test('iPad already-linked accounts ignore additional institution accounts withou
   await page.getByRole('button',{name:'Finance',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Dashboard',exact:true}).click()
-  await page.getByRole('button',{name:/Check existing connection|Sync now/i}).click()
+  await page.getByRole('button',{name:'Refresh bank now'}).click()
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(page.getByRole('status').filter({hasText:'The latest available transactions were checked.'})).toBeVisible()
   await openMenuIfMobile(page,testInfo)
@@ -2465,4 +2465,17 @@ test('contextual archives open Finance and Meals history and preserve the underl
  await page.getByRole('button',{name:/2025-10-09.*Saved menu/}).click()
  await expect(page.getByRole('heading',{name:'Original family roast'})).toBeVisible()
  expect(requests.some(x=>x.kind==='meals'&&x.from==='2025-10-09'&&x.to==='2025-10-09')).toBe(true)
+})
+
+
+test('ordinary app refresh never requests a paid Plaid update',async({page})=>{
+  const requests=[]
+  page.on('request',request=>{if(/\/plaid-(accounts|transactions)/.test(request.url()))requests.push(new URL(request.url()))})
+  await page.reload()
+  await expect(page.locator('.today-dashboard')).toBeVisible()
+  await expect.poll(()=>requests.some(url=>url.pathname.endsWith('/plaid-transactions'))).toBe(true)
+  await expect.poll(()=>requests.some(url=>url.pathname.endsWith('/plaid-accounts'))).toBe(true)
+  await page.getByRole('button',{name:'Refresh all',exact:true}).click()
+  await expect.poll(()=>requests.filter(url=>url.pathname.endsWith('/plaid-accounts')).length).toBeGreaterThanOrEqual(2)
+  expect(requests.filter(url=>url.searchParams.get('live')==='1'||url.searchParams.get('refresh')==='1')).toEqual([])
 })
