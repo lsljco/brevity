@@ -1,5 +1,6 @@
 import OrchestrationPanel from '../governance/OrchestrationPanel.jsx'
 import TodayOverview from './TodayOverview.jsx'
+import {todayCalendarAppointments} from './todayCalendar.js'
 import DailyRhythm from './DailyRhythm.jsx'
 import ReadAloud from '../assistant/ReadAloud.jsx'
 import HealthCare from '../health/HealthCare.jsx'
@@ -232,9 +233,7 @@ export function AlignmentPillarPreview({ pillar, plan, currentMember, meals, mea
 
 export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealLibrary = [], mealPlanState = 'loading', mealPlanError = '', readOnly = false, canViewFinance = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], householdSignals = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onChartCourse, onViewSchedule, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle', browsingDate = false }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
-  const [calendarSelection,setCalendarSelection] = useState({member:currentMember,selected:[currentMember]})
-  const selectedCalendars = calendarSelection.member === currentMember ? calendarSelection.selected : [currentMember]
-  const visibleAppointments = calendarAppointments.filter(item => matchesCalendarScopes(item,selectedCalendars))
+  const visibleAppointments = todayCalendarAppointments(calendarAppointments,currentMember)
   const readModel = buildTodayReadModel({plan:dailyPlan,calendarAppointments:visibleAppointments,calendarHealth,currentMember,householdSignals})
   const [showDecisions, setShowDecisions] = useState(false)
   const [editingFocus, setEditingFocus] = useState(false)
@@ -288,7 +287,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
       <TodayHouseholdChores chores={householdChores} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
 
       <TodayMaintenance date={dailyPlan.date} onOpenPillar={onOpenPillar} />
-      <TodayCalendarAgenda filters={<CalendarScopeFilter selected={selectedCalendars} onChange={selected=>setCalendarSelection({member:currentMember,selected})}/>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
+      <TodayCalendarAgenda filters={<p>Family calendar and {currentMember}’s calendar. Open the full calendar to browse other members.</p>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
 
       {readModel.outcomes.length>0&&<section className="today-section today-outcomes"><div className="today-section-heading"><h2>Agreed daily outcomes</h2></div><ol className="today-top-three">{readModel.outcomes.map((outcome,index)=><li key={index}>{outcome.title}{outcome.owner&&<span>{outcome.owner}</span>}</li>)}</ol></section>}
       <section className="today-section today-actions"><div className="today-section-heading"><div><span>Personal View</span><h2>{currentMember}'s Actions</h2></div><small>Assignment edits open Action Mode review before changing the shared plan.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <AssignmentEditor key={item.id} assignment={item} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => onReviewAssignment?.(item.id, updated, version)} />)}</div> : <div className="today-empty">{readModel.memberOutcomes.length ? `${currentMember} owns ${readModel.memberOutcomes.length} outcome${readModel.memberOutcomes.length===1?'':'s'} in Today’s Top 3, with no separate unresolved assignment.` : `No unresolved assignments or Top 3 outcomes currently involve ${currentMember}.`}</div>}</section>
