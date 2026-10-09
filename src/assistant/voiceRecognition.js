@@ -1,11 +1,22 @@
 // Retired recognizers must not deliver late callbacks into a newer conversation.
-export function retireRecognition(ref) {
+export function retireRecognition(ref, {setTimer=setTimeout,clearTimer=clearTimeout,delay=1000}={}) {
  const recognition=ref.current
  ref.current=null
  if(!recognition)return
  recognition.cancelWatch?.()
  recognition.onstart=null;recognition.onaudiostart=null;recognition.onaudioend=null;recognition.onresult=null;recognition.onend=null;recognition.onerror=null
- try{recognition.abort()}catch{}
+ // Native capture can outlive abort(). Detach transcript callbacks immediately,
+ // but keep an end-only handoff so a replacement does not race native teardown.
+ return new Promise(resolve=>{
+  let settled=false,timer
+  const released=()=>{
+   if(settled)return
+   settled=true;clearTimer(timer);recognition.onend=null;resolve()
+  }
+  recognition.onend=released
+  timer=setTimer(released,delay)
+  try{recognition.abort()}catch{released()}
+ })
 }
 
 // A service can start without capturing audio, or stop returning results without
