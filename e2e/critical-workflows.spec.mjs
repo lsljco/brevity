@@ -192,7 +192,7 @@ test('iPad sidebar stays open after content taps, rotation, and reload until exp
   await expect(drawer).toHaveClass(/is-expanded/)
 })
 
-test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
+test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.locator('.today-outcomes').getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
 test('Household Intelligence dashboard separates metrics and opens an auditable score drilldown',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
@@ -2132,7 +2132,11 @@ test('Apple source filters isolate Family, Terica and Nyla in Today and Family C
       }
     }
   }
-  await verify(page.locator('.today-calendar-agenda'))
+  const todayCalendar=page.locator('.today-calendar-agenda')
+  await expect(todayCalendar).toContainText('Shared source fixture')
+  await expect(todayCalendar).not.toContainText('Terica source fixture')
+  await expect(todayCalendar).not.toContainText('Nyla source fixture')
+  await expect(todayCalendar.getByRole('group',{name:'Calendars to show'})).toHaveCount(0)
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
@@ -2366,7 +2370,7 @@ test('Chart the Course starts and speaks with one tap while Today stays visible'
  await page.route('**/.netlify/functions/evening-recap-voice',route=>route.fulfill({contentType:'application/sdp',body:'v=0\r\n'}))
  await page.route('**/.netlify/functions/meeting-recordings*',async route=>{if(route.request().method()==='PUT')saved.push(route.request().postDataJSON());await route.fulfill({json:{saved:true,meetings:[]}})})
  await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible();await closeMenuIfMobile(page,testInfo)
- await page.getByRole('button',{name:'Start Chart the Course',exact:true}).click()
+ await page.getByRole('button',{name:/Start Chart the Course/}).click()
  const session=page.getByRole('region',{name:'Chart the Course conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
  await expect(page.getByRole('region',{name:'Agreed priorities'})).toBeVisible()
