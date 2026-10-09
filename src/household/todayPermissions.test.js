@@ -32,7 +32,7 @@ test('Today remains navigable but every plan mutation is reviewed and permission
   assert.doesNotMatch(today, /savePlan\(|persistAndSync|onSaveDraft/)
   assert.match(dashboard, /if \(readOnly\) throw new Error\('Plans & decisions permission is required to update the shared decision queue\.'\)/)
   assert.match(dashboard, /disabled=\{readOnly \|\| !canGeneratePlan \|\| generationState === 'generating'\}/)
-  assert.match(conversation, /if\(readOnly\|\|active.current\)return/)
+  assert.match(conversation, /const start=async\(\)=>\{[\s\S]*?if\(active.current\)return[\s\S]*?if\(readOnly\)\{setError\([^;]+;return\}[\s\S]*?getUserMedia/)
   assert.match(conversation, /disabled=\{readOnly\|\|active.current\}/)
 })
 
