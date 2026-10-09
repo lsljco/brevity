@@ -1,3 +1,5 @@
+import {resolvedRecipes} from './recipe-library-actions.mjs'
+import {createMealPlanRepository} from './meal-plan-store.mjs'
 import {getStore} from './scoped-store.mjs'
 import {createHash} from 'node:crypto'
 import {householdClock} from '../../src/household/dailyRhythm.js'
@@ -7,7 +9,7 @@ export const archiveDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'')&&Number.is
 export function archiveCutoff(today){const d=new Date(today+'T12:00:00Z');d.setUTCFullYear(d.getUTCFullYear()-1);return d.toISOString().slice(0,10)}
 const parse=record=>typeof record?.value==='string'?JSON.parse(record.value):record?.value||{}
 export async function archiveKeys(store,prefix){const keys=[];let cursor;do{const page=await store.list({prefix,...(cursor?{cursor}:{})});keys.push(...page.blobs.map(x=>x.key));cursor=page.cursor}while(cursor);return keys}
-export function createHouseholdArchive({plans,shared,archive,meetings,actions,householdId='lslj-family',now=()=>new Date()}){
+export function createHouseholdArchive({plans,shared,archive,meetings,actions,meals,householdId='lslj-family',now=()=>new Date()}){
  const root=householdId+'/',today=()=>householdClock(now()).date
  async function day(date){
   const saved=await archive.get(root+'days/'+date,{type:'json'})
@@ -19,7 +21,8 @@ export function createHouseholdArchive({plans,shared,archive,meetings,actions,ho
   const date=today(),[plan,scheduleRecord,maintenanceRecord,calendarRecord]=await Promise.all([plans.get(root+'daily-plans/'+date,{type:'json'}),shared.get(root+'records/brevity_household_schedule_v1',{type:'json'}),shared.get(root+'records/brevity_household_maintenance_v1',{type:'json'}),shared.get(root+'records/family_calendar_events_v1',{type:'json'})])
   const schedule=normalizeHouseholdScheduleState(parse(scheduleRecord)),maintenance=parse(maintenanceRecord)
   const chores=buildHouseholdMaintenanceWeek(new Date(date+'T12:00:00'),maintenance).find(x=>x.date===date)?.tasks.map(x=>({...x,occurrence:householdOccurrence(maintenance,x),status:occurrenceStatus(x,householdOccurrence(maintenance,x))}))||[]
-  const snapshot={date,kind:'day',title:plan?.household?.keyFocus||plan?.dayObjective||'Daily household records',capturedAt:now().toISOString(),coverage:'Saved plan and Brevity schedule/calendar/chores at capture time. Apple-only events and private health logs are not included.',plan,chores,schedule:[...routineOccurrencesForDate(schedule,date),...schedule.blocks.filter(x=>x.date===date)],calendar:(Array.isArray(parse(calendarRecord))?parse(calendarRecord):[]).filter(x=>x.date<=date&&(x.endDate||x.date)>=date)}
+  const mealSnapshot=meals?(await createMealPlanRepository({store:meals,householdId,now}).getDay(date)?(await createMealPlanRepository({store:meals,householdId,now}).getWindowReadOnly({startDate:date,count:1})).days[0]:null):null
+  const snapshot={meals:mealSnapshot,date,kind:'day',title:plan?.household?.keyFocus||plan?.dayObjective||'Daily household records',capturedAt:now().toISOString(),coverage:'Saved plan and Brevity schedule/calendar/chores at capture time. Apple-only events and private health logs are not included.',plan,chores,schedule:[...routineOccurrencesForDate(schedule,date),...schedule.blocks.filter(x=>x.date===date)],calendar:(Array.isArray(parse(calendarRecord))?parse(calendarRecord):[]).filter(x=>x.date<=date&&(x.endDate||x.date)>=date)}
   for(let attempt=0;attempt<4;attempt++){
    const key=root+'days/'+date,entry=await archive.getWithMetadata(key,{type:'json'})
    const result=await archive.setJSON(key,{...snapshot,pinned:entry?.data?.pinned||false},entry?.etag?{onlyIfMatch:entry.etag}:{onlyIfNew:true})
@@ -28,10 +31,35 @@ export function createHouseholdArchive({plans,shared,archive,meetings,actions,ho
   throw Error('Archive changed during capture; retry later.')
  }
  async function search({query='',from='',to='',member='',pillar='',kind='day',cursor='0',limit=20}={},session){
-  if(!['day','meeting','changes'].includes(kind))throw Error('Invalid record type.');
+  if(!['day','meeting','changes','meals','finance'].includes(kind))throw Error('Invalid record type.');
   const cutoff=archiveCutoff(today()),start=from||cutoff,end=to||today()
   if(!archiveDate(start)||!archiveDate(end)||start>end)throw Error('Choose a valid date range.')
   const offset=Number(cursor);if(!Number.isInteger(offset)||offset<0)throw Error('Invalid archive page.')
+  if(kind==='finance'||kind==='meals'){
+   let records=[]
+   if(kind==='finance'){
+    const entry=await shared.get(root+'records/plaid_actuals_cache',{type:'json'}), transactions=parse(entry)
+    records=(Array.isArray(transactions)?transactions:[]).filter(x=>archiveDate(x.date)).map(x=>({id:x.id,date:x.date,kind,title:x.name||'Bank transaction',coverage:'Saved bank transaction; status reflects the latest successful sync. Historical account balances are not reconstructed.',capturedAt:entry?.updatedAt,details:{description:x.name,statement:x.originalStatement,amount:new Intl.NumberFormat('en-US',{style:'currency',currency:x.currency||'USD'}).format(Math.abs(x.amount)),direction:x.amount>0?'Expense':'Income',status:x.pending?'Pending':'Posted',category:x.category,institution:x.institution,account:x.accountId}}))
+   }else if(meals){
+    const [savedKeys,snapshotKeys,library]=await Promise.all([archiveKeys(meals,root+'days/'),archiveKeys(archive,root+'days/'),meals.get(root+'library/custom',{type:'json'})])
+    const dates=[...new Set([...savedKeys,...snapshotKeys].map(x=>x.split('/').at(-1)))].filter(date=>archiveDate(date)&&date>=start&&date<=end&&date>=cutoff).sort().reverse()
+    // Read saved menus only. Never generate or refresh a historical menu.
+    const catalog=resolvedRecipes(library||{}), byId=new Map(catalog.map(x=>[x.id,x]))
+    const matching=[],pageSize=Math.min(30,Math.max(1,Number(limit)||20));let index=offset,scanned=0
+    while(index<dates.length&&matching.length<pageSize&&scanned<50){
+     const date=dates[index++];scanned++
+     const snapshot=await archive.get(root+'days/'+date,{type:'json'}),saved=snapshot?.meals||await meals.get(root+'days/'+date,{type:'json'})
+     if(!saved)continue
+     const menu=Object.fromEntries(Object.entries(saved.meals||{}).map(([slot,id])=>[slot,saved.resolvedMeals?.[slot]||saved.recipes?.[slot]||{name:byId.get(id)?.name||id||'No meal saved',recipeReference:id}]))
+     const row={id:'meals-'+date,date,kind,title:'Saved menu',capturedAt:snapshot?.meals?snapshot.capturedAt:saved.updatedAt,coverage:snapshot?.meals?'Menu snapshot captured on this date; planned meals do not imply they were eaten.':'Saved meal selections. Names reference the current recipe library where an original recipe was not retained; this is not proof of what was eaten.',details:{menu,substitutions:saved.substitutions}}
+     if(!query||JSON.stringify(row).toLowerCase().includes(String(query).slice(0,200).toLowerCase()))matching.push(row)
+    }
+    return {rows:matching,cursor:index<dates.length?String(index):null,cutoff,scanned}
+   }
+   records=records.filter(x=>x.date>=cutoff&&x.date>=start&&x.date<=end&&(!query||JSON.stringify(x).toLowerCase().includes(String(query).slice(0,200).toLowerCase()))).sort((a,b)=>b.date.localeCompare(a.date)||String(a.id).localeCompare(String(b.id)))
+   const pageSize=Math.min(30,Math.max(1,Number(limit)||20))
+   return {rows:records.slice(offset,offset+pageSize),cursor:offset+pageSize<records.length?String(offset+pageSize):null,cutoff,notice:'Only saved source records are shown. Missing past data is not reconstructed.'}
+  }
   let keys,store
   if(kind==='changes'){store=actions;keys=(await archiveKeys(store,root+'audits/')).reverse()}else if(kind==='meeting'){
    const owner=createHash('sha256').update(`${householdId}:${session.member}`).digest('hex');store=meetings;keys=await archiveKeys(store,owner+'/records/')
@@ -83,4 +111,4 @@ export function createHouseholdArchive({plans,shared,archive,meetings,actions,ho
 
  return {day,capture,search,pin,prune}
 }
-export function productionHouseholdArchive(){const store=name=>getStore({name,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN});return createHouseholdArchive({plans:store('brevity-household'),shared:store('brevity-household-state'),archive:store('brevity-household-archive'),meetings:store('brevity-meeting-recordings'),actions:store('brevity-assistant-actions'),householdId:process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'})}
+export function productionHouseholdArchive(){const store=name=>getStore({name,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN});return createHouseholdArchive({plans:store('brevity-household'),shared:store('brevity-household-state'),archive:store('brevity-household-archive'),meetings:store('brevity-meeting-recordings'),actions:store('brevity-assistant-actions'),meals:store('brevity-meals'),householdId:process.env.BREVITY_HOUSEHOLD_ID||'lslj-family'})}

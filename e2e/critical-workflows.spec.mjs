@@ -2442,3 +2442,27 @@ test('Enhancements captures a spoken idea and screenshot, then shares discussion
   await page.getByRole('region',{name:'Request details'}).getByRole('button',{name:'Support · 1',exact:true}).click();await expect(page.getByRole('region',{name:'Request details'}).getByRole('button',{name:'Supported · 2',exact:true})).toBeVisible()
   await page.screenshot({path:`test-results/enhancements-${testInfo.project.name}.png`})
 })
+
+test('contextual archives open Finance and Meals history and preserve the underlying screen',async({page},testInfo)=>{
+ const requests=[]
+ await page.route('**/.netlify/functions/household-archive*',async route=>{
+  const query=new URL(route.request().url()).searchParams;requests.push(Object.fromEntries(query))
+  const kind=query.get('kind'),date=query.get('from')||'2026-10-08'
+  await route.fulfill({json:{cutoff:'2025-10-09',rows:[{id:'saved',date,kind,title:kind==='meals'?'Saved menu':'HOA dues',coverage:'Saved source record',details:kind==='meals'?{menu:{dinner:{name:'Original family roast',ingredients:['Carrots']}}}:{status:'Posted',amount:'$1,375.00'}}]}})
+ })
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Archive',exact:true}).click()
+ await expect(page.getByRole('heading',{name:'Cash Forecast archive'})).toBeVisible()
+ await expect(page.getByLabel('Records',{exact:true})).toHaveValue('finance')
+ await page.getByRole('button',{name:/2026-10-08.*HOA dues/}).click();await expect(page.getByRole('article')).toContainText('Posted')
+ await page.getByRole('button',{name:'Return to Cash Forecast',exact:true}).click()
+ await expect(page.getByRole('region',{name:'Household archive'})).toHaveCount(0)
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Health & Nutrition',exact:true}).click();await page.getByRole('button',{name:'Meal Plan',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Archive',exact:true}).click()
+ await expect(page.getByLabel('Records',{exact:true})).toHaveValue('meals')
+ await page.getByRole('button',{name:'This date last year',exact:true}).click()
+ await expect(page.getByLabel('From',{exact:true})).toHaveValue('2025-10-09')
+ await page.getByRole('button',{name:/2025-10-09.*Saved menu/}).click()
+ await expect(page.getByRole('heading',{name:'Original family roast'})).toBeVisible()
+ expect(requests.some(x=>x.kind==='meals'&&x.from==='2025-10-09'&&x.to==='2025-10-09')).toBe(true)
+})

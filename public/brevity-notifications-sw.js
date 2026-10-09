@@ -1,4 +1,6 @@
 // Notifications only. Do not cache authenticated pages, API responses or assets.
+self.addEventListener('install',()=>self.skipWaiting())
+self.addEventListener('activate',event=>event.waitUntil(clients.claim()))
 self.addEventListener('push',event=>{
  let message={title:'Brevity',body:'Open Today to review your responsibilities.'}
  try{message={...message,...event.data.json()}}catch{}

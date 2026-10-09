@@ -42,6 +42,7 @@ export function createEnhancementRepository({store,root='lslj-family/',now=()=>n
    }else if(input.action==='seen'){row.seen={...row.seen,[session.member]:at}}
    else if(input.action==='comment'){
     const body=text(input.text,2000,'Comment'),id=text(input.commentId,100,'Comment ID')
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(id))fail('Invalid comment ID.')
     if(row.comments.some(comment=>comment.id===id))return {row:summarize(row)}
     if(row.comments.length>=500)fail('This discussion has reached its comment limit.')
     row.comments.push({id,text:body,actor:session.member,at});event={id,actor:session.member,at,kind:'comment',text:body}
