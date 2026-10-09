@@ -2120,7 +2120,7 @@ test('Apple source filters isolate Family, Terica and Nyla in Today and Family C
     {id:'nyla-only',title:'Nyla source fixture',appleCalendarOwner:'Nyla',owner:'Nyla'},
   ].map(row=>({...row,source:'icloud',appleCalendarId:`source-${row.id}`,date:dateKey(),time:'10:00 AM'}))
   await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events,connected:true,syncedAt:new Date().toISOString()}}))
-  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await openTodayDetails(page)
   const verify=async(container)=>{
     const filter=page.getByRole('group',{name:'Calendars to show'})
     for(const owner of ['Family','Terica','Nyla','All']){
@@ -2150,7 +2150,7 @@ test('alignment presents the selected date meals, workout and calendar using Tod
   await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{connected:true,syncedAt:new Date().toISOString(),events:[{id:'next-day-visit',date:next,title:'Tomorrow family appointment fixture',time:'10:30 AM',source:'icloud',appleCalendarId:'family-source',appleCalendarOwner:'Family',owner:'Family'}]}}))
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
   for(const [timing,date] of [['Today',dateKey()],['Tomorrow',next]]){
-    await page.getByRole('button',{name:`Start ${timing}’s Alignment`}).click()
+    await openTodayDetails(page);await page.getByRole('button',{name:`Edit ${timing.toLowerCase()}’s plan`}).click()
     const steps=page.getByRole('navigation',{name:'Alignment progress'})
     await steps.getByRole('button',{name:'Health & Nutrition'}).click()
     const preview=page.locator('.alignment-day-preview')
