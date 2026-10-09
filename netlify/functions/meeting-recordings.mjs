@@ -1,3 +1,5 @@
+import {archiveCutoff} from '../lib/household-archive.mjs'
+import {householdClock} from '../../src/household/dailyRhythm.js'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
@@ -8,7 +10,7 @@ export function createMeetingRecordingsHandler({authenticate=householdAuth.readS
  return async event=>{
   const session=await authenticate(event).catch(()=>null)
   if(!session)return json(401,{error:'Sign in to access your meeting recordings.'})
-  if(!['GET','PUT','POST'].includes(event.httpMethod))return json(405,{error:'Method not allowed.'})
+  if(!['GET','PUT','POST','PATCH'].includes(event.httpMethod))return json(405,{error:'Method not allowed.'})
   const q=event.queryStringParameters||{},id=q.id||''
   if(q.member&&q.member!==session.member)return json(403,{error:'The signed-in member changed. Sign back in as the recording owner to finish backup.'})
   if(id&&!/^[a-zA-Z0-9-]{16,80}$/.test(id))return json(400,{error:'Invalid meeting identity.'})
@@ -16,7 +18,7 @@ export function createMeetingRecordingsHandler({authenticate=householdAuth.readS
   const root=`${owner}/`,meta=`${root}records/${id}`,audio=`${root}audio/${id}/`
   try{
    const store=storeFactory()
-   if(event.httpMethod==='GET'&&!id){const page=await store.list({prefix:`${root}records/`,...(q.cursor?{cursor:q.cursor}:{})});const meetings=await Promise.all(page.blobs.map(row=>store.get(row.key,{type:'json'})));return json(200,{meetings:meetings.filter(Boolean),cursor:page.cursor||null})}
+   if(event.httpMethod==='GET'&&!id){const page=await store.list({prefix:`${root}records/`,...(q.cursor?{cursor:q.cursor}:{})});const meetings=await Promise.all(page.blobs.map(row=>store.get(row.key,{type:'json'})));return json(200,{meetings:meetings.filter(row=>row&&(row.pinned||row.kind==='finance'||row.date>=archiveCutoff(householdClock().date))),cursor:page.cursor||null})}
    if(!id)return json(400,{error:'A meeting identity is required.'})
    if(q.chunk!==undefined){
     const index=Number(q.chunk)
@@ -35,6 +37,15 @@ export function createMeetingRecordingsHandler({authenticate=householdAuth.readS
     if(!chunk)return json(404,{error:'Recording portion not found.'})
     return {statusCode:200,isBase64Encoded:true,headers:{'content-type':chunk.mime,'cache-control':'private, no-store','x-content-type-options':'nosniff'},body:chunk.data}
    }
+   if(event.httpMethod==='PATCH'){
+    const body=JSON.parse(event.body||'{}')
+    if(typeof body.pinned!=='boolean')return json(400,{error:'Specify whether to pin this meeting.'})
+    const entry=await store.getWithMetadata(meta,{type:'json'})
+    if(!entry?.data)return json(404,{error:'Meeting not found.'})
+    const record={...entry.data,pinned:body.pinned,updatedAt:new Date().toISOString()}
+    const saved=await store.setJSON(meta,record,{onlyIfMatch:entry.etag})
+    return saved?.modified===false?json(409,{error:'Meeting changed. Reload and retry.'}):json(200,{record})
+   }
    if(event.httpMethod==='PUT'){
     if((event.body||'').length>1_000_000)return json(413,{error:'Meeting transcript is too large.'})
     let body;try{body=JSON.parse(event.body||'{}')}catch{return json(400,{error:'Invalid meeting record.'})}
@@ -44,7 +55,7 @@ export function createMeetingRecordingsHandler({authenticate=householdAuth.readS
     for(let attempt=0;attempt<4;attempt++){
      const entry=await store.getWithMetadata(meta,{type:'json'})
      if(entry?.data?.updatedAt>record.updatedAt)return json(200,{saved:true,record:entry.data})
-     const saved=await store.setJSON(meta,record,entry?.etag?{onlyIfMatch:entry.etag}:{onlyIfNew:true})
+     const saved=await store.setJSON(meta,{...record,pinned:entry?.data?.pinned||false},entry?.etag?{onlyIfMatch:entry.etag}:{onlyIfNew:true})
      if(saved?.modified!==false)return json(200,{saved:true,record})
     }
     return json(409,{error:'The meeting was updated elsewhere. Reload Meeting History before retrying.'})

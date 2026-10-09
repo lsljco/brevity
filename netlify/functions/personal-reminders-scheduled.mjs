@@ -1,3 +1,4 @@
+import {connectRoutineChores,linkedChoreId} from '../../src/household/routinePlanning.js'
 import {routineOccurrencesForDate,normalizeHouseholdScheduleState} from '../../src/household/householdScheduleData.js'
 import {buildHouseholdMaintenanceWeek,normalizeHouseholdMaintenanceState,householdOccurrence,occurrenceStatus} from '../../src/household/householdMaintenanceData.js'
 import '../lib/native-runtime.mjs'
@@ -16,7 +17,7 @@ export default async function handler(){
  const blocks=schedule.blocks.filter(block=>block.date===date).map(block=>({...block,participants:(block.participants||[]).filter(member=>block.attendance?.[member]==='accepted')}))
  const maintenance=normalizeHouseholdMaintenanceState(parse(maintenanceRecord))
  const chores=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),maintenance).find(day=>day.date===date)?.tasks||[]
- const plan={...(savedPlan||{}),date,assignments:[...(savedPlan?.assignments||[]),...routines,...blocks,...chores.map(chore=>{const occurrence=householdOccurrence(maintenance,chore);return {...chore,id:chore.occurrenceId,status:occurrenceStatus(chore,occurrence),owners:occurrence.coveredBy?[occurrence.coveredBy]:chore.owners}})]}
+ const plan={...(savedPlan||{}),date,assignments:[...(savedPlan?.assignments||[]),...connectRoutineChores(routines,chores.map(x=>({...x,occurrence:householdOccurrence(maintenance,x),status:occurrenceStatus(x,householdOccurrence(maintenance,x))}))),...blocks,...chores.filter(x=>!routines.some(r=>linkedChoreId(r)===x.id)).map(chore=>{const occurrence=householdOccurrence(maintenance,chore);return {...chore,id:chore.occurrenceId,status:occurrenceStatus(chore,occurrence),owners:occurrence.coveredBy?[occurrence.coveredBy]:chore.owners}})]}
  const keys=await vapidKeys(store)
  for await(const page of store.list({prefix:`${root}devices/`,paginate:true})){
   await Promise.all(page.blobs.map(async row=>{

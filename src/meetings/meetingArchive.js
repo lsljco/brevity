@@ -1,3 +1,4 @@
+import {householdClock} from '../household/dailyRhythm.js'
 const endpoint='/.netlify/functions/meeting-recordings'
 let database
 const db=()=>database ||= new Promise((resolve,reject)=>{
@@ -25,7 +26,7 @@ export async function listMeetings(member){
   const local=await listLocalMeetings(member),rows=new Map(local.map(row=>[row.id,row]))
   let cursor='',error=''
   try{do{const payload=await (await request(`${endpoint}?${new URLSearchParams({cursor,member})}`)).json();for(const row of payload.meetings||[]){const existing=rows.get(row.id);if(!existing||row.updatedAt>existing.updatedAt)rows.set(row.id,{...row,member})}cursor=payload.cursor||''}while(cursor)}catch(cause){error=cause.message}
-  return {meetings:[...rows.values()].sort((a,b)=>b.startedAt.localeCompare(a.startedAt)),error}
+  return {meetings:[...rows.values()].filter(row=>{const date=new Date(householdClock().date+'T12:00:00Z');date.setUTCFullYear(date.getUTCFullYear()-1);return row.pinned||row.kind==='finance'||row.date>=date.toISOString().slice(0,10)}).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)),error}
 }
 export async function meetingAudio(record){
   let chunks=await localMeetingChunks(record)
@@ -39,3 +40,5 @@ export async function meetingAudio(record){
   if(chunks.some((row,index)=>row.index!==index))throw Error('An audio portion is unavailable. Retry backup from the device that recorded this meeting.')
   return new Blob(chunks.map(row=>row.blob),{type:record.mime||chunks[0].blob.type||'audio/webm'})
 }
+
+export async function pinMeeting(record,pinned){const response=await request(`${endpoint}?member=${encodeURIComponent(record.member)}&id=${record.id}`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({pinned})});const data=await response.json();await saveMeetingLocal(data.record);return data.record}
