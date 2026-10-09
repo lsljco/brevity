@@ -8,6 +8,8 @@ export function chartCourseBriefing({plan,agenda,member,calendarReady=true}){
  parts.push(plan.household?.keyFocus?`Our agreed focus is ${plan.household.keyFocus}.`:'No household focus has been saved for today yet.')
  const priorities=agenda.priorities||[]
  parts.push(priorities.length?`Our recorded priorities are: ${priorities.slice(0,3).map(describe).join('; ')}.`:'No open priorities are recorded in today’s plan yet.')
+ const commitments=(agenda.pending||[]).filter(x=>x.sourceKind!=='appointment'&&(x.startTime||x.time)&&!priorities.some(p=>p.title===x.title))
+ if(commitments.length)parts.push(`Our scheduled commitments include: ${commitments.slice(0,4).map(describe).join('; ')}.${commitments.length>4?' The remaining commitments are on Today.':''}`)
  const events=(agenda.pending||[]).filter(x=>x.sourceKind==='appointment')
  parts.push(calendarReady?(events.length?`On the Family and ${member} calendars: ${events.slice(0,5).map(describe).join('; ')}.${events.length>5?' More appointments are in the calendar.':''}`:'There are no appointments in the loaded Family and personal calendars for today.'):'The calendar is not fully verified yet. Check the calendar notice before relying on appointment times.')
  const decisions=openCourseDecisions(plan)
