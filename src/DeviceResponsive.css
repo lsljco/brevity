@@ -178,3 +178,10 @@ button, input, select, textarea { font: inherit; }
 .finance-root .dash-header > div:first-child { flex: 1 1 240px; min-width: 0; }
 .finance-root .dash-actions { flex: 1 1 440px; min-width: 0 !important; flex-wrap: wrap; }
 .finance-root .dash-icon-btn { flex-shrink: 0; }
+
+/* Width-based flex bases must not become vertical spacers on stacked dashboards. */
+@media (max-width:1120px) {
+ .finance-root .dash-header > div:first-child,
+ .finance-root .dash-actions { flex:0 0 auto; width:100%; }
+ .finance-root .dash-header { align-content:flex-start; }
+}

@@ -109,7 +109,7 @@ export function financeInstitutionFailure(item = {}) {
 }
 
 export function financeResponseError(body = {}, status = 500) {
-  const summary = body.detail || body.error || `Finance refresh failed (${status}).`
+  const summary = body.detail || body.error || (status === 504 ? 'The bank refresh timed out (504). Last available balances and transactions remain visible; freshness is unverified. Retry Sync now.' : `Finance refresh failed (${status}).`)
   // The server provides curated messages; never expose raw provider payloads,
   // credentials, account IDs or request metadata in the household banner.
   const failures = (Array.isArray(body.errors) ? body.errors : []).map(financeInstitutionFailure)
