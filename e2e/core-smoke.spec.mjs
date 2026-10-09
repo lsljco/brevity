@@ -841,7 +841,7 @@ test('routine source review shows proposals without silently saving them', async
  let changes=0
  page.on('request',request=>{if(request.method()==='POST'&&request.url().includes('assistant-action'))changes++})
  await page.route('**/.netlify/functions/household-routine-review?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({week:[{member:'Nyla',date:today(),weekday:5,items:[{id:'one',title:'Living room care',timing:'2–4 PM',source:'Chore',status:'pending'}],conflicts:[]}],proposals:[{sourceId:'one',title:'Living room care',owner:'Nyla',days:[5],startTime:'14:00',endTime:'14:30',sourceTitle:'Saved recurring chore'}],questions:['Javin: confirm the after-work time.'],notice:'Proposed work blocks are not completion records.',scheduleVersion:1})}))
- if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Menu',exact:true}).click()
+ if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Menu'}).click()
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
  await page.getByRole('button',{name:'Household Operations',exact:true}).click()
  await page.getByRole('button',{name:'Routines',exact:true}).click()
