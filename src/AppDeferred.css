@@ -20,3 +20,5 @@
   content: 'Household Operations';
   font-size: 12px;
 }
+
+.app-archive-entry{display:flex;justify-content:flex-end;padding:12px 24px 0}.app-archive-entry button{min-height:44px;padding:10px 18px;border:1px solid var(--glass-border);border-radius:12px;background:var(--glass);color:var(--gold);cursor:pointer}

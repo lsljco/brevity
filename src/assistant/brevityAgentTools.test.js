@@ -9,7 +9,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['read_meal_calendar','get_member_preferences','get_module_configuration','search_household_archive','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['read_meal_calendar','get_member_preferences','get_module_configuration','enhancement_requests','search_household_archive','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -414,4 +414,13 @@ test('assistant nutrition allows the background budget and suppresses duplicate 
  assert.equal(first.code,'NUTRITION_TIMEOUT');assert.equal(first.estimateId,null);assert.equal(first.logged,false)
  assert.deepEqual(second,first);assert.equal(calls,1);assert.equal(estimates.size,0)
  await make().invoke({},input);assert.equal(calls,2)
+})
+
+test('enhancement tool saves only to the authenticated member and returns saved request evidence',async()=>{
+ const calls=[]
+ const agent=createBrevitySdkAgent({model:'test',schema,canonical:{...canonical,signedInMember:'Nyla'},browser:{},enhancementRepository:()=>({list:async()=>({rows:[]}),create:async(input,session)=>{calls.push({input,session});return {row:{id:'saved-idea',createdBy:session.member,title:input.title,status:'Received'}}}})})
+ const tool=agent.tools.find(item=>item.name==='enhancement_requests')
+ const result=JSON.parse(await tool.invoke({},JSON.stringify({action:'submit',title:'Recipe read aloud',description:'Read each recipe step aloud.',area:'Meals'})))
+ assert.equal(result.row.createdBy,'Nyla');assert.equal(result.row.status,'Received');assert.equal(calls.length,1)
+ assert.match(tool.description,/Submission records an idea only/)
 })
