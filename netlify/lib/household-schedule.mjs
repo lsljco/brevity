@@ -1,3 +1,4 @@
+import {scheduleReferenceFor} from '../../src/household/scheduleVariants.js'
 import {householdScheduleCalendarEvents} from '../../src/household/householdScheduleData.js'
 import {buildHouseholdMaintenanceWeek,householdOccurrence,occurrenceStatus} from '../../src/household/householdMaintenanceData.js'
 const dateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value
@@ -11,7 +12,7 @@ export function compactAssistantCalendar(calendar) {
 
 // Only server-loaded, already authorized household records enter this view.
 // Shared events with no named participant must not silently become personal events.
-export function householdSchedule(canonical, requestedDate = 'today') {
+export function householdSchedule(canonical, requestedDate = 'today', referenceOptions = {}) {
   let date = requestedDate === 'today' ? canonical.householdDate : requestedDate
   if (requestedDate === 'tomorrow') {
     const next = new Date(`${canonical.householdDate}T12:00:00Z`)
@@ -34,7 +35,7 @@ export function householdSchedule(canonical, requestedDate = 'today') {
   const choresAvailable=canonical.supplementalSources?.['household-maintenance']==='available'
   const timeBlocks=scheduleAvailable?householdScheduleCalendarEvents(canonical.householdScheduleState||{},{start:date,days:1}).filter(onDate):[]
   const chores=choresAvailable?buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),canonical.householdMaintenanceState||{}).find(day=>day.date===date)?.tasks.map(task=>({...task,status:occurrenceStatus(task,householdOccurrence(canonical.householdMaintenanceState||{},task))}))||[]:[]
-  return {date,member,timeZone:'America/New_York',events,timeBlocks,chores,
+  return {date,member,scheduleReference:scheduleReferenceFor(member,{...referenceOptions,assignments:plan?.assignments||[]}),timeZone:'America/New_York',events,timeBlocks,chores,
     projectWindows:events.filter(event=>event.projectId),
     personalAppointments:events.filter(event=>!event.projectId&&namedFor(event)),
     sharedAppointments:events.filter(event => !event.projectId&&!hasNamedMember(event)),
