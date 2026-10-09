@@ -17,10 +17,9 @@ export function createHouseholdArchive({plans,shared,archive,meetings,actions,ho
  }
  async function capture(){
   const date=today(),[plan,scheduleRecord,maintenanceRecord,calendarRecord]=await Promise.all([plans.get(root+'daily-plans/'+date,{type:'json'}),shared.get(root+'records/brevity_household_schedule_v1',{type:'json'}),shared.get(root+'records/brevity_household_maintenance_v1',{type:'json'}),shared.get(root+'records/family_calendar_events_v1',{type:'json'})])
-  if(!plan)return {captured:false,reason:'No saved daily plan'}
   const schedule=normalizeHouseholdScheduleState(parse(scheduleRecord)),maintenance=parse(maintenanceRecord)
   const chores=buildHouseholdMaintenanceWeek(new Date(date+'T12:00:00'),maintenance).find(x=>x.date===date)?.tasks.map(x=>({...x,occurrence:householdOccurrence(maintenance,x),status:occurrenceStatus(x,householdOccurrence(maintenance,x))}))||[]
-  const snapshot={date,kind:'day',title:plan.household?.keyFocus||plan.dayObjective||'Daily household plan',capturedAt:now().toISOString(),coverage:'Saved plan and Brevity schedule/calendar/chores at capture time. Apple-only events and private health logs are not included.',plan,chores,schedule:[...routineOccurrencesForDate(schedule,date),...schedule.blocks.filter(x=>x.date===date)],calendar:(Array.isArray(parse(calendarRecord))?parse(calendarRecord):[]).filter(x=>x.date<=date&&(x.endDate||x.date)>=date)}
+  const snapshot={date,kind:'day',title:plan?.household?.keyFocus||plan?.dayObjective||'Daily household records',capturedAt:now().toISOString(),coverage:'Saved plan and Brevity schedule/calendar/chores at capture time. Apple-only events and private health logs are not included.',plan,chores,schedule:[...routineOccurrencesForDate(schedule,date),...schedule.blocks.filter(x=>x.date===date)],calendar:(Array.isArray(parse(calendarRecord))?parse(calendarRecord):[]).filter(x=>x.date<=date&&(x.endDate||x.date)>=date)}
   for(let attempt=0;attempt<4;attempt++){
    const key=root+'days/'+date,entry=await archive.getWithMetadata(key,{type:'json'})
    const result=await archive.setJSON(key,{...snapshot,pinned:entry?.data?.pinned||false},entry?.etag?{onlyIfMatch:entry.etag}:{onlyIfNew:true})
