@@ -1,3 +1,4 @@
+import {HOUSEHOLD_TRANSCRIPTION_PROMPT} from '../../src/shared/householdNames.js'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
@@ -39,6 +40,7 @@ const handler = async event => {
   form.append('model', MODEL)
   form.append('file', new Blob([bytes], { type: mime }), `meeting-segment.${extensionFor(mime)}`)
   form.append('language', 'en')
+  form.append('prompt', HOUSEHOLD_TRANSCRIPTION_PROMPT)
 
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',

@@ -1,3 +1,4 @@
+import {correctHouseholdPlanName} from '../shared/householdNames.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { normalizeDailyPlanItemStatus, normalizeDailyPlanNotificationLevel, normalizeDailyPlanPriority } from './dailyPlanStatus.js'
 
@@ -81,12 +82,13 @@ export function normalizeDecisionStatus(value) {
 }
 
 const normalizeDecision = decision => decision && typeof decision === 'object' && !Array.isArray(decision)
-  ? { ...decision, status: normalizeDecisionStatus(decision.status) }
+  ? { ...decision, ...(typeof decision.title==='string'?{title:correctHouseholdPlanName(decision.title)}:{}), status: normalizeDecisionStatus(decision.status) }
   : decision
 
 const normalizePlanItem = item => item && typeof item === 'object' && !Array.isArray(item)
   ? {
       ...item,
+      ...(typeof item.title==='string'?{title:correctHouseholdPlanName(item.title)}:{}),
       status:normalizeDailyPlanItemStatus(item.status),
       priority:normalizeDailyPlanPriority(item.priority),
       notificationLevel:normalizeDailyPlanNotificationLevel(item.notificationLevel),
@@ -250,6 +252,7 @@ export function normalizeDailyPlan(input = {}) {
       ...objectOrEmpty(part),
       items:arrayOrEmpty(part?.items).map(item=>({
         ...objectOrEmpty(item),
+        ...(typeof item?.title==='string'?{title:correctHouseholdPlanName(item.title)}:{}),
         pillar:normalizePillarId(item?.pillar),
       })),
     })),
@@ -280,6 +283,7 @@ export function normalizeDailyPlan(input = {}) {
     household: {
       ...base.household,
       ...household,
+      keyFocus:correctHouseholdPlanName(household.keyFocus||base.household.keyFocus),
       appointments: normalizePlanItems(household.appointments),
       priorities: normalizePlanItems(household.priorities),
       errands: arrayOrEmpty(household.errands),
