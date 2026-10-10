@@ -319,6 +319,7 @@ async function writePlaidSourceRecord({
 
   let verifiedBatches = []
   let accountReceiptWatermark = null
+  let balanceObservationAccounts = []
   if (key === 'plaid_actuals_cache') {
     if (existing && !Array.isArray(parsedExisting.value)) {
       throw new Error('The existing synchronized transaction record is damaged and cannot be safely refreshed.')
@@ -374,6 +375,7 @@ async function writePlaidSourceRecord({
     if (!Array.isArray(verifiedAccounts) || !Number.isFinite(accountReceiptWatermark.issuedAt) || !/^[a-f0-9]{64}$/.test(accountReceiptWatermark.receiptId)) {
       return { statusCode:409, body:{ error:'The Plaid balance receipt is missing its monotonic source identity. Refresh balances and try again.', code:'SOURCE_RECEIPT_REJECTED' } }
     }
+    balanceObservationAccounts = verifiedAccounts.map(account => ({ plaidAccountId:account.accountId, plaidCurrentBalance:account.currentBalance }))
     const priorWatermark = existing?.plaidAccountReceipt
     if (priorWatermark) {
       const priorIssuedAt = Number(priorWatermark.issuedAt)
@@ -432,7 +434,7 @@ async function writePlaidSourceRecord({
       updatedAt:now().toISOString(),
       updatedBy:session.member,
       source:'plaid',
-      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark, plaidBalanceHistory:appendBalanceSnapshot(existing?.plaidBalanceHistory, parsedCandidate.value.accounts, accountReceiptWatermark.issuedAt) } : {}),
+      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark, plaidBalanceHistory:appendBalanceSnapshot(existing?.plaidBalanceHistory, balanceObservationAccounts, accountReceiptWatermark.issuedAt) } : {}),
     }
     const writeOptions = existing ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }
     const writeResult = await dataStore.setJSON(recordKey(key), record, writeOptions)

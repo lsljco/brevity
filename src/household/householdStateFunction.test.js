@@ -3,6 +3,7 @@ import test from 'node:test'
 import householdData from '../../netlify/legacy-functions/household-data.js'
 import householdState from '../../netlify/legacy-functions/household-state.js'
 import { readOptionalHouseholdRecord } from '../../netlify/lib/household-plan-generator.mjs'
+import plaidAccountSource from '../../netlify/lib/plaid-account-source.cjs'
 import { hashValue } from './sharedState.js'
 
 const { dailyPlanWritePermission, getPlan, putPlan } = householdData
@@ -660,3 +661,18 @@ test('empty finance defaults do not prevent a member from creating a daily plan'
     assert.equal(rejected.statusCode,422)
   }
  })
+
+
+test('balance history excludes stale accounts absent from the verified source receipt',async()=>{
+ const finance={accounts:[
+  {id:'one',name:'Operating',type:'checking',balance:100,plaidAccountId:'one',plaidCurrentBalance:100},
+  {id:'two',name:'Other',type:'checking',balance:900,plaidAccountId:'two',plaidCurrentBalance:900},
+ ],transactions:[]}
+ const source=[{accountId:'one',name:'Operating',type:'depository',subtype:'checking',balance:200,currentBalance:200}]
+ const value=JSON.stringify(finance),dataStore=memoryStore({key:'lslj_finance_v9',value,hash:hashValue(value),version:1})
+ const next=plaidAccountSource.mergeVerifiedPlaidBalances(finance,source)
+ const result=await writePlaidSourceRecord({dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',next,1),now,...verifiedAccounts(source)})
+ assert.equal(result.statusCode,200)
+ assert.deepEqual(result.body.record.plaidBalanceHistory[0].balances,{one:200})
+ assert.equal(result.body.record.plaidBalanceHistory[0].kind,'intraday')
+})
