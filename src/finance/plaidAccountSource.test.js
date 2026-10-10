@@ -25,7 +25,7 @@ test('server-issued Plaid account receipts verify an exact bounded snapshot',()=
   assert.throws(()=>verifyAccountSourceReceipt({...receipt,signature:'0'.repeat(64)},{signingSecret:secret,now:()=>issued,receiptHouseholdId:'household'}),error=>error.code==='PLAID_ACCOUNT_RECEIPT_MISMATCH')
   assert.throws(()=>verifyAccountSourceReceipt(receipt,{signingSecret:secret,now:()=>new Date(issued.getTime()+RECEIPT_TTL_MS+1),receiptHouseholdId:'household'}),error=>error.code==='PLAID_ACCOUNT_RECEIPT_MISMATCH')
 
-  const cachedPayload=Buffer.from(JSON.stringify({...decoded,balanceMode:'cached',balanceProvenance:'plaid.accountsGet'})).toString('base64url')
+  const cachedPayload=Buffer.from(JSON.stringify({...decoded,balanceMode:'cached',balanceProvenance:'plaid.accountsGet',sourceUpdatedAt:undefined})).toString('base64url')
   const cachedReceipt={payload:cachedPayload,signature:createHmac('sha256',secret).update(cachedPayload).digest('hex')}
   assert.throws(()=>verifyAccountSourceReceipt(cachedReceipt,{signingSecret:secret,now:()=>issued,receiptHouseholdId:'household'}),error=>error.code==='PLAID_ACCOUNT_RECEIPT_MISMATCH')
 })
@@ -176,4 +176,15 @@ test('server merge requires a valid Plaid type family even when the subtype look
     )
     assert.equal(finance.accounts[0].balance,425)
   })
+})
+
+test('cached source receipts bind bank update time without claiming a live check',()=>{
+ const sourceUpdatedAt=issued.getTime()-3600000
+ const receipt=createAccountSourceReceipt(source,{signingSecret:secret,now:()=>issued,receiptHouseholdId:'household',balanceMode:'cached',sourceUpdatedAt})
+ const verified=verifyAccountSourceReceipt(receipt,{signingSecret:secret,now:()=>issued,receiptHouseholdId:'household'})
+ assert.equal(verified.balanceMode,'cached')
+ assert.equal(verified.balanceProvenance,'plaid.accountsGet')
+ assert.equal(verified.sourceUpdatedAt,sourceUpdatedAt)
+ assert.throws(()=>createAccountSourceReceipt(source,{signingSecret:secret,now:()=>issued,balanceMode:'cached'}))
+ assert.throws(()=>createAccountSourceReceipt(source,{signingSecret:secret,now:()=>issued,balanceMode:'cached',sourceUpdatedAt:issued.getTime()+1}))
 })

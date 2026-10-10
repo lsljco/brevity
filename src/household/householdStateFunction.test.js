@@ -74,9 +74,9 @@ const stagedSource = ({ transactions = [actual()], removed = [], acknowledge = a
   },
   acknowledgeSourceReceipt:acknowledge,
 })
-const verifiedAccounts = (accounts, { issuedAt = new Date('2026-09-07T13:59:00.000Z').getTime(), receiptId = 'c'.repeat(64) } = {}) => ({ verifyAccountReceipt:async value => {
+const verifiedAccounts = (accounts, { issuedAt = new Date('2026-09-07T13:59:00.000Z').getTime(), receiptId = 'c'.repeat(64), sourceUpdatedAt = issuedAt, balanceMode = 'live' } = {}) => ({ verifyAccountReceipt:async value => {
   assert.deepEqual(value, accountReceipt)
-  return { accounts, issuedAt, receiptId }
+  return { accounts, issuedAt, receiptId, sourceUpdatedAt, balanceMode }
 } })
 
 test('generic household-state writes require reviewed Action Mode for members and administrators', async () => {
@@ -286,6 +286,13 @@ test('Plaid balance ingestion rejects a valid but older receipt after a newer ba
   assert.equal(replay.body.code,'SOURCE_RECEIPT_REPLAYED')
   assert.equal(dataStore.writes.length,1)
 
+  const cachedRollback=await writePlaidSourceRecord({
+    dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',older,2),now,
+    ...verifiedAccounts(sourceAccount(100),{issuedAt:250,sourceUpdatedAt:150,balanceMode:'cached',receiptId:'b'.repeat(64)}),
+  })
+  assert.equal(cachedRollback.statusCode,409)
+  assert.equal(cachedRollback.body.code,'SOURCE_RECEIPT_REPLAYED')
+
   const conflicting=await writePlaidSourceRecord({
     dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',older,2),now,
     ...verifiedAccounts(sourceAccount(100),{issuedAt:200,receiptId:'e'.repeat(64)}),
@@ -302,11 +309,11 @@ test('Plaid balance ingestion rejects a valid but older receipt after a newer ba
 
   const newerIdentical=await writePlaidSourceRecord({
     dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('lslj_finance_v9',newer,2),now,
-    ...verifiedAccounts(sourceAccount(200),{issuedAt:300,receiptId:'f'.repeat(64)}),
+    ...verifiedAccounts(sourceAccount(200),{issuedAt:300,receiptId:'f'.repeat(64),sourceUpdatedAt:300,balanceMode:'live'}),
   })
   assert.equal(newerIdentical.statusCode,200)
   assert.equal(newerIdentical.body.record.version,3)
-  assert.deepEqual(newerIdentical.body.record.plaidAccountReceipt,{issuedAt:300,receiptId:'f'.repeat(64)})
+  assert.deepEqual(newerIdentical.body.record.plaidAccountReceipt,{issuedAt:300,receiptId:'f'.repeat(64),sourceUpdatedAt:300,balanceMode:'live'})
   assert.equal(dataStore.writes.length,2)
 })
 

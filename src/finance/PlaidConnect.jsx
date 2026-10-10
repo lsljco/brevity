@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
 import { HOUSEHOLD_TIME_ZONE } from './financeTime.js'
 import { APP_REFRESH_EVENT, APP_REFRESH_STARTED_EVENT } from '../household/appRefresh.js'
 
@@ -69,6 +70,9 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
   const [syncedAt, setSyncedAt]         = useState(() => {
     try { return localStorage.getItem('plaid_synced_at') || null } catch { return null }
   })
+  const [lastSyncedAt, setLastSyncedAt] = useState(() => { try { return localStorage.getItem('plaid_last_synced_at') || '' } catch { return '' } })
+  const [sourceUpdatedAt, setSourceUpdatedAt] = useState(() => { try { return localStorage.getItem('plaid_source_updated_at') || '' } catch { return '' } })
+  const formatTime = value => new Date(value).toLocaleString('en-US', {timeZone:HOUSEHOLD_TIME_ZONE,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
   const [syncing, setSyncing]           = useState(false)
   const [appSyncing, setAppSyncing] = useState(false)
   const syncBusy = syncing || appSyncing
@@ -101,13 +105,17 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
         const savedAt = localStorage.getItem('plaid_synced_at') || null
         if (Array.isArray(savedConnections)) setConnections(savedConnections)
         setSyncedAt(savedAt)
+        setLastSyncedAt(localStorage.getItem('plaid_last_synced_at') || '')
+        setSourceUpdatedAt(localStorage.getItem('plaid_source_updated_at') || '')
       } catch {}
     }
     window.addEventListener(APP_REFRESH_STARTED_EVENT, handleStarted)
     window.addEventListener(APP_REFRESH_EVENT, handleCompleted)
+    window.addEventListener(FINANCE_REFRESH_EVENT, handleCompleted)
     return () => {
       window.removeEventListener(APP_REFRESH_STARTED_EVENT, handleStarted)
       window.removeEventListener(APP_REFRESH_EVENT, handleCompleted)
+      window.removeEventListener(FINANCE_REFRESH_EVENT, handleCompleted)
     }
   }, [])
 
@@ -335,9 +343,11 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
               />
               {syncBusy ? 'Syncing…' : 'Refresh bank now'}
             </button>
+            {lastSyncedAt && <span style={{fontSize:10,color:'#aaa99f'}}>Last synced {formatTime(lastSyncedAt)}</span>}
+            {sourceUpdatedAt && <span style={{fontSize:10,color:'#aaa99f'}}>Plaid last updated {formatTime(sourceUpdatedAt)}</span>}
             {syncedAt && (
               <span style={{ fontSize: 10, color: '#888884', letterSpacing: '0.04em' }}>
-                Balances checked {new Date(syncedAt).toLocaleString('en-US', { timeZone:HOUSEHOLD_TIME_ZONE, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                Last live bank check {formatTime(syncedAt)}
               </span>
             )}
             <button
@@ -365,7 +375,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
         )}
       </div>
 
-      <p role="note" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.5}}>Normal transaction updates are included in the subscription. Refresh bank now requests paid balance and transaction updates: estimated $0.22 per connection, with a six-hour cooldown and a shared $5 monthly allowance. Subscription fees are separate. Existing balances retain their last verified check time.</p>
+      <p role="note" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.5}}>Included transactions and cached balances sync automatically when Brevity opens, every 15 minutes while visible, and when you return after five minutes. Plaid controls when new bank data becomes available. Refresh bank now requests paid balance and transaction updates: estimated $0.22 per connection, with a six-hour cooldown and a shared $5 monthly allowance. Subscription fees are separate. Last synced shows when Brevity checked Plaid; Last live bank check shows the separate paid check.</p>
       {syncNotice && <p role="status" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>{syncNotice}</p>}
 
       <p className="plaid-connection-safety-note" role="note" style={{margin:'8px 0 0',fontSize:10,color:'#888884',lineHeight:1.45}}>Existing connected sources can still sync. Adding, reauthorizing, or disconnecting an institution is disabled in this release. Mapping a returned account to an existing Brevity account uses reviewed Action Mode and does not change bank credentials.</p>

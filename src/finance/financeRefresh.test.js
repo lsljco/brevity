@@ -1081,3 +1081,24 @@ test('gateway timeouts explain retained data without claiming a fresh sync',()=>
  assert.match(error.message,/freshness is unverified/)
  assert.match(error.message,/Retry Sync now/)
 })
+
+test('included balances import with source dates and retain the separate live-check time',async()=>{
+ const values=new Map([
+  ['lslj_finance_v9',JSON.stringify({calendarDataVersion:6,accounts:[{id:'cash',name:'Operating',type:'checking',plaidAccountId:'bank',balance:100}],transactions:[]})],
+  ['plaid_synced_at','2026-09-07T10:00:00.000Z'],
+ ])
+ const storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,String(value))}
+ const sourceUpdatedAt=Date.parse('2026-09-08T10:00:00.000Z')
+ let imports=0
+ const options={fetchAccounts:async()=>({connected:true,balanceMode:'cached',balanceProvenance:'plaid.accountsGet',sourceUpdatedAt,syncedAt:'2026-09-08T11:00:00.000Z',accountSourceReceipt:{payload:'signed-cache',signature:'a'.repeat(64)},accounts:[{accountId:'bank',name:'Operating',type:'depository',subtype:'checking',balance:200,currentBalance:250}]}),fetchTransactions:async()=>({connected:false}),persistSourceImport:async(_storage,key,value)=>{imports++;storage.setItem(key,JSON.stringify(value));return{ok:true}}}
+ const result=await refreshFinanceData(storage,options)
+ assert.equal(result.finance.accounts[0].balance,200)
+ assert.equal(result.balanceDataStatus,'cached')
+ assert.equal(imports,1)
+ assert.equal(storage.getItem('plaid_synced_at'),'2026-09-07T10:00:00.000Z')
+ assert.equal(storage.getItem('plaid_last_synced_at'),'2026-09-08T11:00:00.000Z')
+ assert.equal(storage.getItem('plaid_source_updated_at'),'2026-09-08T10:00:00.000Z')
+ storage.setItem('brevity_shared_state_meta_v1',JSON.stringify({lslj_finance_v9:{plaidAccountReceipt:{issuedAt:sourceUpdatedAt+3600000}}}))
+ await refreshFinanceData(storage,options)
+ assert.equal(imports,1,'older cache is not imported over newer durable bank data')
+})

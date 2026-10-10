@@ -53,6 +53,7 @@ exports.handler = async (event) => {
     if (liveBalance) await reservePaidCalls({ event, session, product:'balance', tokens })
 
     const allAccounts = []
+    const cacheUpdateTimes = []
     const requiresUpdate = []  // items whose bank session has expired
     const syncErrors = []
     let liveBalanceTimedOut = false
@@ -62,6 +63,13 @@ exports.handler = async (event) => {
         // Automatic application refreshes use Plaid's cached account endpoint,
         // which is fast and reliable. Only an explicit "Sync now" requests the
         // slower institution-facing live balance call.
+        let cacheUpdatedAt = NaN
+        if (!liveBalance) {
+          try {
+            const item = await getPlaidClient().itemGet({ access_token }, { timeout:CACHED_ACCOUNT_TIMEOUT_MS })
+            cacheUpdatedAt = Date.parse(item.data.status?.transactions?.last_successful_update || '')
+          } catch { /* Account metadata remains readable when update time is unavailable. */ }
+        }
         let res
         let returnedLiveBalance = liveBalance
         try {
@@ -97,6 +105,7 @@ exports.handler = async (event) => {
           }
         })
         allAccounts.push(...sourceAccounts)
+        if (sourceAccounts.length) cacheUpdateTimes.push(cacheUpdatedAt)
         if (liveBalance && !returnedLiveBalance) console.warn(`Live balance timeout for item ${item_id}; returned cached account identity only.`)
       } catch (err) {
         const code = err.response?.data?.error_code
@@ -130,14 +139,17 @@ exports.handler = async (event) => {
 
     const balanceMode = liveBalance && !liveBalanceTimedOut ? LIVE_BALANCE_MODE : 'cached'
     const balanceProvenance = liveBalance && !liveBalanceTimedOut ? LIVE_BALANCE_PROVENANCE : 'plaid.accountsGet'
+    const sourceUpdatedAt = !liveBalance && cacheUpdateTimes.length && cacheUpdateTimes.every(time => Number.isFinite(time) && time > 0 && time <= Date.now()) ? Math.min(...cacheUpdateTimes) : null
+    const accountSourceReceipt = liveBalance && !liveBalanceTimedOut ? createAccountSourceReceipt(allAccounts)
+      : sourceUpdatedAt ? createAccountSourceReceipt(allAccounts, { balanceMode:'cached', sourceUpdatedAt }) : null
     return {
       statusCode: 200, headers,
       body: JSON.stringify({
         accounts: allAccounts,
-        // Cached accountsGet values describe connection/account metadata only.
-        // Only the institution-facing live balance call can mint an importable
-        // source receipt and advance durable household balance truth.
-        ...(liveBalance && !liveBalanceTimedOut ? { accountSourceReceipt:createAccountSourceReceipt(allAccounts) } : {}),
+        // Cached balances carry signed provenance and the bank-update time,
+        // never a claim that this request contacted the bank in real time.
+        ...(accountSourceReceipt ? { accountSourceReceipt } : {}),
+        sourceUpdatedAt,
         connected: true,
         requiresUpdate,  // non-empty = show "Re-connect [bank]" prompt
         errors: syncErrors,

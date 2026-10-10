@@ -341,3 +341,24 @@ test('normal account checks bypass paid reservations', async () => {
   })
   assert.equal((await handler(request(''))).statusCode,200)
 })
+
+test('included cached balance reads sign the provider update time without paid calls', async () => {
+ const previousKey=process.env.BREVITY_SOURCE_RECEIPT_KEY
+ process.env.BREVITY_SOURCE_RECEIPT_KEY='cached-handler-key'
+ const sourceTime='2026-09-07T12:00:00.000Z'
+ let paid=0
+ const handler=installHandler({tokens:[{access_token:'token',item_id:'item',institution:'Bank'}],reservePaidCalls:async()=>{paid++},client:{
+  itemGet:async()=>({data:{status:{transactions:{last_successful_update:sourceTime}}}}),
+  accountsGet:async()=>({data:{accounts:[checkingAccount()]}}),
+  accountsBalanceGet:async()=>{throw new Error('Unexpected paid request')},
+ }})
+ try {
+  const result=await handler(request('')),body=bodyOf(result)
+  assert.equal(result.statusCode,200)
+  const verified=verifyAccountSourceReceipt(body.accountSourceReceipt)
+  assert.equal(verified.balanceMode,'cached')
+  assert.equal(verified.sourceUpdatedAt,Date.parse(sourceTime))
+  assert.equal(body.sourceUpdatedAt,verified.sourceUpdatedAt)
+  assert.equal(paid,0)
+ } finally { if(previousKey===undefined)delete process.env.BREVITY_SOURCE_RECEIPT_KEY;else process.env.BREVITY_SOURCE_RECEIPT_KEY=previousKey }
+})
