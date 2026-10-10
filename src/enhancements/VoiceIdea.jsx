@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 import {transcribeMeetingAudio} from '../finance/meetingApi.js'
-export default function VoiceIdea({onText,onError,disabled}){
+export default function VoiceIdea({onText,onError,disabled,label='Speak your idea'}){
  const [state,setState]=useState('idle'),session=useRef(null),generation=useRef(0)
  const stop=()=>{const active=session.current;if(active?.recorder.state==='recording'){setState('transcribing');active.recorder.stop();active.stream.getTracks().forEach(track=>track.stop());clearTimeout(active.timer)}}
  useEffect(()=>()=>{generation.current++;const active=session.current;if(active){clearTimeout(active.timer);active.recorder.onstop=null;active.recorder.onerror=null;if(active.recorder.state==='recording')active.recorder.stop();active.stream.getTracks().forEach(track=>track.stop())}},[])
@@ -19,5 +19,5 @@ export default function VoiceIdea({onText,onError,disabled}){
    recorder.start();setState('recording');session.current.timer=setTimeout(stop,60000)
   }catch(error){stream?.getTracks().forEach(track=>track.stop());if(run===generation.current){setState('idle');onError(error.name==='NotAllowedError'?'Allow microphone access to speak your idea. You can also type below.':error.message)}}
  }
- return <><button type="button" className="enh-primary" disabled={disabled||['starting','transcribing'].includes(state)} onClick={state==='recording'?stop:start}><i className="ti ti-microphone" aria-hidden="true"/>{state==='recording'?'Stop and transcribe':state==='starting'?'Opening microphone…':state==='transcribing'?'Transcribing…':'Speak your idea'}</button><small role="status">{state==='recording'?'Recording · up to 60 seconds. Tap Stop when finished.':'Your recording is transcribed into an editable draft.'}</small></>
+ return <><button type="button" className="enh-primary" disabled={disabled||['starting','transcribing'].includes(state)} onClick={state==='recording'?stop:start}><i className="ti ti-microphone" aria-hidden="true"/>{state==='recording'?'Stop and transcribe':state==='starting'?'Opening microphone…':state==='transcribing'?'Transcribing…':label}</button><small role="status">{state==='recording'?'Recording · up to 60 seconds. Tap Stop when finished.':'Your recording is transcribed into an editable draft.'}</small></>
 }

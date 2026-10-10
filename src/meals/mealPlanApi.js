@@ -163,3 +163,13 @@ export const importPlanToEatCsv=csv=>request(ENDPOINT,{timeoutMs:45000,method:'P
 export function saveMealPreferences(mealId, preferences) {
  return request(ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'preferences',mealId,preferences})})
 }
+
+export function startMealIdeas(input, jobId) {
+  return request('/.netlify/functions/meal-ideas-background', {timeoutMs:15000,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...input,jobId})})
+}
+export function fetchMealIdeas(jobId) {
+  return request(`/.netlify/functions/meal-ideas?jobId=${encodeURIComponent(jobId)}`)
+}
+export function saveMealIdea(ideaJobId,ideaId) {
+  return createMealLibraryItem({action:'save-idea',ideaJobId,ideaId})
+}
