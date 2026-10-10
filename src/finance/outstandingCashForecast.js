@@ -73,7 +73,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     : Number.isFinite(reconstructedClose) ? 'reconstructed-close' : 'estimated-opening'
   const overdue = candidates.filter(candidate => {
     const actual = assigned.get(candidate.key)
-    return candidate.date < today && (!actual || (!reconcile && (actual.pending || actual.date >= today)))
+    return candidate.date < today && actual && !reconcile && (actual.pending || actual.date >= today)
   })
   const overdueDelta = overdue.reduce((sum,candidate) => sum - candidate.leg.amount, 0)
   let balance = (reconcile ? current + pendingDelta : opening) + overdueDelta
@@ -96,6 +96,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
       ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:overdueDelta / 100, overdue:overdue.map(row => ({ id:row.key, date:row.date, name:row.plan.name, delta:-row.leg.amount / 100 })), currentBalance:current / 100, pendingDelta:reconcile ? pendingDelta / 100 : 0,
+        unresolvedPastCount:candidates.filter(candidate => candidate.date < today && !assigned.has(candidate.key)).length,
         ledgerComplete:ledgerIds.size === accounts.length,
         pendingExcluded:bank.filter(actual => actual.pending && !ledgerIds.has(accountMap[actual.accountId])).length,
         unmatchedCount:realization.filter(row => row.statuses.some(status => status.status === 'expected')).length } : {}) })

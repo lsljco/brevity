@@ -51,9 +51,18 @@ test('weekly recurrence matches exact date without consuming next week', () => {
   assert.equal(result.get(today).bal,4600)
   assert.equal(result.get(date(7)).bal,3225)
 })
-test('old pending activity carries forward, unresolved scheduled items carry forward', () => {
+test('old pending activity carries forward but a missing historical match is not proof of an unpaid bill', () => {
   assert.equal(forecast([{...hoa,start:date(-3)}],[{...actual,date:date(-3),pending:true}]).get(today).bal,3225)
-  assert.equal(forecast([{...hoa,start:date(-3)}],[]).get(today).bal,3225)
+  assert.equal(forecast([{...hoa,start:date(-3)}],[]).get(today).bal,4600)
+})
+test('historical unmatched payroll cannot inflate either forecast mode', () => {
+  const oldPay={...hoa,id:'old-pay',name:'Payroll',amount:60000,type:'income',start:date(-10)}
+  for (const reconcile of [false,true]) {
+    const result=buildOutstandingCashForecast([account],[hoa,oldPay],[],{days:2,pastDays:20,reconcile,closingBalances:{[date(-1)]:4600}}).get(today)
+    assert.equal(result.bal,3225)
+    assert.equal(result.unresolvedPastCount,1)
+    assert.equal(result.overdueDelta,0)
+  }
 })
 test('unlinked balance is qualified and pending holds are not deducted again', () => {
   const point=forecast([hoa],[{...actual,pending:true}],[{...account,plaidCurrentBalance:undefined}]).get(today)
