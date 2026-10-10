@@ -1,3 +1,4 @@
+import {saveMealIdea} from '../lib/meal-ideas.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import householdAuth from '../lib/household-auth.cjs'
@@ -35,6 +36,7 @@ const handler = async event => {
 
     if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}')
+      if(body.action==='save-idea')return response(201,{meal:await saveMealIdea({body,member:session.member,repository})})
       if(body.action==='preferences')return response(200,await repository.setMealPreferences({mealId:body.mealId,preferences:body.preferences,actor:session.member||'Household member'}))
       if(body.action==='import-plan-to-eat')return response(201,await repository.importPlanToEat({csv:body.csv,actor:session.member||'Household member'}))
       if (body.action === 'bulk-create') {

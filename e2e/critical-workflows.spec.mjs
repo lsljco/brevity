@@ -2513,3 +2513,29 @@ test('cash forecast reconciliation changes the balance rather than only showing 
  await page.getByRole('button',{name:/^Stop reconciling with bank for /}).click()
  await expect(balances).toContainText('$3,025.00')
 })
+
+test('Meal Ideas compares ingredients, images and per-serving macros then saves only the selected recipe',async({page},testInfo)=>{
+ const ideas=['Sandwich shop','Sandwich shop','Bistro','Bistro','Steakhouse','Steakhouse'].map((style,index)=>({id:`idea-${index+1}`,name:`Chicken option ${index+1}`,style,description:'Chicken with potatoes',prepMinutes:5,cookMinutes:15,totalMinutes:20,ingredients:['150 g chicken breast','5 g olive oil'],instructions:['Cook chicken thoroughly.'],extras:['5 g olive oil'],assumptions:['Boneless chicken'],macros:{calories:210,proteinGrams:31,carbohydrateGrams:0,fatGrams:9},image:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="40"%3E%3Crect width="60" height="40" fill="gold"/%3E%3C/svg%3E',imageState:'ready'}))
+ let generated=null,saves=0
+ await page.route('**/.netlify/functions/meal-ideas-background',async route=>{generated=route.request().postDataJSON();await route.fulfill({status:202,json:{accepted:true}})})
+ await page.route('**/.netlify/functions/meal-ideas?*',route=>route.fulfill({json:{state:'ready',ideas}}))
+ await page.route('**/.netlify/functions/meal-plans',async route=>{
+  if(route.request().method()!=='POST')return route.fallback()
+  const body=route.request().postDataJSON();expect(body.action).toBe('save-idea');expect(body.ideaId).toBe('idea-1');saves++
+  await route.fulfill({status:201,json:{meal:{...ideas[0],id:'saved-chicken',mealType:'meal',image:'/.netlify/functions/meal-images?id=saved'}}})
+ })
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Health & Nutrition',exact:true}).click();await page.getByRole('button',{name:'Meal Plan',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Meal Ideas',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Speak your ingredients',exact:true})).toBeVisible()
+ await page.getByLabel('Ingredients you have', {exact:true}).fill('Chicken breast and potatoes')
+ await page.getByLabel('Time available').selectOption('30')
+ await page.getByRole('button',{name:'Show me meal ideas',exact:true}).click()
+ await expect(page.locator('.meal-idea-card')).toHaveCount(6)
+ expect(generated.ingredients).toBe('Chicken breast and potatoes');expect(generated.maxMinutes).toBe(30);expect(saves).toBe(0)
+ const card=page.locator('.meal-idea-card').first()
+ await expect(card).toContainText('Sandwich shop');await expect(card).toContainText('210');await expect(card.getByRole('img')).toBeVisible()
+ await card.locator('summary').click();await expect(card).toContainText('Cook chicken thoroughly.')
+ await card.getByRole('button',{name:'Save to Meal Library',exact:true}).click()
+ await expect(card).toContainText('Saved to Meal Library.');expect(saves).toBe(1)
+ await expect(card.getByRole('button',{name:'Plan this meal with Brevity',exact:true})).toBeVisible()
+})
