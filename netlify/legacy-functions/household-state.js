@@ -370,6 +370,8 @@ async function writePlaidSourceRecord({
     const verifiedAccounts = verifiedAccountSnapshot?.accounts
     accountReceiptWatermark = {
       issuedAt:Number(verifiedAccountSnapshot?.issuedAt),
+      sourceUpdatedAt:Number(verifiedAccountSnapshot?.sourceUpdatedAt ?? verifiedAccountSnapshot?.issuedAt),
+      balanceMode:verifiedAccountSnapshot?.balanceMode || 'live',
       receiptId:String(verifiedAccountSnapshot?.receiptId || ''),
     }
     if (!Array.isArray(verifiedAccounts) || !Number.isFinite(accountReceiptWatermark.issuedAt) || !/^[a-f0-9]{64}$/.test(accountReceiptWatermark.receiptId)) {
@@ -380,7 +382,9 @@ async function writePlaidSourceRecord({
     if (priorWatermark) {
       const priorIssuedAt = Number(priorWatermark.issuedAt)
       const priorReceiptId = String(priorWatermark.receiptId || '')
-      const older = !Number.isFinite(priorIssuedAt) || accountReceiptWatermark.issuedAt < priorIssuedAt
+      const priorSourceAt = Number(priorWatermark.sourceUpdatedAt ?? priorIssuedAt)
+      const olderSource = accountReceiptWatermark.balanceMode === 'cached' && (accountReceiptWatermark.sourceUpdatedAt < priorSourceAt || (accountReceiptWatermark.sourceUpdatedAt === priorSourceAt && existing?.value !== body.value))
+      const older = olderSource || !Number.isFinite(priorIssuedAt) || accountReceiptWatermark.issuedAt < priorIssuedAt
       const conflictingSameTime = accountReceiptWatermark.issuedAt === priorIssuedAt && accountReceiptWatermark.receiptId !== priorReceiptId
       const changedReplay = accountReceiptWatermark.receiptId === priorReceiptId && existing?.value !== body.value
       if (older || conflictingSameTime || changedReplay) {
@@ -434,7 +438,7 @@ async function writePlaidSourceRecord({
       updatedAt:now().toISOString(),
       updatedBy:session.member,
       source:'plaid',
-      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark, plaidBalanceHistory:appendBalanceSnapshot(existing?.plaidBalanceHistory, balanceObservationAccounts, accountReceiptWatermark.issuedAt) } : {}),
+      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark, plaidBalanceHistory:appendBalanceSnapshot(existing?.plaidBalanceHistory, balanceObservationAccounts, accountReceiptWatermark.sourceUpdatedAt) } : {}),
     }
     const writeOptions = existing ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }
     const writeResult = await dataStore.setJSON(recordKey(key), record, writeOptions)

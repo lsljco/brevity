@@ -206,6 +206,7 @@ function applyServerRecord(storage, record) {
   try { setSharedStorageItem(storage,record.key,record.value) } finally { suppressWriteThrough = false }
   const meta = readMeta(storage)
   meta[record.key] = {
+    ...(record.plaidAccountReceipt ? { plaidAccountReceipt:record.plaidAccountReceipt } : {}),
     ...(record.plaidBalanceHistory ? { plaidBalanceHistory:record.plaidBalanceHistory } : {}),
     hash:record.hash || hashValue(record.value),
     updatedAt:record.updatedAt || new Date().toISOString(),
@@ -220,6 +221,7 @@ function acknowledgeServerRecord(storage, record) {
   if (!record?.key) return
   const meta = readMeta(storage)
   meta[record.key] = {
+    ...(record.plaidAccountReceipt ? { plaidAccountReceipt:record.plaidAccountReceipt } : {}),
     ...(record.plaidBalanceHistory ? { plaidBalanceHistory:record.plaidBalanceHistory } : {}),
     hash:record.hash || hashValue(record.value || ''),
     updatedAt:record.updatedAt || new Date().toISOString(),

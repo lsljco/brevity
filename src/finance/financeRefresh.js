@@ -610,6 +610,7 @@ export async function refreshFinanceData(storage = window.localStorage, {
   let accountPayload = null
   let transactionPayload = null
   let liveBalanceProof = false
+  let balanceSourceProof = false
   let missingLinkedAccountCount = 0
 
   if (accountResult.status === 'fulfilled') {
@@ -618,12 +619,18 @@ export async function refreshFinanceData(storage = window.localStorage, {
     accounts = payload.accounts || []
     const accountErrors = payload.errors || []
     liveBalanceProof = hasImportableLiveBalanceProof(payload)
+    const cachedProof = payload.balanceMode === 'cached' && payload.balanceProvenance === 'plaid.accountsGet'
+      && Number.isFinite(payload.sourceUpdatedAt) && payload.sourceUpdatedAt > 0
+      && typeof payload.accountSourceReceipt?.payload === 'string' && /^[a-f0-9]{64}$/.test(payload.accountSourceReceipt?.signature || '')
+    let priorSourceAt = 0
+    try { const prior = JSON.parse(storage.getItem('brevity_shared_state_meta_v1') || '{}')[FINANCE_STORAGE_KEY]?.plaidAccountReceipt; priorSourceAt = Number(prior?.sourceUpdatedAt ?? prior?.issuedAt) || 0 } catch {}
+    balanceSourceProof = liveBalanceProof || (cachedProof && payload.sourceUpdatedAt > priorSourceAt)
     if (payload.connected === false) {
       balanceDataStatus = 'disconnected'
     } else if (payload.balanceMode === 'cached') {
       balanceDataStatus = accountErrors.length ? 'partial' : 'cached'
       accountErrors.forEach(item => addBalanceError(`${item.institution || 'Bank'}: ${item.message || 'connection check was not confirmed'}`))
-      balanceErrors.push('Connected accounts were checked from Plaid cache. No balance was refreshed, imported, or marked current.')
+      balanceErrors.push(cachedProof ? 'Included Plaid balance snapshot checked. Its bank-update time is distinct from this sync; this was not a live bank check.' : 'Plaid did not supply a verifiable update time. Stored balances were retained.')
     } else if (!liveBalanceProof) {
       balanceDataStatus = accountErrors.length ? 'partial' : 'unverified'
       accountErrors.forEach(item => addBalanceError(`${item.institution || 'Bank'}: ${item.message || 'balance refresh was not confirmed'}`))
@@ -632,7 +639,7 @@ export async function refreshFinanceData(storage = window.localStorage, {
       balanceDataStatus = accountErrors.length ? 'partial' : 'fresh'
       accountErrors.forEach(item => addBalanceError(`${item.institution || 'Bank'}: ${item.message || 'balance refresh was not confirmed'}`))
     }
-    if (liveBalanceProof && payload.connected && accounts.length && verifiedFinanceSource) {
+    if (balanceSourceProof && payload.connected && accounts.length && verifiedFinanceSource) {
       // Source ingestion may change only bank-owned balance/identity fields.
       // Do not fold client migrations or defaults into this write; those are
       // user-managed changes that require reviewed Action Mode.
@@ -676,10 +683,10 @@ export async function refreshFinanceData(storage = window.localStorage, {
           addBalanceError(missingLinkedBalanceMessage(missingLinkedAccountCount))
         }
       }
-    } else if (liveBalanceProof && payload.connected && accounts.length && !verifiedFinanceSource) {
+    } else if (balanceSourceProof && payload.connected && accounts.length && !verifiedFinanceSource) {
       balanceDataStatus = 'unverified'
       addBalanceError('Bank balances were received, but no server-confirmed finance plan exists. Create the finance plan through reviewed Action Mode before importing balances.')
-    } else if (liveBalanceProof && payload.connected && !accounts.length) {
+    } else if (balanceSourceProof && payload.connected && !accounts.length) {
       const merged = verifiedFinanceSource ? mergePlaidBalancesWithDiagnostics(verifiedFinanceSource, []) : null
       missingLinkedAccountCount = merged?.missingLinkedLocalAccountIds?.length || 0
       balanceDataStatus = missingLinkedAccountCount || accountErrors.length ? 'partial' : 'unverified'
@@ -716,7 +723,7 @@ export async function refreshFinanceData(storage = window.localStorage, {
 
   if (persist) {
     const imports = []
-    if (liveBalanceProof && financeNeedsPersistence && financeSourceCandidate) {
+    if (balanceSourceProof && financeNeedsPersistence && financeSourceCandidate) {
       imports.push({
         key:FINANCE_STORAGE_KEY,
         promise:persistSourceImport(storage, FINANCE_STORAGE_KEY, financeSourceCandidate, { accountSourceReceipt:accountPayload?.accountSourceReceipt }),
@@ -789,10 +796,15 @@ export async function refreshFinanceData(storage = window.localStorage, {
   // balance check. Partial, unmatched, and ambiguous attempts leave it intact.
   if (persist && !persistenceFailure && accountPayload) {
     try {
+      if (accountPayload.connected && ['fresh','cached'].includes(balanceDataStatus)) {
+        storage.setItem('plaid_last_synced_at', accountPayload.syncedAt || new Date().toISOString())
+        const priorUpdate = Date.parse(storage.getItem('plaid_source_updated_at') || '') || 0
+        if (Number.isFinite(accountPayload.sourceUpdatedAt) && accountPayload.sourceUpdatedAt > priorUpdate) storage.setItem('plaid_source_updated_at', new Date(accountPayload.sourceUpdatedAt).toISOString())
+      }
       if (accountPayload.connected === false) {
         storage?.removeItem?.('plaid_connections')
         storage?.removeItem?.('plaid_synced_at')
-      } else if (liveBalanceProof && balanceDataStatus === 'fresh') {
+      } else if ((liveBalanceProof && balanceDataStatus === 'fresh') || (balanceSourceProof && balanceDataStatus === 'cached')) {
         const grouped = {}
         accounts.forEach(account => {
           if (!grouped[account.itemId]) grouped[account.itemId] = { itemId: account.itemId, institution: account.institution, accounts: [] }
@@ -802,7 +814,7 @@ export async function refreshFinanceData(storage = window.localStorage, {
         // between writes, an old roster can never be mislabeled with a newer
         // complete-check time.
         storage.setItem('plaid_connections', JSON.stringify(Object.values(grouped)))
-        if (accountPayload.syncedAt) storage.setItem('plaid_synced_at', accountPayload.syncedAt)
+        if (liveBalanceProof && accountPayload.syncedAt) storage.setItem('plaid_synced_at', accountPayload.syncedAt)
       }
     } catch (error) {
       persistenceFailure = error
@@ -814,10 +826,8 @@ export async function refreshFinanceData(storage = window.localStorage, {
 
   const refreshFailure = transactionFailure || persistenceFailure
   const transactionRefreshFailed = Boolean(transactionFailure || transactionPersistenceFailure)
-  // Non-live account responses are connection metadata only. Re-read the
-  // durable plan immediately before publishing so a slower cached request can
-  // never replace a live balance that another request has already saved.
-  if (!liveBalanceProof) finance = migrateFinanceData(loadFinanceData(storage, FINANCE_STORAGE_KEY).data)
+  // Re-read when no newer signed source was imported; never publish older cache over durable data.
+  if (!balanceSourceProof) finance = migrateFinanceData(loadFinanceData(storage, FINANCE_STORAGE_KEY).data)
   const refreshedAt = new Date().toISOString()
   const detail = {
     finance,

@@ -10,6 +10,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { HouseholdAccounts, HouseholdLogin, useHouseholdAuth } from './household/HouseholdAuth.jsx'
 import { initialsForMember } from './household/memberProfile.js'
 import { APP_REFRESH_STARTED_EVENT, refreshApplicationData } from './household/appRefresh.js'
+import { startIncludedBankSync } from './finance/includedBankSync.js'
+import { refreshFinanceData } from './finance/financeRefresh.js'
 import { startSharedStateSync, syncSharedState } from './household/sharedState.js'
 import BrevityAssistant from './assistant/BrevityAssistant.jsx'
 import { getActionMode } from './assistant/assistantApi.js'
@@ -201,6 +203,10 @@ export default function App() {
       })
     return()=>{cancelled=true}
   },[auth.authenticated,auth.member])
+  useEffect(()=>{
+    if(!auth.authenticated||!sharedReady)return
+    return startIncludedBankSync(()=>refreshFinanceData(window.localStorage,{requestBankUpdate:false,persist:auth.role==='admin'}))
+  },[auth.authenticated,auth.role,sharedReady])
   useEffect(()=>{
     if(!auth.authenticated||!sharedReady)return
     return startSharedStateSync({

@@ -83,6 +83,8 @@ function createAccountSourceReceipt(accounts, {
   now = () => new Date(),
   signingSecret = secret(),
   receiptHouseholdId = householdId(),
+  balanceMode = LIVE_BALANCE_MODE,
+  sourceUpdatedAt,
 } = {}) {
   validateSourceAccounts(accounts)
   if (typeof receiptHouseholdId !== 'string' || !receiptHouseholdId || receiptHouseholdId.length > MAX_SOURCE_TEXT_LENGTH) {
@@ -90,13 +92,16 @@ function createAccountSourceReceipt(accounts, {
   }
   const issuedAt = now().getTime()
   if (!Number.isFinite(issuedAt)) throw sourceError('The Plaid account source receipt has an invalid issue time.', 'PLAID_ACCOUNT_RECEIPT_INVALID')
+  sourceUpdatedAt = balanceMode === LIVE_BALANCE_MODE ? issuedAt : sourceUpdatedAt
+  if (!['live','cached'].includes(balanceMode) || !Number.isFinite(sourceUpdatedAt) || sourceUpdatedAt <= 0 || sourceUpdatedAt > issuedAt) throw sourceError('A valid bank source update time is required.', 'PLAID_ACCOUNT_RECEIPT_INVALID')
   const payload = Buffer.from(JSON.stringify({
     version:RECEIPT_VERSION,
     householdId:receiptHouseholdId,
     issuedAt,
     expiresAt:issuedAt + RECEIPT_TTL_MS,
-    balanceMode:LIVE_BALANCE_MODE,
-    balanceProvenance:LIVE_BALANCE_PROVENANCE,
+    balanceMode,
+    balanceProvenance:balanceMode === LIVE_BALANCE_MODE ? LIVE_BALANCE_PROVENANCE : 'plaid.accountsGet',
+    sourceUpdatedAt,
     accounts,
   })).toString('base64url')
   if (payload.length > MAX_RECEIPT_PAYLOAD_LENGTH) throw sourceError('The Plaid account source receipt exceeds its bounded schema.', 'PLAID_ACCOUNT_RECEIPT_INVALID')
@@ -118,12 +123,15 @@ function verifyAccountSourceReceipt(receipt, {
   try { decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) }
   catch { throw sourceError('The Plaid account source receipt payload is damaged.', 'PLAID_ACCOUNT_RECEIPT_INVALID') }
   const current = now().getTime()
-  if (decoded?.version !== RECEIPT_VERSION || decoded?.householdId !== receiptHouseholdId || decoded?.balanceMode !== LIVE_BALANCE_MODE || decoded?.balanceProvenance !== LIVE_BALANCE_PROVENANCE || !Number.isFinite(decoded?.issuedAt) || !Number.isFinite(decoded?.expiresAt) || decoded.expiresAt <= current || decoded.issuedAt > current + 60_000 || decoded.expiresAt - decoded.issuedAt !== RECEIPT_TTL_MS) {
+  const validMode = decoded?.balanceMode === LIVE_BALANCE_MODE && decoded?.balanceProvenance === LIVE_BALANCE_PROVENANCE
+    || decoded?.balanceMode === 'cached' && decoded?.balanceProvenance === 'plaid.accountsGet' && Number.isFinite(decoded.sourceUpdatedAt) && decoded.sourceUpdatedAt > 0 && decoded.sourceUpdatedAt <= decoded.issuedAt
+  if (decoded?.version !== RECEIPT_VERSION || decoded?.householdId !== receiptHouseholdId || !validMode || !Number.isFinite(decoded?.issuedAt) || !Number.isFinite(decoded?.expiresAt) || decoded.expiresAt <= current || decoded.issuedAt > current + 60_000 || decoded.expiresAt - decoded.issuedAt !== RECEIPT_TTL_MS) {
     throw sourceError('The Plaid account source receipt is expired or belongs to a different household.', 'PLAID_ACCOUNT_RECEIPT_MISMATCH')
   }
   return {
     accounts:validateSourceAccounts(decoded.accounts),
     issuedAt:decoded.issuedAt,
+    sourceUpdatedAt:decoded.sourceUpdatedAt ?? decoded.issuedAt,
     receiptId:crypto.createHash('sha256').update(`${payload}.${signature}`).digest('hex'),
     balanceMode:decoded.balanceMode,
     balanceProvenance:decoded.balanceProvenance,
