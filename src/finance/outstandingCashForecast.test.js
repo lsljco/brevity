@@ -51,9 +51,9 @@ test('weekly recurrence matches exact date without consuming next week', () => {
   assert.equal(result.get(today).bal,4600)
   assert.equal(result.get(date(7)).bal,3225)
 })
-test('old pending activity carries forward, old unmatched budgets are not invented debt', () => {
+test('old pending activity carries forward, unresolved scheduled items carry forward', () => {
   assert.equal(forecast([{...hoa,start:date(-3)}],[{...actual,date:date(-3),pending:true}]).get(today).bal,3225)
-  assert.equal(forecast([{...hoa,start:date(-3)}],[]).get(today).bal,4600)
+  assert.equal(forecast([{...hoa,start:date(-3)}],[]).get(today).bal,3225)
 })
 test('unlinked balance is qualified and pending holds are not deducted again', () => {
   const point=forecast([hoa],[{...actual,pending:true}],[{...account,plaidCurrentBalance:undefined}]).get(today)
@@ -68,4 +68,47 @@ test('transfers count the remaining in-scope leg only', () => {
   assert.equal(forecast([plan],[],[account,destination]).get(today).bal,5600)
   assert.equal(forecast([plan],[out],[account,destination]).get(today).bal,5800)
   assert.equal(forecast([plan],[out,{...out,id:'in',amount:-200,accountId:'savings'}],[account,destination]).get(today).bal,5600)
+})
+
+
+test('plan starts at yesterday actual close and includes all scheduled activity', () => {
+  const plan=buildOutstandingCashForecast([account],[hoa],[actual],{days:2,pastDays:2,reconcile:false,closingBalances:{[date(-1)]:5000}})
+  assert.equal(plan.get(today).openingBalance,5000)
+  assert.equal(plan.get(today).openingSource,'verified-close')
+  assert.equal(plan.get(today).bal,3625)
+  assert.equal(plan.get(date(1)).bal,3625)
+})
+test('switching to bank reconciliation changes calculation, not just display', () => {
+  const options={days:2,pastDays:2,closingBalances:{[date(-1)]:5000}}
+  const planned=buildOutstandingCashForecast([account],[hoa],[actual],{...options,reconcile:false})
+  const reconciled=buildOutstandingCashForecast([account],[hoa],[actual],{...options,reconcile:true})
+  assert.equal(planned.get(today).bal,3625)
+  assert.equal(reconciled.get(today).bal,4600)
+})
+test('unique same-day vendor matches actual amount variance without double deduction', () => {
+  const result=forecast([hoa],[{...actual,amount:1380}]).get(today)
+  assert.equal(result.bal,4600)
+  assert.equal(result.realization[0].statuses[0].actualAmount,1380)
+})
+test('estimated opening reverses today posted activity, but excludes pending', () => {
+  const result=buildOutstandingCashForecast([account],[hoa],[actual,{...actual,id:'hold',pending:true,amount:50}],{days:1,pastDays:2,reconcile:false}).get(today)
+  assert.equal(result.openingBalance,5975)
+  assert.equal(result.openingSource,'estimated-opening')
+  assert.equal(result.bal,4600)
+})
+test('past pending or paid-today obligations remain in planned carryover once', () => {
+  for(const bank of [[actual],[{...actual,pending:true,date:date(-1)}]]) {
+    const result=buildOutstandingCashForecast([account],[{...hoa,start:date(-1)}],bank,{days:1,pastDays:2,reconcile:false,closingBalances:{[date(-1)]:5000}}).get(today)
+    assert.equal(result.overdueDelta,-1375)
+    assert.equal(result.bal,3625)
+  }
+})
+test('canceled/skipped occurrences do not become overdue', () => {
+  assert.equal(forecast([{...hoa,start:date(-1),skips:[date(-1)]}]).get(today).overdueDelta,0)
+})
+test('historical intraday observations remain estimates and respect selected account identity', () => {
+  const balanceHistory=[{date:date(-1),capturedAt:'2026-10-08T20:00:00Z',kind:'intraday',balances:{bank:7000}}]
+  const point=buildOutstandingCashForecast([account],[hoa],[],{days:1,pastDays:2,reconcile:false,balanceHistory}).get(today)
+  assert.equal(point.openingBalance,7000)
+  assert.equal(point.openingSource,'estimated-opening')
 })

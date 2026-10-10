@@ -708,7 +708,7 @@ test('iPhone Cash Forecast keeps Finance context visible without covering its mo
   await expect(page.getByText('Dates / Timeframe',{exact:true})).toHaveCount(0)
   await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText('Scheduled')
   await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText(/(?:Balance from posted activity|Current bank balance|Last saved bank balance|Forecast balance)/)
-  await page.getByRole('button',{name:/Show 3 bank transactions for /}).click()
+  await page.getByRole('button',{name:/Reconcile with bank for /}).click()
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   await expect(agenda).toContainText('Bank activity')
   await expect(agenda).toContainText('Posted · Transfer · PAYMENT TO CAPITAL ONE')
@@ -2478,4 +2478,31 @@ test('ordinary app refresh never requests a paid Plaid update',async({page})=>{
   await page.getByRole('button',{name:'Refresh all',exact:true}).click()
   await expect.poll(()=>requests.filter(url=>url.pathname.endsWith('/plaid-accounts')).length).toBeGreaterThanOrEqual(2)
   expect(requests.filter(url=>url.searchParams.get('live')==='1'||url.searchParams.get('refresh')==='1')).toEqual([])
+})
+
+test('cash forecast reconciliation changes the balance rather than only showing bank rows',async({page},testInfo)=>{
+ const today=dateKey(),updatedAt=new Date().toISOString()
+ const finance={calendarDataVersion:6,accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:4600,plaidCurrentBalance:4600,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking'}],transactions:[
+  {id:'pay',name:'Payroll',acct:'cash',type:'income',amount:800,freq:'once',start:today},
+  {id:'hoa',name:'HOA Dues',acct:'cash',type:'expense',amount:1375,freq:'once',start:today},
+ ]}
+ const actuals=[{id:'pay-bank',name:'Payroll',accountId:'bank',amount:-1000,date:today,pending:false}]
+ const records=Object.fromEntries(Object.entries({lslj_finance_v9:finance,plaid_actuals_cache:actuals}).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt}]))
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:updatedAt}}))
+ await page.reload()
+ await expect(page.locator('.today-dashboard')).toBeVisible()
+ await openMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await openMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Cash Forecast',exact:true}).click()
+ await closeMenuIfMobile(page,testInfo)
+ const balances=page.getByRole('region',{name:'Current and projected cash'})
+ await expect(balances).toContainText('$3,600.00')
+ await expect(balances).toContainText('$3,025.00')
+ await expect(balances).toContainText('Estimated opening balance')
+ await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
+ await expect(balances).toContainText('$4,600.00')
+ await expect(balances).toContainText('$3,225.00')
+ await page.getByRole('button',{name:/^Stop reconciling with bank for /}).click()
+ await expect(balances).toContainText('$3,025.00')
 })

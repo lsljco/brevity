@@ -1,3 +1,4 @@
+const { appendBalanceSnapshot } = require('../lib/finance-balance-history.cjs')
 const { getStore } = require('../lib/scoped-store.cjs')
 const { isDeepStrictEqual } = require('node:util')
 const { readSession } = require('../lib/household-auth.cjs')
@@ -431,7 +432,7 @@ async function writePlaidSourceRecord({
       updatedAt:now().toISOString(),
       updatedBy:session.member,
       source:'plaid',
-      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark } : {}),
+      ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark, plaidBalanceHistory:appendBalanceSnapshot(existing?.plaidBalanceHistory, parsedCandidate.value.accounts, accountReceiptWatermark.issuedAt) } : {}),
     }
     const writeOptions = existing ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }
     const writeResult = await dataStore.setJSON(recordKey(key), record, writeOptions)
