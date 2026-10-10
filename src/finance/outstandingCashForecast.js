@@ -1,4 +1,4 @@
-import { buildProjection, today0, toISO, parseISODate } from './projection.js'
+import { buildProjection, today0, toISO, parseISODate, addDays } from './projection.js'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
 import { normalizeMerchantName } from './financialTruth.js'
 import { approvedReconciliationMatches } from './autoReconciliation.js'
@@ -24,7 +24,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   const pendingDelta = pending.reduce((sum, actual) => sum - cents(actual.amount), 0)
   const occurrences = []
   for (const [date, point] of projection) {
-    if (Math.abs(dayNumber(date) - dayNumber(today)) > 14) continue
+    if (date > toISO(addDays(parseISODate(today), 14))) continue
     for (const plan of point.txns) occurrences.push({ date, plan, key:`${date}:${plan.id}`, matches:[] })
   }
   const used = new Set()
@@ -39,7 +39,9 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     if (approvedReconciliationMatches(candidate.plan, actual, candidate.date, accountMap)) return true
     if (candidate.plan.reconciliation) return false
     if (exactDate ? candidate.date !== actual.date : Math.abs(dayNumber(candidate.date) - dayNumber(actual.date)) > 7) return false
-    if (candidate.leg.amount !== cents(actual.amount)) return false
+    if (Math.sign(candidate.leg.amount) !== Math.sign(cents(actual.amount))) return false
+    // A unique same-day source identity can reconcile a different posted amount.
+    if (!exactDate && candidate.leg.amount !== cents(actual.amount)) return false
     if (candidate.plan.vendorId && actual.vendorId) return candidate.plan.vendorId === actual.vendorId
     const name = normalizeMerchantName(candidate.plan)
     return Boolean(name && name === normalizeMerchantName(actual))
@@ -57,7 +59,24 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
       used.add(actual.id)
     }
   }
-  let balance = current + pendingDelta
+  const reconcile = options.reconcile !== false
+  const yesterday = toISO(addDays(parseISODate(today), -1))
+  const verifiedClose = options.closingBalances?.[yesterday]
+  const reconstructedClose = options.reconstructedBalances?.[yesterday]
+  const snapshot = options.balanceHistory?.find(row => row.date === yesterday && accounts.every(account => Number.isFinite(row.balances?.[account.plaidAccountId])))
+  const observed = snapshot ? accounts.reduce((sum,account) => sum + cents(snapshot.balances[account.plaidAccountId]),0) : null
+  const opening = Number.isFinite(verifiedClose) ? cents(verifiedClose)
+    : Number.isFinite(reconstructedClose) ? cents(reconstructedClose)
+    : observed !== null ? observed
+    : current + bank.filter(row => !row.pending && row.date === today).reduce((sum,row) => sum + cents(row.amount), 0)
+  const openingSource = Number.isFinite(verifiedClose) ? 'verified-close'
+    : Number.isFinite(reconstructedClose) ? 'reconstructed-close' : 'estimated-opening'
+  const overdue = candidates.filter(candidate => {
+    const actual = assigned.get(candidate.key)
+    return candidate.date < today && (!actual || (!reconcile && (actual.pending || actual.date >= today)))
+  })
+  const overdueDelta = overdue.reduce((sum,candidate) => sum - candidate.leg.amount, 0)
+  let balance = (reconcile ? current + pendingDelta : opening) + overdueDelta
   for (const [date, point] of projection) {
     if (date < today) continue
     let remaining = 0
@@ -68,15 +87,15 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
         const actual = assigned.get(`${occurrence.key}:${index}`)
         // Pending rows are already applied above if a posted-ledger anchor exists.
         // Otherwise available/stored balance may already include the hold.
-        if (!actual) delta -= leg.amount
-        return actual ? { status:actual.pending ? 'pending' : 'posted', actualId:actual.id } : { status:'expected' }
+        if (!reconcile || !actual) delta -= leg.amount
+        return actual ? { status:actual.pending ? 'pending' : 'posted', actualId:actual.id, actualAmount:Number(actual.amount), plannedAmount:leg.amount / 100 } : { status:'expected' }
       })
       remaining += delta
       return { id:plan.id, name:plan.name, delta:delta / 100, statuses }
     })
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
-      ...(date === today ? { currentBalance:current / 100, pendingDelta:pendingDelta / 100,
+      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:overdueDelta / 100, overdue:overdue.map(row => ({ id:row.key, date:row.date, name:row.plan.name, delta:-row.leg.amount / 100 })), currentBalance:current / 100, pendingDelta:reconcile ? pendingDelta / 100 : 0,
         ledgerComplete:ledgerIds.size === accounts.length,
         pendingExcluded:bank.filter(actual => actual.pending && !ledgerIds.has(accountMap[actual.accountId])).length,
         unmatchedCount:realization.filter(row => row.statuses.some(status => status.status === 'expected')).length } : {}) })

@@ -607,7 +607,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
       if (resource.startsWith('shared:')) {
         const key=resource.slice(7), storageKey=sharedKey(key),entry=await readStoreEntry(shared,storageKey),current=entry?.data,version=Number(current?.version||0)
         if(version!==expectedVersion)throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
-        const serialized=JSON.stringify(value), record={key,value:serialized,hash:hashValue(serialized),version:version+1,updatedAt:occurredAt,updatedBy:actor,...(current?.plaidAccountReceipt?{plaidAccountReceipt:current.plaidAccountReceipt}:{}),...(mutationId?{lastActionId:mutationId}:{})}
+        const serialized=JSON.stringify(value), record={key,value:serialized,hash:hashValue(serialized),version:version+1,updatedAt:occurredAt,updatedBy:actor,...(current?.plaidAccountReceipt?{plaidAccountReceipt:current.plaidAccountReceipt}:{}),...(current?.plaidBalanceHistory?{plaidBalanceHistory:current.plaidBalanceHistory}:{}),...(mutationId?{lastActionId:mutationId}:{})}
         await conditionalStoreJson(shared,storageKey,record,entry); return { version:record.version, value }
       }
       if(resource.startsWith('meal:')){

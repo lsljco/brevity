@@ -11,7 +11,7 @@ export function CashForecastIntro({ monthName, showBankActivity, error, freshnes
       <section className="finance-calendar-intro" aria-labelledby="cash-forecast-title">
         <p>Finance planning</p>
         <h1 id="cash-forecast-title">Cash Forecast</h1>
-        <p className="finance-calendar-simple-guide">Today separates your bank balance from your projected balance after pending and remaining scheduled activity. Future dates carry that projection forward. Scheduled items are plans, not proof of payment.</p>
+        <p className="finance-calendar-simple-guide">The plan starts from the prior day’s ending balance, with estimated openings labeled. Reconcile with bank switches to the latest bank balance plus outstanding activity. Future dates carry the resulting forecast forward. Scheduled items are plans, not proof of payment.</p>
         {todayPlanUnresolved && <p className="finance-calendar-simple-guide">Some of today’s scheduled items have not been matched to bank activity. They remain in the projection as expected activity until matched.</p>}
         <details className="finance-calendar-explanation"><summary>How this forecast works</summary><span>
           Scheduled activity, reconstructed posted closes, and forward cash-balance projections for {monthName}.
