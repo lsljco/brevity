@@ -2486,11 +2486,11 @@ test('cash forecast reconciliation changes the balance rather than only showing 
  const today=dateKey(),updatedAt=new Date().toISOString()
  const oldDate=new Date(Date.parse(`${today}T12:00:00Z`)-10*86400000).toISOString().slice(0,10)
  const finance={calendarDataVersion:6,accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:4600,plaidCurrentBalance:4600,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking'}],transactions:[
-  {id:'pay',name:'Payroll',acct:'cash',type:'income',amount:800,freq:'once',start:today},
+  {id:'pay',name:'JS CRH Oldcastle Income',acct:'cash',type:'income',amount:800,freq:'once',start:today},
   {id:'hoa',name:'HOA Dues',acct:'cash',type:'expense',amount:1375,freq:'once',start:today},
   {id:'old-pay',name:'Unmatched historical payroll',acct:'cash',type:'income',amount:60000,freq:'once',start:oldDate},
  ]}
- const actuals=[{id:'pay-bank',name:'Payroll',accountId:'bank',amount:-1000,date:today,pending:false}]
+ const actuals=[{id:'pay-bank',merchant_name:'Online transfer',name:'Telephone OLB Credit Transfer from 849 to 200 JS Old Castle Income',accountId:'bank',amount:-1000,date:today,pending:false}]
  const records=Object.fromEntries(Object.entries({lslj_finance_v9:finance,plaid_actuals_cache:actuals}).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt}]))
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:updatedAt}}))
  await page.reload()
@@ -2503,11 +2503,13 @@ test('cash forecast reconciliation changes the balance rather than only showing 
  const balances=page.getByRole('region',{name:'Current and projected cash'})
  await expect(balances).toContainText('$3,600.00')
  await expect(balances).toContainText('$3,025.00')
+ if(testInfo.project.name!=='iphone')await expect(page.locator('.cal-cell.is-today')).toContainText('Projected $3,025')
  await expect(balances).toContainText('Estimated opening balance')
  await expect(balances).toContainText('Excluded from today’s projection')
  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
  await expect(balances).toContainText('$4,600.00')
  await expect(balances).toContainText('$3,225.00')
+ if(testInfo.project.name!=='iphone')await expect(page.locator('.cal-cell.is-today')).toContainText('Projected $3,225')
  await page.getByRole('button',{name:/^Stop reconciling with bank for /}).click()
  await expect(balances).toContainText('$3,025.00')
 })

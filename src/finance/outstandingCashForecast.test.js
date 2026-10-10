@@ -121,3 +121,25 @@ test('historical intraday observations remain estimates and respect selected acc
   assert.equal(point.openingBalance,7000)
   assert.equal(point.openingSource,'estimated-opening')
 })
+test('same-day payroll source names reconcile bank transfer descriptions and changed amounts once', () => {
+  const names=['JS - Mativ Severance','JS CRH Oldcastle Income','LJ Genesco AP Payroll']
+  const amounts=[3210,882,722]
+  const plans=names.map((name,i)=>({...hoa,id:`pay-${i}`,name,type:'income',amount:amounts[i]}))
+  const bankNames=['ACH Credit Mativ Severance','Transfer Pending Telephone OLB Credit from 849 to 200 JS - Old Castle Income','Transfer Pending Telephone OLB Credit from 248 to 200 LJ Genesco Income']
+  const bankAmounts=[2766,885,684]
+  const bank=bankNames.map((name,i)=>({...actual,id:`bank-${i}`,name,merchant_name:'Online Transfer',amount:-bankAmounts[i],pending:true}))
+  const point=forecast(plans,bank).get(today)
+  assert.equal(point.bal,4600+2766+885+684)
+  assert.equal(point.remainingDelta,0)
+  assert.equal(point.unmatchedCount,0)
+  const posted=bank.map(row=>({...row,pending:false}))
+  assert.equal(forecast(plans,posted).get(today).bal,4600)
+})
+test('generic income labels, ambiguous sources, other dates and conflicting vendors cannot reconcile changed amounts', () => {
+  const plan={...hoa,name:'JS Genesco Payroll',type:'income',amount:722}
+  const bank={...actual,name:'Transfer Genesco Income',amount:-684,pending:true}
+  assert.equal(forecast([{...plan,name:'Payroll Income'}],[bank]).get(today).remainingDelta,722)
+  assert.equal(forecast([plan,{...plan,id:'duplicate'}],[bank]).get(today).remainingDelta,1444)
+  assert.equal(forecast([plan],[{...bank,date:date(-1)}]).get(today).remainingDelta,722)
+  assert.equal(forecast([{...plan,vendorId:'a'}],[{...bank,vendorId:'b'}]).get(today).remainingDelta,722)
+})

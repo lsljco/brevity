@@ -5,6 +5,16 @@ import { approvedReconciliationMatches } from './autoReconciliation.js'
 
 const cents = value => Math.round(Number(value || 0) * 100)
 const dayNumber = date => Date.parse(`${date}T12:00:00Z`) / 86400000
+const genericIncomeWords = new Set(['income','payroll','severance','salary','deposit','transfer','payment','credit','debit','funds','direct','bank','checking','savings','account','pending','telephone','online','monthly','weekly','family','household','larry','lorenzo','terica','nyla','javin','isaiah'])
+function sameIncomeSource(plan, actual) {
+  const words = normalizeMerchantName(plan).split(' ').filter(word => word.length >= 4 && !genericIncomeWords.has(word) && !/\d/.test(word))
+  if (!words.length) return false
+  return [actual.name,actual.merchant_name,actual.originalStatement,actual.original_description].filter(Boolean).some(name => {
+    const tokens = normalizeMerchantName({name}).split(' ')
+    const phrases = new Set(tokens.flatMap((word,index) => [word,tokens.slice(index,index+2).join(''),tokens.slice(index,index+3).join('')]))
+    return words.every(word => phrases.has(word))
+  })
+}
 
 // Read-only realization of individual occurrences. Bank IDs are consumed once;
 // amount/date alone never establishes that a scheduled payment has cleared.
@@ -44,7 +54,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     if (!exactDate && candidate.leg.amount !== cents(actual.amount)) return false
     if (candidate.plan.vendorId && actual.vendorId) return candidate.plan.vendorId === actual.vendorId
     const name = normalizeMerchantName(candidate.plan)
-    return Boolean(name && name === normalizeMerchantName(actual))
+    return Boolean(name && (name === normalizeMerchantName(actual) || (exactDate && candidate.plan.type === 'income' && sameIncomeSource(candidate.plan,actual))))
   }
   for (const exactDate of [true, false]) {
     const edges = candidates.filter(candidate => !assigned.has(candidate.key)).flatMap(candidate => bank.filter(actual => !used.has(actual.id) && matches(candidate, actual, exactDate)).map(actual => ({ candidate, actual })))
