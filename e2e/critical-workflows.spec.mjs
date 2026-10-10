@@ -2403,6 +2403,8 @@ test('Cash Forecast separates current cash from outstanding expenses and pending
   const summary=page.getByRole('region',{name:'Current and projected cash'})
   await expect(summary).toBeVisible()
   await expect(summary).toContainText('$4,600.00')
+  await expect(summary).toContainText('$3,225.00')
+  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
   await expect(summary).toContainText('−$100.00')
   await expect(summary).toContainText('−$1,375.00')
   await expect(summary).toContainText('$3,125.00')
