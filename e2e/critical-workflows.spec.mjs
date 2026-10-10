@@ -704,7 +704,7 @@ test('iPhone Cash Forecast keeps Finance context visible without covering its mo
   await closeMenuIfMobile(page,testInfo)
 
   await expect(page.getByRole('heading',{name:'Cash Forecast',exact:true})).toBeVisible()
-  await expect(page.getByRole('button',{name:/Show \d+ bank transactions? for /})).toBeVisible()
+  await expect(page.getByRole('button',{name:/Reconcile with bank for /})).toBeVisible()
   await expect(page.getByText('Dates / Timeframe',{exact:true})).toHaveCount(0)
   await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText('Scheduled')
   await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText(/(?:Balance from posted activity|Current bank balance|Last saved bank balance|Forecast balance)/)
