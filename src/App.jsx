@@ -36,6 +36,7 @@ const HouseholdMaintenance = lazy(() => import('./household/HouseholdMaintenance
 const HouseholdPerformanceIntelligence = lazy(() => import('./household/HouseholdPerformanceIntelligence.jsx'))
 const OperatingPracticesWorkspace = lazy(() => import('./household/OperatingPractices.jsx'))
 const PracticeContextBar = lazy(() => import('./household/OperatingPractices.jsx').then(module => ({default:module.PracticeContextBar})))
+const RevelationVault = lazy(() => import('./ministry/RevelationVault.jsx'))
 const SermonWorkspace = lazy(() => import('./ministry/SermonWorkspace.jsx'))
 
 
@@ -67,7 +68,7 @@ function navigationLabel(pillarId, viewId) {
   return pillar?.items.find(item => item.id === viewId)?.label || pillar?.label || 'Previous screen'
 }
 
-function ExternalSiteView({ title, description, url, icon, embed, currentMember, onOpenWorkspace }) {
+function ExternalSiteView({ title, description, url, icon, embed, currentMember, onOpenWorkspace, onOpenVault }) {
   const frameRef=useRef(null)
   const targetOrigin=useMemo(()=>{try{return new URL(url,window.location.href).origin}catch{return''}},[url])
   const sendMember=()=>{if(embed&&currentMember&&targetOrigin)frameRef.current?.contentWindow?.postMessage({type:'brevity-authenticated-member',member:currentMember},targetOrigin)}
@@ -77,7 +78,7 @@ function ExternalSiteView({ title, description, url, icon, embed, currentMember,
     window.addEventListener('message',receive)
     return()=>window.removeEventListener('message',receive)
   },[embed,currentMember,targetOrigin,url,onOpenWorkspace])
-  return <section className="external-site-view" aria-label={title}><header className="external-site-toolbar"><div><p className="external-site-eyebrow">Connected application</p><h1>{title}</h1><p className="external-site-description">{description}</p></div><a className="external-site-open" href={url} target="_blank" rel="noreferrer">Open full screen <i className="ti ti-external-link" aria-hidden="true" /></a></header>{embed?<iframe ref={frameRef} onLoad={sendMember} className="external-site-frame" src={url} title={title} loading="eager" referrerPolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" />:<div className="external-site-fallback"><div className="external-site-fallback-icon"><i className={`ti ${icon}`} aria-hidden="true" /></div><h2>{title} is connected</h2><p>{title} currently blocks secure in-app display. Open it below while its hosting security setting is updated.</p><a className="external-site-launch" href={url} target="_blank" rel="noreferrer">Launch {title} <i className="ti ti-arrow-up-right" aria-hidden="true" /></a></div>}</section>
+  return <section className="external-site-view" aria-label={title}><header className="external-site-toolbar"><div><p className="external-site-eyebrow">Connected application</p><h1>{title}</h1><p className="external-site-description">{description}</p></div>{url==='/apostolic-builder/'&&<button className="external-site-open" onClick={onOpenVault}>Revelation Vault</button>}<a className="external-site-open" href={url} target="_blank" rel="noreferrer">Open full screen <i className="ti ti-external-link" aria-hidden="true" /></a></header>{embed?<iframe ref={frameRef} onLoad={sendMember} className="external-site-frame" src={url} title={title} loading="eager" referrerPolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" />:<div className="external-site-fallback"><div className="external-site-fallback-icon"><i className={`ti ${icon}`} aria-hidden="true" /></div><h2>{title} is connected</h2><p>{title} currently blocks secure in-app display. Open it below while its hosting security setting is updated.</p><a className="external-site-launch" href={url} target="_blank" rel="noreferrer">Launch {title} <i className="ti ti-arrow-up-right" aria-hidden="true" /></a></div>}</section>
 }
 
 function SettingsPage({ currentMember, role, theme, onThemeChange, onSignOut }) {
@@ -115,6 +116,7 @@ export default function App() {
   const modules=useMemo(()=>resolveModules(moduleConfiguration),[moduleConfiguration])
   useEffect(()=>{if(!auth.authenticated)return;let current=true;fetch('/.netlify/functions/brevity-modules',{credentials:'include'}).then(async response=>{if(!response.ok)throw Error('Module settings unavailable');return response.json()}).then(data=>{if(current)setModuleConfiguration(data.configuration||[])}).catch(()=>{});return()=>{current=false}},[auth.authenticated,auth.member,moduleRevision])
 
+  const [workspaceSermonId,setWorkspaceSermonId]=useState(null)
   const [expandedPillar,setExpandedPillar]=useState(null)
   const [activeView,setActiveView]=useState(()=>new URLSearchParams(window.location.search).has('enhancements')?'enhancements':'today')
   const [activePillar,setActivePillar]=useState('')
@@ -323,8 +325,9 @@ export default function App() {
     if(activeView==='family-calendar')return <Suspense fallback={<div className="app-view-loading">Loading Family Calendar…</div>}><FamilyCalendar currentMember="Family" title="Family Calendar" subtitle="Choose Family, individual calendars, or All household commitments"/></Suspense>
     if(activeView==='grocery-list')return <Suspense fallback={<div className="app-view-loading">Loading Grocery List…</div>}><GroceryList key={currentMember}/></Suspense>
     if(activeView==='meal-plan')return <Suspense fallback={<div className="app-view-loading">Loading Meal Plan…</div>}><MealPlanner currentMember={currentMember} canEditPlanning={canEditPlanning} onOpenGroceryList={()=>navigateTo('household','grocery-list')}/></Suspense>
-    if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace currentMember={currentMember} role={auth.role}/></Suspense>
-    if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember} onOpenWorkspace={()=>navigateTo('ministry','sermon-workspace')}/>
+    if(activeView==='revelation-vault')return <Suspense fallback={<div className="app-view-loading">Opening Revelation Vault…</div>}><RevelationVault key={currentMember} currentMember={currentMember} role={auth.role} onOpenWorkspace={id=>{setWorkspaceSermonId(id);navigateTo('ministry','sermon-workspace')}}/></Suspense>
+    if(activeView==='sermon-workspace')return <Suspense fallback={<div className="app-view-loading">Loading Sermon Workspace…</div>}><SermonWorkspace key={`${currentMember}:${workspaceSermonId||''}`} currentMember={currentMember} role={auth.role} initialSermonId={workspaceSermonId}/></Suspense>
+    if(EXTERNAL_SITES[activeView])return <ExternalSiteView {...EXTERNAL_SITES[activeView]} currentMember={currentMember} onOpenWorkspace={()=>navigateTo('ministry','sermon-workspace')} onOpenVault={()=>navigateTo('ministry','revelation-vault')}/>
     if(FINANCE_VIEWS.has(activeView)&&activePillar==='finance')return <Suspense fallback={<div className="app-view-loading">Loading Finance…</div>}><div className="finance-access-shell">{auth.role!=='admin'&&<section className="finance-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>Financial records are read-only for {currentMember}</strong><span>{canEditPlanning?'Your planning access still allows reviewed edits to Finance Meeting narrative, saved notes, transcripts, and ordinary commitments. ':''}Financial corrections, forecasts, budgets, transactions, financial-effect details, and bank administration require the household administrator; bank connection changes are disabled for every member in this release.</span></div></section>}<FinancePlanner initialVendorId={vendorDestination} view={activeView} setView={navigateFromFinance} currentMember={currentMember} readOnly={auth.role!=='admin'} meetingPlanningReadOnly={!canEditPlanning}/></div></Suspense>
     const pillar=visiblePillars.find(p=>p.id===activePillar)
     return pillar?<Suspense fallback={<div className="app-view-loading">Loading {pillar.label} analysis…</div>}><PillarAnalysis pillar={pillar} currentMember={currentMember}/></Suspense>:null

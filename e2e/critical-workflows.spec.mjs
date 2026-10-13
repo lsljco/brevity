@@ -2574,3 +2574,46 @@ test('daily briefing opens from notification and acknowledges the saved plan',as
   await expect(briefing.getByRole('button',{name:'Day acknowledged'})).toBeDisabled()
   await expect(briefing.getByText('Daily financial analysis',{exact:true})).toHaveCount(0)
 })
+
+test('Revelation Vault captures exact wording and develops a private draft before sharing',async({page},testInfo)=>{
+  let saved=false,developed=false,reflected=false
+  const discovery={id:'rv-test-A1',externalId:'A1',collectionId:'rv-test',quote:'Preserve this exact insight.',cluster:'Personal insight',speaker:'Member',authorName:'Larry',scripture:[],pillars:[],status:'To develop',reflection:'',sourceLabel:'Direct capture'}
+  await page.route('**/.netlify/functions/revelation-vault?**',async route=>{
+    const url=new URL(route.request().url()),body=route.request().method()==='POST'?route.request().postDataJSON():null
+    if(body?.action==='preview')return route.fulfill({json:{id:'rv-test',title:body.title,count:1,scope:'full supplied text',quotes:[body.text]}})
+    if(body?.action==='import'){expect(body.text).toBe(discovery.quote);saved=true;return route.fulfill({json:{id:'rv-test'}})}
+    if(body?.action==='reflect'){expect(body.reflection).toBe('My separate reflection.');reflected=true;return route.fulfill({json:{ok:true}})}
+    if(body?.action==='develop'){expect(body.discoveryIds).toEqual([discovery.id]);return route.fulfill({json:{id:'dev-1',state:'queued'}})}
+    if(url.searchParams.has('job'))return route.fulfill({json:{id:'dev-1',state:'ready',mode:'develop'}})
+    if(body?.action==='accept-job'){developed=true;return route.fulfill({json:{ok:true}})}
+    return route.fulfill({json:{owner:'Larry',revision:saved?1:0,collections:saved?[{id:'rv-test',title:'A preserved teaching',date:dateKey(),scope:'full supplied text'}]:[],discoveries:saved?[{...discovery,reflection:reflected?'My separate reflection.':''}]:[],drafts:developed?[{id:'dev-1',title:'Expand this insight',text:'A separately developed teaching draft.',discoveryIds:[discovery.id],createdAt:new Date().toISOString()}]:[],jobStatuses:[],acceptedJobs:developed?['dev-1']:[]}})
+  })
+  await openMenuIfMobile(page,testInfo)
+  await page.locator('#primary-navigation-drawer').getByRole('button',{name:'Ministry & Fellowship',exact:true}).click()
+  await page.locator('#primary-navigation-drawer').getByRole('button',{name:'Revelation Vault',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await expect(page.getByRole('heading',{name:'Revelation & Content Vault'})).toBeVisible()
+  await page.getByRole('button',{name:'Capture revelation',exact:true}).click()
+  const modal=page.getByRole('dialog',{name:'Capture revelation'})
+  await modal.getByLabel('Collection title').fill('A preserved teaching')
+  await modal.getByLabel('Your insight',{exact:true}).fill(discovery.quote)
+  await modal.getByRole('button',{name:'Preview import'}).click()
+  await expect(modal.getByText(discovery.quote,{exact:true})).toBeVisible()
+  await modal.getByRole('button',{name:'Save to vault'}).click()
+  await expect(modal).toHaveCount(0)
+  await page.getByRole('button',{name:discovery.quote,exact:true}).click()
+  await page.getByLabel('Your reflection',{exact:true}).fill('My separate reflection.')
+  await page.getByRole('button',{name:'Save reflection'}).click()
+  await page.getByRole('button',{name:'Select visible (up to 40)'}).click()
+  await page.getByLabel('Ask Brevity',{exact:true}).fill('Expand this insight')
+  await page.getByRole('button',{name:'Develop selected insights'}).click()
+  await expect(page.getByText('A separately developed teaching draft.',{exact:true})).toBeVisible({timeout:15000})
+  await expect(page.getByRole('button',{name:discovery.quote,exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'Review for Sermon Workspace'}).click()
+  const review=page.getByRole('dialog',{name:'Review shared sermon draft'})
+  await expect(review).toContainText('become visible to members')
+  await review.getByRole('button',{name:'Keep private'}).click()
+  await expect(review).toHaveCount(0)
+  expect(reflected).toBe(true)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+})
