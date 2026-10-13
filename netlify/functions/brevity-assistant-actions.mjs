@@ -465,7 +465,7 @@ export async function executeActionWithJournal({repository,proposal,operations,s
   return{journal,audit}
 }
 
-async function conversationReceipt(member,audit){try{return await productionConversationRepository().appendReceipt(member,{id:audit.id,taskLinks:savedTaskLinks(audit),content:`${audit.action==='undo'?'Undone':'Completed'}: ${audit.summary||'Reviewed household action'}. Recorded in Action Mode history. ${taskReceiptText(savedTaskLinks(audit),member)}`})}catch{return null}}
+async function conversationReceipt(member,audit){try{return await productionConversationRepository().appendReceipt(member,{id:audit.id,proposalId:audit.proposalId,state:audit.action==='undo'?'undone':'executed',taskLinks:savedTaskLinks(audit),content:`${audit.action==='undo'?'Undone':'Completed'}: ${audit.summary||'Reviewed household action'}. Recorded in Action Mode history. ${taskReceiptText(savedTaskLinks(audit),member)}`})}catch{return null}}
 
 export async function completeExecutionJournal({repository,journalId,completedAt}) {
   return repository.updateJournal(journalId,current=>current.state==='completed'?current:{...current,state:'completed',completedAt})

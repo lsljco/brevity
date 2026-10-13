@@ -25,7 +25,7 @@ const actionFieldValue=value=>{
 }
 function mealCalendarReviewFields(json){try{const c=JSON.parse(json);return [['calendar action',c.kind],['starting date',c.date],...(c.slot?[['meal slot',c.slot]]:[]),...(c.servings?[['people eating',c.servings]]:[]),...(c.mealId?[['library meal',c.mealId]]:[]),...(c.toDate?[['destination date',c.toDate]]:[]),...(c.toSlot?[['destination slot',c.toSlot]]:[]),...(c.offset?[['shift',`${c.offset} days; destination menus replaced`]]:[]),...(c.count?[['days to replace',c.count]]:[]),...(c.recipe?[['meal name',c.recipe.name],['ingredients per person',c.recipe.ingredients],['cooking steps',c.recipe.instructions],['nutrition per person',`${c.recipe.macros.calories} cal · ${c.recipe.macros.proteinGrams}g protein · ${c.recipe.macros.carbohydrateGrams}g carbs · ${c.recipe.macros.fatGrams}g fat`]]:[])]}catch{return []}}
 function ActionFields({ operation }) { const nutrition=['nutrition.meal.log','nutrition.meal.update','meal.recipe.update'].includes(operation.type)&&operation.payload?.estimateJson?(()=>{try{return JSON.parse(operation.payload?.estimateJson||'{}')}catch{return{}}})():null;const macros=nutrition?.perServingMacros;const fields=[...(operation.voiceTarget?.title?[['saved item',operation.voiceTarget.title],['current owner',operation.voiceTarget.owner||'Unassigned']]:[]),...(operation.targetDate?[['date',operation.targetDate]]:[]),...(operation.targetId?[['affectedRecord',operation.targetId]]:[]),...Object.entries(operation.payload||{}).filter(([field,value])=>!['date','candidateJson','estimateJson','reconciliation','commandJson'].includes(field)&&value!==''&&value!=null),...(operation.payload?.commandJson?mealCalendarReviewFields(operation.payload.commandJson):[]),...(operation.mealReview?.length?[['menus after this change',operation.mealReview]]:[]),...(operation.payload?.reconciliation?[['bank charge',operation.payload.reconciliation.bankName],['projected date',operation.payload.reconciliation.originalDate],['posting date',operation.payload.reconciliation.postedDate],['original budget',`$${operation.payload.reconciliation.budgetAmount.toFixed(2)}`],['posted amount',`$${operation.payload.reconciliation.actualAmount.toFixed(2)}`],['difference',`$${(operation.payload.reconciliation.actualAmount-operation.payload.reconciliation.budgetAmount).toFixed(2)}`],['scope','Only this occurrence; future payments unchanged']]:[]),...(operation.type==='member.preference.set'&&operation.payload?.value===''?[['preference change','Forget this category of saved preferences']]:[]),...(nutrition?[['ingredients',(nutrition.ingredients||[]).map(item=>item.input||[item.resolvedName,item.amountDescription].filter(Boolean).join(" — "))],['per-food calculation',(nutrition.ingredients||[]).filter(item=>item.macros).map(item=>`${item.input}: ${item.macros.calories} calories · ${item.macros.proteinGrams} g protein · ${item.macros.carbohydrateGrams} g carbs · ${item.macros.fatGrams} g fat${item.packagedPortion?` (consumed ${item.packagedPortion.consumedAmount} ${item.packagedPortion.consumedUnit}; label serving ${item.packagedPortion.labelServingAmount} ${item.packagedPortion.labelServingUnit})`:''}`)],['calculated nutrition',macros?`${macros.calories} calories · ${macros.proteinGrams} g protein · ${macros.carbohydrateGrams} g carbs · ${macros.fatGrams} g fat`:'Unavailable'],...(nutrition.warnings?.length?[['estimate warnings',nutrition.warnings]]:[])]:[])];return fields.length?<dl className="brevity-action-fields">{fields.map(([field,value])=><div key={field}><dt>{actionFieldLabel(field)}</dt><dd>{actionFieldValue(value)}</dd></div>)}</dl>:null }
-function ProposalCard({ proposal, onReview }) { return <section className="brevity-action-proposal"><header><span>Action Mode proposal</span><em>{proposal.risk==='strong-confirmation'?'Strong confirmation':'Confirmation required'}</em></header><strong>{proposal.summary}</strong><ol>{proposal.operations.map(operation=><li key={operation.id}><span>{operation.description}</span><small>{DOMAIN_LABELS[operation.domain]||operation.domain}</small></li>)}</ol><button type="button" onClick={()=>onReview(proposal)}>Review changes</button></section> }
+function ProposalCard({ proposal, onReview }) { return <section className="brevity-action-proposal"><header><span>Action Mode proposal</span><em>{proposal.state==='executed'?'Completed':proposal.state==='undone'?'Undone':proposal.risk==='strong-confirmation'?'Strong confirmation':'Confirmation required'}</em></header><strong>{proposal.summary}</strong><ol>{proposal.operations.map(operation=><li key={operation.id}><span>{operation.description}</span><small>{DOMAIN_LABELS[operation.domain]||operation.domain}</small></li>)}</ol>{!['executed','undone'].includes(proposal.state)&&<button type="button" onClick={()=>onReview(proposal)}>Review changes</button>}</section> }
 
 function ActionReview({ proposal, busy, error, onCancel, onApply, onReadReview, voiceReady, playbackBlocked, onResumePlayback }) {
   const [confirmation,setConfirmation]=useState('')
@@ -134,7 +134,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   sendRef.current=send
   const openActionCenter=async()=>{stopVoiceMode();setBusy(true);setError('');try{setActionCenter(await getActionMode())}catch(actionError){setError(actionError.message)}finally{setBusy(false)}}
   const applyProposal=async(confirmation,proposal=review)=>{
-    if(busyRef.current||!proposal)return
+    if(busyRef.current||!proposal||['executed','undone'].includes(proposal.state))return
     stopPlayback();clearTimeout(voiceTimerRef.current);releaseRecognition();setListening(false);voiceTranscriptRef.current='';voiceFinalTranscriptRef.current='';setDraft('');draftRef.current=''
     const generation=memberGeneration.current,proposalId=proposal.id
     busyRef.current=true;setBusy(true);setError('');let receipt=''
@@ -147,6 +147,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
       receipt=`Completed: ${result.audit.summary}.${savedTotals} ${taskReceiptText(result.audit.taskLinks,currentMember)} The change is recorded in Action Mode history and remains undoable until a newer edit replaces it.`
       if(result.conversation)useConversation(result.conversation)
       else{messagesRef.current=[...messagesRef.current,{role:'assistant',content:receipt,taskLinks:result.audit.taskLinks||[]}];setMessages(messagesRef.current)}
+      messagesRef.current=messagesRef.current.map(message=>message.proposal?.id===proposalId?{...message,proposal:{...message.proposal,state:'executed'}}:message);setMessages(messagesRef.current)
       try{await onActionCompleted?.();publishActionCompleted({proposalId,audit:result.audit})}catch{setError('The change was saved, but the page could not refresh. Reload to see the updated record.')}
     }catch(actionError){if(generation===memberGeneration.current)setError(actionError.message)}
     finally{if(generation===memberGeneration.current){busyRef.current=false;setBusy(false);if(voiceModeRef.current){if(receipt)void playResponse(receipt,messagesRef.current.length-1,true);else stopVoiceMode()}}}
@@ -156,7 +157,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
   useEffect(()=>{const interrupt=event=>{if(event.detail!=='assistant')stopVoiceMode()};window.addEventListener(READING_EVENT,interrupt);return()=>window.removeEventListener(READING_EVENT,interrupt)},[])
   const stopPlayback=()=>{
     setPlaybackBlocked(false);voiceApprovalRef.current=null;setVoiceReady(false);voiceGenerationRef.current+=1;playbackPendingRef.current=false;speechRequestRef.current?.abort();speechRequestRef.current=null
-    if(audioRef.current){audioRef.current.onended=null;audioRef.current.onerror=null;audioRef.current.pause();audioRef.current.removeAttribute?.('src');audioRef.current.load?.();audioRef.current=null}
+    if(audioRef.current){audioRef.current.onended=null;audioRef.current.onerror=null;audioRef.current.pause();audioRef.current=null}
     if(audioUrlRef.current){URL.revokeObjectURL(audioUrlRef.current);audioUrlRef.current=''}
     setSpeakingMessage(null)
   }
@@ -207,7 +208,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
       if(voiceTranscriptRef.current)voiceTimerRef.current=setTimeout(()=>{
         if(!voiceModeRef.current)return
         voiceFinalizingRef.current=true;setVoiceStatus('Sending…')
-        if(recognitionRef.current===recognition)voiceFinishRef.current=finishRecognition({recognition,ref:recognitionRef,onFinish:()=>{setListening(false);submitVoiceTurn()}});else submitVoiceTurn()
+        if(recognitionRef.current===recognition)voiceFinishRef.current=finishRecognition({recognition,ref:recognitionRef,onRelease:released=>{recognitionReleaseRef.current=released;released.then(()=>{if(recognitionReleaseRef.current===released)recognitionReleaseRef.current=null})},onFinish:()=>{setListening(false);submitVoiceTurn()}});else submitVoiceTurn()
       },7000)
     }
     recognition.onend=()=>{
@@ -256,7 +257,7 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
           setPlaybackBlocked(true);setVoiceStatus('Tap Play response to enable audio');setError('Your browser needs a tap to play this response.')
         }else{
           stopPlayback();setError(playbackError.message||'ElevenLabs could not read this response.')
-          if(automatic)stopVoiceMode()
+          if(automatic&&voiceModeRef.current){setVoiceStatus('Starting microphone…');voiceRestartTimerRef.current=setTimeout(()=>startListeningRef.current?.(),300)}
         }
       }
     }
