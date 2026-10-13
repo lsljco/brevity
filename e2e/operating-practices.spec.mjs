@@ -24,6 +24,7 @@ async function backend(page, { readonly = false, activated = false } = {}) {
   await page.route('**/.netlify/functions/**', async route => {
     const request = route.request(), url = new URL(request.url()), endpoint = url.pathname.split('/').at(-1), action = url.searchParams.get('action')
     let body = {}
+    if (endpoint === 'daily-briefing') return route.fulfill({json:{brief:{member:member,date:date,items:[],gaps:[],sources:{}},revision:'brief-v1',acknowledged:false,household:[],finance:null}})
     if (endpoint === 'household-auth') body = action === 'session' ? { authenticated: true, member, role: readonly ? 'member' : 'admin', bootstrapRequired: false } : { members: [] }
     else if (endpoint === 'household-state') {
       if (request.method() !== 'GET') { writes.push(request.postDataJSON()); return route.fulfill({ status: 403, json: { error: 'Raw writes are forbidden in this fixture.' } }) }

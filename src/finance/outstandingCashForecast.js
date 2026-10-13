@@ -26,7 +26,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   const ledgerIds = new Set(accounts.filter(account => Object.values(accountMap).includes(account.id) && Number.isFinite(account.plaidCurrentBalance)).map(account => account.id))
   const current = accounts.reduce((sum, account) => sum + cents(ledgerIds.has(account.id) ? account.plaidCurrentBalance : account.balance), 0)
   // Generic projection supplies recurrence expansion and past estimates only.
-  const projection = buildProjection(accounts, transactions, options.days ?? 365, {}, options.pastDays ?? 365, current / 100)
+  const projection = buildProjection(accounts, transactions, options.days ?? 365, {}, options.pastDays ?? 365, current / 100, parseISODate(today))
   const scoped = actuals.filter(actual => actual.id && ids.has(accountMap[actual.accountId]) && Number.isFinite(Number(actual.amount)) && parseISODate(actual.date) && actual.date <= today)
   const superseded = new Set(scoped.filter(actual => !actual.pending).map(actual => actual.pendingTransactionId).filter(Boolean))
   const bank = [...new Map(scoped.filter(actual => !actual.pending || !superseded.has(actual.id)).map(actual => [actual.id, actual])).values()]

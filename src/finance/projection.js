@@ -89,11 +89,11 @@ export function txOccursOnDate(tx, d) {
   }
 }
 
-export function buildProjection(accounts, transactions, days = 365, overrides = {}, pastDays = 365, todayAnchor = null) {
+export function buildProjection(accounts, transactions, days = 365, overrides = {}, pastDays = 365, todayAnchor = null, anchorDate = today0()) {
   const currentBal = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
   const acctIdSet  = new Set(accounts.map(a => a.id))
   const map = new Map()
-  const t = today0()
+  const t = anchorDate
   const todayStr0  = toISO(t)
   const startDate = addDays(t, -pastDays)
 

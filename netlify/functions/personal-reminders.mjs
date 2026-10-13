@@ -17,6 +17,7 @@ export function createPersonalReminderHandler({authenticate=householdAuth.readSe
    if(existing?.member===session.member)await store.delete(key)
    return json(200,{enabled:false})
   }
+  if(body.action==='status')return json(200,{enabled:existing?.member===session.member,preferences:existing?.member===session.member?reminderPreferences(existing.preferences):null})
   if(body.action==='test'){
    if(existing?.member!==session.member)return json(403,{error:'Enable reminders on this device first.'})
    if(existing.testAt&&Date.now()-Date.parse(existing.testAt)<30000)return json(429,{error:'Wait 30 seconds before another test.'})
