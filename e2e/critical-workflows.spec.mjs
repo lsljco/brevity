@@ -2539,3 +2539,23 @@ test('Meal Ideas compares ingredients, images and per-serving macros then saves 
  await expect(card).toContainText('Saved to Meal Library.');expect(saves).toBe(1)
  await expect(card.getByRole('button',{name:'Plan this meal with Brevity',exact:true})).toBeVisible()
 })
+
+test('failed confirmed apply is visible inside review and can be retried',async({page})=>{
+ let attempts=0
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',async route=>{
+  const body=route.request().postDataJSON();expect(body.confirmation).toBe('CONFIRM');attempts++
+  if(attempts===1)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Household data changed after your review. Refresh and try again.'})})
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({audit:{id:'apply-test',summary:'Reviewed change saved',taskLinks:[]}})})
+ })
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-action-review-requested',{detail:{proposal:{id:'apply-test',summary:'Remove one reviewed schedule occurrence',risk:'strong-confirmation',operations:[{id:'op-1',description:'Cancel one occurrence only',domain:'planning',risk:'strong-confirmation',type:'household.schedule.block.delete',targetDate:'2026-10-10',targetId:'test-block',payload:{},defaultScope:'this-item',allowedScopes:['this-item']}]}}})))
+ const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+ const apply=review.getByRole('button',{name:'Apply approved changes'})
+ await expect(apply).toBeDisabled()
+ await review.getByPlaceholder('CONFIRM').fill('CONFIRM')
+ await apply.click()
+ await expect(review.getByRole('alert')).toContainText('Household data changed after your review.')
+ await expect(apply).toBeEnabled()
+ await apply.click()
+ await expect(review).not.toBeVisible()
+ expect(attempts).toBe(2)
+})

@@ -1,3 +1,4 @@
+import {bindScheduleOperation} from './schedule-action-binding.mjs'
 import {assertActionSourcesAvailable} from './assistant-supplemental-context.mjs'
 import {bindNutritionOperation} from './nutrition-conversation.mjs'
 import {bindRecipeOperation} from './recipe-library-actions.mjs'
@@ -6,7 +7,8 @@ import {normalizeActionProposal} from './assistant-action-contract.mjs'
 // Pure validation: no persistence, side effects, or weaker fallback contract.
 export function validateAgentProposal(output,{canonical,member,role,estimates}){
  if(!output?.proposal)return
- const operations=output.proposal.operations.map(operation=>{
+ const operations=output.proposal.operations.map(input=>{
+  const operation=bindScheduleOperation(input,canonical)
   if(operation.type==='module.configuration.update'&&role!=='admin')throw Error('Module customization requires administrator review.')
   if(operation.type.startsWith('activity.')&&operation.targetId!==member)throw Error('Members can change only their own activity records.')
   if(operation.type==='education.observation.record'&&!['Larry','Lorenzo','Terica'].includes(member))throw Error('Learning evidence requires an authorized adult review.')
