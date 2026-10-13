@@ -35,16 +35,19 @@ export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,cl
 
 // Some mobile implementations do not emit `end` promptly after stop(). The
 // watchdog bounds that wait, while finish() guarantees exactly one submission.
-export function finishRecognition({recognition,ref,onFinish,setTimer=setTimeout,clearTimer=clearTimeout,delay=400}) {
+export function finishRecognition({recognition,ref,onFinish,setTimer=setTimeout,clearTimer=clearTimeout,delay=400,onRelease=()=>{}}) {
  let settled=false,timer
- const finish=()=>{
+ const finish=(ended=false)=>{
   if(settled)return
   settled=true;clearTimer(timer)
-  if(ref.current===recognition)retireRecognition(ref)
+  if(ref.current===recognition){
+   if(ended){recognition.cancelWatch?.();ref.current=null;recognition.onend=null;recognition.onresult=null;recognition.onerror=null}
+   else{const released=retireRecognition(ref);if(released)onRelease(released)}
+  }
   onFinish()
  }
  timer=setTimer(finish,delay)
- recognition.onend=finish
+ recognition.onend=()=>finish(true)
  try{recognition.stop()}catch{finish()}
  return()=>{settled=true;clearTimer(timer)}
 }

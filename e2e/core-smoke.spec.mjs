@@ -855,3 +855,59 @@ test('routine source review shows proposals without silently saving them', async
  await expect(review.getByRole('button',{name:'Review 1 selected blocks'})).toBeVisible()
  expect(changes).toBe(0)
 })
+
+test('four voice turns resume capture after delayed native shutdown',async({page})=>{
+ await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:0,messages:[]}}))
+ let requests=0
+ await page.route('**/.netlify/functions/brevity-assistant',r=>r.fulfill({json:{message:`Voice answer ${++requests}`,proposal:null}}))
+ await page.route('**/elevenlabs-voices',r=>r.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test'}]}}))
+ await page.route('**/elevenlabs-tts',r=>r.fulfill({contentType:'audio/mpeg',body:'test'}))
+ await page.addInitScript(()=>{
+  localStorage.setItem('brevity_el_voice_v1','test-voice')
+  window.voiceTest={starts:0,active:null,audio:null,plays:0,overlap:0}
+  window.SpeechRecognition=class{
+   start(){if(window.voiceTest.active){window.voiceTest.overlap++;throw Error('Still releasing')};window.voiceTest.active=this;window.voiceTest.starts++;this.onstart?.();this.onaudiostart?.()}
+   stop(){} // Exercise the stop watchdog on every turn.
+   abort(){const end=this.onend;setTimeout(()=>{if(window.voiceTest.active===this)window.voiceTest.active=null;end?.()},900)}
+  }
+  window.Audio=class{constructor(){window.voiceTest.audio=this}play(){if(!this.src?.startsWith('data:'))window.voiceTest.plays++;return Promise.resolve()}pause(){}}
+ })
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ await page.clock.install()
+ await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+ for(let turn=1;turn<=4;turn++){
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(turn)
+  await page.evaluate(n=>{const result=[{transcript:`Question ${n}`}];result.isFinal=true;window.voiceTest.active.onresult({results:[result]})},turn)
+  await page.clock.runFor(7000);await page.clock.runFor(400)
+  await expect.poll(()=>requests).toBe(turn)
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.plays)).toBe(turn)
+  await page.evaluate(()=>window.voiceTest.audio.onended())
+  await page.clock.runFor(300)
+  expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(turn)
+  await page.clock.runFor(600)
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(turn+1)
+ }
+ expect(await page.evaluate(()=>window.voiceTest.overlap)).toBe(0)
+ await dialog.getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+})
+
+test('completed proposal card removes approval control and stays completed after reload',async({page})=>{
+ let completed=false,executions=0
+ const proposal={id:'card-1',state:'pending',summary:'Create repaint project',risk:'confirmation',operations:[{id:'op-1',domain:'projects',description:'Paint exterior brick',defaultScope:'this-item',allowedScopes:['this-item'],payload:{}}]}
+ await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:1,messages:[{role:'assistant',content:'Review this project',proposal:{...proposal,state:completed?'executed':'pending'}}]}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',r=>{executions++;completed=true;return r.fulfill({json:{audit:{id:'audit-1',summary:proposal.summary,taskLinks:[]}}})})
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ await dialog.getByRole('button',{name:'Review changes',exact:true}).click()
+ await page.getByRole('button',{name:'Apply approved changes',exact:true}).click()
+ await expect(dialog.locator('.brevity-action-proposal')).toContainText('Completed')
+ await expect(dialog.getByRole('button',{name:'Review changes',exact:true})).toHaveCount(0)
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ await expect(dialog.locator('.brevity-action-proposal')).toContainText('Completed')
+ await expect(dialog.getByRole('button',{name:'Review changes',exact:true})).toHaveCount(0)
+ expect(executions).toBe(1)
+})

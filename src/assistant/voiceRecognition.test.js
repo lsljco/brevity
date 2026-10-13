@@ -52,3 +52,22 @@ test('native release is bounded when abort never emits end',async()=>{
  await Promise.resolve();assert.equal(released,false)
  timeout();await pending;assert.equal(released,true)
 })
+
+test('four consecutive turns track delayed native teardown before allowing a replacement',async()=>{
+ for(let turn=0;turn<4;turn++){
+  let fallback,end,release,submitted=0
+  const recognition={stop(){},abort(){end=this.onend}},ref={current:recognition}
+  finishRecognition({recognition,ref,onFinish:()=>submitted++,onRelease:promise=>{release=promise},setTimer:fn=>{fallback=fn;return 1},clearTimer(){}})
+  fallback()
+  assert.equal(submitted,1);assert.ok(release)
+  let ready=false;release.then(()=>{ready=true});await Promise.resolve();assert.equal(ready,false)
+  end();await release;assert.equal(ready,true)
+  end();assert.equal(submitted,1)
+ }
+})
+test('a normal native end releases capture without aborting a finished recognizer',()=>{
+ let submissions=0,aborts=0
+ const recognition={stop(){this.onend()},abort(){aborts++}},ref={current:recognition}
+ finishRecognition({recognition,ref,onFinish:()=>submissions++})
+ assert.equal(submissions,1);assert.equal(aborts,0);assert.equal(ref.current,null)
+})

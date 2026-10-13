@@ -58,3 +58,29 @@ test('completed action receipts persist with chat and are retry-safe',async()=>{
  const value=await f.repository.appendReceipt('Larry',{id:'action-one',content:'Completed: fixture walk.'})
  assert.equal(value.messages.length,3);assert.equal(value.messages.at(-1).content,'Completed: fixture walk.');assert.equal(value.receiptIds,undefined)
 })
+
+test('successful approvals replace pending cards once, survive reload and restore, and track undo',async()=>{
+ const f=fixture(),t=turn();t.assistant.proposal={id:'p-1',state:'pending',summary:'Paint brick'}
+ await f.repository.appendTurn('Larry',t)
+ // A pre-fix receipt exists but never updated the proposal card.
+ await f.repository.appendReceipt('Larry',{id:'receipt-1',content:'Completed: Paint brick'})
+ const receipt={id:'receipt-1',proposalId:'p-1',content:'Completed: Paint brick'}
+ await f.repository.appendReceipt('Larry',receipt)
+ await f.repository.appendReceipt('Larry',receipt)
+ let value=await f.repository.read('Larry')
+ assert.equal(value.messages.length,3);assert.equal(value.messages[1].proposal.state,'executed')
+ await f.repository.clear('Larry',value.version);value=await f.repository.read('Larry')
+ value=await f.repository.restore('Larry',value.version)
+ assert.equal(value.messages[1].proposal.state,'executed')
+ await f.repository.appendReceipt('Larry',{id:'undo-1',proposalId:'p-1',state:'undone',content:'Undone'})
+ assert.equal((await f.repository.read('Larry')).messages[1].proposal.state,'undone')
+})
+test('legacy pending cards load the authoritative proposal state without replaying any action',async()=>{
+ const f=fixture(),t=turn();t.assistant.proposal={id:'p-old',state:'pending'}
+ await f.repository.appendTurn('Larry',t)
+ const hydrated=createConversationRepository({store:f.store,now:f.now,resolveProposal:async id=>{assert.equal(id,'p-old');return {state:'executed',executedAt:'2026-09-29T10:01:00Z'}}})
+ const value=await hydrated.read('Larry')
+ assert.equal(value.messages[1].proposal.state,'executed');assert.equal(value.version,1)
+ const next=await hydrated.appendTurn('Larry',turn(1,'follow-up'))
+ assert.equal(next.messages[1].proposal.state,'executed')
+})
