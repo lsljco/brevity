@@ -1,3 +1,4 @@
+import {validateRoutineTiming} from './routineRules.js'
 import { randomUUID } from 'node:crypto'
 import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import {
@@ -133,7 +134,8 @@ function scheduleOperation(value, operation, context) {
     assertTimeRange(payload.startTime,payload.endTime)
     const days=[...new Set((payload.days || []).map(Number))].filter(day=>Number.isInteger(day)&&day>=0&&day<=6).sort()
     if (!days.length) throw new Error('A household routine requires at least one reviewed day.')
-    const item={id:createId(context),title,owner,participants:uniqueMembers(payload.participants).filter(member=>member!==owner),days,startTime:payload.startTime,endTime:payload.endTime,pillar:payload.pillar,notes:payload.notes || '',enabled:payload.enabled!==false,createdBy:actor,createdAt:now,updatedBy:actor,updatedAt:now}
+    const item={id:createId(context),title,owner,participants:uniqueMembers(payload.participants).filter(member=>member!==owner),days,startTime:payload.startTime,endTime:payload.endTime,pillar:payload.pillar,notes:payload.notes || '',enabled:payload.enabled!==false,timingRuleJson:payload.timingRuleJson||'',createdBy:actor,createdAt:now,updatedBy:actor,updatedAt:now}
+    validateRoutineTiming(item,state.routines)
     return normalizeHouseholdScheduleState({...state,routines:[...state.routines,item]})
   }
   if (operation.type==='household.schedule.routine.update') {
@@ -151,6 +153,7 @@ function scheduleOperation(value, operation, context) {
       return next
     })
     if (!found) throw new Error('That household routine no longer exists.')
+    for(const routine of routines)validateRoutineTiming(routine,routines)
     return normalizeHouseholdScheduleState({...state,routines})
   }
   if (operation.type==='household.schedule.routine.delete') {
@@ -162,6 +165,7 @@ function scheduleOperation(value, operation, context) {
     if (!state.routines.some(item=>item.id===operation.targetId)) throw new Error('That household routine no longer exists.')
     const date=assertDate(payload.date || operation.targetDate)
     if (date!==operation.targetDate) throw new Error('The routine occurrence date changed after review.')
+    if(payload.reset){const overrides={...state.routineOverrides};delete overrides[`${operation.targetId}:${date}`];return normalizeHouseholdScheduleState({...state,routineOverrides:overrides})}
     if (!payload.cancelled) {
       const effective={...state.routines.find(item=>item.id===operation.targetId),...state.routineOverrides[`${operation.targetId}:${date}`],...payload}
       assertTimeRange(effective.startTime,effective.endTime)

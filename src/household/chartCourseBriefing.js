@@ -5,6 +5,7 @@ const describe=x=>`${x.title}${x.startTime||x.time?` at ${x.startTime||x.time}`:
 // invented agenda is needed before the family hears the first response.
 export function chartCourseBriefing({plan,agenda,member,calendarReady=true}){
  const parts=[`Good morning. Let's chart the course for ${plan.date}.`]
+ if(agenda.routines?.length)parts.push('Your saved routine is ready and repeats automatically. We only need to address changes or exceptions.')
  parts.push(plan.household?.keyFocus?`Our agreed focus is ${plan.household.keyFocus}.`:'No household focus has been saved for today yet.')
  const priorities=agenda.priorities||[]
  parts.push(priorities.length?`Our recorded priorities are: ${priorities.slice(0,3).map(describe).join('; ')}.`:'No open priorities are recorded in today’s plan yet.')

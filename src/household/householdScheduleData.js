@@ -1,3 +1,4 @@
+import {resolveRoutineTiming} from './routineRules.js'
 import { HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { getHouseholdDateKey } from '../finance/financeTime.js'
 import { practiceRoutineDateAllowed } from './operatingPractices.js'
@@ -93,11 +94,11 @@ export function overrideRoutineOccurrence(state, routineId, date, patch, current
 export function routineOccurrencesForDate(state, date) {
   const target = new Date(`${dateKey(date)}T12:00:00`)
   const day = target.getDay()
-  return state.routines.filter(routine => routine.enabled && routine.days.includes(day) && practiceRoutineDateAllowed(routine, dateKey(date))).map(routine => {
+  return resolveRoutineTiming(state.routines.filter(routine => routine.enabled && routine.days.includes(day) && practiceRoutineDateAllowed(routine, dateKey(date))).map(routine => {
     const key = `${routine.id}:${dateKey(date)}`
     const override = state.routineOverrides[key] || {}
-    return { ...routine, ...override, id: key, routineId: routine.id, date: dateKey(date), sourceType: 'routine', cancelled: Boolean(override.cancelled) }
-  }).filter(item => !item.cancelled)
+    return { ...routine, ...override, id: key, routineId: routine.id, date: dateKey(date), sourceType: 'routine', hasTimeOverride:Boolean(override.startTime || override.endTime), cancelled: Boolean(override.cancelled) }
+  })).filter(item => !item.cancelled)
 }
 
 export function scheduleForMember(state, date, member) {
@@ -130,9 +131,9 @@ export function calendarEventForScheduleRoutine(item) {
   const members = unique([item.owner, ...(item.participants || [])])
   return {
     id:`${HOUSEHOLD_SCHEDULE_SOURCE}-${item.id}`, sourceId:`${HOUSEHOLD_SCHEDULE_SOURCE}-${item.id}`, source:HOUSEHOLD_SCHEDULE_SOURCE,
-    title:item.title, date:item.date, start:item.date, time:item.startTime, endTime:item.endTime, allDay:false,
+    title:item.title, date:item.date, start:item.date, time:item.timingIssue?'':item.startTime, endTime:item.timingIssue?'':item.endTime, allDay:false,
     members, participants:members, owner:item.owner || 'Family', calendarName:'Family', calendarSyncEnabled:true,
-    status:'Routine', notes:[item.pillar,'Routine',item.notes].filter(Boolean).join(' · '), updatedAt:item.updatedAt || new Date().toISOString(),
+    status:'Routine', notes:[item.pillar,'Routine',item.timingIssue,item.notes].filter(Boolean).join(' · '), updatedAt:item.updatedAt || new Date().toISOString(),
   }
 }
 

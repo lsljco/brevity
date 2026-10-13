@@ -57,7 +57,7 @@ test('Schedule and routines expose granular reviewed mutations without raw write
   assert.match(source, /scheduleRoutineUpdateOperation/)
   assert.match(source, /scheduleInvitationOperation/)
   assert.match(source, /<input type="date" value=\{date\} onChange=/, 'day navigation remains available')
-  assert.match(source, /scheduleForMember\(state,date,currentMember\)/, 'schedule display remains available')
+  assert.match(source, /scheduleForMember\(state,date,viewMember\)/, 'schedule display remains available')
   assert.match(source, /invitationsForMember\(state,currentMember\)/, 'invitation display remains available')
   assert.doesNotMatch(source, /localStorage\.setItem|writeSharedJson|publishHouseholdScheduleEvents|createScheduleBlock|updateScheduleBlock|deleteScheduleBlock|createRoutine|updateRoutine|deleteRoutine|overrideRoutineOccurrence|respondToInvitation/)
 })

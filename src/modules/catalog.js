@@ -11,6 +11,7 @@ export const PILLARS = [
     { id:'household-practices', label:'Policies & Practices', icon:'ti-list-check' },
     { id:'property', label:'Projects', icon:'ti-building-estate' },
     { id:'grocery-list', label:'Grocery List', icon:'ti-shopping-cart' },
+    { id:'household-schedule', label:'Schedule & Routines', icon:'ti-calendar-repeat' },
     { id:'household-maintenance', label:'Household Operations', icon:'ti-broom' },
     { id:'family-calendar', label:'Family Calendar', icon:'ti-calendar-event' },
     { id:'malbec-estate', label:'Household Maintenance', icon:'ti-building-community' },

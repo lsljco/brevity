@@ -272,7 +272,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
   return <div className="today-dashboard">
     <WeatherHeader date={dailyPlan.date}/>
     {courseConversation}
-    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
+    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} />
 
     <HealthCare currentMember={currentMember} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly} compact />

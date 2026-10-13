@@ -54,6 +54,6 @@ export function buildRoutineReview({date,member,schedule={},maintenance={},calen
    questions.push(...reference.needsClarification)
    questions.push('Schedule stages at or after 8 AM require review against protected focus time; they are not automatically added.')
   }
- }else questions.push(`${member}: choose an agreed Schedule A–D variant before adding morning reference times.`)
+ }else if(!state.routines.some(x=>x.owner===member&&x.enabled!==false))questions.push(`${member}: set up the normal weekday once, or choose an agreed Schedule A–D morning reference.`)
  return {member,date,week,proposals,questions:[...new Set(questions)],notice:'Proposed work blocks are not completion records. Existing recurring calendars remain linked to their original calendar records; they are not copied into duplicate appointments. Times are checked against the loaded week, not a guarantee for all future weeks.'}
 }
