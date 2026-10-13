@@ -2598,7 +2598,7 @@ test('Revelation Vault captures exact wording and develops a private draft befor
   await modal.getByLabel('Collection title').fill('A preserved teaching')
   await modal.getByLabel('Your insight',{exact:true}).fill(discovery.quote)
   await modal.getByRole('button',{name:'Preview import'}).click()
-  await expect(modal.getByText(discovery.quote,{exact:true})).toBeVisible()
+  await expect(modal.locator('blockquote')).toHaveText(discovery.quote)
   await modal.getByRole('button',{name:'Save to vault'}).click()
   await expect(modal).toHaveCount(0)
   await page.getByRole('button',{name:discovery.quote,exact:true}).click()
