@@ -740,7 +740,8 @@ test('voice recovers a stalled microphone after read aloud and preserves a draft
   await dialog.getByRole('button',{name:'Read response aloud',exact:true}).click()
   await expect.poll(()=>page.evaluate(()=>Boolean(window.voiceTest.audio.onended))).toBe(true)
   await page.evaluate(()=>window.voiceTest.audio.onended())
-  expect(await page.evaluate(()=>window.voiceTest.loads)).toBe(1)
+  // Keep the primed playback element reusable between voice turns.
+  expect(await page.evaluate(()=>window.voiceTest.loads)).toBe(0)
   await page.clock.fastForward(300)
   await expect(dialog.getByText(/Voice conversation on · Starting microphone/)).toBeVisible()
   await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toHaveCount(0)
