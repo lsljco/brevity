@@ -57,6 +57,7 @@ async function mockBackend(page) {
     const path = url.pathname
     const action = url.searchParams.get('action')
     let body = {}
+    if (path.endsWith('/daily-briefing')) return route.fulfill({json:{brief:{member:'Larry',date:today(),items:[],gaps:[],sources:{}},revision:'brief-v1',acknowledged:false,household:[],finance:null}})
     if (path.endsWith('/household-auth') && action === 'session') body = { authenticated:true, member:'Larry', role:'admin', bootstrapRequired:false }
     else if (path.endsWith('/nutrition-records')) body = {member:'Larry',targets:{proteinGrams:160,calories:2200,carbohydrateGrams:220,fatGrams:80}}
     else if (path.endsWith('/household-auth') && action === 'members') body = { members:[] }

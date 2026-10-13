@@ -74,6 +74,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
   await page.route('**/.netlify/functions/**',async route=>{
     const url=new URL(route.request().url()),path=url.pathname,action=url.searchParams.get('action')
     let body={}
+    if (path.endsWith('/daily-briefing')) return route.fulfill({json:{brief:{member:sessionMember,date:dateKey(),items:[],gaps:[],sources:{}},revision:'brief-v1',acknowledged:false,household:[],finance:null}})
     if(path.endsWith('/household-auth')&&action==='session')body={authenticated:true,member:sessionMember,role:sessionRole,bootstrapRequired:false}
     else if(path.endsWith('/household-auth')&&action==='members')body={members:[]}
     else if(path.endsWith('/household-state')){
@@ -2558,4 +2559,18 @@ test('failed confirmed apply is visible inside review and can be retried',async(
  await apply.click()
  await expect(review).not.toBeVisible()
  expect(attempts).toBe(2)
+})
+
+test('daily briefing opens from notification and acknowledges the saved plan',async({page})=>{
+  let acknowledged=false
+  await page.route('**/.netlify/functions/daily-briefing',async route=>{
+    if(route.request().method()==='POST'){const body=route.request().postDataJSON();expect(body.action).toBe('acknowledge');expect(body.revision).toBe('brief-v2');acknowledged=true;return route.fulfill({json:{ok:true}})}
+    return route.fulfill({json:{brief:{member:'Larry',date:dateKey(),items:[{id:'task-1',title:'Prepare dinner',time:'17:00',endTime:'18:00',owners:['Larry'],progress:'Scheduled'}],gaps:[],sources:{}},revision:'brief-v2',acknowledged,acknowledgedAt:acknowledged?new Date().toISOString():'',household:[],finance:null}})
+  })
+  await page.goto('/?briefing=1#daily-briefing')
+  const briefing=page.getByRole('region',{name:'Daily briefing'})
+  await expect(briefing.getByText('Prepare dinner',{exact:true})).toBeVisible()
+  await briefing.getByRole('button',{name:'I’ve reviewed my day'}).click()
+  await expect(briefing.getByRole('button',{name:'Day acknowledged'})).toBeDisabled()
+  await expect(briefing.getByText('Daily financial analysis',{exact:true})).toHaveCount(0)
 })
