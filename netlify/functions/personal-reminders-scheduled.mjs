@@ -1,36 +1,28 @@
-import {connectRoutineChores,linkedChoreId} from '../../src/household/routinePlanning.js'
-import {routineOccurrencesForDate,normalizeHouseholdScheduleState} from '../../src/household/householdScheduleData.js'
-import {buildHouseholdMaintenanceWeek,normalizeHouseholdMaintenanceState,householdOccurrence,occurrenceStatus} from '../../src/household/householdMaintenanceData.js'
 import '../lib/native-runtime.mjs'
-import {getStore} from '../lib/scoped-store.mjs'
-import {reminderStore,reminderRoot,vapidKeys,dueReminders,deliverReminder} from '../lib/personal-reminders.mjs'
+import {HOUSEHOLD_MEMBERS} from '../../src/homehq/projectData.js'
+import {buildDailyResponsibilities} from '../../src/household/dailyResponsibilities.js'
 import {householdClock} from '../../src/household/dailyRhythm.js'
+import {reminderStore,reminderRoot,vapidKeys,deliverReminder} from '../lib/personal-reminders.mjs'
+import {briefingStore,loadDailyBriefingInputs,memberRole,financeBriefAllowed} from '../lib/daily-briefing-source.mjs'
+import {dailyFinancialBrief} from '../lib/daily-financial-brief.mjs'
+import {dueBriefingMessages,sendBriefingOnce,reminderMessageId} from '../lib/daily-briefing-delivery.mjs'
 export default async function handler(){
- const store=reminderStore(),root=reminderRoot(),now=new Date()
- const data=getStore({name:'brevity-household',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
- const date=householdClock(now).date
- const shared=getStore({name:'brevity-household-state',consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
- const [savedPlan,scheduleRecord,maintenanceRecord]=await Promise.all([data.get(`${root}daily-plans/${date}`,{type:'json'}),shared.get(`${root}records/brevity_household_schedule_v1`,{type:'json'}),shared.get(`${root}records/brevity_household_maintenance_v1`,{type:'json'})])
- const parse=record=>typeof record?.value==='string'?JSON.parse(record.value):record?.value||{}
- const schedule=normalizeHouseholdScheduleState(parse(scheduleRecord))
- const routines=routineOccurrencesForDate(schedule,date)
- const blocks=schedule.blocks.filter(block=>block.date===date).map(block=>({...block,participants:(block.participants||[]).filter(member=>block.attendance?.[member]==='accepted')}))
- const maintenance=normalizeHouseholdMaintenanceState(parse(maintenanceRecord))
- const chores=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),maintenance).find(day=>day.date===date)?.tasks||[]
- const plan={...(savedPlan||{}),date,assignments:[...(savedPlan?.assignments||[]),...connectRoutineChores(routines,chores.map(x=>({...x,occurrence:householdOccurrence(maintenance,x),status:occurrenceStatus(x,householdOccurrence(maintenance,x))}))),...blocks,...chores.filter(x=>!routines.some(r=>linkedChoreId(r)===x.id)).map(chore=>{const occurrence=householdOccurrence(maintenance,chore);return {...chore,id:chore.occurrenceId,status:occurrenceStatus(chore,occurrence),owners:occurrence.coveredBy?[occurrence.coveredBy]:chore.owners}})]}
- const keys=await vapidKeys(store)
- for await(const page of store.list({prefix:`${root}devices/`,paginate:true})){
-  await Promise.all(page.blobs.map(async row=>{
-   const device=await store.get(row.key,{type:'json'})
-   if(!device)return
-   for(const message of dueReminders(plan,device.member,device.preferences,now)){
-    const sentKey=`${root}sent/${device.id}/${message.key}`
-    const lock=await store.setJSON(sentKey,{attemptedAt:now.toISOString()},{onlyIfNew:true})
-    if(lock?.modified===false)continue
-    try{await deliverReminder(device.subscription,message,keys);await store.setJSON(sentKey,{sentAt:new Date().toISOString()})}
-    catch(error){if([404,410].includes(error.statusCode))await store.delete(row.key);else await store.delete(sentKey)}
-   }
-  }))
+ const store=reminderStore(),root=reminderRoot(),state=briefingStore(),now=new Date(),date=householdClock(now).date
+ const devices=[]
+ for await(const page of store.list({prefix:`${root}devices/`,paginate:true}))for(const row of page.blobs){const device=await store.get(row.key,{type:'json'});if(device&&HOUSEHOLD_MEMBERS.includes(device.member))devices.push({...device,root})}
+ if(!devices.length)return
+ const input=await loadDailyBriefingInputs(date,{now}),keys=await vapidKeys(store)
+ for(const member of new Set(devices.map(device=>device.member))){
+  const role=await memberRole(member);if(!role)continue
+  const saved=await state.get(`${root}days/${date}/${member}`,{type:'json'})||{}
+  const brief=buildDailyResponsibilities(input,member,now,saved.reports),finance=financeBriefAllowed(member,role,input.permissions)?dailyFinancialBrief(input):null
+  for(const device of devices.filter(device=>device.member===member)){
+   const previous=await state.get(`${root}observed/${device.id}/${date}`,{type:'json'})
+   const {messages,snapshot}=dueBriefingMessages({brief,finance,preferences:device.preferences,previous:previous?.snapshot,now})
+   let changesSent=true
+   for(const message of messages){const sent=await sendBriefingOnce({store,key:`${root}sent/${device.id}/${reminderMessageId(message.key)}`,device,message,keys,deliver:deliverReminder,now});if(message.key.startsWith('changes:')&&!sent)changesSent=false}
+   if(snapshot&&changesSent&&Object.values(brief.sources).every(value=>value!=='unavailable'))await state.setJSON(`${root}observed/${device.id}/${date}`,{snapshot,updatedAt:now.toISOString()})
+  }
  }
 }
 export const config={schedule:'* * * * *'}

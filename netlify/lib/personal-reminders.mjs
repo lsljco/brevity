@@ -19,7 +19,7 @@ export function validSubscription(value){
  }catch{return false}
 }
 export function reminderPreferences(input={}){
- return {leadMinutes:[0,5,10,15,30].includes(Number(input.leadMinutes))?Number(input.leadMinutes):15,quietEnabled:input.quietEnabled!==false,quietStart:minuteOfDay(input.quietStart)!==null?input.quietStart:'20:00',quietEnd:minuteOfDay(input.quietEnd)!==null?input.quietEnd:'04:00'}
+ return {dailyBriefing:input.dailyBriefing!==false,financialBriefing:input.financialBriefing!==false,changes:input.changes!==false,followUps:input.followUps!==false,leadMinutes:[0,5,10,15,30].includes(Number(input.leadMinutes))?Number(input.leadMinutes):15,quietEnabled:input.quietEnabled!==false,quietStart:minuteOfDay(input.quietStart)!==null?input.quietStart:'20:00',quietEnd:minuteOfDay(input.quietEnd)!==null?input.quietEnd:'04:00'}
 }
 export function inQuietHours(prefs,minute){
  if(!prefs.quietEnabled)return false
@@ -40,5 +40,5 @@ export function dueReminders(plan,member,prefs,now=new Date()){
  })
 }
 export async function deliverReminder(subscription,message,keys){
- return webpush.sendNotification(subscription,JSON.stringify(message),{TTL:Math.min(900,Math.max(60,(message.remaining||1)*60)),timeout:8000,vapidDetails:{subject:'https://brevityoflife.netlify.app',...keys}})
+ return webpush.sendNotification(subscription,JSON.stringify(message),{TTL:Math.min(14400,Math.max(60,(message.remaining||1)*60)),timeout:8000,vapidDetails:{subject:'https://brevityoflife.netlify.app',...keys}})
 }
