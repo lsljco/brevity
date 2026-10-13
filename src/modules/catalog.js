@@ -32,6 +32,7 @@ export const PILLARS = [
   ]},
   { id:'ministry', label:'Ministry & Fellowship', icon:'ti-users', layer:5, description:'Impartation of the prior six pillars and discipleship of others.', items:[
     { id:'sermon-workspace', label:'Sermon Workspace', icon:'ti-layout-dashboard' },
+    { id:'revelation-vault', label:'Revelation Vault', icon:'ti-bulb' },
     { id:'apostolic-sermon-builder', label:'Sermon Builder', icon:'ti-book-2' },
   ]},
 ]

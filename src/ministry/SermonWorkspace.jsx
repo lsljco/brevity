@@ -21,9 +21,9 @@ const blank={schemaVersion:1,revision:0,series:[],sermons:[]}
 const freshSermon=(seriesId,member)=>({id:newId(),seriesId,title:'Untitled Sermon',date:new Date().toISOString().slice(0,10),serviceType:'Sunday',status:'Draft',version:1,bigIdea:'',scripture:'',outline:'',sourceNotes:'',builderReview:'',approvedNotes:'',recordingUrl:'',transcript:'',publishedUrl:'',assets:[],createdBy:member,updatedAt:new Date().toISOString()})
 const assetTab=type=>['photography','slides'].includes(type)?'Visuals':['quotes','hooks','facebook','reels','stories'].includes(type)?'Social':type==='podcast'?'Recording':'Published'
 
-export default function SermonWorkspace({currentMember,role}) {
+export default function SermonWorkspace({currentMember,role,initialSermonId=null}) {
   const [workspace,setWorkspace]=useState(blank)
-  const [selectedId,setSelectedId]=useState(null)
+  const [selectedId,setSelectedId]=useState(initialSermonId)
   const [tab,setTab]=useState('Message')
   const [assetId,setAssetId]=useState(null)
   const [viewedType,setViewedType]=useState(null)
