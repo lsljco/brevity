@@ -1303,3 +1303,20 @@ test('new assistant library recipe is reviewed, versioned, idempotent and undoab
   await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
   assert.equal((await mealRepository.getLibrary()).library.filter(meal=>meal.custom).length,0)
 })
+
+test('project completion review uses versioned confirmation and cannot be approved by Terica',async()=>{
+ const store=versionedBlobStore(),resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store}),repository=createAssistantActionRepository({store:versionedBlobStore()})
+ const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),resource='shared:homehq_items_v1'
+ const pending={id:'signoff-project',title:'Completion review test',status:'In Progress',completionReview:{state:'pending',submittedBy:'Javin',submittedAt:'2026-10-14T16:00:00Z'}}
+ const create=await prepareDirectProposal({input:{summary:'Create project',expectedVersion:0,operation:{type:'project.create',payload:{title:pending.title,status:'Done'}}},session,permissions,repository,resources})
+ await executeActionWithJournal({repository,proposal:create,operations:create.operations,session,permissions,resources,event:{}})
+ const snapshot=await resources.read(resource),item=snapshot.value[0]
+ assert.equal(item.status,'In Progress');assert.equal(item.completionReview.state,'pending')
+ const input={summary:'Sign off project',expectedVersion:snapshot.version,operation:{type:'project.review',targetId:item.id,payload:{action:'approve'}}}
+ await assert.rejects(()=>prepareDirectProposal({input,session:{member:'Terica',role:'admin'},permissions,repository,resources}),/Larry/)
+ const proposal=await prepareDirectProposal({input,session,permissions,repository,resources})
+ assert.equal((await resources.read(resource)).value[0].status,'In Progress')
+ await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{}})
+ assert.equal((await resources.read(resource)).value[0].status,'Done')
+ await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),/changed after your review/)
+})

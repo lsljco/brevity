@@ -61,6 +61,7 @@ export const ACTION_TYPES = {
   'household.inventory.quantity.update': 'planning',
   'household.inventory.waste.create': 'planning',
   'household.intelligence.config.update': 'planning',
+  'project.review': 'projects',
   'project.create': 'projects',
   'project.update': 'projects',
   'project.delete': 'projects',
@@ -132,6 +133,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.intelligence.config.update': ['configJson'],
   'project.create': ['pushToFamilyCalendar', 'vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'owner', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
   'project.update': ['pushToFamilyCalendar', 'vendorId', 'title', 'type', 'room', 'roomCustom', 'notes', 'status', 'priority', 'date', 'endDate', 'estcost', 'actcost', 'raci', 'cname', 'cphone', 'cemail', 'caddress', 'bizLicense', 'coi', 'workersComp'],
+  'project.review': ['action','reason'],
   'project.delete': [],
   'calendar.create': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
@@ -323,6 +325,8 @@ function normalizeActionPayload(type, input) {
   const payload = input
   if(type.startsWith('vendor.'))return normalizeVendorPayload(type,payload)
   if(type==='apple.sources.update')return normalizeAppleSources(payload)
+  if(type.startsWith('household.maintenance.chore.')&&payload.signoffRequired===false)throw Error('All chores require Larry or Terica’s sign-off.')
+  if(type==='project.review'){if(!['approve','return'].includes(payload.action)||Object.keys(payload).some(key=>!['action','reason'].includes(key))||payload.reason!==undefined&&(typeof payload.reason!=='string'||payload.reason.length>2000)||payload.action==='return'&&!payload.reason?.trim())throw Error('Choose approve, or return with a reason.');return {action:payload.action,reason:payload.reason||''}}
   if(type.startsWith('education.hub.'))return normalizeLearningItem(payload)
   if(type==='module.configuration.update')return normalizeModulePatch(payload)
   if(type.startsWith('activity.'))return normalizeActivityPayload(type,payload)
@@ -517,7 +521,7 @@ export function normalizeActionOperation(input = {}) {
     id: cleanId(input.id) || randomUUID(),
     type,
     domain: ACTION_TYPES[type],
-    description: fixedRecurringScope && !reviewedDescription.toLowerCase().includes(fixedRecurringScope.toLowerCase())
+    description: (type==='project.create'||type==='project.update')&&payload.status==='Done'?'Submit project completion for Larry’s sign-off: '+baseDescription:fixedRecurringScope && !reviewedDescription.toLowerCase().includes(fixedRecurringScope.toLowerCase())
       ? `${reviewedDescription} · ${fixedRecurringScope}`
       : reviewedDescription,
     targetId: cleanId(input.targetId),
@@ -527,6 +531,7 @@ export function normalizeActionOperation(input = {}) {
     defaultScope,
     risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
+  if(type==='project.review'&&!operation.targetId)throw Error('Select the exact project for sign-off.')
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
   if (((operation.domain === 'planning' && !type.startsWith('education.hub.') && type!=='apple.sources.update' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && !type.startsWith('meal.recipe.') && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
@@ -714,6 +719,7 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type==='project.review')return member==='Larry'?{allowed:true}:{allowed:false,reason:'Larry must sign off on projects.'}
   if(operation.type.startsWith('education.hub.'))return role==='admin'||permissions?.planning&&operation.payload.owner===member&&(operation.type==='education.hub.create'||currentRecord?.owner===member)?{allowed:true}:{allowed:false,reason:'Edit your own learning with planning access; household learning requires administrator review.'}
   if(operation.type.startsWith('health.care.'))return (role==='admin'||permissions?.planning&&operation.payload.member===member&&(operation.type==='health.care.create'||currentRecord?.member===member))?{allowed:true}:{allowed:false,reason:'Shared care changes require the member’s planning access or household administrator review.'}
   const governance=governancePermission({operation,member,role,permissions});if(governance)return governance

@@ -1,3 +1,4 @@
+import {submitProjectCompletion,reviewProjectCompletion} from '../../src/homehq/projectSignoff.js'
 import {LEARNING_HUB_RESOURCE,applyLearningItem} from '../../src/education/learningHub.js'
 import {CARE_RESOURCE,applyCareAction} from '../../src/health/healthCare.js'
 import {GOVERNANCE_TYPES,preferenceResource,applyGovernance} from '../../src/governance/governanceModel.js'
@@ -104,7 +105,7 @@ export function recordForOperation(value, operation) {
   if (operation.type === 'plan.pillar.update') return value?.[operation.payload?.pillar] || null
   if (operation.type === 'plan.alignment.update') return value?.morningAlignment || null
   if (operation.type === 'plan.recap.update') return value?.recap || null
-  if (operation.type === 'project.update' || operation.type === 'project.delete') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
+  if (operation.type === 'project.review' || operation.type === 'project.update' || operation.type === 'project.delete') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
   if (operation.type === 'forecast.update') return ['model','planningExpense','expenseMode'].includes(operation.targetId) ? value : (value?.scenarios || []).find(item => item.id === operation.targetId)
   if (operation.type === 'finance.account.link') return (value?.accounts || []).find(item => item.id === operation.targetId)
   if (operation.type.startsWith('recurring.') && operation.type !== 'recurring.create') return (value?.transactions || []).find(item => item.id === operation.targetId)
@@ -280,7 +281,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       photos:[],files:[],...projectFields,createdAt:changedAt,updatedAt:changedAt,updatedBy:context.actor||'Household member',
     }
     if(item.pushToFamilyCalendar && !projectCalendarEvent(item))throw new Error('A calendar-visible project requires a valid start or due date and an end on or after its start.')
-    return { before, after:[...(Array.isArray(value) ? value : []), item], createdId:item.id }
+    return { before, after:[...(Array.isArray(value) ? value : []), submitProjectCompletion(item,{actor:context.actor,now:changedAt})], createdId:item.id }
   }
   if (operation.type === 'project.update') {
     let found = false
@@ -288,12 +289,13 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     if (payload.date !== undefined) { projectChanges.startDate = payload.date; delete projectChanges.date }
     if (payload.endDate !== undefined) { projectChanges.due = payload.endDate; delete projectChanges.endDate }
     const changedAt=nowIso(context.now||(()=>new Date()))
-    const after = (Array.isArray(value) ? value : []).map(item => { if (item.id !== operation.targetId) return item; found = true; return {...item,...clone(projectChanges),updatedAt:changedAt,updatedBy:context.actor||'Household member'} })
+    const after = (Array.isArray(value) ? value : []).map(item => { if (item.id !== operation.targetId) return item; found = true; const updated={...item,...clone(projectChanges),updatedAt:changedAt,updatedBy:context.actor||'Household member',signoffRequired:true,signoffBy:'Larry'};return updated.status==='Done'?submitProjectCompletion(updated,{actor:context.actor,now:changedAt}):payload.status!==undefined?{...updated,completionReview:null}:updated })
     if (!found) throw new Error('That project no longer exists. Refresh Brevity and ask again.')
     const updated=after.find(item=>item.id===operation.targetId)
     if(updated.pushToFamilyCalendar && !projectCalendarEvent(updated))throw new Error('A calendar-visible project requires a valid start or due date and an end on or after its start.')
     return { before, after }
   }
+  if(operation.type==='project.review'){const projects=Array.isArray(value)?value:[];if(!projects.some(item=>item.id===operation.targetId))throw Error('That project no longer exists.');return {before,after:projects.map(item=>item.id===operation.targetId?reviewProjectCompletion(item,payload,{actor:context.actor,now:nowIso(context.now||(()=>new Date()))}):item)}}
   if (operation.type === 'project.delete') {
     const projects=Array.isArray(value) ? value : []
     if (!projects.some(item => item.id === operation.targetId)) throw new Error('That project no longer exists. Refresh Brevity and ask again.')
