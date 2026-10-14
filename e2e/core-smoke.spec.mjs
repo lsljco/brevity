@@ -654,6 +654,7 @@ test('Next 7 Days sends the selected meal date to Brevity',async({page})=>{
   await page.getByRole('button',{name:'Next 7 days'}).click()
   const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
   await expect(page.locator('.today-snack-card')).toHaveCount(2)
+  await page.getByText('Nutrition goals & food logged',{exact:true}).click()
   await page.getByRole('button',{name:'Balance my meals with Brevity'}).click()
   await expect.poll(()=>requests.length).toBe(1)
   const message=requests[0].messages.at(-1).content
