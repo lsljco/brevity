@@ -10,6 +10,6 @@ export function priorityImpact(item){
 }
 export const rankDirectionPriorities=items=>[...items].sort((a,b)=>priorityImpact(b)-priorityImpact(a))
 export function todayDirection(plan,priorities){
- const focus=String(plan.household?.keyFocus||'').trim()
+ const focus=(plan.household?.keyFocusCompleted||plan.household?.keyFocusDate>plan.date)?'':String(plan.household?.keyFocus||'').trim()
  return focus?{title:focus,explicitFocus:true}:priorities[0]||null
 }

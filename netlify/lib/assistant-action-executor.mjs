@@ -178,6 +178,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const pillar = payload.pillar
     const current = value?.[pillar] || {}
     const patch = clone(payload.patch)
+    if(pillar==='household'&&Object.hasOwn(patch,'keyFocus')&&patch.keyFocus!==current.keyFocus){patch.keyFocusCompleted=false;patch.keyFocusDate=''}
     const nextPillar = pillar === 'education' && patch.isaiah
       ? { ...current, ...patch, isaiah:{ ...(current.isaiah || {}), ...patch.isaiah } }
       : { ...current, ...patch }

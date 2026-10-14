@@ -1,3 +1,4 @@
+import {loadOpenWork} from './open-work.mjs'
 import {syncProjectCalendarEvents} from '../../src/homehq/projectData.js'
 import {householdFinanceSchedule} from './household-finance-schedule.mjs'
 import { getStore } from './scoped-store.mjs'
@@ -195,7 +196,7 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
   })
   const sharedStore=getStore({name:SHARED_STORE,consistency:'strong',siteID:process.env.NETLIFY_SITE_ID,token:process.env.NETLIFY_TOKEN})
   const meals = await productionMealPlanRepository()
-  return buildAuthoritativeAssistantContext({
+  const context=await buildAuthoritativeAssistantContext({
     member,
     date,
     now,
@@ -204,4 +205,6 @@ export async function loadProductionAuthoritativeAssistantContext({ member, now 
     loadActiveSermon: () => readOptionalAuthoritativeRecord(dataStore, ACTIVE_SERMON_KEY),
     loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await readOptionalAuthoritativeRecord(sharedStore,`${HOUSEHOLD_ID}/records/${key}`)]))),
   })
+  try{context.openWork={state:'available',items:(await loadOpenWork(date)).map(({operation,...item})=>item),notice:'Unfinished work carries forward each day until explicitly completed. Check in about these items; do not ask the household to recreate them or reapprove carry-forward. Update the original source date and ID when completion is confirmed. Never infer completion from elapsed time.'}}catch{context.openWork={state:'unavailable',items:[],notice:'Unfinished work could not be loaded; do not infer that nothing remains.'}}
+  return context
 }

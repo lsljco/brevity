@@ -16,7 +16,7 @@ export function responsibilityStatus(item,minute,report={}){
  if(report.state==='in-progress'||/in progress/i.test(item.status))return 'In progress'
  return 'Scheduled'
 }
-export function buildDailyResponsibilities({date,plan={},schedule={},maintenance={},calendar=[],projects=[],meals={},sources={}},member,now=new Date(),reports={}){
+export function buildDailyResponsibilities({date,plan={},schedule={},maintenance={},calendar=[],projects=[],openWork=[],meals={},sources={}},member,now=new Date(),reports={}){
  const clock=householdClock(now),state=normalizeHouseholdScheduleState(schedule),care=normalizeHouseholdMaintenanceState(maintenance)
  const tasks=buildHouseholdMaintenanceWeek(new Date(`${date}T12:00:00`),care).find(day=>day.date===date)?.tasks.map(task=>({...task,occurrence:householdOccurrence(care,task),status:occurrenceStatus(task,householdOccurrence(care,task))}))||[]
  const routines=connectRoutineChores(routineOccurrencesForDate(state,date),tasks).filter(item=>!item.cancelled)
@@ -24,7 +24,7 @@ export function buildDailyResponsibilities({date,plan={},schedule={},maintenance
  const add=(item,kind,id,targetId=id)=>{
   if(!id||item.cancelled||String(item.status).toLowerCase()==='cancelled')return
   const owners=names(item),time=item.startTime||item.time||''
-  const row={id:`${kind}:${id}`,targetId,kind,date,title:item.title||item.name||'Untitled responsibility',time,endTime:item.endTime||'',owners,status:item.status||'Scheduled',notes:item.notes||'',signoffRequired:Boolean(item.signoffRequired),source:item.source||kind}
+  const row={id:`${kind}:${id}`,targetId,kind,date,title:item.title||item.name||'Untitled responsibility',time,endTime:item.endTime||'',owners,status:item.status||'Scheduled',notes:item.notes||'',signoffRequired:Boolean(item.signoffRequired),source:item.source||kind,sourceDate:item.sourceDate||date}
   if(!owners.length&&!closed(item))gaps.push({...row,reason:'Owner to confirm'})
   if(owners.includes(member)){
    if(!time&&!item.allDay&&!closed(item))gaps.push({...row,reason:'Time to agree'})
@@ -39,16 +39,17 @@ export function buildDailyResponsibilities({date,plan={},schedule={},maintenance
  for(const item of tasks.filter(item=>!linked.has(item.id))){const owners=item.occurrence.coveredBy?[item.occurrence.coveredBy]:item.owners?.includes('Everyone')?HOUSEHOLD_MEMBERS:item.owners;add({...item,owners},'chore',item.occurrenceId)}
  // Only named attendees get appointments; source-managed copies come from their authoritative records above.
  for(const item of calendar.filter(item=>onDate(item,date)&&!/^household-(schedule|operation)-|^project-|^daily-/.test(item.sourceId||item.id||'')))add(item,'calendar',item.id)
- for(const raw of projects){const item=normalizeProjectItem(raw);if(item.due!==date||closed(item))continue;add({...item,owner:'',owners:item.raci.responsible,participants:[]},'project',item.id)}
+ for(const raw of projects){const item=normalizeProjectItem(raw);if(!(item.startDate||item.due)||(item.startDate||item.due)>date||closed(item))continue;add({...item,owner:'',owners:item.raci.responsible,participants:[]},'project',item.id)}
+ for(const item of openWork){if(item.source.kind==='project'||item.source.kind==='assignment'&&item.source.date===date)continue;add({...item,sourceDate:item.source.date,startTime:'',allDay:true,status:item.status==='deferred'?'pending':item.status},item.source.kind,`${item.source.date}:${item.source.id}`,item.source.id)}
  for(const [slot,meal] of Object.entries(meals||{})){
   if(!['breakfast','lunch','dinner'].includes(slot)||!meal?.name)continue
   const assigned=list(plan.assignments).some(item=>String(item.notes||'').includes(`[meal:${slot}]`)&&names(item).length)
   if(!assigned)gaps.push({id:`meal:${slot}`,kind:'meal',targetId:slot,date,title:`Cook ${slot}: ${meal.name}`,reason:'Cook and preparation time to confirm'})
  }
  const items=[...new Map(all.map(item=>[item.id,item])).values()].sort((a,b)=>(minuteOfDay(a.time)??1440)-(minuteOfDay(b.time)??1440)||a.title.localeCompare(b.title))
- return {date,member,items,gaps:[...new Map(gaps.map(item=>[item.id,item])).values()],sources:Object.fromEntries(['plan','schedule','maintenance','calendar','projects','meals'].map(key=>[key,sources[key]||'unavailable'])),updatedAt:now.toISOString(),counts:Object.fromEntries(['Scheduled','In progress','Awaiting verification','Overdue','Needs help','Completed'].map(status=>[status,items.filter(item=>item.progress===status).length]))}
+ return {date,member,items,gaps:[...new Map(gaps.map(item=>[item.id,item])).values()],sources:Object.fromEntries(['plan','schedule','maintenance','calendar','projects','meals','openWork'].map(key=>[key,sources[key]||'unavailable'])),updatedAt:now.toISOString(),counts:Object.fromEntries(['Scheduled','In progress','Awaiting verification','Overdue','Needs help','Completed'].map(status=>[status,items.filter(item=>item.progress===status).length]))}
 }
 export function briefingAssistantPrompt(item,member){
- const action=item.kind==='meal'?`Assign cooking for ${item.title}. Ask who will cook and the preparation start/end times, then prepare an assignment.create review for ${item.date} with notes containing [meal:${item.targetId}]. Do not infer the cook from who scheduled the meal.`:`Help ${member} report completion, request help, or reschedule ${item.title} on ${item.date}. Read the exact ${item.kind} record ID ${item.targetId} first. ${item.kind==='routine'?'Change only this dated occurrence, not the whole routine. ':''}Preserve chore checklists and required sign-off. Use the existing reviewed Action Mode change; do not create a duplicate task.`
+ const action=item.kind==='meal'?`Assign cooking for ${item.title}. Ask who will cook and the preparation start/end times, then prepare an assignment.create review for ${item.date} with notes containing [meal:${item.targetId}]. Do not infer the cook from who scheduled the meal.`:`Help ${member} report completion, request help, or reschedule ${item.title} originally planned on ${item.sourceDate||item.date}. This unfinished item remains visible each day until explicitly completed; do not create a daily copy. Read the exact ${item.kind} record ID ${item.targetId} first. ${item.kind==='routine'?'Change only this dated occurrence, not the whole routine. ':''}Preserve chore checklists and required sign-off. Use the existing reviewed Action Mode change; do not create a duplicate task.`
  return action
 }

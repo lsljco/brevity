@@ -1,3 +1,4 @@
+import {parseRoutineTiming} from '../../src/household/routineRules.js'
 import {CARE_RESOURCE,normalizeCareAction} from '../../src/health/healthCare.js'
 import {GOVERNANCE_TYPES,governancePermission,preferenceResource} from '../../src/governance/governanceModel.js'
 import {normalizeOrchestrationPayload} from '../../src/governance/orchestration.js'
@@ -113,10 +114,10 @@ const ACTION_PAYLOAD_FIELDS = {
   'household.schedule.block.update': ['title', 'date', 'startTime', 'endTime', 'owner', 'participants', 'pillar', 'notes'],
   'household.schedule.block.delete': [],
   'household.schedule.invitation.update': ['response'],
-  'household.schedule.routine.create': ['title', 'owner', 'participants', 'days', 'startTime', 'endTime', 'pillar', 'notes', 'enabled'],
-  'household.schedule.routine.update': ['title', 'owner', 'participants', 'days', 'startTime', 'endTime', 'pillar', 'notes', 'enabled'],
+  'household.schedule.routine.create': ['title', 'owner', 'participants', 'days', 'startTime', 'endTime', 'pillar', 'notes', 'enabled', 'timingRuleJson'],
+  'household.schedule.routine.update': ['title', 'owner', 'participants', 'days', 'startTime', 'endTime', 'pillar', 'notes', 'enabled', 'timingRuleJson'],
   'household.schedule.routine.delete': [],
-  'household.schedule.occurrence.update': ['date', 'startTime', 'endTime', 'cancelled'],
+  'household.schedule.occurrence.update': ['date', 'startTime', 'endTime', 'cancelled', 'reset'],
   'household.maintenance.coverage.update': ['coveredBy'],
   'household.maintenance.exception.update': ['exception'],
   'household.maintenance.completion.update': ['action', 'reason', 'completedItems'],
@@ -329,7 +330,12 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='meal.schedule.update'&&field==='commandJson'){
+    if(type==='household.schedule.occurrence.update'&&field==='reset'){
+      if(value!==true)throw Error('Reset must restore the normal routine.');normalized.reset=true
+    }else if(field==='timingRuleJson'){
+      if(typeof value!=='string')throw Error('Routine timing must be a reviewed rule.');
+      normalized[field]=value?JSON.stringify(parseRoutineTiming(value)):''
+    }else if(type==='meal.schedule.update'&&field==='commandJson'){
       if(typeof value!=='string'||value.length>30000)throw Error('The meal calendar change is too large.');
       normalized.commandJson=JSON.stringify(normalizeMealScheduleCommand(value))
     }else if(type==='recurring.update'&&field==='reconciliation'){
@@ -544,7 +550,8 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'household.schedule.routine.create' && (!payload.title || !payload.startTime || !payload.endTime || !payload.days?.length)) throw new Error('A household routine requires a title, at least one day, and exact start and end times.')
   if (type === 'household.schedule.occurrence.update') {
     if (payload.date !== operation.targetDate) throw new Error('A household routine occurrence requires the exact reviewed date.')
-    const restoreOnly=payload.cancelled===false&&Object.keys(payload).every(key=>['date','cancelled'].includes(key))
+    if(payload.reset&&Object.keys(payload).some(k=>!['date','reset'].includes(k)))throw Error('Restoring a routine cannot include other changes.')
+    const restoreOnly=payload.reset===true||payload.cancelled===false&&Object.keys(payload).every(key=>['date','cancelled'].includes(key))
     if (!payload.cancelled && !restoreOnly && (!payload.startTime || !payload.endTime)) throw new Error('A changed routine occurrence requires exact start and end times.')
   }
   if (type === 'household.maintenance.coverage.update' && payload.coveredBy && !HOUSEHOLD_MEMBERS.includes(payload.coveredBy)) throw new Error('Household coverage requires a recognized member.')
@@ -735,8 +742,9 @@ export function permissionForOperation({ operation, member, role, permissions, c
     // Assigned chore owners and named verifiers may perform the narrow task
     // lifecycle even when they cannot administer the broader household plan.
     // householdPermissionForOperation still enforces the exact owner/verifier.
+    const personalRoutine=['household.schedule.routine.create','household.schedule.routine.update','household.schedule.occurrence.update'].includes(operation.type)
     const responsibilityLifecycle=operation.type==='household.maintenance.completion.update' || operation.type==='household.maintenance.exception.update'
-    if (role !== 'admin' && !responsibilityLifecycle && !permissions?.[operation.domain]) return { allowed:false, reason:`${operation.domain} actions are not enabled for ${member}.` }
+    if (role !== 'admin' && !responsibilityLifecycle && !personalRoutine && !permissions?.[operation.domain]) return { allowed:false, reason:`${operation.domain} actions are not enabled for ${member}.` }
     return householdPermissionForOperation({ operation, member, role, currentRecord })
   }
   if (operation.domain === 'projects' && role !== 'admin' && (operation.payload?.pushToFamilyCalendar === true || currentRecord?.pushToFamilyCalendar === true) && !permissions?.calendar) return {allowed:false,reason:'Changing a calendar-visible project requires Family Calendar permission.'}

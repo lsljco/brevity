@@ -14,6 +14,7 @@ export function dailyHouseholdBriefing(context){
  const financeAllowed=context.access?.finance===true,educationAllowed=context.access?.education===true
  return {date,member:context.signedInMember,timeZone:'America/New_York',readOnly:true,
   sources:{dailyPlan:state('daily-plan'),meals:state('rolling-meals'),sermon:state('active-sermon'),...schedule.sources,activities:context.supplementalSources?.[`activity:${date}`]||'unavailable'},
+  openWork:context.openWork||{state:'unavailable',items:[]},
   priorities:plan?.topPriorities||[],focus:plan?.dayObjective||'',
   pillars:{
    spiritual:{plan:plan?.spiritual||null,activeSermon:context.activeSermon||null,reportedStudy:byKind('study-note')},

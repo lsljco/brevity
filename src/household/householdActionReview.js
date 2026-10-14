@@ -49,12 +49,12 @@ export function scheduleRoutineCreateOperation(draft) {
   const title=clean(draft?.title)
   if (!title) throw new Error('A routine requires a title.')
   if (!draft?.days?.length) throw new Error('A routine requires at least one day.')
-  return { type:'household.schedule.routine.create',targetDate:householdScheduleDate(),payload:{title,owner:draft.owner,participants:draft.participants||[],days:draft.days,startTime:draft.startTime,endTime:draft.endTime,pillar:draft.pillar,notes:clean(draft.notes),enabled:draft.enabled!==false},description:`Create recurring household routine ${quote(title)}.` }
+  return { type:'household.schedule.routine.create',targetDate:householdScheduleDate(),payload:{title,owner:draft.owner,participants:draft.participants||[],days:draft.days,startTime:draft.startTime,endTime:draft.endTime,pillar:draft.pillar,notes:clean(draft.notes),enabled:draft.enabled!==false,timingRuleJson:draft.timingRuleJson||''},description:`Create recurring household routine ${quote(title)}.` }
 }
 
 export function scheduleRoutineUpdateOperation(before, draft) {
   if (!before?.id) throw new Error('That routine is no longer available. Refresh Routines and try again.')
-  const fields=['title','owner','participants','days','startTime','endTime','pillar','notes','enabled']
+  const fields=['title','owner','participants','days','startTime','endTime','pillar','notes','enabled','timingRuleJson']
   const payload=Object.fromEntries(fields.flatMap(field=>JSON.stringify(before?.[field])===JSON.stringify(draft?.[field])?[]:[[field,field==='notes'||field==='title'?clean(draft?.[field]):draft?.[field]]]))
   if (!Object.keys(payload).length) throw new Error('Change at least one routine field before requesting review.')
   if ('title' in payload && !payload.title) throw new Error('A routine requires a title.')
@@ -94,7 +94,9 @@ const storageKeyForOperation = operation => {
   throw new Error('That household operation is not connected to a synchronized record.')
 }
 
-export async function requestHouseholdActionReview({ summary, operation, storage = localStorage }) {
+export async function requestHouseholdActionReview({ summary, operation, operations, storage = localStorage }) {
+  operation=operation||operations?.[0]
+  if(operations?.length>8)throw Error('Review up to eight routines together.')
   const key=storageKeyForOperation(operation)
   let expectedVersion
   try { expectedVersion=getAcknowledgedSharedStateVersion(storage,key) }
@@ -103,7 +105,7 @@ export async function requestHouseholdActionReview({ summary, operation, storage
     await syncSharedState(storage)
     expectedVersion=getAcknowledgedSharedStateVersion(storage,key)
   }
-  const result=await prepareDirectAction({summary,operation,expectedVersion})
+  const result=await prepareDirectAction({summary,...(operations?{operations}:{operation}),expectedVersion})
   if (!result?.proposal?.id) throw new Error('Action Mode did not return a reviewable household proposal.')
   requestActionReview(result.proposal)
   return result.proposal
