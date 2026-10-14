@@ -67,3 +67,20 @@
 .brevity-assistant-composer>button.brevity-restart-microphone{position:static;transform:none;display:block;width:auto;max-width:100%;height:auto;min-height:44px;margin:10px 0;padding:10px 16px;font:inherit;white-space:normal;text-align:center}
 
 .brevity-action-error{width:100%;padding:14px;border:1px solid #b87969;border-radius:12px;background:#291b18;color:#f0c6bb;overflow-wrap:anywhere}.brevity-action-error p{margin:6px 0 0}
+
+/* Routine conversation stays compact and never places a backdrop over the page. */
+.brevity-voice-launcher{position:fixed;right:185px;bottom:24px;z-index:1300;min-height:48px;padding:10px 16px;border-radius:999px;border:1px solid var(--gold);background:var(--bg);color:var(--gold);font:inherit;cursor:pointer;display:flex;gap:8px;align-items:center}
+.brevity-assistant-drawer.is-compact{top:auto;right:24px;bottom:85px;width:min(430px,calc(100vw - 32px));height:auto;max-height:55dvh;border-radius:16px;transform:none;display:none;box-shadow:0 8px 28px rgba(0,0,0,.25)}
+.brevity-assistant-drawer.is-compact.is-open{display:flex;flex-direction:column}
+.brevity-assistant-drawer.is-compact .brevity-assistant-header{padding:12px 16px}
+.brevity-assistant-drawer.is-compact .brevity-assistant-header h2{font-size:18px}
+.brevity-assistant-drawer.is-compact .brevity-assistant-header p,.brevity-assistant-drawer.is-compact .brevity-assistant-header span,.brevity-assistant-drawer.is-compact .brevity-conversation-notice,.brevity-assistant-drawer.is-compact .brevity-assistant-voice,.brevity-assistant-drawer.is-compact .brevity-assistant-welcome,.brevity-assistant-drawer.is-compact .brevity-assistant-header-actions button[title]{display:none}
+.brevity-assistant-drawer.is-compact .brevity-assistant-transcript{padding:12px 16px;min-height:0;overflow:auto}
+.brevity-assistant-drawer.is-compact .brevity-assistant-composer{padding:10px 16px}
+.brevity-assistant-drawer.is-compact .brevity-action-review{position:fixed;inset:0;z-index:1400;display:flex;justify-content:center;align-items:center;background:rgba(0,0,0,.65);padding:16px}
+.brevity-assistant-drawer.is-compact .brevity-action-review>section{width:min(600px,100%);max-height:90dvh;overflow:auto;background:var(--bg);border:1px solid var(--gold);border-radius:16px;padding:20px}
+@media(max-width:640px){.brevity-voice-launcher{left:16px;right:auto;bottom:calc(94px + env(safe-area-inset-bottom));font-size:13px}.brevity-assistant-drawer.is-compact{right:16px;bottom:calc(152px + env(safe-area-inset-bottom));max-height:50dvh}}
+
+.brevity-voice-launcher{right:260px}.brevity-assistant-drawer.is-compact .brevity-assistant-header,.brevity-assistant-drawer.is-compact .brevity-assistant-composer{flex-shrink:0}.brevity-assistant-drawer.is-compact .brevity-assistant-transcript{flex:1 1 auto}.brevity-assistant-drawer.is-compact .brevity-assistant-header-actions button:first-child{width:auto;padding:8px;font-size:13px}@media(max-width:640px){.brevity-voice-launcher{right:auto;padding:10px}.brevity-voice-launcher span{display:none}}
+
+@media(min-width:641px){.brevity-voice-launcher{right:calc(var(--brevity-command-dock-assistant-width,220px) + 12px);bottom:12px}}

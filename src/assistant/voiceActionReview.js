@@ -1,7 +1,7 @@
 // Voice confirms an already-normalized, single routine change. It never lets
 // the model execute a write or turns a casual yes into authorization.
-const routineTypes=new Set(['assignment.create','household.schedule.block.create','assignment.update','household.schedule.block.update','activity.record'])
-const names={'assignment.create':'Create a task','household.schedule.block.create':'Create a household work block','activity.record':'Record a reported activity','assignment.update':'Update a task','household.schedule.block.update':'Update a household work block'}
+const routineTypes=new Set(['education.hub.create','assignment.create','household.schedule.block.create','assignment.update','household.schedule.block.update','activity.record'])
+const names={'education.hub.create':'Add a learning item','assignment.create':'Create a task','household.schedule.block.create':'Create a household work block','activity.record':'Record a reported activity','assignment.update':'Update a task','household.schedule.block.update':'Update a household work block'}
 const fieldNames={title:'Title',owner:'Owner',participants:'Participants',date:'Date',startTime:'Start time',endTime:'End time',pillar:'Pillar',notes:'Notes',status:'Status',priority:'Priority',source:'Source'}
 const activityKinds=new Set(['workout','progress','maintenance','study-note','sermon-note','ministry-followup','sleep','hydration'])
 const activityFields={kind:'Activity type',title:'Title',notes:'Notes',durationMinutes:'Duration in minutes',quantity:'Quantity',unit:'Unit',status:'Status'}
@@ -13,10 +13,10 @@ export function voiceApprovalCommand(text){
 export function voiceReviewText(proposal,member,now=Date.now()){
  if(!proposal?.id||proposal.actor!==member||proposal.state!=='pending'||proposal.risk!=='confirmation'||Date.parse(proposal.expiresAt)<=now||!Number.isFinite(Date.parse(proposal.expiresAt))||proposal.operations?.length!==1)return ''
  const op=proposal.operations[0],payload=op.payload||{}
- if(!routineTypes.has(op.type)||op.risk!=='confirmation'||op.defaultScope!=='this-item'||op.allowedScopes?.length!==1||op.allowedScopes[0]!=='this-item'||!op.targetDate)return ''
+ if(!routineTypes.has(op.type)||op.risk!=='confirmation'||op.defaultScope!=='this-item'||op.allowedScopes?.length!==1||op.allowedScopes[0]!=='this-item'||(!op.targetDate&&op.type!=='education.hub.create'))return ''
  const activity=op.type==='activity.record'
  if(activity&&(op.targetId!==member||!activityKinds.has(payload.kind)))return ''
- const labels=activity?activityFields:fieldNames
+ const labels=op.type==='education.hub.create'?{title:'Title',kind:'Learning type',owner:'Learner',parentId:'Program or topic ID',date:'Date',time:'Time',objective:'Objective',nextStep:'Next step',notes:'Notes',url:'Resource URL',status:'Status'}:activity?activityFields:fieldNames
  const updating=op.type.endsWith('.update'),target=op.voiceTarget
  if(updating){
   if(!op.targetId||!target?.title||target.id!==op.targetId||!target.resource||!Number.isInteger(target.version)||proposal.expectedVersions?.[target.resource]!==target.version)return ''

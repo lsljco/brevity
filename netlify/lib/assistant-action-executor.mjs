@@ -1,3 +1,4 @@
+import {LEARNING_HUB_RESOURCE,applyLearningItem} from '../../src/education/learningHub.js'
 import {CARE_RESOURCE,applyCareAction} from '../../src/health/healthCare.js'
 import {GOVERNANCE_TYPES,preferenceResource,applyGovernance} from '../../src/governance/governanceModel.js'
 import {validateGovernance} from './governance-service.mjs'
@@ -52,6 +53,7 @@ const hashValue = (value = '') => {
 }
 
 export function resourceForOperation(operation) {
+  if(operation.type.startsWith('education.hub.'))return LEARNING_HUB_RESOURCE
   if(operation.type.startsWith('health.care.'))return CARE_RESOURCE
   if(operation.type==='orchestration.preferences.update')return preferenceResource(operation.targetId)
   if(operation.type.startsWith('orchestration.'))return GOVERNANCE_RESOURCE
@@ -86,6 +88,7 @@ export function resourceForOperation(operation) {
 }
 
 export function recordForOperation(value, operation) {
+  if(operation.type.startsWith('education.hub.'))return value?.items?.find(item=>item.id===operation.targetId)||null
   if(operation.type.startsWith('health.care.'))return value?.items?.find(item=>item.id===operation.targetId)||null
   if(operation.type.startsWith('orchestration.'))return value?.cases?.[operation.targetId]||null
   if(operation.type.startsWith('vendor.'))return value?.vendors?.find(v=>v.id===(operation.payload?.vendorId||operation.targetId))||null
@@ -122,6 +125,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if(operation.type.startsWith('orchestration.'))return {before,after:applyOrchestration(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,orchestrationCase:context.orchestrationCase})}
   if(operation.type.startsWith('vendor.'))return {before,after:applyVendorOperation(value,operation,createId)}
   if(operation.type==='apple.sources.update')return {before,after:normalizeAppleSources(operation.payload).sources}
+  if(operation.type.startsWith('education.hub.'))return {before,after:applyLearningItem(value,operation)}
   if(operation.type==='module.configuration.update')return {before,after:applyModulePatch(value,operation.payload)}
   if(operation.type.startsWith('activity.'))return {before,after:applyActivity(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='education.observation.record')return {before,after:applyLearningObservation(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
