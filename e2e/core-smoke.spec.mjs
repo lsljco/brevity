@@ -72,6 +72,7 @@ async function mockBackend(page) {
     else if (path.endsWith('/meal-plans')) body = mealPlanResponse(url.searchParams.get('startDate') || today())
     else if (path.endsWith('/plaid-accounts')) body = { connected:false, accounts:[], errors:[], syncedAt:new Date().toISOString() }
     else if (path.endsWith('/plaid-transactions')) body = { transactions:[], errors:[] }
+    else if (path.endsWith('/learning-hub')) body = {items:[],version:0}
     else if (path.endsWith('/health-alerts')) body = { alerts:[] }
     await route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(body) })
   })
@@ -1009,4 +1010,67 @@ test('Today opens with four questions and seven visible daily pillars while hist
  await expect(page.locator('.today-four-questions')).not.toContainText('Old August responsibility')
  await expect(page.locator('.today-macro-summary').first()).not.toBeVisible()
  const width=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));expect(width.scroll).toBeLessThanOrEqual(width.viewport+1)
+})
+
+
+test('Education opens a household learning hub and preserves the tutor workspace',async({page})=>{
+ await page.getByRole('button',{name:'Open Education',exact:true}).click()
+ const hub=page.locator('.learning-hub')
+ await expect(hub.getByRole('heading',{name:'Education',exact:true})).toBeVisible()
+ await hub.getByRole('button',{name:'Learning Programs',exact:true}).click()
+ await expect(hub.getByRole('button',{name:'AI Curriculum',exact:true})).toBeVisible()
+ await hub.getByRole('button',{name:'AI Curriculum',exact:true}).click()
+ await hub.getByLabel('Title',{exact:true}).fill('Practical AI')
+ await expect(hub.getByRole('button',{name:'Review changes',exact:true})).toBeVisible()
+ await hub.getByRole('button',{name:'Cancel',exact:true}).click()
+ await hub.getByRole('button',{name:'Open Isaiah’s Daily Tutor',exact:true}).click()
+ await expect(page.getByRole('heading',{name:'Daily Tutor',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Back to Education',exact:true}).click()
+ await expect(page.locator('.learning-hub')).toBeVisible()
+})
+
+test('page requests use compact conversation without a backdrop and only changes open confirmation',async({page})=>{
+ await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:1,messages:[]}}))
+ await page.route('**/.netlify/functions/brevity-assistant',r=>r.fulfill({json:{message:'What would you like to learn?',proposal:null}}))
+ await page.reload()
+ await page.getByRole('button',{name:'Open Education',exact:true}).click()
+ await page.getByRole('button',{name:'Plan with Brevity',exact:true}).click()
+ const compact=page.getByRole('region',{name:'Brevity Assistant',exact:true})
+ await expect(compact.getByText('What would you like to learn?',{exact:true})).toBeVisible()
+ await expect(page.locator('.brevity-assistant-backdrop')).toHaveCount(0)
+ await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('button',{name:'Speak to Brevity',exact:true})).toBeVisible()
+ await compact.getByRole('button',{name:'Expand conversation',exact:true}).click()
+ await expect(page.getByRole('dialog',{name:'Brevity Assistant',exact:true})).toBeVisible()
+})
+
+
+test('Education saves only an approved item and shows the saved record after refresh',async({page})=>{
+ let items=[],version=0,proposal=null,executions=0
+ await page.route('**/.netlify/functions/learning-hub',r=>r.fulfill({json:{items,version}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',async r=>{
+  const input=r.request().postDataJSON()
+  proposal={id:'learning-review',actor:'Larry',state:'pending',risk:'confirmation',summary:input.summary,operations:[{...input.operation,id:'learning-op',domain:'planning',allowedScopes:['this-item'],defaultScope:'this-item',risk:'confirmation'}]}
+  await r.fulfill({json:{proposal}})
+ })
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',async r=>{
+  executions++;const op=proposal.operations[0];items=[{...op.payload,id:op.targetId}];version++
+  await r.fulfill({json:{audit:{summary:'Learning item saved',operations:proposal.operations}}})
+ })
+ await page.getByRole('button',{name:'Open Education',exact:true}).click()
+ const hub=page.locator('.learning-hub')
+ await hub.getByRole('button',{name:'Add learning item',exact:true}).click()
+ await hub.getByLabel('Title',{exact:true}).fill('Discuss responsible AI')
+ await hub.getByRole('combobox',{name:'Type',exact:true}).selectOption('session')
+ await hub.getByLabel('Date',{exact:true}).fill(today())
+ await hub.getByRole('button',{name:'Review changes',exact:true}).click()
+ const review=page.getByRole('dialog',{name:'Review proposed Brevity changes',exact:true})
+ await expect(review).toBeVisible();expect(executions).toBe(0)
+ await review.getByRole('button',{name:'Apply approved changes',exact:true}).click()
+ await expect(hub.getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()
+ expect(executions).toBe(1)
+ await page.locator('.brevity-assistant-drawer.is-open').getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+ await page.reload()
+ await page.getByRole('button',{name:'Open Education',exact:true}).click()
+ await expect(page.locator('.learning-hub').getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()
 })

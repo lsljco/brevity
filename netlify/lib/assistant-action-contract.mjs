@@ -1,3 +1,4 @@
+import {LEARNING_HUB_RESOURCE,normalizeLearningItem} from '../../src/education/learningHub.js'
 import {parseRoutineTiming} from '../../src/household/routineRules.js'
 import {CARE_RESOURCE,normalizeCareAction} from '../../src/health/healthCare.js'
 import {GOVERNANCE_TYPES,governancePermission,preferenceResource} from '../../src/governance/governanceModel.js'
@@ -22,6 +23,7 @@ import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-pla
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
 export const ACTION_DOMAINS = ['planning', 'calendar', 'projects', 'finance']
 export const ACTION_TYPES = {
+  'education.hub.create':'planning','education.hub.update':'planning',
   'health.care.create':'planning','health.care.update':'planning',
   ...Object.fromEntries(GOVERNANCE_TYPES.map(type=>[type,'planning'])),
   'orchestration.case.update':'planning','orchestration.pause.update':'planning',
@@ -206,6 +208,7 @@ const STRONG_TYPES = new Set(['health.care.create','health.care.update',...GOVER
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
+  if(operation.type.startsWith('education.hub.'))return LEARNING_HUB_RESOURCE
   if(operation.type.startsWith('health.care.'))return CARE_RESOURCE
   if(operation.type==='orchestration.preferences.update')return preferenceResource(operation.targetId)
   if(operation.type.startsWith('orchestration.'))return 'shared:brevity_orchestration_v1'
@@ -320,6 +323,7 @@ function normalizeActionPayload(type, input) {
   const payload = input
   if(type.startsWith('vendor.'))return normalizeVendorPayload(type,payload)
   if(type==='apple.sources.update')return normalizeAppleSources(payload)
+  if(type.startsWith('education.hub.'))return normalizeLearningItem(payload)
   if(type==='module.configuration.update')return normalizeModulePatch(payload)
   if(type.startsWith('activity.'))return normalizeActivityPayload(type,payload)
   if(type==='education.observation.record')return normalizeLearningObservation(payload)
@@ -524,8 +528,9 @@ export function normalizeActionOperation(input = {}) {
     risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
-  if (((operation.domain === 'planning' && type!=='apple.sources.update' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && !type.startsWith('meal.recipe.') && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
+  if (((operation.domain === 'planning' && !type.startsWith('education.hub.') && type!=='apple.sources.update' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && !type.startsWith('meal.recipe.') && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
+  if(type.startsWith('education.hub.')&&!operation.targetId)throw Error('Learning changes require a stable item ID.')
   if(type==='apple.sources.update'&&operation.targetId!=='apple-sources')throw Error('Choose the Apple calendar sources configuration.')
   if(type==='module.configuration.update'&&operation.targetId!=='household-modules')throw Error('Choose the household modules configuration.')
   if(type.startsWith('activity.')&&!HOUSEHOLD_MEMBERS.includes(operation.targetId))throw Error('Choose the signed-in member for an activity.')
@@ -709,6 +714,7 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
 }
 
 export function permissionForOperation({ operation, member, role, permissions, currentRecord }) {
+  if(operation.type.startsWith('education.hub.'))return role==='admin'||permissions?.planning&&operation.payload.owner===member&&(operation.type==='education.hub.create'||currentRecord?.owner===member)?{allowed:true}:{allowed:false,reason:'Edit your own learning with planning access; household learning requires administrator review.'}
   if(operation.type.startsWith('health.care.'))return (role==='admin'||permissions?.planning&&operation.payload.member===member&&(operation.type==='health.care.create'||currentRecord?.member===member))?{allowed:true}:{allowed:false,reason:'Shared care changes require the member’s planning access or household administrator review.'}
   const governance=governancePermission({operation,member,role,permissions});if(governance)return governance
   if(operation.type==='orchestration.pause.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Only the household administrator may pause household assistance.'}
