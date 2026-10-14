@@ -4,3 +4,5 @@
 .app-main .household-today-workspace>.today-sync-banner--error{position:static!important;inset:auto!important;z-index:auto!important;margin:12px 24px!important;max-height:none!important;min-height:0!important;width:auto!important}
 
 .today-next-step .today-focus-edit{background:transparent;color:var(--gold-light);flex-shrink:0}
+
+.open-work-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.open-work-actions button{min-height:44px;padding:8px 12px}

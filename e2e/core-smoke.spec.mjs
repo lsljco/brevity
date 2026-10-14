@@ -920,10 +920,10 @@ test('routine workspace reviews a single day, a recurring change and household e
  await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
  let request
  await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{if(route.request().method()==='POST'){request=route.request().postDataJSON();return route.fulfill({status:409,json:{error:'Review captured for test'}})}return route.fallback()})
- if(testInfo.project.name==='iphone'&&await page.getByRole('button',{name:'Menu',exact:true}).isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click()
+ if(testInfo.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
  await page.getByRole('button',{name:'Schedule & Routines',exact:true}).click()
- if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ if(testInfo.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
  const workspace=page.locator('.household-schedule')
  await expect(workspace.getByRole('heading',{name:'Larry focus',exact:true})).toBeVisible()
  await workspace.getByRole('button',{name:'Change one day',exact:true}).click()
@@ -958,10 +958,10 @@ test('members default to their routines and can view everyone without editing ot
  await page.route('**/.netlify/functions/household-auth?action=session',route=>route.fulfill({json:{authenticated:true,member:'Nyla',role:'member',bootstrapRequired:false}}))
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{[key]:{key,version:1,value:JSON.stringify(source),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
  await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
- if(testInfo.project.name==='iphone'&&await page.getByRole('button',{name:'Menu',exact:true}).isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click()
+ if(testInfo.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
  await page.getByRole('button',{name:'Schedule & Routines',exact:true}).click()
- if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ if(testInfo.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
  const workspace=page.locator('.household-schedule'),filter=workspace.getByLabel('View routines for')
  await expect(filter).toHaveValue('Nyla')
  await expect(workspace.getByRole('heading',{name:'Nyla focus',exact:true})).toBeVisible()
@@ -977,4 +977,24 @@ test('members default to their routines and can view everyone without editing ot
  await expect(workspace.getByRole('heading',{name:'Nyla focus',exact:true})).toBeVisible()
  await expect(workspace.getByRole('button',{name:'Edit recurring routine',exact:true})).toHaveCount(1)
  await expect(workspace.getByRole('checkbox',{name:/Select .* for/})).toHaveCount(0)
+})
+
+test('unfinished work carries forward and completion reviews the original dated record',async({page},testInfo)=>{
+ const original='2026-09-01',operation={type:'assignment.update',targetDate:original,targetId:'saved-task',payload:{status:'complete'}}
+ const item={id:'assignment:saved-task',title:'Finish exterior brick preparation',owner:'Larry',participants:[],originalDate:original,carriedForward:true,source:{kind:'assignment',date:original,id:'saved-task'},operation,expectedVersion:7}
+ let completed=false,request
+ await page.route('**/.netlify/functions/open-work?*',route=>route.fulfill({json:{date:today(),items:completed?[]:[item,{...item,id:'other',title:'Nyla open task',owner:'Nyla'}]}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{if(route.request().method()==='POST'){request=route.request().postDataJSON();return route.fulfill({status:409,json:{error:'Review captured for test'}})}return route.fallback()})
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
+ if(testInfo.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ const work=page.getByRole('region',{name:'Open work',exact:true})
+ await expect(work.getByText(item.title,{exact:true})).toBeVisible()
+ await expect(work.getByText('Nyla open task',{exact:true})).toHaveCount(0)
+ await expect(work.getByText('Larry · Carried forward from 2026-09-01',{exact:true})).toBeVisible()
+ await work.getByRole('button',{name:'Mark complete',exact:true}).click()
+ await expect.poll(()=>request?.operation?.targetId).toBe('saved-task')
+ expect(request.operation.targetDate).toBe(original);expect(request.expectedVersion).toBe(7)
+ await expect(work.getByText(item.title,{exact:true})).toBeVisible()
+ completed=true
+ await page.reload();await expect(page.getByRole('region',{name:'Open work',exact:true}).getByText(item.title,{exact:true})).toHaveCount(0)
 })

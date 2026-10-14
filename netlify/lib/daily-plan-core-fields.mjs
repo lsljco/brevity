@@ -97,7 +97,7 @@ export const PILLAR_FIELDS = {
   spiritual: { text:['devotionFocus', 'obedienceAction', 'requiredOutput'], strings:['scripture', 'prayerFocus', 'discussionPrompts'] },
   health: { text:['breakfast', 'lunch', 'dinner', 'snacks', 'hydration', 'nextDayPrep', 'discussionPrompt'], strings:['groceries'] },
   fitness: { text:['location', 'workout', 'objective', 'goal', 'departureTime', 'returnTime', 'recovery', 'discussionPrompt'], strings:['exerciseIds', 'exerciseImages'], members:['participants'], numbers:['stepGoal'], booleans:['requiresDecision'] },
-  household: { text:['keyFocus'], strings:['errands', 'openItems', 'careerPriorities'], items:['appointments', 'priorities'] },
+  household: { booleans:['keyFocusCompleted'], text:['keyFocus','keyFocusDate'], strings:['errands', 'openItems', 'careerPriorities'], items:['appointments', 'priorities'] },
   education: { text:['thinkTankTopic', 'thinkTankDeliverable'], strings:['discussionPrompts'], nested:['isaiah'] },
   finance: { text:['decisionRule', 'discussionPrompt', 'requiredOutput'], strings:['incomePipeline'], items:['bills', 'purchases', 'transfers', 'accountsToFund'] },
   ministry: { text:['contentFocus', 'framework'], strings:['prayerNeeds', 'readinessChecklist'], items:['meetings', 'fellowshipFollowUps'] },
@@ -113,6 +113,7 @@ function pillarPatch(pillar, value) {
   for (const [field, raw] of Object.entries(value)) {
     if (fields.text?.includes(field)) {
       if (typeof raw !== 'string') throw new Error(`The ${pillar} ${field} value must be text.`)
+      if(field==='keyFocusDate'&&raw&&!/^\d{4}-\d{2}-\d{2}$/.test(raw))throw new Error('Choose a valid focus date.')
       result[field] = clean(raw, 3000)
     } else if (fields.strings?.includes(field)) result[field] = strings(raw, `The ${pillar} ${field} list`)
     else if (fields.members?.includes(field)) result[field] = members(raw, `The ${pillar} ${field} list`)
@@ -165,6 +166,7 @@ function overviewPatch(value) {
   for (const [field, raw] of Object.entries(value)) {
     if (['theme', 'dayObjective', 'governingPrinciple', 'successStandard'].includes(field)) {
       if (typeof raw !== 'string') throw new Error(`The daily-plan ${field} value must be text.`)
+      if(field==='keyFocusDate'&&raw&&!/^\d{4}-\d{2}-\d{2}$/.test(raw))throw new Error('Choose a valid focus date.')
       result[field] = clean(raw, 3000)
     } else if (field === 'topPriorities' || field === 'decisions') result[field] = planItems(raw, `Daily-plan ${field}`)
     else if (field === 'dayparts') result.dayparts = dayparts(raw)
