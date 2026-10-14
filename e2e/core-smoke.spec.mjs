@@ -3,7 +3,7 @@ async function openTodayDetails(page) {
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
   if(restore)await collapse.click()
-  for (const title of ['Weather','Household details & responsibility updates','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+  for (const title of ['Weather','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }
@@ -124,7 +124,7 @@ test('Today can browse tomorrow and the next seven days without changing a plan'
   await expect(page.locator('.upcoming-schedule .today-dashboard')).toBeVisible()
   await expect(page.locator('.upcoming-schedule .weather-header')).toBeVisible()
   for (const pillar of ['spiritual','health','fitness','household','education','finance','ministry']) {
-    const sections=page.locator(`.upcoming-schedule [data-pillar="${pillar}"]`)
+    const sections=page.locator(`.upcoming-schedule .today-dashboard > [data-pillar="${pillar}"]`)
     expect(await sections.count()).toBeGreaterThan(0)
     for(const section of await sections.all())await expect(section).toBeVisible()
   }
@@ -279,8 +279,8 @@ test('Physical Fitness builds and refines a goal-driven workout before Action Mo
 
 test('Today Pillar 4 lists every calendar commitment and today’s Household Operations chores', async ({ page }) => {
   const household = page.locator('[data-pillar="household"]')
-  await expect(household.getByRole('button', { name:'Set Today’s Focus' })).toBeVisible()
-  await household.getByRole('button', { name:'Set Today’s Focus' }).click()
+  await expect(page.getByRole('button', { name:'Set Today’s Focus' })).toBeVisible()
+  await page.getByRole('button', { name:'Set Today’s Focus' }).click()
   const focusDialog=page.getByRole('dialog',{name:'Set Today’s Focus'})
   await expect(focusDialog.getByRole('textbox', { name:'Today’s Focus' })).toBeVisible()
   await expect(focusDialog).toContainText('Calendar appointments remain visible below')
@@ -289,6 +289,7 @@ test('Today Pillar 4 lists every calendar commitment and today’s Household Ope
   await expect(household.getByText('School planning meeting')).toBeVisible()
   await expect(household.getByText('Doctor appointment')).toBeVisible()
   await expect(household.getByRole('heading', { name:'Today’s Chores' })).toBeVisible()
+  await page.getByRole('button',{name:'Household',exact:true}).click()
   expect(await household.locator('.today-chore-item').count()).toBeGreaterThan(0)
   await expect(household.getByRole('button', { name:'Open Household Operations' })).toBeVisible()
 })
@@ -341,24 +342,18 @@ test('expanded mobile refresh details stay above Ask Brevity and mobile navigati
   expect(reservedPadding).toBeGreaterThanOrEqual(refreshBox.height)
 })
 
-test('Today Finance displays stored cash and scheduled obligations without claiming payment', async ({ page }) => {
-  const date=today()
-  const tomorrow=new Date(`${date}T12:00:00`); tomorrow.setDate(tomorrow.getDate()+1)
-  const dueDate=[tomorrow.getFullYear(),String(tomorrow.getMonth()+1).padStart(2,'0'),String(tomorrow.getDate()).padStart(2,'0')].join('-')
-  const financeData={accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:1250}],transactions:[{id:'bill',name:'Mortgage',amount:900,type:'expense',freq:'once',start:dueDate,acct:'cash'}]}
-  await page.route('**/.netlify/functions/household-state*', route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records:{lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(financeData),version:1,updatedAt:new Date().toISOString()}}})}))
+test('Today Finance separates accounts, limits cash flow to today and preserves unverified states', async ({ page }) => {
+  const date=today(),tomorrow=new Date(`${date}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1)
+  const financeData={accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:1250,plaidCurrentBalance:1250,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking'},{id:'save',name:'Savings',type:'savings',balance:2000,plaidCurrentBalance:2000,plaidAccountId:'bank2',plaidType:'depository',plaidSubtype:'savings'}],transactions:[{id:'bill',name:'Today bill',amount:100,type:'expense',freq:'once',start:date,acct:'cash'},{id:'future',name:'Tomorrow mortgage',amount:900,type:'expense',freq:'once',start:tomorrow.toISOString().slice(0,10),acct:'cash'},{id:'pay',name:'Today income',amount:500,type:'income',freq:'once',start:date,acct:'cash'}]}
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{lslj_finance_v9:{key:'lslj_finance_v9',value:JSON.stringify(financeData),version:1,updatedAt:new Date().toISOString()}}}}))
   await page.reload();await openTodayDetails(page)
   const finance=page.locator('.today-finance-brief')
-  await expect(finance).toContainText('Daily Finance Brief')
-  await expect(finance).toContainText('$1,250')
-  await expect(finance).toContainText('Latest stored balance')
-  await expect(finance).toContainText('Mortgage')
-  await expect(finance).toContainText('Scheduled · unconfirmed')
-  await expect(finance).toContainText('Operating Balance · $1,000 watch')
-  await expect(finance).toContainText('Projected below $1,000 on 6 of the next seven days')
-  await expect(finance.locator('.today-operating-watch')).toContainText('$350')
-  await expect(finance).not.toContainText('Posted · linked')
-  await expect(finance).toContainText('No finance decision recorded today.')
+  await expect(finance).toContainText('Balances & today’s cash flow')
+  await expect(finance).toContainText('$1,250.00');await expect(finance).toContainText('$2,000.00')
+  await expect(finance).toContainText('Projected month end')
+  await expect(finance).toContainText('Today bill');await expect(finance).toContainText('Today income')
+  await expect(finance).not.toContainText('Tomorrow mortgage')
+  await expect(finance).toContainText('Expected');await expect(finance).toContainText('not proof of receipt or payment')
 })
 
 for(const interruptPhase of ['preparing','playing'])test(`voice can interrupt while ${interruptPhase} and resume the next turn`,async({page})=>{
@@ -629,14 +624,14 @@ test('Today reflects inventory source exceptions and clears them after a newer s
     return route.fulfill({status:200,json:{records:{[key]:{key,version:quantity,value:JSON.stringify({items:[{id:'inventory-audit-source',name:'Audit paper towels',quantity,parLevel:4,unit:'rolls'}],waste:[]}),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}})
   })
   await page.reload();await openTodayDetails(page)
-  await expect(page.locator('.today-attention')).toContainText('Replenish Audit paper towels')
-  await expect(page.locator('.today-attention')).not.toContainText('No household items need attention')
-  await page.locator('.today-attention').getByRole('button').first().click()
+  await expect(page.getByRole('region',{name:'Needs your attention'})).toContainText('Replenish Audit paper towels')
+  await expect(page.getByRole('region',{name:'Needs your attention'})).not.toContainText('No household items need attention')
+  await page.getByRole('button',{name:'Review source for Replenish Audit paper towels',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Household Cleaning Plan',exact:true})).toBeVisible()
   await page.getByRole('button',{name:'Back to Today',exact:true}).click()
   quantity=5
   await page.reload();await openTodayDetails(page)
-  await expect(page.locator('.today-attention')).not.toContainText('Replenish Audit paper towels')
+  await expect(page.getByRole('region',{name:'Needs your attention'})).not.toContainText('Replenish Audit paper towels')
 })
 
 test('an open Today calendar ages from verified to stale without losing appointments',async({page})=>{
@@ -659,6 +654,7 @@ test('Next 7 Days sends the selected meal date to Brevity',async({page})=>{
   await page.getByRole('button',{name:'Next 7 days'}).click()
   const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
   await expect(page.locator('.today-snack-card')).toHaveCount(2)
+  await page.getByText('Nutrition goals & food logged',{exact:true}).click()
   await page.getByRole('button',{name:'Balance my meals with Brevity'}).click()
   await expect.poll(()=>requests.length).toBe(1)
   const message=requests[0].messages.at(-1).content
@@ -819,9 +815,9 @@ test('Today has one focus editor in the focus card and does not repeat the prima
   await expect(focus.getByRole('button',{name:'Edit focus',exact:true})).toBeVisible()
   await expect(page.getByRole('button',{name:'Set today’s focus',exact:true})).toHaveCount(0)
   await expect(page.getByRole('button',{name:'Edit focus',exact:true})).toHaveCount(1)
-  const priorities=page.getByRole('region',{name:'Agreed priorities',exact:true})
+  const priorities=focus.locator('.today-outcome-summary')
   await expect(priorities.getByRole('button',{name:'Edit focus',exact:true})).toHaveCount(0)
-  const title=await focus.getByRole('heading',{level:2}).innerText()
+  const title=await focus.locator('.today-primary-focus').innerText()
   await expect(priorities.getByText(title,{exact:true})).toHaveCount(0)
 })
 
@@ -985,7 +981,7 @@ test('unfinished work carries forward and completion reviews the original dated 
  let completed=false,request
  await page.route('**/.netlify/functions/open-work?*',route=>route.fulfill({json:{date:today(),items:completed?[]:[item,{...item,id:'other',title:'Nyla open task',owner:'Nyla'}]}}))
  await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{if(route.request().method()==='POST'){request=route.request().postDataJSON();return route.fulfill({status:409,json:{error:'Review captured for test'}})}return route.fallback()})
- await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
+ await page.reload();await openTodayDetails(page)
  if(testInfo.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
  const work=page.getByRole('region',{name:'Open work',exact:true})
  await expect(work.getByText(item.title,{exact:true})).toBeVisible()
@@ -997,4 +993,20 @@ test('unfinished work carries forward and completion reviews the original dated 
  await expect(work.getByText(item.title,{exact:true})).toBeVisible()
  completed=true
  await page.reload();await expect(page.getByRole('region',{name:'Open work',exact:true}).getByText(item.title,{exact:true})).toHaveCount(0)
+})
+
+test('Today opens with four questions and seven visible daily pillars while history stays closed',async({page},testInfo)=>{
+ await page.route('**/.netlify/functions/open-work?*',route=>route.fulfill({json:{items:Array.from({length:38},(_,i)=>({id:`assignment:old-${i}`,title:`Old August responsibility ${i}`,owner:'Larry',participants:[],originalDate:'2026-08-19',source:{kind:'assignment',id:`old-${i}`,date:'2026-08-19'}}))}}))
+ await page.route('**/.netlify/functions/health-care',route=>route.fulfill({json:{version:1,items:[{id:'today',title:'Scheduled dental visit',member:'Larry',type:'Dental',status:'Scheduled',date:today()},{id:'old',title:'Unscheduled old need',member:'Larry',status:'Needs scheduling',date:'2026-08-19'},{id:'other',title:'Other member appointment',member:'Nyla',status:'Scheduled',date:today()}]}}))
+ await page.reload();await expect(page.locator('.today-overview')).toBeVisible()
+ for(const question of ['What matters most today?','What should I do now?','What needs my attention?','What remains today?'])await expect(page.getByRole('heading',{name:question,exact:true})).toBeVisible()
+ const ordered=await page.locator('.today-dashboard > [data-pillar]').evaluateAll(nodes=>[...new Set(nodes.map(node=>node.dataset.pillar))])
+ expect(ordered).toEqual(['spiritual','health','fitness','household','education','finance','ministry'])
+ for(const pillar of ordered)await expect(page.locator(`.today-dashboard > [data-pillar="${pillar}"]`).first()).toBeVisible()
+ await expect(page.getByText('Old August responsibility 0',{exact:true})).not.toBeVisible()
+ const care=page.getByRole('region',{name:'Scheduled health appointments',exact:true})
+ await expect(care).toContainText('Scheduled dental visit');await expect(care).not.toContainText('Unscheduled old need');await expect(care).not.toContainText('Other member appointment')
+ await expect(page.locator('.today-four-questions')).not.toContainText('Old August responsibility')
+ await expect(page.locator('.today-macro-summary').first()).not.toBeVisible()
+ const width=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));expect(width.scroll).toBeLessThanOrEqual(width.viewport+1)
 })

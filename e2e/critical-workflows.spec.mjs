@@ -3,7 +3,7 @@ async function openTodayDetails(page) {
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
   if(restore)await collapse.click()
-  for (const title of ['Weather','Household details & responsibility updates','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+  for (const title of ['Weather','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }
@@ -193,7 +193,7 @@ test('iPad sidebar stays open after content taps, rotation, and reload until exp
   await expect(drawer).toHaveClass(/is-expanded/)
 })
 
-test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.locator('.today-outcomes').getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
+test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByRole('region',{name:'Today’s focus'}).getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
 test('Household Intelligence dashboard separates metrics and opens an auditable score drilldown',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
@@ -262,27 +262,24 @@ test('Today and Tomorrow alignment include Finance-style meeting capture and rev
   }
 })
 
-test('Today renders and counts unresolved Household Operations priorities',async({page})=>{
-  const panel=page.locator('.today-attention')
-  await expect(panel.getByRole('heading',{name:'Needs Attention'})).toBeVisible()
-  await expect(panel.locator('header > strong')).toHaveText('4')
-  for(let index=1;index<=4;index+=1)await expect(panel.getByText(`Household attention item ${index}`)).toBeVisible()
-  await expect(page.locator('body')).not.toContainText("Can't find variable: signals")
+test('Today groups unresolved household priorities under the attention question',async({page})=>{
+  const panel=page.getByRole('region',{name:'Needs your attention',exact:true})
+  await expect(panel.getByRole('heading',{name:'What needs my attention?'})).toBeVisible()
+  const more=panel.locator('details > summary').filter({hasText:'More decisions and blockers'})
+  if(await more.count())await more.click()
+  for(let index=1;index<=4;index+=1)await expect(panel.getByText(`Household attention item ${index}`,{exact:true})).toBeVisible()
 })
 
-test('Today last three pillar cards expose recorded detail instead of generic headings',async({page})=>{
-  const education=page.locator('[data-pillar="education"]')
-  const finance=page.locator('[data-pillar="finance"]')
-  const ministry=page.locator('[data-pillar="ministry"]')
-  await expect(education).toContainText('Education plan not defined')
-  await expect(education).toContainText('20 min reading · 10 min math')
-  await expect(finance).toContainText('Daily Finance Brief')
-  await expect(finance).toContainText('No finance decision recorded today.')
-  await expect(finance).toContainText('Operating Balance · $1,000 watch')
-  await expect(ministry).toContainText('No ministry focus, meeting, fellowship follow-up, or prayer need is recorded for today.')
-  await expect(finance).not.toContainText('Financial Stewardship')
+test('Today last three pillars remain visible and show daily details',async({page})=>{
+  const education=page.locator('[data-pillar="education"]'),finance=page.locator('[data-pillar="finance"]'),ministry=page.locator('[data-pillar="ministry"]')
+  await expect(education).toBeVisible();await expect(finance).toBeVisible();await expect(ministry).toBeVisible()
+  await expect(education).toContainText('No Think Tank topic recorded for this day.')
+  await education.getByText('Isaiah’s learning plan',{exact:true}).click()
+  await expect(education).toContainText('20 min reading')
+  await expect(finance).toContainText('Operating');await expect(finance).toContainText('Savings')
+  await expect(finance).toContainText('Bills due today');await expect(finance).toContainText('Income expected today')
+  await expect(ministry).toContainText('No content creation tasks or events recorded for this day.')
 })
-
 test('Meal Library finds ingredients and month view shows every selected day',async({page})=>{
   const steak={id:'breakfast-steak-eggs',mealType:'breakfast',name:'Morning skillet',description:'A savory breakfast',ingredients:['6 oz steak','2 eggs'],prepMinutes:15,totalMinutes:20,serving:'1 plate',macros:{calories:520,proteinGrams:42,carbohydrateGrams:5,fatGrams:35}}
   await page.route('**/.netlify/functions/meal-plans?*',async route=>{
@@ -2381,7 +2378,7 @@ test('Chart the Course starts and speaks with one tap while Today stays visible'
  await page.getByRole('button',{name:/Start Chart the Course/}).click()
  const session=page.getByRole('region',{name:'Chart the Course conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
- await expect(page.getByRole('region',{name:'Agreed priorities'})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Today’s focus'})).toBeVisible()
  await expect(page.getByRole('heading',{name:'Remember the plan. Start together.'})).toHaveCount(0)
  await expect.poll(()=>spoken.length).toBe(1)
  expect(spoken[0].voiceId).toBe('chosen-meeting-voice');expect(spoken[0].text).toContain('Protect the household rhythm')
@@ -2640,7 +2637,7 @@ test('Evening Recap starts inline and keeps Today items available',async({page},
  await page.getByRole('button',{name:/Start Evening Recap/}).click()
  const session=page.getByRole('region',{name:'Evening Recap conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
- await expect(page.getByRole('region',{name:'Agreed priorities'})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Today’s focus'})).toBeVisible()
  await expect(page.getByRole('heading',{name:'Remember the plan. Start together.'})).toHaveCount(0)
  await expect.poll(()=>voice.length).toBe(1);expect(voice[0].mode).toBe('evening')
  await expect(session.getByRole('button',{name:'Stop recording',exact:true})).toBeVisible()

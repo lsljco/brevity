@@ -28,7 +28,7 @@ test('agenda retains shared Apple events despite a personal organizer and exclud
 test('agreed dated tasks remain priorities; calendar events never become priorities',()=>{
  const plan={date:'2026-10-09',assignments:[{id:'a',title:'Vacuum',owner:'Nyla'},{id:'b',title:'Done',status:'completed'},{id:'c',title:'Cancelled',cancelled:true}]}
  const result=buildDailyAgenda({plan,appointments:events,member:'Larry'})
- assert.deepEqual(result.priorities.map(x=>x.id),['a']);assert.ok(!result.pending.some(x=>x.id==='a'))
+ assert.deepEqual(result.priorities.map(x=>x.id),[]);assert.ok(!result.pending.some(x=>x.id==='a'));assert.deepEqual(buildDailyAgenda({plan,appointments:events,member:'Larry',scope:'household'}).priorities.map(x=>x.id),['a'])
 })
 test('explicit Brevity participants remain visible without changing full calendar data',()=>{
  const records=[{id:'trip',owner:'Lorenzo',participants:['Larry']}],before=structuredClone(records)

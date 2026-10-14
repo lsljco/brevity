@@ -1,3 +1,7 @@
+import OpenWork from './OpenWork.jsx'
+import DailyBriefing from './DailyBriefing.jsx'
+import TodayPillarDetails from './TodayPillarDetails.jsx'
+import {belongsToViewer} from './todayGuidance.js'
 import OrchestrationPanel from '../governance/OrchestrationPanel.jsx'
 import TodayOverview from './TodayOverview.jsx'
 import {todayCalendarAppointments} from './todayCalendar.js'
@@ -233,7 +237,9 @@ export function AlignmentPillarPreview({ pillar, plan, currentMember, meals, mea
 
 export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealLibrary = [], mealPlanState = 'loading', mealPlanError = '', readOnly = false, canViewFinance = false, canGeneratePlan = false, todayAlignmentCompleted = false, todayAlignmentUnavailable = false, alignmentDate, alignmentCompleted = false, alignmentLoading = false, calendarAppointments = [], calendarHealth, householdChores = [], householdSignals = [], currentMember = 'Larry', onStartTodayAlignment, onStartAlignment, onStartRecap, onChartCourse, courseRunning=false, courseConversation=null, onViewSchedule, onOpenPillar, onOpenCalendar, onOpenMealPlan, onGeneratePlan, onReviewDecision, onReviewAssignment, onReviewDailyFocus, generationState = 'idle', browsingDate = false }) {
   const dailyPlan = useMemo(() => normalizeDailyPlan(plan), [plan])
-  const visibleAppointments = todayCalendarAppointments(calendarAppointments,currentMember)
+  const [scope,setScope] = useState('mine')
+  const visibleAppointments = todayCalendarAppointments(calendarAppointments,currentMember,scope)
+  const visibleChores = householdChores.filter(item=>belongsToViewer({...item,owner:item.occurrence?.coveredBy||item.owner,owners:item.occurrence?.coveredBy?[item.occurrence.coveredBy]:item.owners},currentMember,scope))
   const readModel = buildTodayReadModel({plan:dailyPlan,calendarAppointments:visibleAppointments,calendarHealth,currentMember,householdSignals})
   const [showDecisions, setShowDecisions] = useState(false)
   const [editingFocus, setEditingFocus] = useState(false)
@@ -272,39 +278,37 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
   return <div className="today-dashboard">
     <WeatherHeader date={dailyPlan.date}/>
     {courseConversation}
-    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
-    <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} />
+    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
+    <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
 
-    <HealthCare currentMember={currentMember} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly} compact />
+    <HealthCare currentMember={currentMember} scope={scope} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly} compact />
 
     <TodayMeals readOnly={readOnly} currentMember={currentMember} mealDay={mealDay} mealLibrary={mealLibrary} meals={meals} state={mealPlanState} error={mealPlanError} onOpenMealPlan={onOpenMealPlan} browsingDate={browsingDate} />
 
     <TodayFitnessWorkout date={dailyPlan.date} currentMember={currentMember} fitness={fitness} onOpenPillar={onOpenPillar} />
 
-    <details className="today-supporting" open={browsingDate||undefined}><summary>Household details & responsibility updates</summary><button onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'}>Review Scheduled Draft</button><button onClick={()=>setShowDecisions(true)}>Review decisions</button><section className="today-pillar-stack" data-pillar="household">
-      {!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}<details><summary>Assistant settings & administration</summary><OrchestrationPanel date={dailyPlan.date} currentMember={currentMember} readOnly={readOnly} onOpenSource={()=>onOpenPillar?.('household')} /></details><div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Household Management &amp; Maintenance</h2></div>
-      <AttentionPanel onOpenPillar={onOpenPillar} items={readModel.attentionItems} onOpenCalendar={onOpenCalendar} />
-      <DailyRhythm readOnly={readOnly} plan={dailyPlan} currentMember={currentMember} chores={householdChores} onOpenOperations={()=>onOpenPillar?.('household')} />
-      <TodayHouseholdChores chores={householdChores} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
-
-      <TodayMaintenance date={dailyPlan.date} onOpenPillar={onOpenPillar} />
-      <TodayCalendarAgenda filters={<p>Family calendar and {currentMember}’s calendar. Open the full calendar to browse other members.</p>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
-
-      {readModel.outcomes.length>0&&<section className="today-section today-outcomes"><div className="today-section-heading"><h2>Agreed daily outcomes</h2></div><ol className="today-top-three">{readModel.outcomes.map((outcome,index)=><li key={index}>{outcome.title}{outcome.owner&&<span>{outcome.owner}</span>}</li>)}</ol></section>}
-      <section className="today-section today-actions"><div className="today-section-heading"><div><span>Personal View</span><h2>{currentMember}'s Actions</h2></div><small>Assignment edits open Action Mode review before changing the shared plan.</small></div>{readModel.actions.length ? <div className="today-assignment-list">{readModel.actions.map(item => <AssignmentEditor key={item.id} assignment={item} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => onReviewAssignment?.(item.id, updated, version)} />)}</div> : <div className="today-empty">{readModel.memberOutcomes.length ? `${currentMember} owns ${readModel.memberOutcomes.length} outcome${readModel.memberOutcomes.length===1?'':'s'} in Today’s Top 3, with no separate unresolved assignment.` : `No unresolved assignments or Top 3 outcomes currently involve ${currentMember}.`}</div>}</section>
-    </section></details>
+    <section className="today-pillar-stack today-household-pillar" data-pillar="household" aria-label="Pillar 4 Household Management"><div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Calendar &amp; chores</h2></div>
+      <TodayCalendarAgenda filters={<p>{scope==='household'?'Family calendar':`Family calendar and ${currentMember}’s calendar`}. Open the full calendar to browse other members.</p>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
+      <TodayHouseholdChores chores={visibleChores} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
+    </section>
+    <TodayPillarDetails pillar="education" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
+    <TodayFinanceBrief date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
+    <TodayPillarDetails pillar="ministry" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
+    <details className="today-supporting" open={new URLSearchParams(window.location.search).has('briefing')||undefined}><summary>Earlier work &amp; daily briefing</summary><p>Historical records are retained for review. They are not automatically assigned to today.</p><OpenWork date={dailyPlan.date} currentMember={currentMember} scope={scope} readOnly={readOnly}/><DailyBriefing key={currentMember} currentMember={currentMember}/></details>
+    <details className="today-supporting"><summary>Household details &amp; responsibility updates</summary><button onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'}>Review Scheduled Draft</button><button onClick={()=>setShowDecisions(true)}>Review decisions</button>
+      {!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}
+      <details><summary>Assistant settings &amp; administration</summary><OrchestrationPanel date={dailyPlan.date} currentMember={currentMember} readOnly={readOnly} onOpenSource={()=>onOpenPillar?.('household')}/></details>
+      <DailyRhythm readOnly={readOnly} plan={dailyPlan} currentMember={currentMember} chores={visibleChores} onOpenOperations={()=>onOpenPillar?.('household')}/>
+      <details><summary>Health care coordination</summary><HealthCare currentMember={currentMember} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly}/></details>
+      <TodayMaintenance date={dailyPlan.date} onOpenPillar={onOpenPillar}/>
+      <section className="today-section today-actions"><h2>{currentMember}'s Actions</h2>{readModel.actions.map(item=><AssignmentEditor key={item.id} assignment={item} expectedVersion={Number(dailyPlan.version||0)} readOnly={readOnly} onSave={(updated,version)=>onReviewAssignment?.(item.id,updated,version)}/>)}</section>
+    </details>
 
     {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Queue</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{readModel.counts.decisions} active {readModel.counts.decisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}. A determined decision remains visible until its resulting work is complete.</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{readModel.decisions.map((decision, index) => <DecisionEditor key={decision.id} decision={decision} number={index + 1} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => saveDecision(updated, decision.id, version)} />)}{!readModel.decisions.length && <div className="today-decision-all-clear"><i className="ti ti-circle-check" /><strong>All decisions are resolved.</strong><span>There are no remaining decisions needing attention.</span></div>}</div></section></div>}
 
     {editingFocus && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditingFocus(false) }}><section className="today-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="today-focus-dialog-title"><header><div><span>Household Management</span><h2 id="today-focus-dialog-title">Set Today’s Focus</h2><p>Choose the single focus the household should keep in view today. Calendar appointments remain visible below, but they will not replace this focus.</p></div><button type="button" onClick={() => setEditingFocus(false)} aria-label="Close Today’s Focus editor"><i className="ti ti-x" /></button></header><label><span>Today’s Focus</span><textarea autoFocus value={focusDraft} maxLength={240} onChange={event => { setFocusDraft(event.target.value); setFocusState('idle'); setFocusError('') }} placeholder="What should the household focus on today?" /></label>{focusError && <p className="today-decision-save-error">{focusError}</p>}<footer><small>{focusState === 'reviewing' ? 'Review and approve this change in Action Mode.' : 'Nothing changes until this exact plan version is approved in Action Mode.'}</small><div><button type="button" onClick={() => setEditingFocus(false)}>Cancel</button><button type="button" className="primary" onClick={reviewFocus} disabled={focusState === 'saving' || !focusDraft.trim()}><i className="ti ti-shield-check" /> {focusState === 'saving' ? 'Opening review…' : 'Review focus'}</button></div></footer></section></div>}
 
-    <details className="today-supporting" open={browsingDate||undefined}><summary>Education, finance & ministry</summary>
-    <PillarBrief number={5} pillar="education" title={educationCard.title} detail={educationCard.detail} meta={educationCard.meta} onOpenPillar={onOpenPillar} />
 
-    <TodayFinanceBrief date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar} />
-
-    <PillarBrief number={7} pillar="ministry" title={ministryCard.title} detail={ministryCard.detail} meta={ministryCard.meta} prayerNeeds={ministryCard.prayerNeeds} onOpenPillar={onOpenPillar} />
-    </details>
 
 
   </div>

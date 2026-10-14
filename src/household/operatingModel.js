@@ -94,7 +94,7 @@ export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth
   const attentionItems=[...signals,...householdPriorityAttention(normalized)].sort(byPriorityThenTime)
   const householdNowDate=getHouseholdDateKey(now)
   const householdNowMinutes=getHouseholdMinuteOfDay(now)
-  const nextCommitment=normalized.date===householdNowDate?commitments.find(item=>item.startsAt&&timeMinutes(item.startsAt.slice(11,16))>=householdNowMinutes)||commitments.find(item=>!item.startsAt)||commitments[0]||null:commitments[0]||null
+  const nextCommitment=normalized.date===householdNowDate?commitments.find(item=>item.startsAt&&timeMinutes(item.startsAt.slice(11,16))>=householdNowMinutes)||null:commitments[0]||null
   const focus=todayFocus(normalized,{signals,outcomes,nextCommitment,actions})
   return{date:normalized.date,generatedAt:now.toISOString(),theme:normalized.theme,objective:normalized.dayObjective,governingPrinciple:normalized.governingPrinciple,focus,signals,attentionItems,criticalSignals:signals.filter(item=>item.priority==='critical'),nextCommitment,commitments,outcomes,memberOutcomes,actions,decisions,pillarPulse:pillarPulse(normalized,commitments,signals),schedule:arrayOrEmpty(normalized.dayparts),counts:{signals:signals.length,attention:attentionItems.length,actions:actions.length,decisions:decisions.length,commitments:commitments.length}}
 }
