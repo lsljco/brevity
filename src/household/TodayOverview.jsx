@@ -6,7 +6,7 @@ import {dailyGuidance} from './todayGuidance.js'
 import {requestAssistantConversation} from '../assistant/actionEvents.js'
 import './TodayOverview.css'
 const recordKey=item=>`${item.sourceKind}:${item.id}`
-const describeTime=item=>item.startTime||item.time||'Flexible'
+const describeTime=item=>item.startTime||item.time||(item.sourceKind==='appointment'?'All day':'Flexible')
 export default function TodayOverview({plan,currentMember,householdChores,householdSignals=[],calendarAppointments,calendarHealth,onStartRecap,onChartCourse,courseRunning=false,onOpenCalendar,onViewSchedule,onOpenRoutines,onOpenPillar,onEditFocus,readOnly,scope='mine',onScopeChange}){
  const agenda=useDailyAgenda({plan,member:currentMember,scope,chores:householdChores,appointments:calendarAppointments})
  const work=useOpenWork(plan.date)

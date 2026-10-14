@@ -22,3 +22,8 @@ test('personal priorities and pillar records respect date and owner; household v
  assert.deepEqual(pillarDayItems(plan,'ministry',member).map(x=>x.id),['today'])
  assert.equal(pillarDayItems(plan,'education',member,'household').length,2)
 })
+
+test('untimed calendar commitments remain visible without becoming the next timed event or suggested task',()=>{
+ const model=dailyGuidance({plan:{date},member,agenda:{priorities:[],items:[item('all-day','','',{sourceKind:'appointment'}),item('flex','',''),item('done','','',{status:'done'})]}})
+ assert.deepEqual(model.remaining.map(x=>x.id),['all-day','flex']);assert.equal(model.next,null);assert.equal(model.suggested.id,'flex');assert.deepEqual(model.completed.map(x=>x.id),['done'])
+})
