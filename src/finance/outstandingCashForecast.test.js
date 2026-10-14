@@ -143,3 +143,35 @@ test('generic income labels, ambiguous sources, other dates and conflicting vend
   assert.equal(forecast([plan],[{...bank,date:date(-1)}]).get(today).remainingDelta,722)
   assert.equal(forecast([{...plan,vendorId:'a'}],[{...bank,vendorId:'b'}]).get(today).remainingDelta,722)
 })
+
+test('available balance anchors forecast without reapplying an asynchronous pending feed', () => {
+  const cash={...account,plaidCurrentBalance:1000,plaidAvailableBalance:1600}
+  const pending={...actual,id:'older-feed',amount:3500,pending:true,date:date(-1)}
+  const point=forecast([], [pending], [cash]).get(today)
+  assert.equal(point.anchorBalance,1600)
+  assert.equal(point.currentBalance,1000)
+  assert.equal(point.pendingDelta,0)
+  assert.equal(point.bal,1600)
+  assert.equal(point.anchorKind,'available')
+  assert.equal(point.pendingActivity[0].delta,-3500)
+  assert.equal(point.pendingActivity[0].applied,false)
+})
+test('available cash excludes matched pending plans but retains unmatched future obligations', () => {
+  const cash={...account,plaidAvailableBalance:3225}
+  const pending={...actual,pending:true}
+  const result=forecast([hoa,{...hoa,id:'next',name:'Other bill',start:date(1),amount:200}],[pending],[cash])
+  assert.equal(result.get(today).bal,3225)
+  assert.equal(result.get(today).remainingDelta,0)
+  assert.equal(result.get(date(1)).bal,3025)
+})
+test('mixed accounts apply pending only to current-balance accounts, including zero available', () => {
+  const cash={...account,plaidAvailableBalance:0}
+  const savings={...account,id:'savings',name:'Savings',plaidAccountId:'save',plaidCurrentBalance:500}
+  const pending=[{...actual,pending:true},{...actual,id:'save-hold',accountId:'save',amount:50,pending:true}]
+  const point=forecast([],pending,[cash,savings]).get(today)
+  assert.equal(point.anchorKind,'mixed')
+  assert.equal(point.anchorBalance,500)
+  assert.equal(point.pendingDelta,-50)
+  assert.equal(point.bal,450)
+  assert.deepEqual(point.pendingActivity.map(row=>row.applied),[false,true])
+})

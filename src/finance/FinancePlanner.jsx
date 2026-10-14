@@ -4641,7 +4641,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
             color: showActuals ? 'var(--gold)' : 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
              style={{ fontSize: 11, animation: actualsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
-          {actualsLoading ? 'Loading bank activity…' : `${showActuals ? 'Reconciled with bank' : 'Reconcile with bank'} (${monthBankCount})`}
+          {actualsLoading ? 'Loading bank activity…' : `${showActuals ? 'Using bank snapshot' : 'Reconcile with bank'} (${monthBankCount})`}
           {actualsError && <span style={{ fontSize: 10, color: 'var(--expense-color)', marginLeft: 4 }} title={actualsError}>⚠ Error</span>}
         </button>
       </div>

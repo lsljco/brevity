@@ -2410,6 +2410,30 @@ test('Cash Forecast separates current cash from outstanding expenses and pending
   await expect(summary).toContainText('HOA Dues: not matched — included in projection')
 })
 
+test('Cash Forecast uses available cash without subtracting stale pending holds again',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  finance.accounts[0].balance=4500;finance.accounts[0].plaidCurrentBalance=4600;finance.accounts[0].plaidAvailableBalance=4300
+  finance.transactions=[{id:'hoa',name:'HOA Dues',type:'expense',amount:1375,acct:'a1',freq:'once',start:dateKey()}]
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value=JSON.stringify([{id:'pending-fuel',accountId:'plaid-operating',name:'Fuel hold',amount:100,date:dateKey(),pending:true}])
+  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const summary=page.getByRole('region',{name:'Current and projected cash'})
+  await expect(summary).toBeVisible()
+  await expect(summary).toContainText('$4,600.00')
+  await expect(summary).toContainText('$3,225.00')
+  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
+  await expect(summary).toContainText('+$0.00')
+  await expect(summary).toContainText('Last saved available balance')
+  await expect(summary).toContainText('Estimated forecast:')
+  await expect(summary).toContainText('−$1,375.00')
+  await expect(summary).toContainText('$2,925.00')
+  await summary.getByText('What is included in today’s projection?',{exact:true}).click()
+  await expect(summary).toContainText('HOA Dues: not matched — included in projection')
+  await expect(summary).toContainText('Fuel hold: −$100.00 — reference only; no additional adjustment')
+})
+
 test('Enhancements captures a spoken idea and screenshot, then shares discussion and manager updates',async({page},testInfo)=>{
   const {createEnhancementRepository}=await import('../netlify/lib/enhancement-requests.mjs')
   const {createEnhancementHandler}=await import('../netlify/functions/enhancement-requests.mjs')
