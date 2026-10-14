@@ -755,7 +755,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
       </div>
 
       {readOnly&&<div role="note" className="hq-read-only-notice" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.35)`,borderRadius:10,background:"rgba(197,164,109,0.08)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Projects are read-only.</strong> You can review, filter, navigate, preview attachments, and export project information. A household administrator can restore project editing access.</div>}
-      {!readOnly&&<div role="note" className="hq-action-safety-note" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.25)`,borderRadius:10,background:"rgba(197,164,109,0.06)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Review required.</strong> Creating, editing, or deleting a project opens Action Mode before anything changes. Project calendar visibility is reviewed with the project and follows safe Undo. Project import, file and image changes remain unavailable until Brevity can audit and safely undo them.</div>}
+      {!readOnly&&<div role="note" className="hq-action-safety-note" style={{margin:"16px 32px 0",padding:"12px 16px",border:`1px solid rgba(197,164,109,0.25)`,borderRadius:10,background:"rgba(197,164,109,0.06)",color:W2,fontSize:13,lineHeight:1.5}}><strong style={{color:G}}>Review required.</strong> Every project requires Larry’s completion sign-off. Selecting Done submits the project for his approval. Creating, editing, or deleting a project opens Action Mode before anything changes. Project calendar visibility is reviewed with the project and follows safe Undo. Project import, file and image changes remain unavailable until Brevity can audit and safely undo them.</div>}
 
       {/* TABS */}
       <div className="hq-tabs" style={{display:"flex",background:"rgba(0,0,0,0.6)",borderBottom:`1px solid ${BORDER}`,padding:"0 28px",overflowX:"auto",backdropFilter:"blur(10px)"}}>
@@ -837,6 +837,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
 
                     {/* Card body */}
                     <div style={{padding:"14px 16px"}}>
+                      <p style={{color:G,fontSize:12,marginBottom:8}}>Sign-off: Larry{item.completionReview?.state==='pending'?' · Awaiting approval':item.completionReview?.state==='returned'?` · Returned: ${item.completionReview.returnReason}`:''}</p>
                       <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:14,fontWeight:600,color:W,lineHeight:1.3,marginBottom:6}}>{item.title}</div>
@@ -979,7 +980,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
 
               <FField label="Status">
                 <select style={FI} value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))}>
-                  {STATUSES.map(s=><option key={s}>{s}</option>)}
+                  {STATUSES.map(s=><option key={s} value={s}>{s==='Done'?'Submit for Larry’s sign-off':s}</option>)}
                 </select>
               </FField>
 

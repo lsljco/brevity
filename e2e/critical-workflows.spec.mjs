@@ -2645,3 +2645,16 @@ test('Evening Recap starts inline and keeps Today items available',async({page},
  await expect.poll(()=>saved.some(x=>x.title==='Evening Recap')).toBe(true)
  await expect(page.locator('.today-dashboard')).toBeVisible()
 })
+
+test('Completion inbox stages exact project sign-off without saving before confirmation',async({page},testInfo)=>{
+ const prepared=[],writes=[]
+ await page.route('**/.netlify/functions/completion-signoffs',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[{id:'review-project',kind:'project',title:'Garden completion',submittedBy:'Javin',submittedAt:'2026-10-14T16:00:00Z',details:['Inspect completed gate'],version:7}],unavailable:[]})}))
+ page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes.push(request)})
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ const inbox=page.getByRole('region',{name:'Completion notifications'})
+ await inbox.getByRole('button',{name:'Sign-off requests · 1',exact:true}).click()
+ await expect(inbox).toContainText('Projects: your sign-off is required.')
+ await inbox.getByRole('button',{name:'Review sign-off',exact:true}).click()
+ await expect(page.locator('.brevity-action-review')).toContainText('Garden completion')
+ expect(prepared).toHaveLength(1);expect(prepared[0]).toMatchObject({expectedVersion:7,operation:{type:'project.review',targetId:'review-project',payload:{action:'approve'}}});expect(writes).toHaveLength(0)
+})

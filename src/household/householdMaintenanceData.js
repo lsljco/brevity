@@ -82,15 +82,15 @@ const normalizeChore = value => ({
   category:String(value?.category||'Household chore'), zone:String(value?.zone||'Whole House'),
   owners:[...new Set((value?.owners||[]).filter(member=>HOUSEHOLD_MEMBERS.includes(member)||member==='Everyone'))],
   details:(Array.isArray(value?.details)?value.details:[]).map(String).map(item=>item.trim()).filter(Boolean),
-  calendarEnabled:value?.calendarEnabled!==false, signoffRequired:value?.signoffRequired!==false,
-  verifiers:[...new Set((value?.verifiers||HOUSEHOLD_CHORE_VERIFIERS).filter(member=>HOUSEHOLD_MEMBERS.includes(member)))],
+  calendarEnabled:value?.calendarEnabled!==false, signoffRequired:true,
+  verifiers:[...HOUSEHOLD_CHORE_VERIFIERS],
 })
 const displayTiming = chore => chore.startTime ? `${chore.startTime}${chore.endTime?`–${chore.endTime}`:''}` : (chore.timing||'Flexible')
 export function buildHouseholdMaintenanceWeek(anchor=maintenanceToday(),rawState={}){
   const state=normalizeHouseholdMaintenanceState(rawState),weekStart=maintenanceWeekStart(anchor),days=Array.from({length:7},(_,index)=>{const date=addDays(weekStart,index),dateKey=maintenanceDateKey(date),templates=date.getDay()===6?saturdayTasks(date):(WEEKLY_TASKS[date.getDay()]||[]);return{date:dateKey,label:date.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}),tasks:templates.map(template=>({...template,owners:[...template.owners],verifiers:[...(template.verifiers||HOUSEHOLD_CHORE_VERIFIERS)],details:[...template.details],occurrenceId:`${dateKey}:${template.id}`}))}})
   const start=maintenanceDateKey(weekStart),end=maintenanceDateKey(addDays(weekStart,6)),tasks=days.flatMap(day=>day.tasks)
   for(const chore of state.customChores){if(chore.date>=start&&chore.date<=end)tasks.push({...chore,timing:displayTiming(chore),occurrenceId:`${chore.date}:custom-${chore.id}`})}
-  const visible=tasks.filter(item=>!state.deletedOccurrences[item.occurrenceId]).map(item=>{const edit=state.taskEdits[item.occurrenceId]||{},next={...item,...edit};next.owners=edit.owners?[...edit.owners]:[...item.owners];next.details=edit.details?[...edit.details]:[...item.details];next.timing=displayTiming(next);next.scheduledDate=next.date||item.occurrenceId.slice(0,10);return next})
+  const visible=tasks.filter(item=>!state.deletedOccurrences[item.occurrenceId]).map(item=>{const edit=state.taskEdits[item.occurrenceId]||{},next={...item,...edit};next.owners=edit.owners?[...edit.owners]:[...item.owners];next.details=edit.details?[...edit.details]:[...item.details];next.timing=displayTiming(next);next.signoffRequired=true;next.verifiers=[...HOUSEHOLD_CHORE_VERIFIERS];next.scheduledDate=next.date||item.occurrenceId.slice(0,10);return next})
   return days.map(day=>({...day,tasks:visible.filter(item=>item.scheduledDate===day.date)}))
 }
 export function householdOperationZones(days=[]){return ['All Zones',...new Set(days.flatMap(day=>day.tasks.map(item=>item.zone).filter(Boolean)))]}

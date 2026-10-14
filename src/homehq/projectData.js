@@ -25,7 +25,7 @@ export function normalizeProjectItem(item = {}) {
     const stored = item.raci?.[key]
     raci[key] = uniqueMembers(Array.isArray(stored) ? stored : key === 'responsible' ? legacyAssignee : [])
   })
-  return { ...item, raci }
+  return { ...item, raci, signoffRequired:true, signoffBy:'Larry' }
 }
 
 export function projectCalendarEvent(item) {

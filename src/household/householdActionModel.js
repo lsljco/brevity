@@ -57,7 +57,7 @@ const maintenanceTask = (occurrenceId,state={}) => {
   if(!task&&occurrenceId.includes(':custom-')){const id=occurrenceId.split(':custom-')[1],custom=normalized.customChores.find(item=>item.id===id);if(custom)task={...custom,occurrenceId}}
   if(task&&normalized.taskEdits[occurrenceId])task={...task,...normalized.taskEdits[occurrenceId],occurrenceId}
   if (!task) throw new Error('That household responsibility no longer exists in the operating plan.')
-  return task
+  return {...task,signoffRequired:true,verifiers:[...HOUSEHOLD_CHORE_VERIFIERS]}
 }
 
 export function householdRecordForOperation(value, operation) {
@@ -184,7 +184,7 @@ function maintenanceOperation(value, operation, context) {
     const title=String(payload.title||'').trim(),date=assertDate(payload.date||operation.targetDate),owners=uniqueMembers(payload.owners)
     if(!title||!owners.length)throw new Error('A chore requires a title and at least one owner.')
     if(payload.startTime||payload.endTime)assertTimeRange(payload.startTime,payload.endTime)
-    const item={id:createId(context),title,date,startTime:payload.startTime||'',endTime:payload.endTime||'',timing:payload.timing||'Flexible',category:payload.category||'Household chore',zone:payload.zone||'Whole House',owners,details:(payload.details||[]).map(String).map(value=>value.trim()).filter(Boolean),calendarEnabled:true,signoffRequired:payload.signoffRequired!==false,verifiers:HOUSEHOLD_CHORE_VERIFIERS,createdBy:actor,createdAt:now,updatedBy:actor,updatedAt:now}
+    const item={id:createId(context),title,date,startTime:payload.startTime||'',endTime:payload.endTime||'',timing:payload.timing||'Flexible',category:payload.category||'Household chore',zone:payload.zone||'Whole House',owners,details:(payload.details||[]).map(String).map(value=>value.trim()).filter(Boolean),calendarEnabled:true,signoffRequired:true,verifiers:HOUSEHOLD_CHORE_VERIFIERS,createdBy:actor,createdAt:now,updatedBy:actor,updatedAt:now}
     return normalizeHouseholdMaintenanceState({...state,customChores:[...state.customChores,item]})
   }
   const task=maintenanceTask(operation.targetId,state)
@@ -212,8 +212,9 @@ function maintenanceOperation(value, operation, context) {
       const requiredItems=(task.details||[]).map((detail,index)=>String(detail||'').trim()?index:null).filter(index=>index!==null)
       const completedItems=[...new Set(Array.isArray(payload.completedItems)?payload.completedItems:[])].filter(index=>requiredItems.includes(index)).sort((a,b)=>a-b)
       if(requiredItems.some(index=>!completedItems.includes(index)))throw new Error('Complete every checklist item before submitting this responsibility for review.')
-      patch={complete:!task.signoffRequired,checklistCompleted:completedItems,startedAt:prior.startedAt||'',startedBy:prior.startedBy||'',completedAt:now,completedBy:actor,submittedAt:task.signoffRequired?now:'',submittedBy:task.signoffRequired?actor:'',approvedAt:'',approvedBy:'',returnedAt:'',returnedBy:'',returnReason:'',exception:''};action=task.signoffRequired?'submitted-for-signoff':'completed'
+      patch={submissionTitle:task.title,complete:!task.signoffRequired,checklistCompleted:completedItems,startedAt:prior.startedAt||'',startedBy:prior.startedBy||'',completedAt:now,completedBy:actor,submittedAt:task.signoffRequired?now:'',submittedBy:task.signoffRequired?actor:'',approvedAt:'',approvedBy:'',returnedAt:'',returnedBy:'',returnReason:'',exception:''};action=task.signoffRequired?'submitted-for-signoff':'completed'
     } else if (payload.action==='approve') {
+      if(!['Larry','Terica'].includes(actor))throw Error('Larry or Terica must sign off on household chores.')
       if (!prior.submittedAt || prior.approvedAt) throw new Error('Only a currently submitted responsibility can be approved.')
       patch={complete:true,approvedAt:now,approvedBy:actor,returnedAt:'',returnedBy:'',returnReason:''};action='approved'
     } else if (payload.action==='return') {
@@ -273,6 +274,7 @@ export function applyHouseholdRecordOperation(value, operation, context = {}) {
 
 export function householdPermissionForOperation({ operation, member, role, currentRecord }) {
   if (!operation?.type?.startsWith('household.')) return null
+  if(operation.type==='household.maintenance.completion.update'&&['approve','return','reopen'].includes(operation.payload?.action))return ['Larry','Terica'].includes(member)?{allowed:true}:{allowed:false,reason:'Larry or Terica must sign off on household chores.'}
   if (role==='admin') return {allowed:true}
   if (operation.type==='household.schedule.block.create' || operation.type==='household.schedule.routine.create') {
     return operation.payload?.owner===member ? {allowed:true} : {allowed:false,reason:'Household members may create schedule records only for themselves.'}
