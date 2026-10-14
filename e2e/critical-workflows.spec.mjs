@@ -506,7 +506,7 @@ test('Household Operations can add and edit chore dates, times, owners, and deta
   await editor.getByRole('button',{name:'Review change'}).click()
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toContainText('Add household chore')
   await page.getByRole('button',{name:'Close confirmation'}).click()
-  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+  await page.locator('.brevity-assistant-drawer.is-open').getByRole('button',{name:'Close Brevity Assistant'}).click()
   await page.locator('.operations-filter-group').first().getByRole('button',{name:'All',exact:true}).click()
   await page.getByRole('button',{name:'Edit details'}).first().click()
   const edit=page.getByRole('dialog',{name:'Edit chore'})
@@ -641,7 +641,7 @@ test('Scenario Modeling edits descriptions, income rows, and recurring-expense t
   let review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Update reviewed forecast assumptions for “LS Genesco Inc.”')
   await review.getByRole('button',{name:'Cancel'}).click()
-  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+  await page.locator('.brevity-assistant-drawer.is-open').getByRole('button',{name:'Close Brevity Assistant'}).click()
 
   await page.getByRole('button',{name:'Add income source'}).click()
   const newRow=page.locator('.scenario-table tbody tr').last()
@@ -653,13 +653,13 @@ test('Scenario Modeling edits descriptions, income rows, and recurring-expense t
   review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Add “Consulting Income” to “Current” after review.')
   await review.getByRole('button',{name:'Cancel'}).click()
-  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+  await page.locator('.brevity-assistant-drawer.is-open').getByRole('button',{name:'Close Brevity Assistant'}).click()
 
   await page.getByRole('button',{name:'Review removal of LS Primary Salary'}).click()
   review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Remove “LS Genesco Inc.” from “Current” after review.')
   await review.getByRole('button',{name:'Cancel'}).click()
-  await page.getByRole('dialog',{name:'Brevity Assistant'}).getByRole('button',{name:'Close Brevity Assistant'}).click()
+  await page.locator('.brevity-assistant-drawer.is-open').getByRole('button',{name:'Close Brevity Assistant'}).click()
 
   await page.getByLabel('Monthly recurring expense total draft').fill('22000')
   await page.getByRole('button',{name:'Review expense total'}).click()
