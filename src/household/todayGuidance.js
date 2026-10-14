@@ -17,7 +17,10 @@ export function dailyGuidance({plan,agenda,member,scope='mine',minute=0,openWork
  const exceptions=[...signals.filter(item=>belongsToViewer(item,member,scope)).map(item=>({...item,sourceKind:'signal'})),...list(plan.household?.priorities).filter(item=>belongsToDay(item,plan.date)&&belongsToViewer(item,member,scope)&&!isFinished(item)&&!item.cancelled).map(item=>({...item,sourceKind:'priority'})),...list(plan.decisions).filter(item=>belongsToDay(item,plan.date)&&belongsToViewer(item,member,scope)&&!isFinished(item)&&!['resolved','done'].includes(String(item.status).toLowerCase())).map(item=>({...item,sourceKind:'decision'})),...pending.filter(item=>/needs.help|exception|returned|blocked|needs-decision/i.test(item.status||''))]
  const attention=[...new Map(exceptions.map(item=>[key(item),item])).values()]
  const focus=plan.household?.keyFocusCompleted||plan.household?.keyFocusDate>plan.date?'':String(plan.household?.keyFocus||'').trim()
- return {focus,priorities:priorities.slice(0,3),now:active[0]||null,suggested:rankDirectionPriorities(flexible)[0]||null,next:future[0]||null,remaining:[...active,...future,...untimed],earlier,attention,completed:items.filter(item=>['complete','completed','approved','done'].includes(String(item.status||'').toLowerCase())&&!item.cancelled)}
+ // Prefer a unique exact focus match among equally urgent flexible work. Keep source IDs intact.
+ const focusMatches=focus?flexible.filter(item=>item.title===focus):[]
+ const suggested=rankDirectionPriorities(focusMatches.length===1?[focusMatches[0],...flexible.filter(item=>item!==focusMatches[0])]:flexible)[0]||null
+ return {focus,priorities:priorities.slice(0,3),now:active[0]||null,suggested,next:future[0]||null,remaining:[...active,...future,...untimed],earlier,attention,completed:items.filter(item=>['complete','completed','approved','done'].includes(String(item.status||'').toLowerCase())&&!item.cancelled)}
 }
 
 // Saved dated records only: no inference of schedules from a draft's creation date.

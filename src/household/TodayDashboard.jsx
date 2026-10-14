@@ -73,15 +73,15 @@ function TodayCalendarAgenda({ filters, commitments, nextCommitment, health, onO
   </section>
 }
 
-function TodayHouseholdChores({ chores = [], onOpenPillar, browsingDate }) {
+function TodayHouseholdChores({ chores = [], onOpenPillar, browsingDate, personal = false }) {
   const complete = status => status === 'Approved' || status === 'Complete'
   return <section className="today-section today-household-chores" aria-labelledby="today-chores-title">
-    <div className="today-section-heading"><div><span>Household Operations · {chores.length} due</span><h2 id="today-chores-title">{browsingDate ? 'Scheduled Chores' : 'Today’s Chores'}</h2></div>{onOpenPillar && <button type="button" className="today-calendar-open" onClick={() => onOpenPillar('household')}>Open Household Operations <i className="ti ti-arrow-right" aria-hidden="true" /></button>}</div>
+    <div className="today-section-heading"><div><span>Household Operations · {chores.length} due{personal ? ' in your view' : ' across the household'}</span><h2 id="today-chores-title">{browsingDate ? 'Scheduled Chores' : 'Today’s Chores'}</h2></div>{onOpenPillar && <button type="button" className="today-calendar-open" onClick={() => onOpenPillar('household')}>Open Household Operations <i className="ti ti-arrow-right" aria-hidden="true" /></button>}</div>
     {chores.length ? <div className="today-chore-list">{chores.map(chore => <article className={`today-chore-item${complete(chore.status) ? ' today-chore-item--complete' : ''}`} key={chore.occurrenceId}>
       <i className={`ti ${complete(chore.status) ? 'ti-circle-check' : chore.status === 'Exception' || chore.status === 'Returned' ? 'ti-alert-triangle' : chore.status === 'In progress' ? 'ti-progress' : 'ti-circle'}`} aria-hidden="true" />
       <div><strong>{chore.title}</strong><span>{chore.timing || 'Flexible'} · {chore.zone || 'Whole House'}</span><small>{chore.owners?.join(', ') || 'Family'}</small></div>
       <em>{chore.status}</em>
-    </article>)}</div> : <div className="today-calendar-empty"><i className="ti ti-circle-check" aria-hidden="true" /><div><strong>No Household Operations chores are scheduled {browsingDate ? 'for this day' : 'today'}</strong><span>Open Household Operations to review the weekly plan or add a dated chore through Action Mode.</span></div></div>}
+    </article>)}</div> : <div className="today-calendar-empty"><i className="ti ti-circle-check" aria-hidden="true" /><div><strong>{personal ? 'No chores are scheduled for you or shared with everyone' : 'No Household Operations chores are scheduled'} {browsingDate ? 'for this day' : 'today'}</strong><span>Open Household Operations to review the weekly plan or add a dated chore through Action Mode.</span></div></div>}
   </section>
 }
 
@@ -289,7 +289,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
 
     <section className="today-pillar-stack today-household-pillar" data-pillar="household" aria-label="Pillar 4 Household Management"><div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Calendar &amp; chores</h2></div>
       <TodayCalendarAgenda filters={<p>{scope==='household'?'Family calendar':`Family calendar and ${currentMember}’s calendar`}. Open the full calendar to browse other members.</p>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
-      <TodayHouseholdChores chores={visibleChores} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
+      <TodayHouseholdChores chores={visibleChores} personal={scope==='mine'} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
     </section>
     <TodayPillarDetails pillar="education" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
     <TodayFinanceBrief date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
