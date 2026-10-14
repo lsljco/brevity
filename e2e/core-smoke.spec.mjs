@@ -917,7 +917,7 @@ test('routine workspace reviews a single day, a recurring change and household e
  const routine=(id,owner)=>({id,title:`${owner} focus`,owner,participants:[],days:[0,1,2,3,4,5,6],startTime:'08:00',endTime:'12:00',enabled:true,pillar:'Household Management',notes:''})
  const key='brevity_household_schedule_v1',source={version:1,blocks:[],routines:[routine('larry-focus','Larry'),routine('nyla-focus','Nyla')],routineOverrides:{}}
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{[key]:{key,version:1,value:JSON.stringify(source),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
- await page.reload();await openTodayDetails(page)
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
  let request
  await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{if(route.request().method()==='POST'){request=route.request().postDataJSON();return route.fulfill({status:409,json:{error:'Review captured for test'}})}return route.fallback()})
  if(testInfo.project.name==='iphone'&&await page.getByRole('button',{name:'Menu',exact:true}).isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click()
