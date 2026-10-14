@@ -27,3 +27,14 @@ test('untimed calendar commitments remain visible without becoming the next time
  const model=dailyGuidance({plan:{date},member,agenda:{priorities:[],items:[item('all-day','','',{sourceKind:'appointment'}),item('flex','',''),item('done','','',{status:'done'})]}})
  assert.deepEqual(model.remaining.map(x=>x.id),['all-day','flex']);assert.equal(model.next,null);assert.equal(model.suggested.id,'flex');assert.deepEqual(model.completed.map(x=>x.id),['done'])
 })
+
+test('a unique saved focus leads equally urgent flexible work while active and urgent work retain precedence',()=>{
+ const focus=item('interview','','',{title:'Prepare for interview'}),other=item('taxes','',''),urgent=item('urgent','','',{priority:'critical'}),active=item('appointment','06:00','07:00',{sourceKind:'appointment'})
+ const build=items=>dailyGuidance({plan:{date,household:{keyFocus:focus.title}},member,minute:375,agenda:{priorities:[],items}})
+ assert.equal(build([other,focus]).suggested.id,'interview')
+ assert.equal(build([other,focus,active]).now.id,'appointment')
+ assert.equal(build([other,focus,urgent]).suggested.id,'urgent')
+ assert.equal(build([other,{...focus,status:'complete'}]).suggested.id,'taxes')
+ assert.equal(build([other,{...focus,date:'2026-10-15'}]).suggested.id,'taxes')
+ assert.equal(build([other,focus,{...focus,id:'duplicate'}]).suggested.id,'taxes')
+})
