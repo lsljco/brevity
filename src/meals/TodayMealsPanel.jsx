@@ -44,7 +44,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
   }
   return <section className="today-section today-meals" aria-labelledby="today-meals-title" data-pillar="health">
     <div className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2 id="today-meals-title">{browsingDate?'Planned Meals':'Today’s Meals'}</h2></div><button className="today-meals-open" aria-label="Open Meal Plan" onClick={onOpenMealPlan}>Open Meal Plan →</button></div>
-    <section className="today-macro-summary" aria-label="Planned daily macros compared with goals">
+    <details className="today-nutrition-details"><summary>Nutrition goals &amp; food logged</summary><section className="today-macro-summary" aria-label="Planned daily macros compared with goals">
       <h3>{currentMember}’s planned daily macros</h3><p>If you eat the meals and any optional snacks listed below. These are estimates, not logged consumption.</p>
       {!personal.complete && <p role="status">The plan is incomplete. Totals cover only the listed items; missing meals have not been estimated.</p>}
       {!verified && <p role="status">{error || 'Loading your saved macro goals…'}</p>}
@@ -56,6 +56,7 @@ export default function TodayMealsPanel({meals, currentMember, mealDay, library 
       <button onClick={()=>requestAssistantConversation(`Read my saved nutrition targets and the authoritative meal plan including any manually added snacks for ${mealDay?.date || 'today'}. Help me balance this selected day against all four macro goals. Ask about brands, portions, and food restrictions before recommending replacements. Prepare any saved changes for Action Mode review.`)}>Balance my meals with Brevity</button>
     </section>
     {!browsingDate && <TodayCalorieConsumption nutrition={nutrition} currentMember={currentMember} date={today} error={error}/>}
+    </details>
     <div className="today-meal-grid">{Object.entries(LABELS).filter(([slot])=>personal.meals[slot]).map(([slot,label])=>{
       const meal=personal.meals[slot]
       return <article className={`today-meal-card${slot.startsWith('snack')?' today-snack-card':''}`} key={slot}>

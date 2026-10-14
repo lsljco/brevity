@@ -1,15 +1,25 @@
+import {belongsToViewer} from '../household/todayGuidance.js'
 import {useEffect,useState} from 'react'
 import {CARE_MEMBERS,CARE_TYPES,CARE_STATUSES,carePriorities} from './healthCare.js'
 import {getHouseholdDateKey} from '../finance/financeTime.js'
 import './HealthCare.css'
-export default function HealthCare({currentMember='Larry',isAdmin=false,date=getHouseholdDateKey(new Date()),appointments=[],onOpenCalendar,compact=false,readOnly=false}){
+export default function HealthCare({currentMember='Larry',isAdmin=false,date=getHouseholdDateKey(new Date()),appointments=[],onOpenCalendar,compact=false,readOnly=false,scope='mine'}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[draft,setDraft]=useState(null),[busy,setBusy]=useState(false),[showCompleted,setShowCompleted]=useState(false)
  const load=()=>{setError('');fetch('/.netlify/functions/health-care',{credentials:'include',cache:'no-store'}).then(async r=>{const p=await r.json();if(!r.ok)throw Error(p.error);return p}).then(setData).catch(e=>setError(e.message))}
- useEffect(load,[currentMember])
+ useEffect(()=>{load();window.addEventListener('brevity-health-care-updated',load);return()=>window.removeEventListener('brevity-health-care-updated',load)},[currentMember,date])
  const edit=item=>setDraft(item||{title:'',member:currentMember,type:'Medical',status:'Needs scheduling',priority:'Normal',date:'',notes:''})
- const save=async e=>{e.preventDefault();setBusy(true);setError('');try{const r=await fetch('/.netlify/functions/health-care',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({version:data.version,id:draft.id,item:draft})});const p=await r.json();if(!r.ok)throw Error(p.error);setData(p);setDraft(null)}catch(e){setError(e.message)}finally{setBusy(false)}}
+ const save=async e=>{e.preventDefault();setBusy(true);setError('');try{const r=await fetch('/.netlify/functions/health-care',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({version:data.version,id:draft.id,item:draft})});const p=await r.json();if(!r.ok)throw Error(p.error);setData(p);setDraft(null);window.dispatchEvent(new Event('brevity-health-care-updated'))}catch(e){setError(e.message)}finally{setBusy(false)}}
  const items=showCompleted?data?.items||[]:carePriorities(data?.items||[],date)
  const visits=appointments.filter(x=>x.pillar==='health'||/\b(doctor|dentist|dental|orthodont|optometr|ophthalm|eye exam|medical|checkup|check-up|teeth cleaning)\b/i.test(x.title||''))
+ if(compact){
+  const scheduled=(data?.items||[]).filter(item=>item.status==='Scheduled'&&item.date===date&&belongsToViewer({...item,owner:item.member},currentMember,scope))
+  return <section className="today-section health-care today-health-appointments" aria-label="Scheduled health appointments" data-pillar="health"><header className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2>Scheduled medical &amp; dental appointments</h2></div><button onClick={onOpenCalendar}>Open Family Calendar</button></header>
+   {error&&<p role="alert">Health appointments could not be loaded. <button onClick={load}>Retry</button></p>}
+   {!data&&!error&&<p role="status">Checking scheduled appointments…</p>}
+   <ul className="today-pillar-day-list">{visits.map(item=><li key={item.id}><div><strong>{item.title}</strong><small>{item.startTime||item.time||'All day'} · {item.owner||currentMember}</small></div></li>)}{scheduled.filter(item=>!visits.some(visit=>item.calendarEventId&&visit.id===item.calendarEventId)).map(item=><li key={item.id}><div><strong>{item.title}</strong><small>{item.member} · {item.type} · Scheduled</small></div></li>)}</ul>
+   {data&&!error&&!scheduled.length&&!visits.length&&<p>No scheduled medical or dental appointments recorded for this day.</p>}
+  </section>
+ }
  return <section className="today-section health-care" aria-label="Health priorities" data-pillar="health"><header className="today-section-heading"><div><span>Pillar 2 · Health &amp; Nutrition</span><h2>Health</h2><p>Medical, dental and eye care · appointments, scheduling and follow-up reviews</p></div>{onOpenCalendar&&<button onClick={onOpenCalendar}>Open Family Calendar</button>}</header>
  <p className="care-note">Shared household care coordination. Private device health measurements remain in Health Connections.</p>
  {error&&<p role="alert">{error} <button onClick={load}>Refresh care</button></p>}
