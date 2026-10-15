@@ -128,7 +128,7 @@ test('Cash Forecast names its scope and owns one explicit bank-activity toggle',
   assert.match(agenda, /<h1 id="cash-forecast-title">Cash Forecast<\/h1>/)
   assert.match(planner, /transactionsForCalendarMonth\(plaidActuals \|\| \[\], calYear, calMonth\)/)
   assert.match(planner, /aria-pressed=\{showActuals\}/)
-  assert.match(planner, /Reconciled with bank/)
+  assert.match(planner, /Using bank snapshot/)
   assert.doesNotMatch(planner, /`Actuals \(\$\{plaidActuals\.length\}\)`/)
   assert.match(planner, /view !== 'calendar' && \(/, 'global account bar toggle should be absent from Cash Forecast')
   assert.match(planner, /view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div[^>]*><FinanceTimeframe/, 'disconnected global timeframe should be hidden on Cash Forecast')

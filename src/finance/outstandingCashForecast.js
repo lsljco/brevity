@@ -25,12 +25,16 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   const ids = new Set(accounts.map(account => account.id))
   const ledgerIds = new Set(accounts.filter(account => Object.values(accountMap).includes(account.id) && Number.isFinite(account.plaidCurrentBalance)).map(account => account.id))
   const current = accounts.reduce((sum, account) => sum + cents(ledgerIds.has(account.id) ? account.plaidCurrentBalance : account.balance), 0)
+  // Available cash is the bank's authoritative spendable snapshot. Its holds
+  // must not be subtracted again from a separately refreshed transaction feed.
+  const availableIds = new Set(accounts.filter(account => ledgerIds.has(account.id) && Number.isFinite(account.plaidAvailableBalance)).map(account => account.id))
+  const anchor = accounts.reduce((sum, account) => sum + cents(availableIds.has(account.id) ? account.plaidAvailableBalance : ledgerIds.has(account.id) ? account.plaidCurrentBalance : account.balance), 0)
   // Generic projection supplies recurrence expansion and past estimates only.
   const projection = buildProjection(accounts, transactions, options.days ?? 365, {}, options.pastDays ?? 365, current / 100, parseISODate(today))
   const scoped = actuals.filter(actual => actual.id && ids.has(accountMap[actual.accountId]) && Number.isFinite(Number(actual.amount)) && parseISODate(actual.date) && actual.date <= today)
   const superseded = new Set(scoped.filter(actual => !actual.pending).map(actual => actual.pendingTransactionId).filter(Boolean))
   const bank = [...new Map(scoped.filter(actual => !actual.pending || !superseded.has(actual.id)).map(actual => [actual.id, actual])).values()]
-  const pending = bank.filter(actual => actual.pending && ledgerIds.has(accountMap[actual.accountId]))
+  const pending = bank.filter(actual => actual.pending && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]))
   const pendingDelta = pending.reduce((sum, actual) => sum - cents(actual.amount), 0)
   const occurrences = []
   for (const [date, point] of projection) {
@@ -86,7 +90,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     return candidate.date < today && actual && !reconcile && (actual.pending || actual.date >= today)
   })
   const overdueDelta = overdue.reduce((sum,candidate) => sum - candidate.leg.amount, 0)
-  let balance = (reconcile ? current + pendingDelta : opening) + overdueDelta
+  let balance = (reconcile ? anchor + pendingDelta : opening) + overdueDelta
   for (const [date, point] of projection) {
     if (date < today) continue
     let remaining = 0
@@ -105,7 +109,10 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     })
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
-      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:overdueDelta / 100, overdue:overdue.map(row => ({ id:row.key, date:row.date, name:row.plan.name, delta:-row.leg.amount / 100 })), currentBalance:current / 100, pendingDelta:reconcile ? pendingDelta / 100 : 0,
+      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:overdueDelta / 100, overdue:overdue.map(row => ({ id:row.key, date:row.date, name:row.plan.name, delta:-row.leg.amount / 100 })), currentBalance:current / 100, anchorBalance:anchor / 100,
+        anchorKind:availableIds.size === accounts.length ? 'available' : availableIds.size ? 'mixed' : 'current',
+        pendingActivity:bank.filter(actual => actual.pending).map(actual => ({ id:actual.id, date:actual.date, name:actual.name || actual.merchant_name || 'Pending transaction', accountName:accounts.find(account => account.id === accountMap[actual.accountId])?.name || 'Cash account', delta:-cents(actual.amount) / 100, applied:reconcile && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]) })),
+        pendingDelta:reconcile ? pendingDelta / 100 : 0,
         unresolvedPastCount:candidates.filter(candidate => candidate.date < today && !assigned.has(candidate.key)).length,
         ledgerComplete:ledgerIds.size === accounts.length,
         pendingExcluded:bank.filter(actual => actual.pending && !ledgerIds.has(accountMap[actual.accountId])).length,
