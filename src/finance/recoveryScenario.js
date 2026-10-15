@@ -59,7 +59,8 @@ export function projectRecovery(raw, {forecast=new Map(), debts=[]}={}, variant=
   const unsupported=rows.some(d=>d.interestMethod!=='Amortized APR'||d.paymentsPerYear!==12)
   let interestTotal=0;const completed=[],daily=[],months=[],warnings=[]
   if(cash===null)warnings.push('No forecast opening cash anchor for the selected horizon. Balances and accelerated debt payments are unavailable.')
-  if(!a.firstPayDate)warnings.push('Offer, start date and payroll commencement are unconfirmed. Dated payroll is excluded until a hypothetical first payday is entered.')
+  const monthlyEstimate=!a.firstPayDate
+  if(monthlyEstimate)warnings.push('Monthly what-if estimate: Vizient income and Texas costs are modeled together from the assumed opportunity start. Employment and payroll dates remain unconfirmed; pay-period timing is unavailable.')
   if(a.taxAmount&&!a.taxDate)warnings.push('Property tax payment date is unconfirmed; the obligation is not yet deducted.')
   if(a.relocation&&!a.relocationDate)warnings.push('Relocation timing is missing; the one-time cost is not yet deducted.')
   if(unsupported)warnings.push('Debt projection requires monthly amortized APR debts. Other interest methods need their own payment schedules; debt projections are unavailable.')
@@ -75,11 +76,13 @@ export function projectRecovery(raw, {forecast=new Map(), debts=[]}={}, variant=
     let base=a.baselineMode==='live'?(Number.isFinite(p?.remainingDelta)?cents(p.remainingDelta):null):dailyShare(a.monthlySurplus,date)
     if(base===null)cash=null
     const active=variant!=='baseline'
+    const opportunityActive=active&&(a.firstPayDate?key>=a.firstPayDate.slice(0,7):date>=a.texasStart)
     let income=0
     // Expected and conservative cap each month's dated income at the planning allowance.
     if(active&&payroll.has(date))income=variant==='optimistic'?cents(a.paycheck):Math.min(cents(a.paycheck),Math.max(0,cents(a.monthlyIncome)-month.payroll))
-    const texas=active&&date>=a.texasStart&&date<=a.texasEnd?dailyShare(a.texasMonthly,date):0
-    const contingency=variant==='conservative'?dailyShare(a.contingency,date):0
+    if(opportunityActive&&monthlyEstimate)income=dailyShare(a.monthlyIncome,date)
+    const texas=opportunityActive&&date>=a.texasStart&&date<=a.texasEnd?dailyShare(a.texasMonthly,date):0
+    const contingency=opportunityActive&&variant==='conservative'?dailyShare(a.contingency,date):0
     const relocation=active&&date===a.relocationDate?cents(a.relocation):0
     // A linked obligation already appears in the live forecast. Never subtract it twice.
     const linkedTax=a.baselineMode==='live'&&a.taxRecordId
@@ -102,5 +105,5 @@ export function projectRecovery(raw, {forecast=new Map(), debts=[]}={}, variant=
   }
   if(daily.some(d=>d.balance<0&&d.balance!==null))warnings.push('Projected cash falls below zero. Accelerated payments stop when reserves are unavailable.')
   const normalizedMonths=months.map(m=>Object.fromEntries(Object.entries(m).map(([k,v])=>[k,k==='month'||v===null?v:v/100])))
-  return {variant,opening:opening===null?null:opening/100,months:normalizedMonths,daily,warnings,completed:unsupported?[]:completed,totalInterest:unsupported?null:interestTotal/100,payoffDate:!unsupported&&rows.length&&rows.every(d=>d.balance===0)?completed.at(-1)?.date:null,remainingDebt:unsupported?null:rows.reduce((s,d)=>s+d.balance,0)/100}
+  return {variant,monthlyEstimate,opening:opening===null?null:opening/100,months:normalizedMonths,daily,warnings,completed:unsupported?[]:completed,totalInterest:unsupported?null:interestTotal/100,payoffDate:!unsupported&&rows.length&&rows.every(d=>d.balance===0)?completed.at(-1)?.date:null,remainingDebt:unsupported?null:rows.reduce((s,d)=>s+d.balance,0)/100}
 }

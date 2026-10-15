@@ -23,10 +23,19 @@ test('optimistic retains third checks; expected caps them without changing pay d
   assert.equal(projectRecovery(a,source(),'optimistic').months[0].payroll,22500)
   assert.equal(projectRecovery(a,source()).months[0].payroll,15000)
 })
-test('unknown and delayed payroll do not manufacture income',()=>{
-  assert.equal(projectRecovery(assumptions({firstPayDate:''}),source()).months[0].payroll,0)
+test('unknown payroll uses paired hypothetical monthly income and costs; delayed payroll defers both',()=>{
+  const monthly=projectRecovery(assumptions({firstPayDate:''}),source())
+  assert.equal(monthly.months[0].payroll,15000)
+  assert.equal(monthly.months[0].texas,7500)
+  assert.equal(monthly.months[0].closing,14104.09)
+  assert.ok(monthly.daily.every(d=>!d.payday&&d.classification==='hypothetical'))
+  assert.equal(projectRecovery(assumptions({firstPayDate:''}),source(),'conservative').months[0].closing,13606)
+  const baseline=projectRecovery(assumptions({firstPayDate:''}),source(),'baseline').months[0]
+  assert.equal(baseline.payroll,0);assert.equal(baseline.texas,0);assert.equal(baseline.closing,6604.09)
   const late=projectRecovery(assumptions({firstPayDate:'2026-12-18'}),source())
   assert.equal(late.months[0].payroll,0)
+  assert.equal(late.months[0].texas,0)
+  assert.equal(projectRecovery(assumptions({firstPayDate:'2026-12-18'}),source(),'conservative').months[0].contingency,0)
   assert.equal(late.months[1].payroll,7500)
 })
 test('property tax occurs once on supplied date and negative cash remains visible',()=>{
