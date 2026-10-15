@@ -93,3 +93,5 @@ button.brevity-assistant-launcher>i{display:none!important}
 .brevity-assistant-drawer.is-compact .brevity-assistant-message.is-user{display:none}
 .brevity-assistant-drawer.is-compact{max-height:min(380px,55dvh)}
 @media(max-width:640px){.brevity-voice-launcher{left:auto;right:calc(var(--brevity-command-dock-assistant-width) - 48px);bottom:calc(var(--brevity-mobile-nav-reserve) + env(safe-area-inset-bottom) + 10px)}}
+
+.brevity-image-preview{padding:8px;border:1px solid var(--brevity-border);border-radius:8px;max-width:100%;overflow-wrap:anywhere}.brevity-image-preview img{display:block;max-width:100%;max-height:120px;object-fit:contain}.brevity-image-preview p{font-size:12px;margin:6px 0}.brevity-assistant-composer input[type=file]{max-width:100%;font-size:12px}

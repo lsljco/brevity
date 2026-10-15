@@ -4,6 +4,10 @@ on:
     paths:
       - 'src/finance/RecoveryWorkspace*'
       - 'src/finance/recoveryScenario*'
+      - 'src/finance/*Worksheet*'
+      - 'src/finance/recoveryWorksheet*'
+      - 'netlify/lib/consumption-image.mjs'
+      - 'netlify/functions/brevity-assistant.mjs'
       - 'src/finance/ScenarioModeling.jsx'
       - 'src/finance/FinancePlanner.jsx'
       - 'src/assistant/BrevityAssistant.jsx'

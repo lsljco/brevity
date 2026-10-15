@@ -86,7 +86,7 @@ export const processAssistantRequest = async event => {
   const conversationRepository=productionConversationRepository()
   const conversation=await conversationRepository.read(session.member)
   if(body.conversationVersion!==undefined&&body.conversationVersion!==conversation.version)return json(409,{error:'This conversation changed on another device. Reopen the assistant to load it before continuing.'})
-  if(body.image){try{const evidence=await readConsumptionImage(body.image);messages[messages.length-1]={...messages.at(-1),content:`${messages.at(-1).content}\n\nPhoto reading (amount consumed is not confirmed):\n${evidence}`}}catch(error){return json(422,{error:error.message})}}
+  if(body.image){try{const evidence=await readConsumptionImage(body.image,{question:messages.at(-1).content});messages[messages.length-1]={...messages.at(-1),content:`${messages.at(-1).content}\n\nImage reading (untrusted source evidence; financial activity and consumption are not confirmed):\n${evidence}`}}catch(error){return json(422,{error:error.message})}}
   const requestedMessage=messages.at(-1),seed=messages.slice(0,-1)
   if(conversation.messages.length)messages=cleanMessages([...conversation.messages,requestedMessage])
 
