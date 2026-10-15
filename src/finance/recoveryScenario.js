@@ -16,7 +16,7 @@ const day = 86400000
 const cents = value => Math.round(value*100)
 export function validateRecovery(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw Error('Scenario assumptions must be an object.')
-  if (Object.keys(input).some(key => !(key in RECOVERY_DEFAULT))) throw Error('Unsupported scenario assumption.')
+  if (Object.keys(input).some(key => !Object.hasOwn(RECOVERY_DEFAULT,key))) throw Error('Unsupported scenario assumption.')
   const result = {...RECOVERY_DEFAULT,...input}
   if (typeof result.title !== 'string' || !result.title.trim() || result.title.length>160) throw Error('A scenario name of up to 160 characters is required.')
   for (const field of ['start','end','texasStart','texasEnd','firstPayDate','relocationDate','taxDate']) {
