@@ -23,3 +23,11 @@
 @media(max-width:520px){.scenario-summary{grid-template-columns:1fr}.scenario-projection-grid{grid-template-columns:1fr}.scenario-segmented{width:100%}.scenario-segmented button{flex:1}.scenario-title-input,.scenario-description-input{width:62vw}}
 .scenario-income-tools{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}.scenario-draft-guidance{margin:0;color:var(--brevity-muted);font-size:12px;line-height:1.5}.scenario-row-actions{display:flex;align-items:center;gap:7px}.scenario-row-actions .scenario-add{height:38px;padding:0 11px}.scenario-row-actions .scenario-delete:disabled{opacity:.4;cursor:not-allowed}
 @media(max-width:900px){.scenario-income-tools{align-items:flex-start;flex-direction:column}}
+/* Size controls to the Finance content lane, including a docked iPad sidebar. */
+.scenario-header,.scenario-section-heading,.scenario-expense-panel,.scenario-expense-controls{flex-wrap:wrap;min-width:0}
+.scenario-section-heading>div{flex:1 1 280px;min-width:0;max-width:100%}
+.scenario-title-input,.scenario-description-input{width:100%;max-width:100%;box-sizing:border-box}
+.scenario-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
+.scenario-page{container-type:inline-size}
+@container(max-width:850px){.scenario-header,.scenario-expense-panel{align-items:flex-start;flex-direction:column}.scenario-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.scenario-expense-controls{width:100%}.scenario-projection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container(max-width:480px){.scenario-summary,.scenario-projection-grid{grid-template-columns:minmax(0,1fr)}}
