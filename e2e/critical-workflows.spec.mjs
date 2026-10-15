@@ -152,7 +152,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 async function closeMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click();await expect(drawer).not.toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');await expect(page.locator('.app-shell')).toBeVisible();await openTodayDetails(page)})
+test.beforeEach(async({page},testInfo)=>{const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');if(process.env.PREVIEW_BASE_URL)await page.addStyleTag({content:'[data-netlify-deploy-id]{display:none!important}'});await expect(page.locator('.app-shell')).toBeVisible({timeout:process.env.PREVIEW_BASE_URL?20000:7000});await openTodayDetails(page)})
 
 test('expanded side panel remains expanded while navigating until its toggle is used',async({page},testInfo)=>{
   const drawer=page.locator('#primary-navigation-drawer')
@@ -2681,4 +2681,36 @@ test('Completion inbox stages exact project sign-off without saving before confi
  await inbox.getByRole('button',{name:'Review sign-off',exact:true}).click()
  await expect(page.locator('.brevity-action-review')).toContainText('Garden completion')
  expect(prepared).toHaveLength(1);expect(prepared[0]).toMatchObject({expectedVersion:7,operation:{type:'project.review',targetId:'review-project',payload:{action:'approve'}}});expect(writes).toHaveLength(0)
+})
+
+test('Scenario Modeling edits recovery assumptions without realizing hypothetical cash',async({page},testInfo)=>{
+  await page.clock.setFixedTime(new Date('2026-10-15T12:00:00Z'))
+  const prepared=[],executed=[]
+  page.on('request',r=>{if(r.url().includes('action=prepare-direct'))prepared.push(r.postDataJSON());if(r.url().includes('action=execute'))executed.push(r)})
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Scenario Modeling',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  const workspace=page.locator('.recovery-workspace')
+  await expect(workspace.getByRole('heading',{name:'Household Financial Recovery',exact:true})).toBeVisible()
+  await expect(workspace).toContainText('No hypothetical income is realized cash.')
+  await expect(workspace).toContainText('$14,104.09')
+  await expect(workspace).toContainText('$13,606')
+  await workspace.getByText('Assumptions and timing',{exact:true}).click()
+  await workspace.getByLabel('Hypothetical first payday',{exact:true}).fill('2026-11-06')
+  await workspace.getByLabel('Hypothetical tax payment date',{exact:true}).fill('2026-11-30')
+  await expect(workspace.locator('tbody tr').first()).toContainText('$15,000')
+  await expect(workspace.locator('tbody tr').first()).toContainText('$30,000')
+  await workspace.getByRole('button',{name:'Pay-period forecast',exact:true}).click()
+  await expect(workspace.locator('tbody')).toContainText('2026-11-06')
+  await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
+  await workspace.getByRole('button',{name:'Review & save scenario',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(dialog).toBeVisible()
+  expect(prepared.at(-1).operation.type).toBe('forecast.update')
+  expect(JSON.parse(prepared.at(-1).operation.payload.recoveryJson).firstPayDate).toBe('2026-11-06')
+  expect(executed).toHaveLength(0)
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
+  expect(executed).toHaveLength(0)
 })

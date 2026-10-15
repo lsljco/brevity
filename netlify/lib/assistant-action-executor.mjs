@@ -1,3 +1,4 @@
+import { validateRecovery } from '../../src/finance/recoveryScenario.js'
 import {submitProjectCompletion,reviewProjectCompletion} from '../../src/homehq/projectSignoff.js'
 import {LEARNING_HUB_RESOURCE,applyLearningItem} from '../../src/education/learningHub.js'
 import {CARE_RESOURCE,applyCareAction} from '../../src/health/healthCare.js'
@@ -326,6 +327,16 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:applyBudgetTarget(value, payload) }
   }
   if (operation.type === 'forecast.update') {
+    if (payload.recoveryJson !== undefined) {
+      const assumptions=validateRecovery(JSON.parse(payload.recoveryJson))
+      const plans=value?.recoveryPlans||[]
+      const previous=plans.find(plan=>plan.id===operation.targetId)
+      const timestamp=nowIso(context.now||(()=>new Date()))
+      const revision={version:(previous?.version||0)+1,assumptions,changedAt:timestamp,changedBy:context.actor}
+      const plan={id:operation.targetId,title:assumptions.title,owner:previous?.owner||context.actor,createdAt:previous?.createdAt||timestamp,classification:'hypothetical',...revision,history:[...(previous?.history||[]),revision]}
+      return {before,after:{...(value||{}),recoveryPlans:previous?plans.map(item=>item.id===plan.id?plan:item):[...plans,plan]}}
+    }
+
     if (['model','planningExpense','expenseMode'].includes(operation.targetId)) {
       const after = { ...(value || {}) }
       if (payload.planningExpense !== undefined) after.planningExpense = Math.max(0, Number(payload.planningExpense) || 0)

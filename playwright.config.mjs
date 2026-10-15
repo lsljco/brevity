@@ -8,7 +8,7 @@ export default defineConfig({
   retries: 1,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: process.env.PREVIEW_BASE_URL || 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -18,7 +18,7 @@ export default defineConfig({
     { name: 'tablet', use: { ...devices['iPad Pro 11'], browserName: 'chromium' } },
     { name: 'tablet-landscape', use: { ...devices['iPad Pro 11 landscape'], browserName: 'chromium' } },
   ],
-  webServer: {
+  webServer: process.env.PREVIEW_BASE_URL ? undefined : {
     command: 'npm run preview -- --host 127.0.0.1 --port 4173',
     port: 4173,
     reuseExistingServer: !process.env.CI,

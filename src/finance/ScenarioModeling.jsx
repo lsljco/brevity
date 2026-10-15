@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { getAcknowledgedSharedStateVersion, SHARED_STATE_EVENT } from '../household/sharedState.js'
@@ -8,6 +8,8 @@ import {
   SCENARIO_STORAGE_KEY,
 } from './scenarioModelingData.js'
 import './ScenarioModeling.css'
+
+const RecoveryWorkspace = lazy(() => import('./RecoveryWorkspace.jsx'))
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -46,7 +48,7 @@ function SummaryMetric({ label, value, tone = '' }) {
   </div>
 }
 
-export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = false }) {
+export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = false, financeData, actuals, debts, freshness }) {
   const initialModel = useMemo(() => loadModel(), [])
   const [model, setModel] = useState(initialModel)
   const [draftModel, setDraftModel] = useState(() => clone(initialModel))
@@ -245,6 +247,8 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       {!readOnly && <span className="scenario-eyebrow"><i className="ti ti-shield-check"/> Review · Audit · Safe Undo</span>}
     </header>
 
+    <Suspense fallback={<p>Loading recovery scenarios…</p>}><RecoveryWorkspace financeData={financeData} actuals={actuals} debts={debts} freshness={freshness} readOnly={readOnly} /></Suspense>
+    <h2>Existing income scenarios</h2>
     <p className="scenario-account-scope" role="note"><i className="ti ti-building-bank" aria-hidden="true"/><span><strong>Account scope: Operating Account</strong> Scenario Modeling uses the household operating-expense baseline. Renovation / Projects and Savings are intentionally excluded from these calculations.</span></p>
 
     {reviewError && <div className="scenario-expense-panel" role="alert">{reviewError}</div>}

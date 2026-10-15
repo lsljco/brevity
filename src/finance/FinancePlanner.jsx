@@ -1528,6 +1528,10 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),vendorDirectory,'posted',vendorOrder),
     [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder],
   )
+  const recoveryFinanceSources = useMemo(() => ({
+    data:{...data,transactions:decorateVendorTransactions(data.transactions,vendorDirectory,'planned',vendorOrder)},
+    actuals:decorateVendorTransactions(plaidActuals || [],vendorDirectory,'posted',vendorOrder),
+  }), [data,plaidActuals,vendorDirectory,vendorOrder])
   const cashForecastPostedActuals = useMemo(
     () => balanceActuals.filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),
     [balanceActuals, forecastScope.accountIds, plaidIdToLocal],
@@ -3006,7 +3010,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {/* ══════════ SCENARIO MODELING ══════════ */}
       {view === 'scenario-modeling' && (
-        <ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} />
+        <ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} financeData={recoveryFinanceSources.data} actuals={recoveryFinanceSources.actuals} debts={debts} freshness={`${balanceDataMessage} ${actualsFreshnessMessage}`} />
       )}
 
       {/* ══════════ CALENDAR ══════════ */}

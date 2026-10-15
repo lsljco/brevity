@@ -1,3 +1,4 @@
+import { RECOVERY_DEFAULT, validateRecovery } from '../../src/finance/recoveryScenario.js'
 import {LEARNING_HUB_RESOURCE,normalizeLearningItem} from '../../src/education/learningHub.js'
 import {parseRoutineTiming} from '../../src/household/routineRules.js'
 import {CARE_RESOURCE,normalizeCareAction} from '../../src/health/healthCare.js'
@@ -150,7 +151,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
-  'forecast.update': ['title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
+  'forecast.update': ['recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'recurring.create': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
   'recurring.update': ['reconciliation', 'vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
@@ -338,7 +339,12 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='household.schedule.occurrence.update'&&field==='reset'){
+    if(type==='forecast.update'&&field==='recoveryJson'){
+      if(typeof value!=='string'||value.length>12000)throw Error('Invalid recovery assumptions.');
+      const assumptions=JSON.parse(value)
+      if(Object.keys(RECOVERY_DEFAULT).some(key=>!Object.hasOwn(assumptions,key)))throw Error('Provide the complete recovery assumptions, preserving unchanged fields.')
+      normalized.recoveryJson=JSON.stringify(validateRecovery(assumptions))
+    }else if(type==='household.schedule.occurrence.update'&&field==='reset'){
       if(value!==true)throw Error('Reset must restore the normal routine.');normalized.reset=true
     }else if(field==='timingRuleJson'){
       if(typeof value!=='string')throw Error('Routine timing must be a reviewed rule.');
@@ -681,7 +687,9 @@ export function normalizeActionOperation(input = {}) {
     const scenarioFields = ['title', 'description']
     const incomeFields = ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']
     const fields = Object.keys(payload)
-    if (['model', 'planningExpense', 'expenseMode'].includes(operation.targetId)) {
+    if (payload.recoveryJson !== undefined) {
+      if(fields.length!==1 || !/^recovery-[a-zA-Z0-9-]+$|^household-financial-recovery-001$/.test(operation.targetId))throw Error('Recovery changes require a stable recovery scenario ID and only recoveryJson.')
+    } else if (['model', 'planningExpense', 'expenseMode'].includes(operation.targetId)) {
       if (fields.some(field => !modelFields.includes(field))) throw new Error('A forecast model update can change only planningExpense or expenseMode.')
     } else if (payload.incomeAction === 'create') {
       if (!payload.incomeId || !payload.description || fields.some(field => !['incomeAction', 'incomeId', ...incomeFields].includes(field))) throw new Error('Adding forecast income requires a unique id, description, and supported income fields.')

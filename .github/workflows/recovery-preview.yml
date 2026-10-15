@@ -1,0 +1,61 @@
+name: Recovery scenario deployed preview
+on:
+  pull_request:
+    paths:
+      - 'src/finance/RecoveryWorkspace*'
+      - 'src/finance/recoveryScenario*'
+      - 'src/finance/ScenarioModeling.jsx'
+      - 'src/finance/FinancePlanner.jsx'
+      - 'src/assistant/BrevityAssistant.jsx'
+      - 'netlify/lib/assistant-*'
+      - 'playwright.config.mjs'
+      - '.github/workflows/recovery-preview.yml'
+permissions:
+  contents: read
+jobs:
+  deployed-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for the exact commit's Netlify preview
+        id: preview
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const sha=context.payload.pull_request.head.sha;
+            for(let attempt=0;attempt<60;attempt++) {
+              const response=await github.rest.repos.getCombinedStatusForRef({...context.repo,ref:sha});
+              const status=response.data.statuses.find(s=>s.context==='netlify/brevity-architect-staging/deploy-preview');
+              if(status?.state==='success') {
+                const url=new URL(status.target_url);
+                if(url.protocol!=='https:' || !url.hostname.endsWith('--brevity-architect-staging.netlify.app')) throw new Error('Unexpected preview origin');
+                core.setOutput('url',url.origin);
+                core.info(`Testing deployed commit ${sha} at ${url.origin}`);
+                return;
+              }
+              if(['failure','error'].includes(status?.state)) throw new Error('Netlify preview failed');
+              await new Promise(resolve=>setTimeout(resolve,10000));
+            }
+            throw new Error('No successful preview for this exact commit within ten minutes');
+      - name: Exercise deployed recovery UI with isolated synthetic household fixtures
+        env:
+          PREVIEW_BASE_URL: ${{ steps.preview.outputs.url }}
+        run: npx playwright test e2e/critical-workflows.spec.mjs --grep 'Scenario Modeling edits recovery assumptions' --workers=2
+      - name: Preserve failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-deployed-preview-failures
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 3

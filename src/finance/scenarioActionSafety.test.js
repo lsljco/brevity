@@ -107,3 +107,21 @@ test('direct forecast review stops before review when a newer shared version exi
   assert.equal(repository.proposals.size,0)
   assert.equal(resources.snapshot().value.planningExpense,20000)
 })
+
+test('recovery scenario save is versioned, owned, audited, isolated and undoable',async()=>{
+  const {RECOVERY_DEFAULT,RECOVERY_ID}=await import('./recoveryScenario.js')
+  const initial={expenseMode:'scenario',planningExpense:20000,scenarios:[]}
+  const repository=memoryRepository(),resources=versionedForecastResources(initial,3)
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),now=()=>new Date('2026-10-15T12:00:00Z')
+  const input={summary:'Save recovery assumptions',expectedVersion:3,operation:{type:'forecast.update',targetId:RECOVERY_ID,payload:{recoveryJson:JSON.stringify(RECOVERY_DEFAULT)}}}
+  const proposal=await prepareDirectProposal({input,session,permissions,repository,resources,now:now(),id:'recovery-save'})
+  assert.deepEqual(resources.snapshot().value,initial)
+  const execution=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},now,createAttemptId:()=> 'recovery-attempt'})
+  const plan=resources.snapshot().value.recoveryPlans[0]
+  assert.equal(plan.owner,'Larry');assert.equal(plan.version,1);assert.equal(plan.classification,'hypothetical')
+  assert.deepEqual(plan.assumptions,RECOVERY_DEFAULT)
+  assert.equal(plan.history.length,1)
+  assert.equal(execution.audit.actor,'Larry')
+  await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'recovery-undo'})
+  assert.deepEqual(resources.snapshot().value,initial)
+})
