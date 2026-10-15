@@ -20,7 +20,7 @@ Extend Finance → Scenario Modeling with Household Financial Recovery / Vizient
 - Texas allocation: $7,500/month, provisionally throughout November 2026–December 2027; dates editable.
 - Expected steady-month surplus: $14,104.09. Conservative contingency: $498.09, producing $13,606.
 - Property tax: $30,000; payment date blank. Relocation, reserve and extra debt default to zero, explicitly editable.
-- First payday remains blank. No dated payroll is projected until the user supplies a hypothetical date. No tax cash movement is projected until its date is provided or its existing scheduled record is linked in live mode.
+- First payday remains blank. Monthly what-if income uses the $15,000 allowance from the assumed opportunity/Texas start, paired with living expenses. No actual receipt or dated payday is inferred. Pay-period views and daily minima are unavailable until a hypothetical payday is supplied. When dated payroll is used, Texas costs and contingency cannot begin before the first payroll month. No tax cash movement is projected until its date is provided or its existing scheduled record is linked in live mode.
 - The bundled Scenario 001 template is not represented as a saved household record. First reviewed save establishes the persisted record and audit trail.
 
 ## Calculation conventions and limitations
