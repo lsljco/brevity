@@ -125,3 +125,24 @@ test('recovery scenario save is versioned, owned, audited, isolated and undoable
   await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'recovery-undo'})
   assert.deepEqual(resources.snapshot().value,initial)
 })
+
+test('worksheet save preserves the Vizient plan and supports audited Undo',async()=>{
+  const {RECOVERY_DEFAULT,RECOVERY_ID}=await import('./recoveryScenario.js')
+  const {createRecoveryWorksheet,WORKSHEET_ID}=await import('./recoveryWorksheet.js')
+  const assumptions={...RECOVERY_DEFAULT,worksheet:createRecoveryWorksheet()}
+  const initial={expenseMode:'scenario',planningExpense:20000,scenarios:[],recoveryPlans:[{id:RECOVERY_ID,title:'Existing Vizient plan',assumptions:RECOVERY_DEFAULT}]}
+  const repository=memoryRepository(),resources=versionedForecastResources(initial,3)
+  const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),now=()=>new Date('2026-10-15T12:00:00Z')
+  const input={summary:'Save recovery assumptions',expectedVersion:3,operation:{type:'forecast.update',targetId:WORKSHEET_ID,payload:{recoveryJson:JSON.stringify(assumptions)}}}
+  const proposal=await prepareDirectProposal({input,session,permissions,repository,resources,now:now(),id:'recovery-save'})
+  assert.deepEqual(resources.snapshot().value,initial)
+  const execution=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},now,createAttemptId:()=> 'recovery-attempt'})
+  const plan=resources.snapshot().value.recoveryPlans[1]
+  assert.equal(plan.owner,'Larry');assert.equal(plan.version,1);assert.equal(plan.classification,'hypothetical')
+  assert.deepEqual(plan.assumptions,assumptions)
+  assert.deepEqual(resources.snapshot().value.recoveryPlans[0],initial.recoveryPlans[0])
+  assert.equal(plan.history.length,1)
+  assert.equal(execution.audit.actor,'Larry')
+  await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'recovery-undo'})
+  assert.deepEqual(resources.snapshot().value,initial)
+})
