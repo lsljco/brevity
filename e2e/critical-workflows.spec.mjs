@@ -2725,7 +2725,7 @@ test('Scenario Modeling edits recovery assumptions from worksheet and attaches g
   await page.getByRole('button',{name:'Scenario Modeling',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
   const workspace=page.locator('.recovery-workspace')
-  await workspace.getByLabel('Named scenario',{exact:true}).selectOption('recovery-household-worst-case-002')
+  await workspace.getByRole('combobox',{name:'Named scenario',exact:true}).selectOption('recovery-household-worst-case-002')
   await expect(workspace).toContainText('$39,386.17')
   await expect(workspace).toContainText('Nyla must find 2nd remote opportunity')
   await expect(workspace).toContainText('LSTS income tax payoff')
