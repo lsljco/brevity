@@ -3006,7 +3006,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {/* ══════════ SCENARIO MODELING ══════════ */}
       {view === 'scenario-modeling' && (
-        <ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} financeData={data} actuals={plaidActuals || []} debts={debts} freshness={actualsFreshnessMessage} />
+        <ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} financeData={data} actuals={plaidActuals || []} debts={debts} freshness={`${balanceDataMessage} ${actualsFreshnessMessage}`} />
       )}
 
       {/* ══════════ CALENDAR ══════════ */}
