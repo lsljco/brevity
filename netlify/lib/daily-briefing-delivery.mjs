@@ -3,14 +3,15 @@ import {householdClock,minuteOfDay} from '../../src/household/dailyRhythm.js'
 import {inQuietHours,reminderPreferences} from './personal-reminders.mjs'
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const url='/?briefing=1#daily-briefing'
-export function dueBriefingMessages({brief,finance,preferences={},previous,now=new Date()}){
+export function dueBriefingMessages({brief,finance,preferences={},previous,morning,now=new Date()}){
  const prefs=reminderPreferences(preferences),clock=householdClock(now),date=brief.date,items=brief.items
  const snapshot=Object.fromEntries(items.map(item=>[item.id,hash([item.title,item.time,item.endTime,item.owners])]))
  if(clock.date!==date||inQuietHours(prefs,clock.minute))return {messages:[],snapshot:null}
  const messages=[]
- if(clock.minute>=270&&clock.minute<720){
-  if(prefs.dailyBriefing)messages.push({key:`daily:${date}`,title:`Brevity · Your day, ${brief.member}`,body:`${items.filter(item=>item.progress!=='Completed').length} responsibilities today. Review your appointments, chores, routines and project tasks.${Object.values(brief.sources).includes('unavailable')?' Some sources need attention.':''}`,url,tag:`briefing-${date}`,remaining:240})
-  if(finance&&prefs.financialBriefing)messages.push({key:`finance:${date}`,title:'Brevity · Daily financial analysis',body:`Your operating and savings balances, month-end forecast, ${finance.bills.filter(item=>item.status!=='Posted').length} unposted bills and ${finance.tasks.length} financial tasks are ready. Open your secure briefing.`,url,tag:`finance-brief-${date}`,remaining:240})
+ const dailyStart=minuteOfDay(prefs.dailyBriefingTime)
+ if(clock.minute>=dailyStart){
+  if(prefs.dailyBriefing)messages.push({key:`daily:${date}`,title:morning?.title||`Brevity · Your day, ${brief.member}`,body:morning?.body||'Let’s set today’s priorities. Open Brevity → Today',url:morning?.url||'/?priorities=1#today-focus',tag:`briefing-${date}`,remaining:Math.min(240,1440-clock.minute)})
+  if(finance&&prefs.financialBriefing&&!prefs.dailyBriefing)messages.push({key:`finance:${date}`,title:'Brevity · Daily financial analysis',body:`Your operating and savings balances, month-end forecast, ${finance.bills.filter(item=>item.status!=='Posted').length} unposted bills and ${finance.tasks.length} financial tasks are ready. Open your secure briefing.`,url,tag:`finance-brief-${date}`,remaining:240})
  }
  if(clock.minute>=270&&prefs.changes&&previous&&Object.values(brief.sources).every(value=>value!=='unavailable')){
   const changed=[...new Set([...Object.keys(previous),...Object.keys(snapshot)])].filter(id=>previous[id]!==snapshot[id])
