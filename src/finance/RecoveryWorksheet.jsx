@@ -6,8 +6,8 @@ export default function RecoveryWorksheet({worksheet,onChange,readOnly}) {
   const result=useMemo(()=>{try{return projectWorksheet(worksheet)}catch(error){return {error:error.message}}},[worksheet])
   const edit=(id,key,value)=>onChange({...worksheet,rows:worksheet.rows.map(row=>row.id===id?{...row,[key]:value}:row)})
   return <section aria-label="Source worksheet plan">
-    <p role="note">Hypothetical worksheet · opening funds replace the live cash anchor for this plan. They are not added to bank balances. Month-level ordering follows the supplied sheet; it does not verify receipts or payment dates. No Vizient income or Texas costs are included in this worksheet.</p>
-    <details><summary>Source interpretation and uncertainties</summary><p>{worksheet.sourceNotes}</p></details>
+    <p role="note">Hypothetical worksheet · opening funds replace the live cash anchor for this plan. They are not added to bank balances. Month-level ordering follows the supplied sheet; it does not verify receipts or payment dates. Income, Texas allocations, taxes and payoffs are included only where shown in the rows below.</p>
+    <details open><summary>Source interpretation and uncertainties</summary><p>{worksheet.sourceNotes}</p></details>
     {result.error?<p role="alert">{result.error}</p>:<>
       <dl className="recovery-fields"><div><dt>Opening planning funds</dt><dd>{money(result.opening)}</dd></div><div><dt>Modeled obligations</dt><dd>{money(result.obligations)}</dd></div><div><dt>Ending planning balance</dt><dd>{money(result.closing)}</dd></div></dl>
       {result.negative&&<p role="alert">The worksheet balance falls below zero.</p>}

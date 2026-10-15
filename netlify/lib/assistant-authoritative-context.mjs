@@ -1,3 +1,4 @@
+import {WORK_SCENARIOS,createWorkScenario} from '../../src/finance/workScenarios.js'
 import { WORKSHEET_ID, createRecoveryWorksheet } from '../../src/finance/recoveryWorksheet.js'
 import { RECOVERY_DEFAULT, RECOVERY_ID } from '../../src/finance/recoveryScenario.js'
 import {loadOpenWork} from './open-work.mjs'
@@ -106,7 +107,7 @@ const compactRecurring=item=>({
   ...pick(item,['id','name','title','notes','amount','type','cat','category','acct','accountId','freq','start','end','skips','owner','updatedAt']),
   budgetLineId:budgetLineId(item),
 })
-const compactForecast=model=>({worksheetTemplate:{id:WORKSHEET_ID,classification:'unsaved-template',assumptions:{...RECOVERY_DEFAULT,title:'Addition of NS Income Worst Case Scenario',start:'2026-10-01',end:'2027-12-31',paycheck:0,monthlyIncome:0,texasMonthly:0,contingency:0,taxAmount:0,worksheet:createRecoveryWorksheet()}},recoveryTemplate:{id:RECOVERY_ID,classification:'unsaved-template',assumptions:RECOVERY_DEFAULT},recoveryPlans:(model?.recoveryPlans||[]).map(plan=>pick(plan,['id','title','owner','version','classification','assumptions'])),expenseMode:model?.expenseMode,planningExpense:model?.planningExpense,scenarios:(model?.scenarios||[]).map(scenario=>({...pick(scenario,['id','title','description']),incomes:(scenario.incomes||[]).map(income=>pick(income,['id','description','monthlyNet','annualGross','contribution','remote','employment','notes']))}))})
+const compactForecast=model=>({workScenarioTemplates:WORK_SCENARIOS.map(s=>({id:s.id,classification:'unsaved-template',assumptions:createWorkScenario(s.id)})),worksheetTemplate:{id:WORKSHEET_ID,classification:'unsaved-template',assumptions:{...RECOVERY_DEFAULT,title:'Addition of NS Income Worst Case Scenario',start:'2026-10-01',end:'2027-12-31',paycheck:0,monthlyIncome:0,texasMonthly:0,contingency:0,taxAmount:0,worksheet:createRecoveryWorksheet()}},recoveryTemplate:{id:RECOVERY_ID,classification:'unsaved-template',assumptions:RECOVERY_DEFAULT},recoveryPlans:(model?.recoveryPlans||[]).map(plan=>pick(plan,['id','title','owner','version','classification','assumptions'])),expenseMode:model?.expenseMode,planningExpense:model?.planningExpense,scenarios:(model?.scenarios||[]).map(scenario=>({...pick(scenario,['id','title','description']),incomes:(scenario.incomes||[]).map(income=>pick(income,['id','description','monthlyNet','annualGross','contribution','remote','employment','notes']))}))})
 const compactSharedRecords=records=>{
   const finance=parseSharedValue(records?.lslj_finance_v9)
   return {
