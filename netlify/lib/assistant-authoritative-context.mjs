@@ -104,7 +104,7 @@ const compactRecurring=item=>({
   ...pick(item,['id','name','title','notes','amount','type','cat','category','acct','accountId','freq','start','end','skips','owner','updatedAt']),
   budgetLineId:budgetLineId(item),
 })
-const compactForecast=model=>({expenseMode:model?.expenseMode,planningExpense:model?.planningExpense,scenarios:(model?.scenarios||[]).map(scenario=>({...pick(scenario,['id','title','description']),incomes:(scenario.incomes||[]).map(income=>pick(income,['id','description','monthlyNet','annualGross','contribution','remote','employment','notes']))}))})
+const compactForecast=model=>({recoveryPlans:(model?.recoveryPlans||[]).map(plan=>pick(plan,['id','title','owner','version','classification','assumptions'])),expenseMode:model?.expenseMode,planningExpense:model?.planningExpense,scenarios:(model?.scenarios||[]).map(scenario=>({...pick(scenario,['id','title','description']),incomes:(scenario.incomes||[]).map(income=>pick(income,['id','description','monthlyNet','annualGross','contribution','remote','employment','notes']))}))})
 const compactSharedRecords=records=>{
   const finance=parseSharedValue(records?.lslj_finance_v9)
   return {
