@@ -19,7 +19,7 @@ export function validSubscription(value){
  }catch{return false}
 }
 export function reminderPreferences(input={}){
- return {dailyBriefing:input.dailyBriefing!==false,financialBriefing:input.financialBriefing!==false,changes:input.changes!==false,followUps:input.followUps!==false,leadMinutes:[0,5,10,15,30].includes(Number(input.leadMinutes))?Number(input.leadMinutes):15,quietEnabled:input.quietEnabled!==false,quietStart:minuteOfDay(input.quietStart)!==null?input.quietStart:'20:00',quietEnd:minuteOfDay(input.quietEnd)!==null?input.quietEnd:'04:00'}
+ return {dailyBriefingTime:/^([01]\d|2[0-3]):[0-5]\d$/.test(input.dailyBriefingTime||'')?input.dailyBriefingTime:'04:30',dailyBriefing:input.dailyBriefing!==false,financialBriefing:input.financialBriefing!==false,changes:input.changes!==false,followUps:input.followUps!==false,leadMinutes:[0,5,10,15,30].includes(Number(input.leadMinutes))?Number(input.leadMinutes):15,quietEnabled:input.quietEnabled!==false,quietStart:minuteOfDay(input.quietStart)!==null?input.quietStart:'20:00',quietEnd:minuteOfDay(input.quietEnd)!==null?input.quietEnd:'04:00'}
 }
 export function inQuietHours(prefs,minute){
  if(!prefs.quietEnabled)return false
