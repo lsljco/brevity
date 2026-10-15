@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'src/finance/RecoveryWorkspace*'
+      - 'src/finance/workScenarios*'
+      - 'src/finance/WorkScenarioComparison*'
       - 'src/finance/recoveryScenario*'
       - 'src/finance/*Worksheet*'
       - 'src/finance/recoveryWorksheet*'
