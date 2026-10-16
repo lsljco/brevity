@@ -47,3 +47,12 @@ test('dispose removes listeners and ignores stale events',async()=>{
  const f=setup();await f.speaker.play('Review',f.complete);const stale=f.sources[0].onended
  f.speaker.dispose();stale();assert.equal(f.heard,0);assert.equal(f.listeners.size,0)
 })
+
+test('hung speech preparation becomes retryable and cannot later complete a review',async()=>{
+ let finish,heard=0;const states=[],nodes=[]
+ const context={state:'running',destination:{},addEventListener(){},removeEventListener(){},decodeAudioData:async()=>({}),createBufferSource(){nodes.push({});return nodes.at(-1)}}
+ const speaker=createMeetingSpeaker({context,recordingDestination:{},loadSpeech:()=>new Promise(resolve=>{finish=resolve}),onState:s=>states.push(s),onError(){},speechTimeout:5})
+ const pending=speaker.play('Review',()=>heard++)
+ await new Promise(resolve=>setTimeout(resolve,15));assert.equal(states.at(-1),'blocked')
+ finish(new Blob(['late']));await pending;assert.equal(nodes.length,0);assert.equal(heard,0);speaker.dispose()
+})

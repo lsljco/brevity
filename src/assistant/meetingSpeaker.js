@@ -1,7 +1,7 @@
 // Use the same Web Audio graph for the speaker and the archived meeting. This
 // avoids a second, independently blocked HTMLMediaElement autoplay path on iOS.
-export function createMeetingSpeaker({context,recordingDestination,loadSpeech,onState,onError,onInterrupted=()=>{},resumeTimeout=3000}) {
- let generation=0,controller=null,source=null,buffer=null,request=null,disposed=false
+export function createMeetingSpeaker({context,recordingDestination,loadSpeech,onState,onError,onInterrupted=()=>{},resumeTimeout=3000,speechTimeout=45000}) {
+ let generation=0,controller=null,source=null,buffer=null,request=null,disposed=false,prepareTimer=null
  const current=id=>!disposed&&id===generation
  const releaseSource=()=>{if(source){source.onended=null;try{source.stop()}catch{}source.disconnect();source=null}}
  const unlock=()=>{
@@ -12,7 +12,7 @@ export function createMeetingSpeaker({context,recordingDestination,loadSpeech,on
    Promise.resolve(resume).then(()=>{clearTimeout(timer);context.state==='running'?resolve():reject(Error('Speaker is paused by the browser. Tap Retry speaker.'))},error=>{clearTimeout(timer);reject(error)})
   })
  }
- const fail=(id,error)=>{if(!current(id))return;releaseSource();onInterrupted();onState('blocked');onError(error?.name==='NotAllowedError'?'Tap Retry speaker to enable Brevity’s voice.':error?.message||'Speech could not play. Tap Retry speaker.')}
+ const fail=(id,error)=>{if(!current(id))return;generation++;clearTimeout(prepareTimer);controller?.abort();releaseSource();onInterrupted();onState('blocked');onError(error?.name==='NotAllowedError'?'Tap Retry speaker to enable Brevity’s voice.':error?.message||'Speech could not play. Tap Retry speaker.')}
  const begin=id=>{
   if(!current(id))return
   if(context.state!=='running')throw Error('Speaker is paused by the browser. Tap Retry speaker.')
@@ -23,12 +23,13 @@ export function createMeetingSpeaker({context,recordingDestination,loadSpeech,on
  }
  const prepare=async id=>{
   controller=new AbortController();onState('loading')
+  clearTimeout(prepareTimer);prepareTimer=setTimeout(()=>fail(id,Error('Speech preparation took too long. Tap Retry speaker.')),speechTimeout)
   const blob=await loadSpeech(request.text,controller.signal)
   const bytes=await blob.arrayBuffer();if(!current(id))return
   const decoded=await context.decodeAudioData(bytes);if(!current(id))return
-  buffer=decoded;begin(id)
+  clearTimeout(prepareTimer);buffer=decoded;begin(id)
  }
- const stop=()=>{generation++;controller?.abort();controller=null;releaseSource();buffer=null;request=null;onState('idle')}
+ const stop=()=>{generation++;clearTimeout(prepareTimer);controller?.abort();controller=null;releaseSource();buffer=null;request=null;onState('idle')}
  const play=async(text,onComplete)=>{stop();const id=generation;request={text,onComplete};onError('');try{await prepare(id)}catch(error){fail(id,error)}}
  const retry=async()=>{
   if(!request||disposed)return

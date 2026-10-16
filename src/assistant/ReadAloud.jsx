@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createElevenLabsSpeech } from './assistantApi.js'
-import { primeAudio } from './voicePlayback.js'
+import { primeAudio, releaseAudio, watchPlayback } from './voicePlayback.js'
 import { READING_EVENT, speechChunks, VOICE_KEY } from './readingText.js'
 import './ReadAloud.css'
 
@@ -8,11 +8,11 @@ export default function ReadAloud({ getText, label = 'Read aloud', contentKey })
   const [state, setState] = useState('idle')
   const [error, setError] = useState('')
   const audio = useRef(null), request = useRef(null), url = useRef(''), generation = useRef(0)
-  const identity = useRef({})
+  const identity = useRef({}), playbackWatch = useRef(null)
   const stop = () => {
     generation.current += 1
     request.current?.abort(); request.current = null
-    if (audio.current) { audio.current.onended = null; audio.current.onerror = null; audio.current.pause(); audio.current.removeAttribute('src'); audio.current.load() }
+    playbackWatch.current?.();releaseAudio(audio.current)
     if (url.current) { URL.revokeObjectURL(url.current); url.current = '' }
     setState('idle')
   }
@@ -22,6 +22,10 @@ export default function ReadAloud({ getText, label = 'Read aloud', contentKey })
     return () => { window.removeEventListener(READING_EVENT, interrupt); stop() }
   }, [])
   useEffect(() => { stop(); setError('') }, [contentKey])
+  const monitor = current => {
+    playbackWatch.current?.()
+    playbackWatch.current=watchPlayback({audio:audio.current,onStall:()=>{if(current!==generation.current)return;stop();setError('Audio playback was interrupted. Please try again.')}})
+  }
   const play = async () => {
     setError('')
     let voiceId
@@ -44,10 +48,11 @@ export default function ReadAloud({ getText, label = 'Read aloud', contentKey })
         if (url.current) URL.revokeObjectURL(url.current)
         url.current = URL.createObjectURL(blob)
         audio.current.src = url.current
-        audio.current.onended = () => { void next(index + 1) }
+        audio.current.onended = () => { playbackWatch.current?.();void next(index + 1) }
         audio.current.onerror = () => { stop(); setError('Audio could not be played. Please try again.') }
+        monitor(current)
         try { await audio.current.play(); if (current === generation.current) setState('playing') }
-        catch { if (current === generation.current) setState('paused') }
+        catch { if (current === generation.current) {playbackWatch.current?.();setState('paused')} }
       } catch (err) {
         if (current !== generation.current) return
         stop(); setError(err.name === 'AbortError' ? 'ElevenLabs took too long. Please try again.' : err.message || 'Read aloud is unavailable.')
@@ -56,12 +61,13 @@ export default function ReadAloud({ getText, label = 'Read aloud', contentKey })
     void next(0)
   }
   const resume = async () => {
-    try { await audio.current.play(); setState('playing') }
-    catch { setError('Your browser could not start audio. Tap Resume to try again.') }
+    const current=generation.current;monitor(current)
+    try { await audio.current.play(); if(current===generation.current)setState('playing') }
+    catch { if(current===generation.current){playbackWatch.current?.();setError('Your browser could not start audio. Tap Resume to try again.')} }
   }
   return <div className="brevity-read-aloud" data-reading-skip>
     {state === 'idle' ? <button type="button" onClick={play}><i className="ti ti-volume" aria-hidden="true"/>{label}</button> : <>
-      {state === 'playing' && <button type="button" onClick={() => { audio.current.pause(); setState('paused') }}>Pause reading</button>}
+      {state === 'playing' && <button type="button" onClick={() => { playbackWatch.current?.();audio.current.pause(); setState('paused') }}>Pause reading</button>}
       {state === 'paused' && <button type="button" onClick={resume}>Resume reading</button>}
       {state === 'loading' && <span role="status">Preparing audio…</span>}
       <button type="button" onClick={stop}>Stop reading</button>
