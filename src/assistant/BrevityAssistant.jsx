@@ -197,10 +197,14 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
         stopVoiceMode();setError('The microphone stopped returning speech. Tap Restart microphone to reconnect. Your draft is preserved.')
       }
     }
-    const pulse=watchRecognition({recognition,ref:recognitionRef,onStall:recover})
-    let capturing=false
-    recognition.onstart=()=>{if(recognitionRef.current===recognition&&!capturing)pulse(4000)}
-    recognition.onaudiostart=()=>{if(recognitionRef.current===recognition){capturing=true;voiceRecoveryRef.current=0;setListening(false);setVoiceStatus('Microphone connected · Speak to begin');pulse(null)}}
+    let capturing=false,started=false
+    const pulse=watchRecognition({recognition,ref:recognitionRef,initialDelay:30000,onStall:()=>{
+      if(started){recover();return}
+      // Do not reopen a browser permission dialog on an automatic retry.
+      stopVoiceMode();setError('The microphone did not connect. If Safari asked for permission, choose Allow in Website Settings, then tap Restart microphone.')
+    }})
+    recognition.onstart=()=>{if(recognitionRef.current===recognition){started=true;if(!capturing)pulse(4000)}}
+    recognition.onaudiostart=()=>{if(recognitionRef.current===recognition){capturing=true;started=true;voiceRecoveryRef.current=0;setListening(false);setVoiceStatus('Microphone connected · Speak to begin');pulse(null)}}
     recognition.onaudioend=()=>{if(recognitionRef.current===recognition){capturing=false;setListening(false);setVoiceStatus('Reconnecting microphone…');pulse(1000)}}
     recognition.onresult=event=>{
       if(recognitionRef.current!==recognition)return

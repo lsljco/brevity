@@ -21,7 +21,7 @@ export function retireRecognition(ref, {setTimer=setTimeout,clearTimer=clearTime
 
 // Bound native startup/shutdown, not the time a person takes to think.
 // A null delay disarms the watchdog once capture is established.
-export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,clearTimer=clearTimeout}) {
+export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,clearTimer=clearTimeout,initialDelay=4000}) {
  let timer,closed=false
  const arm=(delay=20000)=>{
   clearTimer(timer)
@@ -29,7 +29,7 @@ export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,cl
   timer=setTimer(()=>{if(!closed&&ref.current===recognition)onStall()},delay)
  }
  recognition.cancelWatch=()=>{closed=true;clearTimer(timer)}
- arm(4000)
+ arm(initialDelay)
  return arm
 }
 

@@ -14,7 +14,7 @@ Scope: Ask Brevity, shared-room Chart the Course / Evening Recap, and page Read 
 
 ## Microphone permission
 
-Permission persistence belongs to Safari, not app storage. Do not store a fake “granted” flag or make an extra getUserMedia request to test permission. Ask Brevity now includes the per-site Safari setting path, and permission denial stops automatic retries. Healthy idle capture no longer causes unnecessary reacquisition. Reference: https://support.apple.com/guide/iphone/browse-the-web-privately-iphb01fc3c85/ios
+Permission persistence belongs to Safari, not app storage. Do not store a fake “granted” flag or make an extra getUserMedia request to test permission. Ask Brevity now includes the per-site Safari setting path, and permission denial stops automatic retries. Before a native start event, allow 30 seconds for permission; a timeout stops without repeatedly reopening the prompt. Healthy idle capture no longer causes unnecessary reacquisition. Reference: https://support.apple.com/guide/iphone/browse-the-web-privately-iphb01fc3c85/ios
 
 ## Approval invariants
 

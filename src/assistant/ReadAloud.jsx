@@ -48,8 +48,8 @@ export default function ReadAloud({ getText, label = 'Read aloud', contentKey })
         if (url.current) URL.revokeObjectURL(url.current)
         url.current = URL.createObjectURL(blob)
         audio.current.src = url.current
-        audio.current.onended = () => { playbackWatch.current?.();void next(index + 1) }
-        audio.current.onerror = () => { stop(); setError('Audio could not be played. Please try again.') }
+        audio.current.onended = () => { if(current!==generation.current)return;playbackWatch.current?.();void next(index + 1) }
+        audio.current.onerror = () => { if(current!==generation.current)return;stop(); setError('Audio could not be played. Please try again.') }
         monitor(current)
         try { await audio.current.play(); if (current === generation.current) setState('playing') }
         catch { if (current === generation.current) {playbackWatch.current?.();setState('paused')} }

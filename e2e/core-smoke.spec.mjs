@@ -1136,3 +1136,22 @@ test('microphone permission denial stops retries and explains the remembered Saf
  expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
  await expect(dialog.getByRole('button',{name:'Start voice conversation',exact:true})).toBeVisible()
 })
+
+test('microphone permission prompt waiting does not create repeated automatic requests',async({page})=>{
+ await page.addInitScript(()=>{
+  window.voiceTest={starts:0}
+  window.SpeechRecognition=class{start(){window.voiceTest.starts++}abort(){this.onend?.()}}
+ })
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ await page.clock.install()
+ await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+ await page.clock.runFor(10000)
+ expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
+ await expect(dialog.getByRole('button',{name:'Stop voice conversation',exact:true})).toBeVisible()
+ await page.clock.runFor(50000)
+ expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
+ await expect(dialog.getByRole('alert')).toContainText('microphone did not connect')
+ await expect(dialog.getByRole('button',{name:'Restart microphone',exact:true})).toBeVisible()
+})
