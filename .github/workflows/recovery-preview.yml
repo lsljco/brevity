@@ -5,6 +5,8 @@ on:
       - 'src/finance/RecoveryWorkspace*'
       - 'src/finance/workScenarios*'
       - 'src/finance/WorkScenarioComparison*'
+      - 'src/finance/opportunityIncome*'
+      - 'src/finance/OpportunityAssumptions*'
       - 'src/finance/recoveryScenario*'
       - 'src/finance/*Worksheet*'
       - 'src/finance/recoveryWorksheet*'

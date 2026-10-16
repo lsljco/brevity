@@ -1,4 +1,4 @@
-import {WORK_SCENARIOS,createWorkScenario} from '../../src/finance/workScenarios.js'
+import {ALL_WORK_SCENARIOS as WORK_SCENARIOS,createWorkScenario} from '../../src/finance/workScenarios.js'
 import { WORKSHEET_ID, createRecoveryWorksheet } from '../../src/finance/recoveryWorksheet.js'
 import { RECOVERY_DEFAULT, RECOVERY_ID } from '../../src/finance/recoveryScenario.js'
 import {loadOpenWork} from './open-work.mjs'
