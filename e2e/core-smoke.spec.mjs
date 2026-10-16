@@ -1168,7 +1168,7 @@ test('Today personal guidance groups household work and highlights major appoint
  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{connected:true,syncedAt:new Date().toISOString(),events:[
   {id:'medical',source:'icloud',title:'TS- Dr. Appointment',date:today(),time:'3:00 PM',endTime:'4:00 PM',owner:'Family',ownershipKnown:false},
   {id:'bank',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',title:'Send bank files',date:today(),time:'11:00 AM',owner:'Lorenzo'},
-  {id:'tutor',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',title:'Isaiah Daily Tutor',date:today(),time:'2:45 PM',owner:'Nyla',recurring:true}
+  {id:'tutor',source:'icloud',appleCalendarId:'larry',appleCalendarOwner:'Larry',title:'Isaiah Daily Tutor',date:today(),time:'2:45 PM',owner:'Nyla',recurring:true}
  ]}}))
  await page.reload();await expect(page.locator('.today-overview')).toBeVisible()
  if((page.viewportSize()?.width||1440)<700&&await page.getByRole('button',{name:'Collapse navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()

@@ -1,3 +1,4 @@
+import {todayCalendarAppointments} from './todayCalendar.js'
 import {isPersonalItem,groupTodayItems,focusBubbles} from './todayPresentation.js'
 import {minuteOfDay,isFinished,namedFor} from './dailyRhythm.js'
 import {rankDirectionPriorities} from './priorityDirection.js'
@@ -7,7 +8,7 @@ export const belongsToViewer=(item,member,scope='mine')=>scope==='household'||na
 const key=item=>`${item.sourceKind}:${item.id}`
 export function dailyGuidance({plan,agenda,member,scope='mine',minute=0,openWork=[],signals=[],chores=[]}){
  const datedWork=openWork.filter(item=>item.originalDate===plan.date&&item.source.kind!=='focus'&&belongsToViewer(item,member,scope)).map(item=>({...item,id:item.source.id,sourceKind:item.source.kind,date:item.originalDate,sourceDate:item.source.date}))
- const items=[...new Map([...datedWork,...agenda.priorities.filter(item=>belongsToViewer(item,member,scope)),...agenda.items].filter(item=>belongsToDay(item,plan.date)&&(scope==='household'||isPersonalItem(item,member)||(item.sourceKind==='appointment'&&item.appleCalendarOwner===member))).map(item=>[key(item),item])).values()].sort((a,b)=>(minuteOfDay(a.startTime||a.time)??1440)-(minuteOfDay(b.startTime||b.time)??1440))
+ const items=[...new Map([...datedWork,...agenda.priorities.filter(item=>belongsToViewer(item,member,scope)),...agenda.items].filter(item=>belongsToDay(item,plan.date)&&(scope==='household'||(item.sourceKind==='appointment'?todayCalendarAppointments([item],member).length>0:isPersonalItem(item,member)))).map(item=>[key(item),item])).values()].sort((a,b)=>(minuteOfDay(a.startTime||a.time)??1440)-(minuteOfDay(b.startTime||b.time)??1440))
  const pending=items.filter(item=>!isFinished(item)&&!item.cancelled&&!['done','canceled'].includes(String(item.status||'').toLowerCase()))
  const priorities=rankDirectionPriorities(agenda.priorities.filter(item=>belongsToDay(item,plan.date)&&(scope==='household'||isPersonalItem(item,member))))
  const active=pending.filter(item=>{const start=minuteOfDay(item.startTime||item.time),end=minuteOfDay(item.endTime);return start!==null&&end!==null&&start<=minute&&minute<end})
