@@ -278,6 +278,9 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
 
   return <div className="today-dashboard">
     <WeatherHeader date={dailyPlan.date}/>
+    <nav className="today-quick-actions" aria-label="Today planning actions"><button onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'}>Review Scheduled Draft</button><button onClick={()=>setShowDecisions(true)}>Review decisions</button>
+      {!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}
+    </nav>
     {courseConversation}
     {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
     {!browsingDate&&<HouseholdCheckin key={currentMember} currentMember={currentMember}/>}
@@ -297,8 +300,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
     <TodayFinanceBrief date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
     <TodayPillarDetails pillar="ministry" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
     <details className="today-supporting" open={new URLSearchParams(window.location.search).has('briefing')||undefined}><summary>Earlier work &amp; daily briefing</summary><p>Historical records are retained for review. They are not automatically assigned to today.</p><OpenWork date={dailyPlan.date} currentMember={currentMember} scope={scope} readOnly={readOnly}/><DailyBriefing key={currentMember} currentMember={currentMember}/></details>
-    <details className="today-supporting"><summary>Household details &amp; responsibility updates</summary><button onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'}>Review Scheduled Draft</button><button onClick={()=>setShowDecisions(true)}>Review decisions</button>
-      {!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}
+    <details className="today-supporting"><summary>Household details &amp; responsibility updates</summary>
       <details><summary>Assistant settings &amp; administration</summary><OrchestrationPanel date={dailyPlan.date} currentMember={currentMember} readOnly={readOnly} onOpenSource={()=>onOpenPillar?.('household')}/></details>
       <DailyRhythm readOnly={readOnly} plan={dailyPlan} currentMember={currentMember} chores={visibleChores} onOpenOperations={()=>onOpenPillar?.('household')}/>
       <details><summary>Health care coordination</summary><HealthCare currentMember={currentMember} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly}/></details>
