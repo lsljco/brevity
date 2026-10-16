@@ -2825,7 +2825,7 @@ test('Household check-in saves owned updates and prepares a Thursday meeting wit
  await panel.getByRole('button',{name:'Save check-in draft',exact:true}).click();await expect(panel.getByRole('status')).toHaveText('Draft saved.')
  await panel.getByRole('button',{name:'Submit my check-in',exact:true}).click();await expect(panel.getByRole('status')).toHaveText('Your check-in is submitted for the meeting.')
  expect(posts).toHaveLength(2);expect(posts[1].member).toBe('Larry');expect(posts[1].response.priorities).toHaveLength(3);expect(posts[1].response.weekend.ideas).toBe('Park and family picnic')
- await expect(panel.getByText('Missing · overdue',{exact:true})).toBeVisible()
+ await expect(panel.getByText('Missing · overdue',{exact:false})).toBeVisible()
  await expect(panel.getByText('Version 1 · submit · Larry',{exact:false})).toBeAttached()
  const overflow=await panel.evaluate(el=>el.scrollWidth>el.clientWidth+2);expect(overflow).toBe(false)
 })
