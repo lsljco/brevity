@@ -2806,7 +2806,8 @@ test('Scenario Modeling edits recovery assumptions from worksheet and attaches g
   await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
 })
 
-test('Household check-in saves owned updates and prepares a Thursday meeting without operating writes',async({page})=>{
+test('Household check-in saves owned updates and prepares a Thursday meeting without operating writes',async({page},testInfo)=>{
+ if(process.env.PREVIEW_BASE_URL){const unauthenticated=await page.request.get('/.netlify/functions/household-checkin');expect(unauthenticated.status()).toBe(401)}
  const source={member:'Larry',date:'2026-10-15',revision:'checkin-source-1',focus:'Interview readiness',items:[{id:'assignment:resume',title:'Update resume',kind:'assignment'}],sources:{plan:'available'}}
  let record=null;const posts=[]
  await page.route('**/.netlify/functions/household-checkin',async route=>{
@@ -2814,6 +2815,7 @@ test('Household check-in saves owned updates and prepares a Thursday meeting wit
   return route.fulfill({json:{source,record,status:record?.submittedAt?'Submitted':'Not submitted',meeting:{tomorrow:'2026-10-16',statuses:[{member:'Larry',status:record?.submittedAt?'Submitted':'Not submitted'},{member:'Lorenzo',status:'Missing · overdue'}],notice:'Self-reported updates are not verified completion.',method:'Exact-title grouping · semantic review pending',groups:[],responses:[],weekend:[],weekendDate:source.date}}})
  })
  await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await openTodayDetails(page)
+ await closeMenuIfMobile(page,testInfo)
  const panel=page.locator('#household-checkin');await panel.locator(':scope > summary').click();await expect(panel.getByRole('heading',{name:'Larry’s update · 2026-10-15'})).toBeVisible()
  await panel.getByLabel('Progress for Update resume',{exact:true}).selectOption('in-progress')
  await panel.getByLabel('Today’s focus update',{exact:true}).fill('Resume draft ready; need proofreading')
