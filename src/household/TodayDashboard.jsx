@@ -293,7 +293,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
     <TodayFitnessWorkout date={dailyPlan.date} currentMember={currentMember} fitness={fitness} onOpenPillar={onOpenPillar} />
 
     <section className="today-pillar-stack today-household-pillar" data-pillar="household" aria-label="Pillar 4 Household Management"><div className="today-pillar-stack-heading"><span>Pillar 4 · Household Management</span><h2>Calendar &amp; chores</h2></div>
-      <TodayCalendarAgenda filters={<p>{scope==='household'?'Family calendar':`Family calendar and ${currentMember}’s calendar`}. Open the full calendar to browse other members.</p>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
+      <TodayCalendarAgenda filters={<p>{scope==='household'?'All household calendars':`${currentMember}’s calendar and shared commitments`}. Open the full calendar to browse other members.</p>} commitments={readModel.commitments} nextCommitment={readModel.nextCommitment} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate={browsingDate} />
       <TodayHouseholdChores chores={visibleChores} personal={scope==='mine'} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
     </section>
     <TodayPillarDetails pillar="education" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
