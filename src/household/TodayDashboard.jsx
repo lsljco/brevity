@@ -1,3 +1,4 @@
+import HouseholdCheckin from './HouseholdCheckin.jsx'
 import OpenWork from './OpenWork.jsx'
 import DailyBriefing from './DailyBriefing.jsx'
 import TodayPillarDetails from './TodayPillarDetails.jsx'
@@ -279,6 +280,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
     <WeatherHeader date={dailyPlan.date}/>
     {courseConversation}
     {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
+    {!browsingDate&&<HouseholdCheckin key={currentMember} currentMember={currentMember}/>}
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
 
     <HealthCare currentMember={currentMember} scope={scope} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly} compact />

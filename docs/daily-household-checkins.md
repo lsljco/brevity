@@ -1,0 +1,15 @@
+# Daily household check-ins
+
+Every household account submits its own dated response from Today. The form reads existing daily plans, routines, chores, calendar, projects and carried-forward open work through the daily briefing source. It stores only responses and source references in the existing scoped daily-briefing store; it does not create duplicate task, calendar, finance or completion records.
+
+Eastern-time cadence (DST-aware): 2 p.m. prompt, one 3:30 p.m. reminder for incomplete members, 4 p.m. response deadline, 4:30 p.m. suggested grouping, 4:45 p.m. administrator meeting notification, 5 p.m. discussion. Existing per-device push registration, quiet hours, delivery claims and duplicate suppression are reused. Each member must enable notifications on their own device; Focus and connectivity can delay delivery. The form remains available without push permission.
+
+Required responses: progress for each current commitment, today's focus update, and three distinct tomorrow priorities with expected results. Blockers and rescheduling require an explanation. Optional help and seven-pillar updates accompany the priorities. Thursdays also require weekend ideas and availability (explicit none/unavailable is valid), with cost and coordinator fields. Friday's brief includes Thursday's submitted weekend and pillar updates.
+
+Session identity controls all reads and writes. Members read only their response; administrators additionally read submitted household responses and participation status. Nobody may submit as another member. Check-in source revisions and record versions use compare-and-set writes to prevent stale overwrite. History and Undo retain attribution. Source clocks do not invalidate submissions merely because a task became overdue; changed commitments do.
+
+Reconciliation preserves every contribution exactly once and carries each person's original expected result/help into the group. One bounded AI attempt per day may suggest semantic groups. Exact-title groups and original responses remain available if AI is unavailable. Later submissions invalidate stale grouping and are included in the live meeting's fresh review. Missing responses stay assigned to the missing person. Submitted completion is a self-report, never verified task sign-off. Tomorrow plan changes still require existing Action Mode approval.
+
+Ask Brevity and evening meetings read the server-side check-in context. The meeting facilitator confirms shared outcomes, owners and timing before asking for reviewed operating changes. Text fields support browser dictation and ordinary keyboard input; dictation never submits automatically.
+
+Verification: householdCheckin.test.js covers ownership, authentication, origin checks, revision conflicts, audit/Undo, operating-record isolation, Thursday requirements, DST timing, quiet hours, grouping preservation, stale grouping and Friday carryover. The deployed-preview workflow exercises the real rendered build against isolated synthetic API fixtures on desktop, iPhone and iPad in both orientations. It does not submit synthetic household updates to production or claim actual device delivery.

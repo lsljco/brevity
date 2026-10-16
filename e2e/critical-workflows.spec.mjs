@@ -2805,3 +2805,27 @@ test('Scenario Modeling edits recovery assumptions from worksheet and attaches g
   await expect(assistant.getByAltText('Attached image: financial-worksheet.png')).toHaveCount(0)
   await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
 })
+
+test('Household check-in saves owned updates and prepares a Thursday meeting without operating writes',async({page},testInfo)=>{
+ if(process.env.PREVIEW_BASE_URL){const unauthenticated=await page.request.get('/.netlify/functions/household-checkin');expect(unauthenticated.status()).toBe(401)}
+ const source={member:'Larry',date:'2026-10-15',revision:'checkin-source-1',focus:'Interview readiness',items:[{id:'assignment:resume',title:'Update resume',kind:'assignment'}],sources:{plan:'available'}}
+ let record=null;const posts=[]
+ await page.route('**/.netlify/functions/household-checkin',async route=>{
+  if(route.request().method()==='POST'){const b=route.request().postDataJSON();posts.push(b);record={member:'Larry',version:(record?.version||0)+1,response:b.response,submittedAt:b.action==='submit'?'2026-10-15T19:00:00Z':'',history:[{version:1,action:b.action,by:'Larry',at:'2026-10-15T19:00:00Z'}]};return route.fulfill({json:{ok:true,record}})}
+  return route.fulfill({json:{source,record,status:record?.submittedAt?'Submitted':'Not submitted',meeting:{tomorrow:'2026-10-16',statuses:[{member:'Larry',status:record?.submittedAt?'Submitted':'Not submitted'},{member:'Lorenzo',status:'Missing · overdue'}],notice:'Self-reported updates are not verified completion.',method:'Exact-title grouping · semantic review pending',groups:[],responses:[],weekend:[],weekendDate:source.date}}})
+ })
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await openTodayDetails(page)
+ await closeMenuIfMobile(page,testInfo)
+ const panel=page.locator('#household-checkin');await panel.locator(':scope > summary').click();await expect(panel.getByRole('heading',{name:'Larry’s update · 2026-10-15'})).toBeVisible()
+ await panel.getByLabel('Progress for Update resume',{exact:true}).selectOption('in-progress')
+ await panel.getByLabel('Today’s focus update',{exact:true}).fill('Resume draft ready; need proofreading')
+ for(let i=1;i<=3;i++){await panel.getByLabel(`Priority ${i}`,{exact:true}).fill(['Resume review','Family dinner','Budget review'][i-1]);await panel.getByLabel(`Expected result ${i}`,{exact:true}).fill(`Complete outcome ${i}`)}
+ await panel.getByLabel('Weekend ideas',{exact:true}).fill('Park and family picnic')
+ await panel.getByLabel('Weekend availability',{exact:true}).fill('Saturday afternoon')
+ await panel.getByRole('button',{name:'Save check-in draft',exact:true}).click();await expect(panel.getByRole('status')).toHaveText('Draft saved.')
+ await panel.getByRole('button',{name:'Submit my check-in',exact:true}).click();await expect(panel.getByRole('status')).toHaveText('Your check-in is submitted for the meeting.')
+ expect(posts).toHaveLength(2);expect(posts[1].member).toBe('Larry');expect(posts[1].response.priorities).toHaveLength(3);expect(posts[1].response.weekend.ideas).toBe('Park and family picnic')
+ await expect(panel.getByText('Missing · overdue',{exact:false})).toBeVisible()
+ await expect(panel.getByText('Version 1 · submit · Larry',{exact:false})).toBeAttached()
+ const overflow=await panel.evaluate(el=>el.scrollWidth>el.clientWidth+2);expect(overflow).toBe(false)
+})

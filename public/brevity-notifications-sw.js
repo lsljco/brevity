@@ -1,4 +1,4 @@
-const reminderUrl=value=>['/?priorities=1#today-focus','/?enhancements=1','/?briefing=1#daily-briefing'].includes(value)?value:'/?reminder=1#daily-rhythm'
+const reminderUrl=value=>['/?checkin=1#household-checkin','/?priorities=1#today-focus','/?enhancements=1','/?briefing=1#daily-briefing'].includes(value)?value:'/?reminder=1#daily-rhythm'
 // Notifications only. Do not cache authenticated pages, API responses or assets.
 self.addEventListener('install',()=>self.skipWaiting())
 self.addEventListener('activate',event=>event.waitUntil(clients.claim()))
