@@ -2730,6 +2730,47 @@ test('Scenario Modeling edits recovery assumptions without realizing hypothetica
   expect(executed).toHaveLength(0)
 })
 
+test('Scenario Modeling edits recovery assumptions for all October 15 opportunities',async({page},testInfo)=>{
+  const prepared=[],executed=[]
+  page.on('request',r=>{if(r.url().includes('action=prepare-direct'))prepared.push(r.postDataJSON());if(r.url().includes('action=execute'))executed.push(r)})
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Scenario Modeling',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  const workspace=page.locator('.recovery-workspace')
+  await workspace.getByRole('button',{name:'October 15 opportunities',exact:true}).click()
+  const comparison=page.getByRole('region',{name:'Return-to-work scenario comparison'})
+  await expect(comparison.locator('.work-scenario-comparison > button')).toHaveCount(8)
+  await expect(comparison).toContainText('$12,726.97')
+  await expect(workspace.locator('tbody')).toContainText('-$2,717.94')
+  await expect(workspace.locator('tbody tr').last()).toContainText('$30,579.32')
+  const select=workspace.getByRole('combobox',{name:'Named scenario',exact:true})
+  for(const [id,monthly] of [['vcu-60','$13,283.60'],['vcu-75','$14,953.47'],['ykk-125','$13,294.30'],['ykk-140','$14,097.12'],['wipro','$18,378.86'],['bose','$14,782.20']]) {
+    await select.selectOption(`recovery-oct15-${id}`)
+    await expect(workspace.locator('tbody')).toContainText(monthly)
+  }
+  await select.selectOption('recovery-oct15-expedite')
+  await expect(workspace.getByLabel('Gross compensation',{exact:true})).toHaveValue('')
+  await expect(workspace.locator('tbody tr').last()).toContainText('Awaiting compensation')
+  await workspace.getByLabel('Gross compensation',{exact:true}).fill('55')
+  await expect(workspace.locator('tbody tr').last()).toContainText('$30,579.32')
+  await workspace.getByLabel('Added monthly job costs',{exact:true}).fill('500')
+  await expect(workspace.locator('tbody tr').last()).toContainText('$23,579.32')
+  await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
+  await workspace.getByRole('button',{name:'Review & save scenario',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+  await expect(dialog).toBeVisible()
+  expect(prepared.at(-1).operation.targetId).toBe('recovery-oct15-expedite')
+  const assumptions=JSON.parse(prepared.at(-1).operation.payload.recoveryJson)
+  expect(assumptions.worksheet.opportunity.gross).toBe(55)
+  expect(assumptions.worksheet.opportunity.costs).toBe(500)
+  expect(assumptions.worksheet.rows.find(r=>r.id==='cash-2026-11').amount).toBe(6604.09)
+  expect(executed).toHaveLength(0)
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
+  expect(executed).toHaveLength(0)
+})
+
 test('Scenario Modeling edits recovery assumptions from worksheet and attaches general images',async({page},testInfo)=>{
   const prepared=[],images=[]
   page.on('request',r=>{if(r.url().includes('action=prepare-direct'))prepared.push(r.postDataJSON())})

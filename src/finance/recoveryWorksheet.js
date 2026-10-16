@@ -1,3 +1,4 @@
+import {validateOpportunityIncome,opportunityMonthly} from './opportunityIncome.js'
 // A source worksheet is a hypothetical monthly plan, never a bank/ledger import.
 export const WORKSHEET_ID = 'recovery-household-worst-case-002'
 const money = value => Math.round(value * 100)
@@ -17,7 +18,7 @@ export function createRecoveryWorksheet() {
   return {rows,sourceNotes:'Transcribed from “Addition of NS Income Worst Case Scenario.” Initial funds and cash flows are planning assumptions, not verified receipts. The final December row is labeled 2028 in the source; modeled as December 2027 to follow November 2027. “LSTS” and “NS” are retained as written. The income tax month is provisionally October 2027 based on row order. The source places the October property tax payoff after the full monthly cash flow despite noting an October 15 due date; this monthly worksheet does not establish cash available on that day.'}
 }
 export function validateWorksheet(input) {
-  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['rows','sourceNotes'].includes(k)))throw Error('Invalid source worksheet.')
+  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['rows','sourceNotes','opportunity'].includes(k)))throw Error('Invalid source worksheet.')
   if(typeof input.sourceNotes!=='string'||input.sourceNotes.length>4000)throw Error('Source notes must be at most 4,000 characters.')
   if(!Array.isArray(input.rows)||!input.rows.length||input.rows.length>120)throw Error('A worksheet requires 1–120 planning rows.')
   const ids=new Set();let lastMonth=''
@@ -32,16 +33,27 @@ export function validateWorksheet(input) {
     for(const field of ['label','financialStrategy','householdStrategy'])if(typeof row[field]!=='string'||row[field].length>1000||(field==='label'&&!row[field].trim()))throw Error('Worksheet labels and strategy notes must be valid text.')
     return {...row}
   })
-  return {rows,sourceNotes:input.sourceNotes}
+  return {rows,sourceNotes:input.sourceNotes,...(input.opportunity!==undefined?{opportunity:validateOpportunityIncome(input.opportunity)}:{})}
 }
 export function projectWorksheet(input) {
-  const worksheet=validateWorksheet(input);let balance=0,opening=0,inflow=0,obligations=0
+  const worksheet=validateWorksheet(input),income=worksheet.opportunity?opportunityMonthly(worksheet.opportunity):undefined
+  let balance=0,opening=0,inflow=0,obligations=0
+  const incomeMonths=new Set()
   const rows=worksheet.rows.map(row=>{
-    const amount=money(row.amount);balance+=amount
+    let amount=money(row.amount)
+    const a=worksheet.opportunity
+    // Add the modeled job once per month. Blank compensation is unknown, not zero.
+    if(a&&row.kind==='cashflow'&&row.month>=a.start&&row.month<=a.end) {
+      if(incomeMonths.has(row.month))throw Error('Opportunity plans require one cash flow row per month.')
+      incomeMonths.add(row.month)
+      amount=income===null?null:money(row.amount+income.net-income.costs)
+    }
+    balance=balance===null||amount===null?null:balance+amount
     if(row.kind==='opening')opening+=amount
-    else if(amount>=0)inflow+=amount
+    else if(amount===null)inflow=null
+    else if(amount>=0)inflow=inflow===null?null:inflow+amount
     else obligations-=amount
-    return {...row,balance:balance/100,classification:'hypothetical'}
+    return {...row,amount:amount===null?null:amount/100,balance:balance===null?null:balance/100,classification:'hypothetical'}
   })
-  return {rows,opening:opening/100,inflow:inflow/100,obligations:obligations/100,closing:balance/100,negative:rows.some(row=>row.balance<0)}
+  return {rows,opening:opening/100,inflow:inflow===null?null:inflow/100,obligations:obligations/100,closing:balance===null?null:balance/100,negative:rows.some(row=>row.balance!==null&&row.balance<0),incomePending:income===null}
 }

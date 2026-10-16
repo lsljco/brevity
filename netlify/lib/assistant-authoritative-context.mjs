@@ -1,4 +1,4 @@
-import {WORK_SCENARIOS,createWorkScenario} from '../../src/finance/workScenarios.js'
+import {ALL_WORK_SCENARIOS as WORK_SCENARIOS,createWorkScenario} from '../../src/finance/workScenarios.js'
 import { WORKSHEET_ID, createRecoveryWorksheet } from '../../src/finance/recoveryWorksheet.js'
 import { RECOVERY_DEFAULT, RECOVERY_ID } from '../../src/finance/recoveryScenario.js'
 import {loadOpenWork} from './open-work.mjs'
@@ -184,6 +184,9 @@ export async function buildAuthoritativeAssistantContext({
   // Keep complete calendar records on the server; date-scoped tools select the
   // relevant events before exposing them to the model. Array caps lose dates.
   context.actionRecords.familyCalendarEvents=(parseSharedValue(sharedRecords?.family_calendar_events_v1)||[]).map(item=>sanitizeAuthoritativeContext(compactCalendarEvent(item)))
+  // Sanitize this bounded subtree independently so worksheet row fields and
+  // opportunity drivers survive the outer context's nesting limit.
+  context.actionRecords.finance.forecasts=sanitizeAuthoritativeContext(compactForecast(parseSharedValue(sharedRecords?.brevity_finance_scenarios_v1)||{}))
   const financeRecord=sharedRecords?.lslj_finance_v9
   context.actionRecords.finance.upcomingSchedule=sanitizeAuthoritativeContext(householdFinanceSchedule(parseSharedValue(financeRecord),date,{updatedAt:financeRecord?.updatedAt||'',state:sharedResult.status==='rejected'?'unavailable':financeRecord?.value==null?'missing':'available'}))
   return context

@@ -1,13 +1,24 @@
 import {RECOVERY_DEFAULT} from './recoveryScenario.js'
 import {createRecoveryWorksheet,projectWorksheet} from './recoveryWorksheet.js'
+import {OPPORTUNITY_SCENARIOS,NET_RETENTION} from './opportunityIncome.js'
 export const WORK_SCENARIOS = [
   {id:'recovery-larry-work',title:'Larry returns to work',monthly:14604.09,texas:0,debtMonths:['2027-02','2027-03','2027-04','2027-05','2027-07','2027-07']},
   {id:'recovery-both-work',title:'Larry and Lorenzo return to work',monthly:22604.09,texas:0,debtMonths:['2027-01','2027-01','2027-02','2027-03','2027-04','2027-04']},
   {id:'recovery-both-vizient',title:'Larry and Lorenzo — Vizient',monthly:29604.09,texas:7500,debtMonths:['2026-12','2026-12','2027-01','2027-02','2027-03','2027-03']},
 ]
+export const ALL_WORK_SCENARIOS=[...WORK_SCENARIOS,...OPPORTUNITY_SCENARIOS]
 const debtItems=[['capital-one','LS Capital One',10475.86],['synchrony','LJ Synchrony',9778.37],['ts','TS payoff',14000],['discover','LJ Discover',26000],['prosper-1','LJ Prosper Loan 1/2',17136.47],['prosper-2','LJ Prosper Loan 2/2',17136.47]]
 const entry=(id,month,label,amount,kind='obligation')=>({id,month,label,amount,kind,financialStrategy:'',householdStrategy:''})
 export function createWorkScenario(id) {
+  const opportunity=OPPORTUNITY_SCENARIOS.find(s=>s.id===id)
+  if(opportunity) {
+    const base=createWorkScenario('recovery-larry-work')
+    return {...base,title:opportunity.title,worksheet:{
+      rows:base.worksheet.rows.map(row=>row.kind==='cashflow'?{...row,amount:6604.09,label:row.label.replace('before Texas','including modeled opportunity')}:row),
+      opportunity:{gross:opportunity.gross,basis:opportunity.basis,hours:40,weeks:52,retention:NET_RETENTION,costs:0,start:'2026-11',end:'2027-12'},
+      sourceNotes:`Source: October 15 Models in LSLJ_Financial_Strategy_10.07.2026.xlsx. ${opportunity.role}. ${opportunity.status} Each model is an alternative job for Larry, not simultaneous employment; no additional Lorenzo income or Texas expense is included. Opening planning funds: $9,000 savings + $4,000 severance + $4,000 HOA check. Monthly baseline surplus after bills and minimum debt payments is $6,604.09. Full-month job income starts hypothetically November 2026, with renewals assumed through December 2027. Hourly estimates use 40 hours/week and 52 paid weeks/year. Net pay uses the worksheet’s Phoenix-implied 64.226% retention proxy, not personalized taxes. Added monthly costs default to zero; unpaid leave, benefit changes and unreimbursed travel are not estimated. Pay dates, employment and receipts remain unconfirmed. Wipro spreads total compensation, including bonus, evenly across months, not actual payout dates. Debt timing follows the worksheet’s Larry-return schedule, including December 2026 and October 2027 property taxes ($30,337.59 each), January 2027 income tax ($16,000) and six debt payoffs. No interest rates are assumed. Month-level ordering does not establish funds available on the tax due day. Monthly flows are rounded to cents; ending balances may differ by a few cents from Excel’s unrounded formulas.`,
+    }}
+  }
   const config=WORK_SCENARIOS.find(s=>s.id===id)
   if(!config)throw Error('Unknown named work scenario.')
   const vizient=config.texas>0, rows=createRecoveryWorksheet().rows.filter(r=>r.kind==='opening')
@@ -32,6 +43,6 @@ export function summarizeWorkScenario(assumptions) {
   for(const row of result.rows)if(row.month)monthly.set(row.month,row.balance)
   const cash=result.rows.filter(r=>r.kind==='cashflow'&&r.month>='2026-11')
   const texas=result.rows.filter(r=>r.id.startsWith('texas-'))
-  const monthlyBefore=cash[0]?.amount??0,allocation=-(texas[0]?.amount??0)
-  return {...result,monthly,monthlyBefore,allocation,monthlyAfter:Math.round((monthlyBefore-allocation)*100)/100}
+  const monthlyBefore=cash.length?cash[0].amount:0,allocation=-(texas[0]?.amount??0)
+  return {...result,monthly,monthlyBefore,allocation,monthlyAfter:monthlyBefore===null?null:Math.round((monthlyBefore-allocation)*100)/100}
 }

@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react'
 import {Line} from 'react-chartjs-2'
 import WorkScenarioComparison from './WorkScenarioComparison.jsx'
-import {WORK_SCENARIOS,createWorkScenario} from './workScenarios.js'
+import {ALL_WORK_SCENARIOS as WORK_SCENARIOS,createWorkScenario} from './workScenarios.js'
 import RecoveryWorksheet from './RecoveryWorksheet.jsx'
 import {WORKSHEET_ID,createRecoveryWorksheet} from './recoveryWorksheet.js'
 import {RECOVERY_DEFAULT,RECOVERY_ID,projectRecovery,validateRecovery} from './recoveryScenario.js'

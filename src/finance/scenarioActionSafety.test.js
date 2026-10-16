@@ -146,3 +146,21 @@ test('worksheet save preserves the Vizient plan and supports audited Undo',async
   await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'recovery-undo'})
   assert.deepEqual(resources.snapshot().value,initial)
 })
+
+test('October 15 pending and priced models retain drivers through approved saves and Undo',async()=>{
+  const {createWorkScenario}=await import('./workScenarios.js')
+  for(const id of ['recovery-oct15-phoenix','recovery-oct15-expedite']) {
+    const assumptions=createWorkScenario(id),initial={expenseMode:'scenario',planningExpense:20000,scenarios:[]}
+    const repository=memoryRepository(),resources=versionedForecastResources(initial,3)
+    const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),now=()=>new Date('2026-10-15T12:00:00Z')
+    const input={summary:'Save October 15 model',expectedVersion:3,operation:{type:'forecast.update',targetId:id,payload:{recoveryJson:JSON.stringify(assumptions)}}}
+    const proposal=await prepareDirectProposal({input,session,permissions,repository,resources,now:now(),id:'opportunity-save'})
+    assert.deepEqual(resources.snapshot().value,initial)
+    const execution=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},now,createAttemptId:()=> 'opportunity-attempt'})
+    const plan=resources.snapshot().value.recoveryPlans[0]
+    assert.equal(plan.owner,'Larry');assert.equal(plan.version,1);assert.equal(plan.classification,'hypothetical')
+    assert.deepEqual(plan.assumptions,assumptions)
+    await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'opportunity-undo'})
+    assert.deepEqual(resources.snapshot().value,initial)
+  }
+})
