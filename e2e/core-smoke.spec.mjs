@@ -79,6 +79,8 @@ async function mockBackend(page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // Netlify's preview-only feedback drawer overlaps app controls on tablets.
+  if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort())
   await mockBackend(page)
   await page.goto('/')
   await expect(page.locator('.app-shell')).toBeVisible()
@@ -781,6 +783,7 @@ test('manual microphone restart waits for native release, preserves speech, and 
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await page.clock.install()
+  await page.clock.pauseAt(new Date(Date.now()+1000))
   await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
   await page.evaluate(()=>{
     const r=window.voiceTest.active;window.voiceTest.oldResult=r.onresult

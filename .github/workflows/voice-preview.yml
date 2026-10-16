@@ -41,7 +41,7 @@ jobs:
       - name: Exercise deployed voice handoffs with synthetic speech and household fixtures
         env:
           PREVIEW_BASE_URL: ${{ steps.preview.outputs.url }}
-        run: npx playwright test --grep 'voice|microphone|speaker|read aloud|Read aloud|Chart the Course|Evening Recap' --workers=2
+        run: npx playwright test --grep 'voice|spoken review|microphone|speaker|read aloud|Read aloud|Chart the Course|Evening Recap' --workers=2
       - name: Preserve failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
