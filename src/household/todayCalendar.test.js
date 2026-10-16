@@ -43,6 +43,6 @@ test('saved top priorities lead ahead of routine assignments and calendar times'
 })
 
 test('explicit responsibility overrides a personal calendar container',()=>{
- const tutor={id:'tutor',title:'Isaiah Daily Tutor',source:'icloud',appleCalendarOwner:'Larry',appleCalendarId:'larry',owner:'Nyla'}
+ const tutor={id:'tutor',title:'Isaiah Daily Tutor',source:'icloud',appleCalendarOwner:'Larry',appleCalendarId:'larry',owner:'Nyla',participants:['Larry','Lorenzo','Terica','Nyla','Javin','Isaiah']}
  assert.equal(todayCalendarAppointments([tutor],'Larry').length,0);assert.equal(todayCalendarAppointments([tutor],'Nyla').length,1)
 })
