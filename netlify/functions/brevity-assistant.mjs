@@ -91,7 +91,7 @@ export const processAssistantRequest = async event => {
   if(conversation.messages.length)messages=cleanMessages([...conversation.messages,requestedMessage])
 
   const [canonicalServerContext,actionPermissions] = await Promise.all([
-    loadProductionAuthoritativeAssistantContext({ member: session.member }),
+    loadProductionAuthoritativeAssistantContext({ member: session.member, role: session.role }),
     productionAssistantActionRepository().getPermissions(),
   ])
   const supplemental=await loadAssistantSupplementalContext({loadHealth:()=>assistantHealthContext(session.member),role:session.role,permissions:actionPermissions[session.member]||{},canonical:canonicalServerContext,member:session.member,resources:createProductionActionResources(),loadLibrary:async()=>{const repository=await productionMealPlanRepository();return repository.getLibrary()},loadCalendar:()=>loadAppleCalendar(event)})
