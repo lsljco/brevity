@@ -9,7 +9,7 @@ export const checkinKey=(date,member)=>`${reminderRoot()}checkins/${date}/${memb
 export const reconciliationKey=date=>`${reminderRoot()}checkin-reconciliation/${date}`
 export const checkinHash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
 export function checkinSource(input,member,now=new Date()){
- const brief=buildDailyResponsibilities(input,member,now)
+ const brief=buildDailyResponsibilities({...input,openWork:[]},member,now)
  const items=brief.items.map(({id,title,kind,targetId,sourceDate,progress,status,endTime,time,owners})=>({id,title,kind,targetId,sourceDate,progress,status,endTime,time,owners}))
  for(const p of input.plan?.topPriorities||[])if(p.id&&(p.owner===member||p.owners?.includes(member)||p.participants?.includes(member))&&!items.some(i=>i.targetId===p.id))items.push({id:`priority:${p.id}`,targetId:p.id,kind:'priority',title:p.title,owners:[member],sourceDate:input.date})
  const source={date:input.date,member,focus:input.plan?.household?.keyFocus||'',items,sources:brief.sources}
