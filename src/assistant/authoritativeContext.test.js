@@ -54,6 +54,16 @@ test('server context strips credentials and encoded attachments', () => {
   assert.equal(sanitized.photo, '[large value omitted]')
 })
 
+test('Ask Brevity receives complete October 15 assumptions and worksheet rows',async()=>{
+  const c=await buildAuthoritativeAssistantContext({member:'Larry',date:'2026-10-15',loadDailyPlan:async()=>null,loadMealWindow:async()=>null,loadActiveSermon:async()=>null,loadSharedRecords:async()=>({})})
+  const templates=c.actionRecords.finance.forecasts.workScenarioTemplates
+  assert.equal(templates.length,11)
+  const phoenix=templates.find(s=>s.id==='recovery-oct15-phoenix').assumptions.worksheet
+  assert.equal(phoenix.opportunity.gross,55)
+  assert.equal(phoenix.rows.find(r=>r.id==='cash-2026-11').amount,6604.09)
+  assert.equal(templates.find(s=>s.id==='recovery-oct15-expedite').assumptions.worksheet.opportunity.gross,null)
+})
+
 test('Assistant treats only a missing active sermon as absent and fails closed on storage outage', async () => {
   assert.equal(await readOptionalAuthoritativeRecord({ async getWithMetadata() { return null } }, 'active-sermon'), null)
   assert.equal(await readOptionalAuthoritativeRecord({ async getWithMetadata() { throw Object.assign(new Error('missing'), { name:'NotFoundError' }) } }, 'active-sermon'), null)
