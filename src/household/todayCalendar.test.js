@@ -11,18 +11,18 @@ const events=[
  {id:'unknown',source:'icloud',owner:'Family',title:'Unmapped event'},
  {id:'uncertain',owner:'Family',ownershipKnown:false,title:'Unknown owner'},
 ]
-test('Today shows Family and the signed-in calendar using Apple source ownership',()=>{
- assert.deepEqual(todayCalendarAppointments(events,'Larry').map(x=>x.id),['family','larry','shared'])
+test('My day shows personal and explicitly shared events, not other members’ Family-calendar tasks',()=>{
+ assert.deepEqual(todayCalendarAppointments(events,'Larry').map(x=>x.id),['larry','shared'])
  assert.deepEqual(todayCalendarAppointments(events,'Terica').map(x=>x.id),['family','terica','shared'])
- assert.deepEqual(todayCalendarAppointments(events,'Nyla').map(x=>x.id),['family','nyla','shared'])
+ assert.deepEqual(todayCalendarAppointments(events,'Nyla').map(x=>x.id),['nyla','shared'])
 })
-test('Household means Family calendar, never every personal calendar',()=>{
- assert.deepEqual(todayCalendarAppointments(events,'Larry','household').map(x=>x.id),['family','shared'])
+test('Today Household includes all known household calendars',()=>{
+ assert.deepEqual(todayCalendarAppointments(events,'Larry','household').map(x=>x.id),['family','larry','terica','nyla','shared'])
 })
-test('agenda retains shared Apple events despite a personal organizer and excludes another source despite Family owner',()=>{
+test('agenda follows personal relevance in My day and includes known members in Household',()=>{
  for(const scope of ['mine','household']){
  const result=buildDailyAgenda({plan:{date:'2026-10-09'},appointments:events,member:'Larry',scope})
- assert.ok(result.items.some(x=>x.id==='family'));assert.ok(!result.items.some(x=>x.id==='terica'))
+ assert.equal(result.items.some(x=>x.id==='family'),scope==='household');assert.equal(result.items.some(x=>x.id==='terica'),scope==='household')
  }
 })
 test('agreed dated tasks remain priorities; calendar events never become priorities',()=>{

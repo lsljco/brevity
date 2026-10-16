@@ -589,7 +589,7 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
  })
  test('Today calendar is scoped to Family and the signed-in member',async({page})=>{
    const calendar=page.locator('.today-calendar-agenda')
-   await expect(calendar).toContainText('Family calendar and Larry’s calendar')
+   await expect(calendar).toContainText('Larry’s calendar and shared commitments')
    await expect(calendar.getByRole('group',{name:'Calendars to show'})).toHaveCount(0)
    await expect(calendar.getByRole('button',{name:'Open Family Calendar',exact:true})).toBeVisible()
  })
@@ -1157,4 +1157,34 @@ test('microphone permission prompt waiting does not create repeated automatic re
  expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
  await expect(dialog.getByRole('alert')).toContainText('microphone did not connect')
  await expect(dialog.getByRole('button',{name:'Restart microphone',exact:true})).toBeVisible()
+})
+
+test('Today personal guidance groups household work and highlights major appointments',async({page},testInfo)=>{
+ await page.route('**/.netlify/functions/household-data*',route=>{
+  const p=plan();p.topPriorities=[];p.household.keyFocus='Financial Review / Daily Schedule Alignment / LinkedIn & Résumé Optimization'
+  p.assignments=['Larry','Lorenzo','Terica','Nyla','Javin','Isaiah'].flatMap(owner=>['Financial Review','Daily Schedule Alignment'].map((title,index)=>({id:`${owner}-${index}`,title,owner,date:today(),priority:'high',status:'pending'})))
+  return route.fulfill({json:{householdId:'lslj-family',plan:p}})
+ })
+ await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{connected:true,syncedAt:new Date().toISOString(),events:[
+  {id:'medical',source:'icloud',title:'TS- Dr. Appointment',date:today(),time:'3:00 PM',endTime:'4:00 PM',owner:'Family',ownershipKnown:false},
+  {id:'bank',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',title:'Send bank files',date:today(),time:'11:00 AM',owner:'Lorenzo'},
+  {id:'tutor',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',title:'Isaiah Daily Tutor',date:today(),time:'2:45 PM',owner:'Nyla',recurring:true}
+ ]}}))
+ await page.reload();await expect(page.locator('.today-overview')).toBeVisible()
+ if((page.viewportSize()?.width||1440)<700&&await page.getByRole('button',{name:'Collapse navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ const overview=page.getByRole('region',{name:'Your day at a glance',exact:true})
+ await expect(overview.locator('.today-focus-bubbles li')).toHaveCount(3)
+ const major=overview.getByRole('region',{name:'Major household calendar items'})
+ await expect(major).toContainText('TS- Dr. Appointment');await expect(major).toContainText('3:00 PM');await expect(major).toContainText('Owner unconfirmed');await expect(major).not.toContainText('Isaiah Daily Tutor')
+ const remaining=overview.getByRole('region',{name:'Remaining today'})
+ await expect(remaining).not.toContainText('Send bank files');await expect(remaining).not.toContainText('Lorenzo');await expect(remaining).not.toContainText('Isaiah Daily Tutor')
+ const attention=overview.getByRole('region',{name:'Needs your attention'})
+ await expect(attention).not.toContainText('Overdue:');await expect(attention).not.toContainText('Lorenzo')
+ await overview.getByRole('button',{name:'Household',exact:true}).click()
+ await expect(remaining.getByText('Financial Review',{exact:true})).toHaveCount(1)
+ await expect(remaining.getByText('Daily Schedule Alignment',{exact:true})).toHaveCount(1)
+ await remaining.getByRole('button',{name:'Update Financial Review',exact:true}).click()
+ await expect(overview.getByRole('region',{name:'Shared task participants'}).getByRole('button',{name:/^Review /})).toHaveCount(6)
+ await overview.getByRole('button',{name:'Close participant review'}).click()
+ await overview.locator('#today-focus').screenshot({path:testInfo.outputPath('today-personal-priorities.png')})
 })
