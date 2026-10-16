@@ -13,7 +13,7 @@ export function checkinSource(input,member,now=new Date()){
  const items=brief.items.map(({id,title,kind,targetId,sourceDate,progress,status,endTime,time,owners})=>({id,title,kind,targetId,sourceDate,progress,status,endTime,time,owners}))
  for(const p of input.plan?.topPriorities||[])if(p.id&&(p.owner===member||p.owners?.includes(member)||p.participants?.includes(member))&&!items.some(i=>i.targetId===p.id))items.push({id:`priority:${p.id}`,targetId:p.id,kind:'priority',title:p.title,owners:[member],sourceDate:input.date})
  const source={date:input.date,member,focus:input.plan?.household?.keyFocus||'',items,sources:brief.sources}
- return {...source,revision:checkinHash({...source,items:items.map(({progress,...item})=>item)})}
+ return {...source,revision:checkinHash({date:source.date,member,focus:source.focus,items:items.map(({progress,...item})=>item)})}
 }
 export async function loadCheckinMeeting(date,{store=briefingStore(),input,now=new Date()}={}){
  input ||= await loadDailyBriefingInputs(date,{now})
