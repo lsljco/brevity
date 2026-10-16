@@ -1,6 +1,6 @@
 # Daily household check-ins
 
-Every household account submits its own dated response from Today. The form reads existing daily plans, routines, chores, calendar, projects and carried-forward open work through the daily briefing source. It stores only responses and source references in the existing scoped daily-briefing store; it does not create duplicate task, calendar, finance or completion records.
+Every household account submits its own dated response from Today. The form reads existing daily plans, routines, chores, calendar and projects through the daily briefing source. Historical open work stays in the existing earlier-work view and does not require a new daily status; relevant blockers can be included in the focus update. It stores only responses and source references in the existing scoped daily-briefing store; it does not create duplicate task, calendar, finance or completion records.
 
 Eastern-time cadence (DST-aware): 2 p.m. prompt, one 3:30 p.m. reminder for incomplete members, 4 p.m. response deadline, 4:30 p.m. suggested grouping, 4:45 p.m. administrator meeting notification, 5 p.m. discussion. Existing per-device push registration, quiet hours, delivery claims and duplicate suppression are reused. Each member must enable notifications on their own device; Focus and connectivity can delay delivery. The form remains available without push permission.
 
