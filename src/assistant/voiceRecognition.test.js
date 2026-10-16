@@ -71,3 +71,12 @@ test('a normal native end releases capture without aborting a finished recognize
  finishRecognition({recognition,ref,onFinish:()=>submissions++})
  assert.equal(submissions,1);assert.equal(aborts,0);assert.equal(ref.current,null)
 })
+
+test('established capture disarms the startup watchdog while a person thinks',async()=>{
+ const {watchRecognition}=await import('./voiceRecognition.js')
+ const pending=new Map();let id=0,stalls=0
+ const recognition={},ref={current:recognition}
+ const pulse=watchRecognition({recognition,ref,onStall:()=>stalls++,setTimer:fn=>{pending.set(++id,fn);return id},clearTimer:id=>pending.delete(id)})
+ assert.equal(pending.size,1);pulse(null);assert.equal(pending.size,0)
+ pulse(1000);assert.equal(pending.size,1);[...pending.values()][0]();assert.equal(stalls,1)
+})

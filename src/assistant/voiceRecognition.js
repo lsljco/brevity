@@ -19,17 +19,17 @@ export function retireRecognition(ref, {setTimer=setTimeout,clearTimer=clearTime
  })
 }
 
-// A service can start without capturing audio, or stop returning results without
-// delivering end/error. Bound both states; never leave a zombie recognizer active.
-export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,clearTimer=clearTimeout}) {
+// Bound native startup/shutdown, not the time a person takes to think.
+// A null delay disarms the watchdog once capture is established.
+export function watchRecognition({recognition,ref,onStall,setTimer=setTimeout,clearTimer=clearTimeout,initialDelay=4000}) {
  let timer,closed=false
  const arm=(delay=20000)=>{
   clearTimer(timer)
-  if(closed)return
+  if(closed||delay===null)return
   timer=setTimer(()=>{if(!closed&&ref.current===recognition)onStall()},delay)
  }
  recognition.cancelWatch=()=>{closed=true;clearTimer(timer)}
- arm(4000)
+ arm(initialDelay)
  return arm
 }
 

@@ -15,7 +15,7 @@ export async function executeAssistantProposal({proposalId,selections,confirmed,
 }
 export function undoAssistantAction({auditId,confirmation}){return actionRequest('POST','undo',{auditId,confirmation})}
 export function saveActionPermissions(permissions,expectedVersion,confirmation){return actionRequest('PUT','permissions',{permissions,expectedVersion,confirmation})}
-export async function getElevenLabsVoices(){const response=await fetch(`${ELEVENLABS_WORKER}/elevenlabs-voices`,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||'Could not load your ElevenLabs voices.');return payload.voices||[]}
+export async function getElevenLabsVoices(signal){const response=await fetch(`${ELEVENLABS_WORKER}/elevenlabs-voices`,{signal,method:'POST',headers:{'content-type':'application/json'},body:'{}'});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||'Could not load your ElevenLabs voices.');return payload.voices||[]}
 export async function createElevenLabsSpeech({text,voiceId,signal}){const response=await fetch(`${ELEVENLABS_WORKER}/elevenlabs-tts`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({voiceId,text:messageSpeech(text),model_id:'eleven_turbo_v2_5'}),signal});if(!response.ok){const payload=await response.json().catch(()=>({}));throw new Error(payload.error||'ElevenLabs could not read this response.')}return response.blob()}
 
 export function prepareRepeatMeal(input){return actionRequest('POST','prepare-repeat-meal',input)}

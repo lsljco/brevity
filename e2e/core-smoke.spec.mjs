@@ -79,6 +79,8 @@ async function mockBackend(page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // Netlify's preview-only feedback drawer overlaps app controls on tablets.
+  if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort())
   await mockBackend(page)
   await page.goto('/')
   await expect(page.locator('.app-shell')).toBeVisible()
@@ -737,19 +739,16 @@ test('voice recovers a stalled microphone after read aloud and preserves a draft
   await dialog.getByRole('button',{name:'Read response aloud',exact:true}).click()
   await expect.poll(()=>page.evaluate(()=>Boolean(window.voiceTest.audio.onended))).toBe(true)
   await page.evaluate(()=>window.voiceTest.audio.onended())
-  // Keep the primed playback element reusable between voice turns.
-  expect(await page.evaluate(()=>window.voiceTest.loads)).toBe(0)
+  // Retain the element but release its native source before reopening capture.
+  expect(await page.evaluate(()=>window.voiceTest.loads)).toBe(1)
   await page.clock.fastForward(300)
   await expect(dialog.getByText(/Voice conversation on · Starting microphone/)).toBeVisible()
   await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toHaveCount(0)
   await page.clock.fastForward(4000)
   await page.clock.fastForward(300)
   expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(3)
-  // Capture starts but the browser never returns speech or an end/error callback.
-  await page.evaluate(()=>{window.voiceTest.current.onaudiostart();window.voiceTest.current.onstart()})
-  await page.clock.fastForward(5000)
-  await expect(dialog.getByText(/Microphone connected · Speak to begin/)).toBeVisible()
-  await page.clock.fastForward(15000)
+  // A second startup failure is bounded; silence after healthy capture is not.
+  await page.clock.fastForward(4000)
   await expect(dialog.getByRole('alert')).toContainText('microphone stopped returning speech')
   await expect(dialog.getByPlaceholder('Listening…',{exact:true})).toHaveCount(0)
   await dialog.locator('textarea').fill('Keep this draft')
@@ -784,6 +783,7 @@ test('manual microphone restart waits for native release, preserves speech, and 
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
   await page.clock.install()
+  await page.clock.pauseAt(new Date(Date.now()+1000))
   await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
   await page.evaluate(()=>{
     const r=window.voiceTest.active;window.voiceTest.oldResult=r.onresult
@@ -854,7 +854,7 @@ test('routine source review shows proposals without silently saving them', async
  expect(changes).toBe(0)
 })
 
-test('four voice turns resume capture after delayed native shutdown',async({page})=>{
+test('six voice turns resume capture after delayed native shutdown and quiet follow-up pauses',async({page})=>{
  await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:0,messages:[]}}))
  let requests=0
  await page.route('**/.netlify/functions/brevity-assistant',r=>r.fulfill({json:{message:`Voice answer ${++requests}`,proposal:null}}))
@@ -875,8 +875,12 @@ test('four voice turns resume capture after delayed native shutdown',async({page
  const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
  await page.clock.install()
  await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
- for(let turn=1;turn<=4;turn++){
+ for(let turn=1;turn<=6;turn++){
   await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(turn)
+  // Thinking for a minute must not exhaust retries or disable voice mode.
+  await page.clock.runFor(60000)
+  expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(turn)
+  await expect(dialog.getByRole('button',{name:'Stop voice conversation',exact:true})).toBeVisible()
   await page.evaluate(n=>{const result=[{transcript:`Question ${n}`}];result.isFinal=true;window.voiceTest.active.onresult({results:[result]})},turn)
   await page.clock.runFor(7000);await page.clock.runFor(400)
   await expect.poll(()=>requests).toBe(turn)
@@ -1073,4 +1077,84 @@ test('Education saves only an approved item and shows the saved record after ref
  await page.reload()
  await page.getByRole('button',{name:'Open Education',exact:true}).click()
  await expect(page.locator('.learning-hub').getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()
+})
+
+for(const failure of ['speech request','playback'])test(`voice resumes after stalled ${failure} and keeps final words from native stop`,async({page})=>{
+ await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:0,messages:[{role:'assistant',content:'A response to read.'}]}}))
+ let sent=null
+ await page.route('**/.netlify/functions/brevity-assistant',r=>{sent=r.request().postDataJSON();return r.fulfill({json:{message:'Follow-up received.',proposal:null}})})
+ await page.route('**/elevenlabs-voices',r=>r.fulfill({json:{voices:[{voice_id:'test-voice',name:'Test'}]}}))
+ await page.route('**/elevenlabs-tts',r=>failure==='speech request'?undefined:r.fulfill({contentType:'audio/mpeg',body:'test'}))
+ await page.addInitScript(()=>{
+  localStorage.setItem('brevity_el_voice_v1','test-voice')
+  window.voiceTest={starts:0,current:null,audio:null}
+  window.SpeechRecognition=class{
+   start(){window.voiceTest.current=this;window.voiceTest.starts++;this.onstart?.();this.onaudiostart?.()}
+   stop(){const result=[{transcript:'My complete follow-up'}];result.isFinal=true;this.onresult?.({results:[result]});this.onend?.()}
+   abort(){this.onend?.()}
+  }
+  window.Audio=class{constructor(){window.voiceTest.audio=this;this.currentTime=0}play(){return Promise.resolve()}pause(){}removeAttribute(){this.src=''}load(){}}
+ })
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ await expect(dialog.getByText('A response to read.',{exact:true})).toBeVisible()
+ await page.clock.install()
+ await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+ await dialog.getByRole('button',{name:'Read response aloud',exact:true}).click()
+ await expect(dialog.getByText(failure==='speech request'?/Preparing spoken response/:/Speaking…/)).toBeVisible()
+ await page.clock.runFor(failure==='speech request'?45000:15000)
+ await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(2)
+ await expect(dialog.getByRole('alert')).toContainText(failure==='speech request'?'took too long':'playback was interrupted')
+ // Quiet native sessions can end with no-speech repeatedly; those are not faults.
+ for(let i=0;i<3;i++){
+  await page.evaluate(()=>window.voiceTest.current.onerror({error:'no-speech'}))
+  await page.clock.runFor(300)
+  await expect.poll(()=>page.evaluate(()=>window.voiceTest.starts)).toBe(3+i)
+ }
+ await page.evaluate(()=>window.voiceTest.current.onresult({results:[[{transcript:'My incomplete'}]]}))
+ await page.clock.runFor(7000)
+ await expect.poll(()=>sent?.messages?.at(-1)?.content).toBe('My complete follow-up')
+ await dialog.getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+ const starts=await page.evaluate(()=>window.voiceTest.starts)
+ await page.clock.runFor(60000)
+ expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(starts)
+})
+
+test('microphone permission denial stops retries and explains the remembered Safari setting',async({page})=>{
+ await page.addInitScript(()=>{
+  window.voiceTest={starts:0}
+  window.SpeechRecognition=class{
+   start(){window.voiceTest.starts++;this.onerror?.({error:'not-allowed'})}
+   abort(){this.onend?.()}
+  }
+ })
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ await page.clock.install()
+ await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+ await expect(dialog.getByRole('alert')).toContainText('Website Settings → Microphone → Allow')
+ await page.clock.runFor(60000)
+ expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
+ await expect(dialog.getByRole('button',{name:'Start voice conversation',exact:true})).toBeVisible()
+})
+
+test('microphone permission prompt waiting does not create repeated automatic requests',async({page})=>{
+ await page.addInitScript(()=>{
+  window.voiceTest={starts:0}
+  window.SpeechRecognition=class{start(){window.voiceTest.starts++}abort(){this.onend?.()}}
+ })
+ await page.reload();await openTodayDetails(page)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:'Brevity Assistant',exact:true})
+ await page.clock.install()
+ await dialog.getByRole('button',{name:'Start voice conversation',exact:true}).click()
+ await page.clock.runFor(10000)
+ expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
+ await expect(dialog.getByRole('button',{name:'Stop voice conversation',exact:true})).toBeVisible()
+ await page.clock.runFor(50000)
+ expect(await page.evaluate(()=>window.voiceTest.starts)).toBe(1)
+ await expect(dialog.getByRole('alert')).toContainText('microphone did not connect')
+ await expect(dialog.getByRole('button',{name:'Restart microphone',exact:true})).toBeVisible()
 })
