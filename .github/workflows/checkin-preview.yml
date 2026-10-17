@@ -41,7 +41,7 @@ jobs:
       - name: Exercise deployed Today and check-in UI with isolated household fixtures
         env:
           PREVIEW_BASE_URL: ${{ steps.preview.outputs.url }}
-        run: npx playwright test --grep 'Household check-in saves owned updates|Today personal guidance groups household work' --workers=2
+        run: npx playwright test --grep 'Household check-in saves owned updates|Today personal guidance groups household work|Cash Forecast planned balance excludes prior-day pending income carryover' --workers=2
       - name: Preserve failure evidence
         if: failure()
         uses: actions/upload-artifact@v4

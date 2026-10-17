@@ -2829,3 +2829,29 @@ test('Household check-in saves owned updates and prepares a Thursday meeting wit
  await expect(panel.getByText('Version 1 · submit · Larry',{exact:false})).toBeAttached()
  const overflow=await panel.evaluate(el=>el.scrollWidth>el.clientWidth+2);expect(overflow).toBe(false)
 })
+
+test('Cash Forecast planned balance excludes prior-day pending income carryover',async({page},testInfo)=>{
+  const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+  const prior=new Date(`${dateKey()}T12:00:00Z`);prior.setUTCDate(prior.getUTCDate()-1)
+  const yesterday=prior.toISOString().slice(0,10)
+  Object.assign(finance.accounts[0],{balance:6898.22,plaidCurrentBalance:6898.22,plaidAvailableBalance:6898.22})
+  const income=[882.39,721.90,2791.38].map((amount,i)=>({id:`pay-${i}`,name:`Employer ${i}`,type:'income',amount,acct:'a1',freq:'once',start:yesterday}))
+  finance.transactions=[...income,{id:'today-bills',name:'Today expenses',type:'expense',amount:1988.02,acct:'a1',freq:'once',start:dateKey()}]
+  records.lslj_finance_v9.value=JSON.stringify(finance)
+  records.plaid_actuals_cache.value=JSON.stringify(income.map((row,i)=>({id:`bank-pay-${i}`,accountId:'plaid-operating',name:row.name,amount:-row.amount,date:yesterday,pending:true})))
+  let writes=0
+  await page.route('**/.netlify/functions/household-state*',route=>{if(route.request().method()!=='GET')writes++;return route.fulfill({json:{records,serverTime:new Date().toISOString()}})})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  const summary=page.getByRole('region',{name:'Current and projected cash'})
+  await expect(summary).toContainText('$6,898.22')
+  await expect(summary).toContainText('−$1,988.02')
+  await expect(summary).toContainText('$4,910.20')
+  await expect(summary).not.toContainText('$9,305.87')
+  await expect(summary).not.toContainText('Earlier scheduled activity settling now')
+  const writesBeforeToggle=writes
+  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
+  await expect(summary).toContainText('$4,910.20')
+  await expect(summary).toContainText('Additional pending adjustment')
+  expect(writes).toBe(writesBeforeToggle)
+})
