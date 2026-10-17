@@ -11,7 +11,7 @@ test('Accounts mirrors the application-wide Plaid refresh state',()=>{
   assert.match(plaidConnect,/APP_REFRESH_STARTED_EVENT/)
   assert.match(plaidConnect,/event\.detail\?\.bankUpdateRequested[\s\S]*setAppSyncing\(true\)/)
   assert.match(plaidConnect,/APP_REFRESH_EVENT[\s\S]*setAppSyncing\(false\)/)
-  assert.match(plaidConnect,/syncBusy \? 'Syncing…' : 'Refresh bank now'/)
+  assert.match(plaidConnect,/syncBusy \? 'Updating…' : 'Refresh balance'/)
 })
 const financeRefresh=readFileSync(new URL('./financeRefresh.js',import.meta.url),'utf8')
 
@@ -34,7 +34,7 @@ test('automatic account refresh is cached while Sync now explicitly requests liv
   assert.match(plaidConnect,/transaction refresh continues separately/)
   assert.match(plaidConnect,/\[balanceHasIssue \? '' : balanceSummary, transactionSummary\]/)
   assert.match(plaidConnect,/No cached bank connection on this device/)
-  assert.match(plaidConnect,/Refresh bank now/)
+  assert.match(plaidConnect,/Refresh balance/)
   assert.match(plaidConnect,/Requests a paid update from existing bank connections/)
   assert.match(plaidConnect,/onClick=\{\(\) => syncAccounts\(\{ refreshTransactions:true \}\)\}/)
   assert.match(plaidConnect,/Bank changes unavailable/)
@@ -212,7 +212,7 @@ test('bank refresh status cannot erase an unrelated reviewed Finance error',()=>
 
 test('dashboard bank controls wrap safely at phone width',()=>{
   assert.match(plaidConnect,/className="plaid-connect"/)
-  assert.match(plaidConnect,/className="plaid-connect-disconnected"/)
+  assert.match(plaidConnect,/aria-label="Bank information"/)
   assert.match(financePlanner,/\.dash-actions \.plaid-connect[\s\S]*margin-bottom: 0 !important/)
   assert.match(financePlanner,/@media \(max-width: 768px\)[\s\S]*\.plaid-connect-disconnected \{ flex-wrap: wrap !important/)
 })
