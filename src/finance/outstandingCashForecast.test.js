@@ -105,11 +105,11 @@ test('estimated opening reverses today posted activity, but excludes pending', (
   assert.equal(result.openingSource,'estimated-opening')
   assert.equal(result.bal,4600)
 })
-test('past pending or paid-today obligations remain in planned carryover once', () => {
+test('past pending or paid-today obligations are not automatically rescheduled in planned mode', () => {
   for(const bank of [[actual],[{...actual,pending:true,date:date(-1)}]]) {
     const result=buildOutstandingCashForecast([account],[{...hoa,start:date(-1)}],bank,{days:1,pastDays:2,reconcile:false,closingBalances:{[date(-1)]:5000}}).get(today)
-    assert.equal(result.overdueDelta,-1375)
-    assert.equal(result.bal,3625)
+    assert.equal(result.overdueDelta,0)
+    assert.equal(result.bal,5000)
   }
 })
 test('canceled/skipped occurrences do not become overdue', () => {
@@ -174,4 +174,28 @@ test('mixed accounts apply pending only to current-balance accounts, including z
   assert.equal(point.pendingDelta,-50)
   assert.equal(point.bal,450)
   assert.deepEqual(point.pendingActivity.map(row=>row.applied),[false,true])
+})
+
+
+test('prior-day pending income cannot inflate today’s plan or subsequent balances', () => {
+  const cash={...account,balance:6898.22,plaidCurrentBalance:6898.22,plaidAvailableBalance:6898.22}
+  const income=[882.39,721.90,2791.38].map((amount,i)=>({...hoa,id:`income-${i}`,name:`Employer ${i}`,type:'income',amount,start:date(-1)}))
+  const bills=[791.25,336.36,320,300,150,90.41].map((amount,i)=>({...hoa,id:`bill-${i}`,name:`Bill ${i}`,amount}))
+  const next={...hoa,id:'tomorrow',name:'Tomorrow expense',start:date(1),amount:6000}
+  const original=structuredClone({cash,income,bills,next})
+  for (const pending of [true,false]) {
+    const bank=income.map((row,i)=>({...actual,id:`bank-${i}`,name:row.name,amount:-row.amount,pending,date:pending?date(-1):today}))
+    const options={days:2,pastDays:2,reconcile:false,closingBalances:{[date(-1)]:6898.22}}
+    const result=buildOutstandingCashForecast([cash],[...income,...bills,next],bank,options)
+    assert.equal(result.get(today).remainingDelta,-1988.02)
+    assert.equal(result.get(today).bal,4910.2)
+    assert.equal(result.get(date(1)).bal,-1089.8)
+    assert.equal(result.get(date(2)).bal,-1089.8)
+    assert.equal(result.get(today).overdueDelta,0)
+    // Available balance already incorporates holds: reconciliation must not
+    // add the old payroll again either.
+    const reconciled=buildOutstandingCashForecast([cash],[...income,...bills,next],bank,{...options,reconcile:true})
+    assert.equal(reconciled.get(today).bal,4910.2)
+  }
+  assert.deepEqual({cash,income,bills,next},original)
 })

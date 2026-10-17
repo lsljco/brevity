@@ -85,12 +85,11 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     : current + bank.filter(row => !row.pending && row.date === today).reduce((sum,row) => sum + cents(row.amount), 0)
   const openingSource = Number.isFinite(verifiedClose) ? 'verified-close'
     : Number.isFinite(reconstructedClose) ? 'reconstructed-close' : 'estimated-opening'
-  const overdue = candidates.filter(candidate => {
-    const actual = assigned.get(candidate.key)
-    return candidate.date < today && actual && !reconcile && (actual.pending || actual.date >= today)
-  })
-  const overdueDelta = overdue.reduce((sum,candidate) => sum - candidate.leg.amount, 0)
-  let balance = (reconcile ? anchor + pendingDelta : opening) + overdueDelta
+  // Planned mode follows occurrence dates only. A pending/late-posted match
+  // must not move yesterday's scheduled income or expense into today: the
+  // opening snapshot may already include it. Bank timing belongs exclusively
+  // to reconciled mode; changing a plan's date requires an explicit reschedule.
+  let balance = reconcile ? anchor + pendingDelta : opening
   for (const [date, point] of projection) {
     if (date < today) continue
     let remaining = 0
@@ -109,7 +108,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     })
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
-      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:overdueDelta / 100, overdue:overdue.map(row => ({ id:row.key, date:row.date, name:row.plan.name, delta:-row.leg.amount / 100 })), currentBalance:current / 100, anchorBalance:anchor / 100,
+      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
         anchorKind:availableIds.size === accounts.length ? 'available' : availableIds.size ? 'mixed' : 'current',
         pendingActivity:bank.filter(actual => actual.pending).map(actual => ({ id:actual.id, date:actual.date, name:actual.name || actual.merchant_name || 'Pending transaction', accountName:accounts.find(account => account.id === accountMap[actual.accountId])?.name || 'Cash account', delta:-cents(actual.amount) / 100, applied:reconcile && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]) })),
         pendingDelta:reconcile ? pendingDelta / 100 : 0,
