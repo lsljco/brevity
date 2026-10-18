@@ -33,7 +33,7 @@ test('Today read model separates outcomes, actions, decisions, commitments, and 
   const model = buildTodayReadModel({
     plan,
     currentMember: 'Larry',
-    now: new Date('2026-08-26T08:00:00'),
+    now: new Date('2026-08-26T08:00:00-04:00'),
     calendarHealth: { state: 'ready', usable: true, stale: false, lastSuccessfulSyncAt: '2026-08-26T07:55:00.000Z' },
     calendarAppointments: [
       { id: 'doctor', title: 'Doctor appointment', date: '2026-08-26', startTime: '9:30 AM', owner: 'Larry', calendarSource: 'icloud' },
@@ -86,7 +86,7 @@ test('Today derives a concrete focus when the plan theme is blank', () => {
 
   const commitmentModel=buildTodayReadModel({
     plan:{date:'2026-08-26',health:{dinner:'Salmon'}},
-    now:new Date('2026-08-26T08:00:00'),
+    now:new Date('2026-08-26T08:00:00-04:00'),
     calendarAppointments:[{id:'review',title:'Family Finance Meeting',date:'2026-08-26',startTime:'9:00 AM'}],
   })
   assert.equal(commitmentModel.focus.headline,'Prepare for Family Finance Meeting')
@@ -130,7 +130,7 @@ test('calendar failures become prioritized signals without hiding cached commitm
   const model = buildTodayReadModel({
     plan,
     currentMember: 'Larry',
-    now: new Date('2026-08-26T08:00:00'),
+    now: new Date('2026-08-26T08:00:00-04:00'),
     calendarHealth: { state: 'error', usable: true, stale: true, message: 'Apple rejected discovery. Cached events remain visible.', lastSuccessfulSyncAt: '2026-08-26T07:00:00.000Z' },
     calendarAppointments: [
       { id: 'doctor', title: 'Doctor appointment', date: '2026-08-26', startTime: '9:30 AM', owner: 'Larry', calendarSource: 'icloud' },

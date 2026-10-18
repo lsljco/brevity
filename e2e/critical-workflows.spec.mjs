@@ -2883,3 +2883,26 @@ test('Bank status keeps explanations behind tap-friendly information and errors 
   await expect(panel).toHaveCount(0)
   await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
 })
+
+test('Finance editor recovers an unrelated version conflict before review only',async({page},testInfo)=>{
+ const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),attempts=[]
+ finance.transactions=[{id:'water',name:'Water fixture',type:'expense',amount:260.28,acct:'a1',freq:'once',start:dateKey(),cat:'Utilities'}]
+ records.lslj_finance_v9.value=JSON.stringify(finance);records.plaid_actuals_cache.value='[]'
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ let executions=0
+ page.on('request',request=>{if(request.url().includes('action=execute'))executions++})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',async route=>{
+  const body=route.request().postDataJSON();attempts.push(body)
+  if(attempts.length===1){records.lslj_finance_v9.version=2;finance.accounts[0].balance=900;records.lslj_finance_v9.value=JSON.stringify(finance);return route.fulfill({status:409,json:{code:'VERSION_CONFLICT',error:'Household data changed after your review. Refresh and try again.'}})}
+  return route.fallback()
+ })
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Transactions',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Edit Water fixture',exact:true}).click()
+ await page.getByPlaceholder('0.00',{exact:true}).fill('250')
+ await page.getByRole('button',{name:'Review scheduled change',exact:true}).click()
+ await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+ expect(attempts.map(row=>row.expectedVersion)).toEqual([1,2])
+ expect(attempts[1].operation.payload.amount).toBe(250)
+ expect(executions).toBe(0)
+})

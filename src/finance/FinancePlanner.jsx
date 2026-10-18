@@ -1,3 +1,4 @@
+import { prepareFinanceReview } from './prepareFinanceReview.js'
 import { createPortal } from 'react-dom'
 import { buildMetricTrends } from './metricTrends.js'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
@@ -1041,11 +1042,15 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
   const blank = { name: '', amount: '', type: 'expense', freq: 'monthly', start: getHouseholdDateKey(), end: '', cat: 'Housing', acct: accounts[0]?.id || '', transferTo: '' }
   const [form, setForm] = useState(tx ? { ...tx } : blank)
   // Keep the version from the moment this editor opened. If household data
-  // changes while the form is open, direct Action preparation must reject it
-  // instead of treating stale form fields as intentional replacements.
+  // changes while the form is open, retain the original target so preparation
+  // can distinguish a bank-only update from a conflicting transaction edit.
   const [openedVersion] = useState(() => Object.hasOwn(tx || {}, '_reviewVersion')
     ? tx._reviewVersion
     : captureFinanceReviewVersion())
+  const [reviewOriginal] = useState(() => {
+    if (!tx?.id || captureFinanceReviewVersion() !== openedVersion) return null
+    return loadData().transactions.find(row => row.id === tx.id) || null
+  })
   const [preparing, setPreparing] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   // Custom category support: if existing cat isn't in CATS list, treat as custom
@@ -1062,6 +1067,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
     const saved = { ...form, amount: parseFloat(form.amount) || 0 }
     if (tx?.id) saved.id = tx.id
     saved._reviewVersion = openedVersion
+    saved._reviewOriginal = reviewOriginal
     if (form.type === 'transfer') saved.cat = 'Transfer'
     setPreparing(true)
     try { await onSave(saved) }
@@ -1784,7 +1790,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }
   }
 
-  async function stageDirectFinanceReview({ summary, operation, operations, storageKey, expectedVersion, surfaceError = false }) {
+  async function stageDirectFinanceReview({ summary, operation, operations, storageKey, expectedVersion, reviewOriginal, surfaceError = false }) {
     if (readOnly) {
       showToast('Finance is read-only for this household member')
       return false
@@ -1807,11 +1813,17 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           reviewedVersion = getAcknowledgedSharedStateVersion(localStorage, storageKey)
         }
       }
-      const result = await prepareDirectAction({
-        summary,
-        operation,
-        operations,
-        expectedVersion: reviewedVersion,
+      const result = await prepareFinanceReview({
+        input:{summary,operation,operations,expectedVersion:reviewedVersion},
+        original:reviewOriginal,
+        prepare:prepareDirectAction,
+        refresh:async () => {
+          await syncSharedState(localStorage)
+          const current = loadData()
+          dataRef.current = current
+          setData(current)
+          return {transactions:current.transactions,version:getAcknowledgedSharedStateVersion(localStorage,storageKey)}
+        },
       })
       if (!result?.proposal?.id) throw new Error('This financial change could not be prepared safely.')
       setStorageError('')
@@ -1894,7 +1906,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   }
 
   const reviewScheduledTransaction = async (tx, options = {}) => {
-    const current = dataRef.current.transactions.find(item => item.id === tx?.id) || null
+    const current = tx?._reviewOriginal || dataRef.current.transactions.find(item => item.id === tx?.id) || null
     const occurrenceDate = options.occurrenceDate || current?.start || tx?.start
     const payload = buildScheduledActionPayload(tx, { current, occurrenceDate })
     if (current && !Object.keys(payload).length) {
@@ -1920,6 +1932,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       },
       storageKey:LS_KEY,
       expectedVersion:Object.hasOwn(tx || {}, '_reviewVersion') ? tx._reviewVersion : undefined,
+      reviewOriginal:tx?._reviewOriginal,
     })
   }
 
