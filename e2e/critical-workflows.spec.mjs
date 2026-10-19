@@ -2933,7 +2933,7 @@ test('Sermon document paste imports files without activating the draft',async({p
   await expect(page.locator('.transcript-filename')).toHaveText('Teaching.docx')
   expect(imports).toHaveLength(2)
   await expect(page.getByRole('heading',{name:'Active teaching',exact:true})).toBeVisible()
-  await expect(page.getByRole('button',{name:'Analyze replacement as draft',exact:true})).toBeEnabled()
+  await expect(page.locator('.sermon-source-card .sermon-generate')).toBeEnabled()
   await field.fill('Manually pasted text')
   await expect(page.locator('.transcript-filename')).toHaveCount(0)
   await expect(field).toHaveValue('Manually pasted text')
