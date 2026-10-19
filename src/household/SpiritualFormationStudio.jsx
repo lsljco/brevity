@@ -34,6 +34,7 @@ export default function SpiritualFormationStudio({draft,update}){
   const fileRef=useRef(null)
   const notesFileRef=useRef(null)
   const analysisControllerRef=useRef(null)
+  const sourceReadRef=useRef(false)
 
   const hasGenerated=Boolean(spiritual.sermonNotes)
   const activeVersion=Number(existingSource.activeVersion||0)
@@ -76,20 +77,7 @@ export default function SpiritualFormationStudio({draft,update}){
     return [existingSource.serviceType,existingSource.sermonDate,existingSource.title].filter(Boolean).join(' · ')
   },[existingSource,hasGenerated])
 
-  const chooseFile=async event=>{
-    const file=event.target.files?.[0]
-    if(!file) return
-    if(!/\.(txt|md|markdown|vtt|srt)$/i.test(file.name)){
-      setError('Upload a text transcript (.txt, .md, .vtt or .srt), or paste the transcript below.')
-      event.target.value=''
-      return
-    }
-    try{
-      setTranscript(await file.text());setFileName(file.name);setSourceKind('transcript');setError('')
-    }catch{
-      setError('Brevity could not read that transcript file.')
-    }
-  }
+  const chooseFile=event=>readSourceFile(event.target.files?.[0], 'transcript')
 
   const generate=async()=>{
     if(!transcript.trim()){
@@ -142,17 +130,39 @@ export default function SpiritualFormationStudio({draft,update}){
     if(notesFileRef.current) notesFileRef.current.value=''
   }
 
-  const chooseNotesFile=async event=>{
-    const file=event.target.files?.[0]
-    if(!file)return
-    if(!/\.(docx|pdf|txt|md|markdown)$/i.test(file.name)){setError('Upload sermon notes as Word (.docx), PDF (.pdf), or text.');event.target.value='';return}
-    setState('reading');setError('')
+  const readSourceFile=async (file,kind='notes')=>{
+    if(!file||sourceReadRef.current||state==='loading')return
+    if(!/\.(docx|pdf|txt|md|markdown|vtt|srt)$/i.test(file.name)){setError('Use a Word (.docx), PDF, or text transcript file. Images and copied links are not documents.');return}
+    if(file.size>4_500_000){setError('Choose a file smaller than 4.5 MB.');return}
+    sourceReadRef.current=true;setState('reading');setError('')
     try{
       const result=/\.(docx|pdf)$/i.test(file.name)?await importSermonNotes(file):{text:await file.text()}
-      setTranscript(result.text);setFileName(file.name);setSourceKind('notes');setState('idle')
-      const inferred=file.name.replace(/\.(docx|pdf|txt|md|markdown)$/i,'').replace(/^\d{2}[.-]\d{2}[.-]\d{4}\s*-\s*/,'').replace(/\s+Sermon(?:\s+Teaching)?\s+Guide$/i,'').trim()
+      if(!result.text?.trim())throw new Error('No readable text was found in this document. Upload a text-based document or paste its text.')
+      setTranscript(result.text);setFileName(file.name);setSourceKind(kind);setState('idle')
+      const inferred=file.name.replace(/\.(docx|pdf|txt|md|markdown|vtt|srt)$/i,'').replace(/^\d{2}[.-]\d{2}[.-]\d{4}\s*-\s*/,'').replace(/\s+Sermon(?:\s+Teaching)?\s+Guide$/i,'').trim()
       if(!title&&inferred)setTitle(inferred)
-    }catch(err){setState('error');setError(err.message||'Brevity could not read those sermon notes.')}
+    }catch(err){setState('error');setError(err.message||'Brevity could not read that document.')}
+    finally{sourceReadRef.current=false}
+  }
+  const chooseNotesFile=event=>readSourceFile(event.target.files?.[0])
+  const pasteFiles=event=>{
+    const files=Array.from(event.clipboardData?.files||[])
+    if(!files.length)return
+    event.preventDefault()
+    if(files.length!==1){setError('Paste one document at a time.');return}
+    void readSourceFile(files[0], /\.(vtt|srt)$/i.test(files[0].name)?'transcript':'notes')
+  }
+  const pasteDocument=async()=>{
+    if(!navigator.clipboard?.read){setError('Press and hold in the field below and choose Paste. If your phone does not share the file, use Upload existing sermon notes.');return}
+    try{
+      const items=await navigator.clipboard.read()
+      const types={'application/pdf':'pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx'}
+      const documents=items.flatMap(item=>{const type=item.types.find(type=>types[type]);return type?[{item,type}]:[]})
+      if(documents.length>1){setError('Paste one document at a time.');return}
+      if(!documents.length){setError('The clipboard did not provide a PDF or Word file. Copy the actual file, or use Upload existing sermon notes. Copied text can still be pasted below.');return}
+      const {item,type}=documents[0]
+      await readSourceFile(new File([await item.getType(type)],`Pasted document.${types[type]}`,{type}))
+    }catch{setError('Clipboard access was unavailable. Press and hold in the field below to paste, or use Upload existing sermon notes.')}
   }
 
   const createSlides=async()=>{
@@ -173,7 +183,7 @@ export default function SpiritualFormationStudio({draft,update}){
 
   return <div className="spiritual-studio" ref={readingRef}>
     <ReadAloud getText={()=>readableText(readingRef.current)} label="Read Spiritual Maturity aloud" contentKey={draft.date}/>
-    <section className="sermon-source-card">
+    <section className="sermon-source-card" onPaste={pasteFiles}>
       <div className="sermon-source-heading">
         <div><span>Sermon Source</span><h3>{hasGenerated?'Active teaching':'Upload the Word that will govern the formation cycle'}</h3><p>{hasGenerated?`${sourceLabel}. This reviewed sermon remains active until a household member explicitly reviews and applies a replacement.`:'Start with a transcript or sermon notes you already have. Brevity will analyze it as a draft; the active teaching changes only after Action Mode review.'}</p></div>
         {hasGenerated&&<div className="sermon-status"><i className="ti ti-circle-check"/> Active source</div>}
@@ -185,15 +195,17 @@ export default function SpiritualFormationStudio({draft,update}){
       </div>
       <div className="transcript-actions">
         <input ref={fileRef} className="transcript-file-input" type="file" accept=".txt,.md,.markdown,.vtt,.srt,text/plain,text/markdown,text/vtt" onChange={chooseFile}/>
-        <button type="button" className="transcript-upload" onClick={()=>fileRef.current?.click()}><i className="ti ti-upload"/> {fileName&&sourceKind==='transcript'?'Replace transcript':'Upload transcript'}</button>
+        <button type="button" className="transcript-upload" disabled={state==='reading'||state==='loading'} onClick={()=>fileRef.current?.click()}><i className="ti ti-upload"/> {fileName&&sourceKind==='transcript'?'Replace transcript':'Upload transcript'}</button>
         <input ref={notesFileRef} className="transcript-file-input" type="file" accept=".docx,.pdf,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={chooseNotesFile}/>
-        <button type="button" className="transcript-upload" disabled={state==='reading'} onClick={()=>notesFileRef.current?.click()}><i className={`ti ${state==='reading'?'ti-loader-2':'ti-file-upload'}`}/> {state==='reading'?'Reading notes…':'Upload existing sermon notes'}</button>
-        {fileName&&<span className="transcript-filename"><i className="ti ti-file-text"/> {fileName}</span>}
-        {(fileName||transcript)&&<button type="button" className="transcript-clear" onClick={clearSource}>Clear</button>}
+        <button type="button" className="transcript-upload" disabled={state==='reading'||state==='loading'} onClick={()=>notesFileRef.current?.click()}><i className={`ti ${state==='reading'?'ti-loader-2':'ti-file-upload'}`}/> {state==='reading'?'Reading notes…':'Upload existing sermon notes'}</button>
+        <button type="button" className="transcript-upload" disabled={state==='reading'||state==='loading'} onClick={pasteDocument}><i className="ti ti-clipboard"/> Paste document</button>
+        {fileName&&<span role="status" className="transcript-filename"><i className="ti ti-file-text"/> {fileName}</span>}
+        {(fileName||transcript)&&<button type="button" className="transcript-clear" disabled={state==='reading'||state==='loading'} onClick={clearSource}>Clear</button>}
       </div>
       <details className="transcript-paste" open={!fileName&&!hasGenerated}>
-        <summary>Paste transcript or sermon notes instead</summary>
-        <textarea value={transcript} onChange={e=>{setTranscript(e.target.value);setSourceKind('transcript')}} placeholder="Paste the Sunday or Wednesday sermon transcript, or existing sermon notes, here…"/>
+        <summary>Paste a document or text instead</summary>
+        <p>Paste one Word, PDF, or text file here (up to 4.5 MB), or paste text. If your phone only copies a link, use Upload.</p>
+        <textarea aria-label="Transcript or sermon notes" disabled={state==='reading'||state==='loading'} value={transcript} onChange={e=>{setTranscript(e.target.value);setFileName('');setSourceKind('transcript')}} placeholder="Paste the Sunday or Wednesday sermon transcript, or existing sermon notes, here…"/>
       </details>
       {error&&<div className="sermon-error" role="alert">{error}</div>}
       <button type="button" className="sermon-generate" disabled={state==='loading'||state==='reading'} onClick={generate}><i className={`ti ${state==='loading'?'ti-loader-2':'ti-sparkles'}`}/> {state==='loading'?'Analyzing a retained draft in the background…':hasGenerated?'Analyze replacement as draft':'Analyze Sermon Notes + Daily Formation'}</button>
