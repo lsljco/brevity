@@ -199,3 +199,26 @@ test('prior-day pending income cannot inflate today’s plan or subsequent balan
   }
   assert.deepEqual({cash,income,bills,next},original)
 })
+
+test('generic LS income and unique exact payroll credit count once across bank states', () => {
+  const plan={...hoa,name:'LS Income',type:'income',amount:8488}
+  const bank={...actual,name:'Pending: Memo Credit GENESCO INC PAYROLL ACH Entry Memo Posted Today',amount:-8488}
+  for (const pending of [true,false]) {
+    const point=forecast([plan],[{...bank,pending}],[{...account,plaidAvailableBalance:6550.85}]).get(today)
+    assert.equal(point.bal,6550.85)
+    assert.equal(point.remainingDelta,0)
+    assert.equal(point.realization[0].statuses[0].status,pending?'pending':'posted')
+  }
+  const currentOnly=forecast([plan],[{...bank,pending:true}]).get(today)
+  assert.equal(currentOnly.bal,13088)
+  assert.equal(currentOnly.remainingDelta,0)
+})
+test('generic payroll match rejects ambiguity, transfers, variance, wrong account and other dates', () => {
+  const plan={...hoa,name:'LS Income',type:'income',amount:8488}
+  const bank={...actual,name:'GENESCO INC PAYROLL',amount:-8488}
+  for (const row of [ {...bank,name:'OLB Transfer GENESCO PAYROLL'}, {...bank,amount:-8487}, {...bank,accountId:'other'}, {...bank,date:date(-1)}, {...bank,name:'Refund PAYROLL'} ]) {
+    assert.equal(forecast([plan],[row]).get(today).remainingDelta,8488)
+  }
+  assert.equal(forecast([plan,{...plan,id:'second'}],[bank]).get(today).remainingDelta,16976)
+  assert.equal(forecast([plan],[bank,{...bank,id:'second'}]).get(today).remainingDelta,8488)
+})

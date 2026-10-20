@@ -1642,8 +1642,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
   const cashForecastProjection = useMemo(() => buildOutstandingCashForecast(
     forecastScope.accounts, forecastScope.transactions, cashForecastActuals,
-    { reconcile:showActuals, reconstructedBalances:historicalBals, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
-  ), [forecastScope, cashForecastActuals, showActuals, historicalBals])
+    { reconcile:true, reconstructedBalances:historicalBals, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
+  ), [forecastScope, cashForecastActuals, historicalBals])
   const forecastTodayPlanUnresolved = Boolean(cashForecastProjection.get(toISO(getHouseholdCalendarDate()))?.unmatchedCount)
 
   // Balance history is only comparable when every selected account is in the
@@ -4651,14 +4651,14 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           Today
         </button>
         <button onClick={toggleActuals} disabled={actualsLoading} aria-pressed={showActuals}
-          aria-label={actualsLoading ? 'Loading bank activity' : `${showActuals ? 'Stop reconciling' : 'Reconcile'} with bank for ${monthName}`}
+          aria-label={actualsLoading ? 'Loading bank activity' : `${showActuals ? 'Hide' : 'Show'} bank activity for ${monthName}`}
           style={{ padding: '5px 10px', cursor: actualsLoading ? 'default' : 'pointer', borderRadius: 8, fontSize: 12,
             border: showActuals ? '1px solid rgba(197,164,109,0.55)' : '1px solid var(--glass-border)',
             background: showActuals ? 'rgba(197,164,109,0.18)' : 'transparent',
             color: showActuals ? 'var(--gold)' : 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
              style={{ fontSize: 11, animation: actualsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
-          {actualsLoading ? 'Loading bank activity…' : `${showActuals ? 'Using bank snapshot' : 'Reconcile with bank'} (${monthBankCount})`}
+          {actualsLoading ? 'Loading bank activity…' : `${showActuals ? 'Hide bank activity' : 'Show bank activity'} (${monthBankCount})`}
           {actualsError && <span style={{ fontSize: 10, color: 'var(--expense-color)', marginLeft: 4 }} title={actualsError}>⚠ Error</span>}
         </button>
       </div>

@@ -16,6 +16,16 @@ function sameIncomeSource(plan, actual) {
   })
 }
 
+// Generic household labels can lack an employer name. Only an exact same-day
+// payroll credit is eligible; the one-to-one edge check below rejects ambiguity.
+function genericPayrollMatch(plan, actual) {
+  const words = normalizeMerchantName(plan).split(' ').filter(word => word.length >= 4 && !genericIncomeWords.has(word))
+  const description = [actual.name, actual.originalStatement, actual.original_description].filter(Boolean).join(' ').toLowerCase()
+  return plan.type === 'income' && words.length === 0
+    && /\b(payroll|salary)\b/.test(description)
+    && !/\b(transfer|refund|reversal)\b/.test(description)
+}
+
 // Read-only realization of individual occurrences. Bank IDs are consumed once;
 // amount/date alone never establishes that a scheduled payment has cleared.
 export function buildOutstandingCashForecast(accounts, transactions, actuals = [], options = {}) {
@@ -57,6 +67,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     // A unique same-day source identity can reconcile a different posted amount.
     if (!exactDate && candidate.leg.amount !== cents(actual.amount)) return false
     if (candidate.plan.vendorId && actual.vendorId) return candidate.plan.vendorId === actual.vendorId
+    if (exactDate && candidate.leg.amount === cents(actual.amount) && genericPayrollMatch(candidate.plan, actual)) return true
     const name = normalizeMerchantName(candidate.plan)
     return Boolean(name && (name === normalizeMerchantName(actual) || (exactDate && candidate.plan.type === 'income' && sameIncomeSource(candidate.plan,actual))))
   }
