@@ -627,6 +627,7 @@ test('Today reflects inventory source exceptions and clears them after a newer s
     return route.fulfill({status:200,json:{records:{[key]:{key,version:quantity,value:JSON.stringify({items:[{id:'inventory-audit-source',name:'Audit paper towels',quantity,parLevel:4,unit:'rolls'}],waste:[]}),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}})
   })
   await page.reload();await openTodayDetails(page)
+  await page.getByRole('button',{name:'Household',exact:true}).click()
   await expect(page.getByRole('region',{name:'Needs your attention'})).toContainText('Replenish Audit paper towels')
   await expect(page.getByRole('region',{name:'Needs your attention'})).not.toContainText('No household items need attention')
   await page.getByRole('button',{name:'Review source for Replenish Audit paper towels',exact:true}).click()
@@ -634,6 +635,7 @@ test('Today reflects inventory source exceptions and clears them after a newer s
   await page.getByRole('button',{name:'Back to Today',exact:true}).click()
   quantity=5
   await page.reload();await openTodayDetails(page)
+  await page.getByRole('button',{name:'Household',exact:true}).click()
   await expect(page.getByRole('region',{name:'Needs your attention'})).not.toContainText('Replenish Audit paper towels')
 })
 
@@ -816,10 +818,11 @@ test('Today has one focus editor in the focus card and does not repeat the prima
   await expect(focus.getByRole('button',{name:'Edit focus',exact:true})).toBeVisible()
   await expect(page.getByRole('button',{name:'Set today’s focus',exact:true})).toHaveCount(0)
   await expect(page.getByRole('button',{name:'Edit focus',exact:true})).toHaveCount(1)
-  const priorities=focus.locator('.today-outcome-summary')
-  await expect(priorities.getByRole('button',{name:'Edit focus',exact:true})).toHaveCount(0)
-  const title=await focus.locator('.today-primary-focus').innerText()
-  await expect(priorities.getByText(title,{exact:true})).toHaveCount(0)
+  const bubbles=focus.locator('.today-focus-bubbles li strong')
+  await expect(bubbles.first()).toBeVisible()
+  const titles=await bubbles.allTextContents()
+  expect(new Set(titles).size).toBe(titles.length)
+  await expect(focus.locator('.today-primary-focus')).toHaveCount(0)
 })
 
 test('household archive searches saved history and displays source coverage', async ({page})=>{

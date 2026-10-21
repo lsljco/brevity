@@ -38,3 +38,9 @@ test('a unique saved focus leads equally urgent flexible work while active and u
  assert.equal(build([other,{...focus,date:'2026-10-15'}]).suggested.id,'taxes')
  assert.equal(build([other,focus,{...focus,id:'duplicate'}]).suggested.id,'taxes')
 })
+
+test('household attention shows shared exceptions without adding them to personal attention',()=>{
+ const input={plan:{date,household:{priorities:[{id:'shared',title:'Shared blocker',owner:'Family'}]}},agenda:{items:[],priorities:[]},member,signals:[{id:'stock',title:'Replenish supplies',owner:'Terica',action:'inventory'}]}
+ assert.deepEqual(dailyGuidance(input).attention,[])
+ assert.deepEqual(dailyGuidance({...input,scope:'household'}).attention.map(x=>x.id),['stock','shared'])
+})
