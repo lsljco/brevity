@@ -54,13 +54,20 @@ export function recoverSharedStorageCapacity(storage) {
   for(const key of keys){try{storage.removeItem(key);removed.push(key)}catch{/* continue with any other recoverable cache */}}
   return removed
 }
+function storageCapacityError(cause) {
+  const error=new Error('Brevity cannot finish household sync because this browser’s storage is full. Keep this tab open and do not clear website data while local changes may be unsynced.')
+  error.name='QuotaExceededError'
+  error.code='HOUSEHOLD_STORAGE_FULL'
+  error.cause=cause
+  return error
+}
 export function setSharedStorageItem(storage, key, value) {
   try { storage.setItem(key,value);return{recovered:false,removed:[]} }
   catch(error){
     if(!isSharedStorageQuotaError(error))throw error
     const removed=recoverSharedStorageCapacity(storage)
-    if(!removed.length)throw error
-    storage.setItem(key,value)
+    if(!removed.length)throw storageCapacityError(error)
+    try { storage.setItem(key,value) } catch(retryError) { throw isSharedStorageQuotaError(retryError)?storageCapacityError(retryError):retryError }
     return{recovered:true,removed}
   }
 }
@@ -196,11 +203,30 @@ export function shouldUploadSharedWrite() {
   return false
 }
 
+
+// A previously acknowledged snapshot is already synchronized; an
+// unacknowledged local edit must be backed up successfully before replacement.
+function preserveLocalRecord(storage,key,value) {
+  if(readMeta(storage)?.[key]?.hash===hashValue(value))return
+  setSharedStorageItem(storage,`${key}_local_backup_before_cloud`,value)
+}
+function reclaimVerifiedDuplicates(storage,remoteRecords) {
+  for(const key of SHARED_STATE_KEYS) {
+    const remote=remoteRecords[key]
+    if(typeof remote?.value!=='string')continue
+    for(const suffix of ['_backup','_local_backup_before_cloud']) {
+      const backupKey=key+suffix
+      // Exact content comparison with this server response, never a hash alone.
+      if(storage.getItem(backupKey)===remote.value)storage.removeItem(backupKey)
+    }
+  }
+}
+
 function applyServerRecord(storage, record) {
   if (!record?.key || !SHARED_STATE_KEY_SET.has(record.key) || typeof record.value !== 'string') return false
   const localValue = storage.getItem(record.key)
   if (localValue != null && localValue !== record.value) {
-    try { storage.setItem(`${record.key}_local_backup_before_cloud`, localValue) } catch {}
+    preserveLocalRecord(storage,record.key,localValue)
   }
   suppressWriteThrough = true
   try { setSharedStorageItem(storage,record.key,record.value) } finally { suppressWriteThrough = false }
@@ -429,7 +455,7 @@ export async function persistSharedSourceImport(storage, key, value, nowOrOption
 
     try {
       applyServerRecord(storage, result.record)
-      try { storage.setItem(`${normalizedKey}_backup`, serialized) } catch {}
+      // The server has acknowledged this exact snapshot; avoid a redundant local copy.
     } catch (error) {
       updateHealth(storage, { status:'degraded', lastErrorAt:new Date().toISOString(), lastError:error.message || 'The acknowledged source snapshot could not be cached locally.' })
       dispatchSyncError(error, normalizedKey)
@@ -457,6 +483,7 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
   const recoveredCaches = new Set()
   suppressWriteThrough = true
   try {
+    reclaimVerifiedDuplicates(storage,remoteRecords)
     SHARED_STATE_KEYS.forEach(key => {
       const localValue = storage.getItem(key)
       const remote = remoteRecords[key]
@@ -467,7 +494,7 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
       // synchronization; preserve a backup and apply the reviewed server copy.
       if (remote && typeof remote.value === 'string') {
         if (localValue != null && localValue !== remote.value) {
-          try { storage.setItem(`${key}_local_backup_before_cloud`, localValue) } catch {}
+          preserveLocalRecord(storage,key,localValue)
         }
         const cacheRecovery=setSharedStorageItem(storage,key,remote.value)
         cacheRecovery.removed.forEach(cacheKey=>recoveredCaches.add(cacheKey))
@@ -481,7 +508,7 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
       // Preserve it under an explicit recovery key, then remove it from the
       // live key. Otherwise every refresh re-reports the same browser-only
       // value and feature readers can mistake it for synchronized truth.
-      try { storage.setItem(`${key}_local_backup_before_cloud`, localValue) } catch {}
+      setSharedStorageItem(storage,`${key}_local_backup_before_cloud`,localValue)
       try { storage.removeItem(key) } catch {}
       delete meta[key]
       blockedLocal.push(key)
