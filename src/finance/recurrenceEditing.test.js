@@ -105,3 +105,11 @@ test('moving a monthly rental earlier changes only the chosen charge and preserv
   assert.equal(result.upserts[1].amount, 1240)
   assert.throws(() => editRecurringOccurrence(rental, {}, '2026-10-07', 'future', ()=>'invalid', '2026-10-06'), /choose “This item only”/)
 })
+
+test('one-time mortgage can move earlier even under a legacy series scope', () => {
+  const mortgage={id:'mortgage',name:'Mortgage',freq:'once',start:'2026-10-21',end:'2026-10-21',amount:11355.71,type:'expense',acct:'cash'}
+  for (const scope of ['one','future']) {
+    const result=editRecurringOccurrence(mortgage,{},mortgage.start,scope,()=>{throw Error('Must retain ID')},'2026-10-20')
+    assert.deepEqual(result,{upserts:[{...mortgage,start:'2026-10-20',end:'2026-10-20'}],deleteIds:[]})
+  }
+})

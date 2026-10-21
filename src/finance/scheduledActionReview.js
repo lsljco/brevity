@@ -27,6 +27,11 @@ export function buildScheduledActionPayload(transaction, { current = null, occur
   const desired = normalizedScheduledFields(transaction, targetDate)
   if (!current) return desired
 
+  // A one-time item's end follows its date in the executor. Including that
+  // derived field would incorrectly promote a date move to a series edit.
+  if (current.freq === 'once' && desired.frequency === 'once' && desired.endDate === desired.date) {
+    desired.endDate = text(current.end)
+  }
   const baseline = normalizedScheduledFields(current, targetDate)
   baseline.date = targetDate
   return Object.fromEntries(Object.entries(desired).filter(([field, value]) => value !== baseline[field]))
