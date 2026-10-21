@@ -1,3 +1,4 @@
+import { sermonDateError } from '../lib/calendar-date.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
 import '../lib/native-runtime.mjs'
 import { getStore } from '../lib/scoped-store.mjs'
@@ -80,6 +81,8 @@ export function createMinistrySermonWorkspaceHandler({ authenticate=readSession,
         return reply(200,{workspace:updated,sermonId})
       }
       if (!validate(body)) return reply(400,{error:'Invalid series or sermon data.'})
+      const dateError=body.sermons.map(sermonDateError).find(Boolean)
+      if(dateError)return reply(400,{error:dateError})
       const current=(await dataStore.get(key,{type:'json'})) || empty
       if (body.baseRevision !== current.revision) return reply(409,{error:'Another member saved a newer version. Reload to review it before saving.',workspace:current})
       const updated={ schemaVersion:1, revision:current.revision+1, series:body.series, sermons:body.sermons, updatedAt:now().toISOString(), updatedBy:session.member }
