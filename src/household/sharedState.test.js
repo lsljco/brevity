@@ -480,3 +480,28 @@ test('record construction retains the exact acknowledged CAS version', () => {
     key:'plaid_actuals_cache', value, hash:hashValue(value), updatedAt:'2026-09-07T15:00:00.000Z', expectedVersion:9,
   })
 })
+
+test('quota failure preserves a browser-only record when its recovery backup cannot be written',()=>{
+ const storage=memoryStorage({homehq_items_v1:'unsynced work'})
+ storage.setItem=()=>{const error=new Error('The quota has been exceeded.');error.name='QuotaExceededError';throw error}
+ assert.throws(()=>reconcileSharedRecords(storage,{}),error=>error.code==='HOUSEHOLD_STORAGE_FULL')
+ assert.equal(storage.getItem('homehq_items_v1'),'unsynced work')
+})
+test('quota failure does not overwrite local work with remote state when backup fails',()=>{
+ const storage=memoryStorage({homehq_items_v1:'unsynced work'})
+ storage.setItem=()=>{const error=new Error('The quota has been exceeded.');error.name='QuotaExceededError';throw error}
+ assert.throws(()=>reconcileSharedRecords(storage,{homehq_items_v1:{value:'remote',version:1}}),/browser’s storage is full/)
+ assert.equal(storage.getItem('homehq_items_v1'),'unsynced work')
+})
+test('sync removes only backups identical to a fetched server record',()=>{
+ const storage=memoryStorage({homehq_items_v1:'remote',homehq_items_v1_backup:'remote',homehq_items_v1_local_backup_before_cloud:'unique local edit'})
+ reconcileSharedRecords(storage,{homehq_items_v1:{value:'remote',version:1}})
+ assert.equal(storage.getItem('homehq_items_v1_backup'),null)
+ assert.equal(storage.getItem('homehq_items_v1_local_backup_before_cloud'),'unique local edit')
+})
+test('acknowledged records do not create another snapshot on every sync',()=>{
+ const storage=memoryStorage({homehq_items_v1:'old',brevity_shared_state_meta_v1:JSON.stringify({homehq_items_v1:{hash:hashValue('old'),version:1}})})
+ reconcileSharedRecords(storage,{homehq_items_v1:{value:'new',version:2}})
+ assert.equal(storage.getItem('homehq_items_v1'),'new')
+ assert.equal(storage.getItem('homehq_items_v1_local_backup_before_cloud'),null)
+})
