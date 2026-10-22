@@ -263,6 +263,7 @@ test('Today and Tomorrow alignment include Finance-style meeting capture and rev
 })
 
 test('Today groups unresolved household priorities under the attention question',async({page})=>{
+  await page.getByRole('button',{name:'Household',exact:true}).click()
   const panel=page.getByRole('region',{name:'Needs your attention',exact:true})
   await expect(panel.getByRole('heading',{name:'What needs my attention?'})).toBeVisible()
   const more=panel.locator('details > summary').filter({hasText:'More decisions and blockers'})
@@ -702,11 +703,11 @@ test('iPhone Cash Forecast keeps Finance context visible without covering its mo
   await closeMenuIfMobile(page,testInfo)
 
   await expect(page.getByRole('heading',{name:'Cash Forecast',exact:true})).toBeVisible()
-  await expect(page.getByRole('button',{name:/Reconcile with bank for /})).toBeVisible()
+  await expect(page.getByRole('button',{name:/^(Show|Hide) bank activity for /})).toBeVisible()
   await expect(page.getByText('Dates / Timeframe',{exact:true})).toHaveCount(0)
   await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText('Scheduled')
   await expect(page.locator('.finance-calendar-mobile-agenda')).toContainText(/(?:Balance from posted activity|Current bank balance|Last saved bank balance|Forecast balance)/)
-  await page.getByRole('button',{name:/Reconcile with bank for /}).click()
+  await page.getByRole('button',{name:/^(Show|Hide) bank activity for /}).click()
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   await expect(agenda).toContainText('Bank activity')
   await expect(agenda).toContainText('Posted · Transfer · PAYMENT TO CAPITAL ONE')
@@ -2132,7 +2133,8 @@ test('Apple source filters isolate Family, Terica and Nyla in Today and Family C
   }
   const todayCalendar=page.locator('.today-calendar-agenda')
   await expect(todayCalendar).toContainText('Shared source fixture')
-  await expect(todayCalendar).not.toContainText('Terica source fixture')
+  // Larry is explicitly a participant; the full calendar still filters by source.
+  await expect(todayCalendar).toContainText('Terica source fixture')
   await expect(todayCalendar).not.toContainText('Nyla source fixture')
   await expect(todayCalendar.getByRole('group',{name:'Calendars to show'})).toHaveCount(0)
   await openMenuIfMobile(page,testInfo)
@@ -2401,8 +2403,8 @@ test('Cash Forecast separates current cash from outstanding expenses and pending
   const summary=page.getByRole('region',{name:'Current and projected cash'})
   await expect(summary).toBeVisible()
   await expect(summary).toContainText('$4,600.00')
-  await expect(summary).toContainText('$3,225.00')
-  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
+  await expect(summary).toContainText('$3,125.00')
+  await page.getByRole('button',{name:/^(Show|Hide) bank activity for /}).click()
   await expect(summary).toContainText('−$100.00')
   await expect(summary).toContainText('−$1,375.00')
   await expect(summary).toContainText('$3,125.00')
@@ -2421,9 +2423,9 @@ test('Cash Forecast uses available cash without subtracting stale pending holds 
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const summary=page.getByRole('region',{name:'Current and projected cash'})
   await expect(summary).toBeVisible()
-  await expect(summary).toContainText('$4,600.00')
-  await expect(summary).toContainText('$3,225.00')
-  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
+  await expect(summary).toContainText('$4,300.00')
+  await expect(summary).toContainText('$2,925.00')
+  await page.getByRole('button',{name:/^(Show|Hide) bank activity for /}).click()
   await expect(summary).toContainText('+$0.00')
   await expect(summary).toContainText('Last saved available balance')
   await expect(summary).toContainText('Estimated forecast:')
@@ -2504,7 +2506,7 @@ test('ordinary app refresh never requests a paid Plaid update',async({page})=>{
   expect(requests.filter(url=>url.searchParams.get('live')==='1'||url.searchParams.get('refresh')==='1')).toEqual([])
 })
 
-test('cash forecast reconciliation changes the balance rather than only showing bank rows',async({page},testInfo)=>{
+test('cash forecast bank visibility never changes balances or double counts posted income',async({page},testInfo)=>{
  const today=dateKey(),updatedAt=new Date().toISOString()
  const oldDate=new Date(Date.parse(`${today}T12:00:00Z`)-10*86400000).toISOString().slice(0,10)
  const finance={calendarDataVersion:6,accounts:[{id:'cash',name:'Operating Account',type:'checking',balance:4600,plaidCurrentBalance:4600,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking'}],transactions:[
@@ -2523,17 +2525,17 @@ test('cash forecast reconciliation changes the balance rather than only showing 
  await page.getByRole('button',{name:'Cash Forecast',exact:true}).click()
  await closeMenuIfMobile(page,testInfo)
  const balances=page.getByRole('region',{name:'Current and projected cash'})
- await expect(balances).toContainText('$3,600.00')
- await expect(balances).toContainText('$3,025.00')
- if(testInfo.project.name!=='iphone')await expect(page.locator('.cal-cell.is-today')).toContainText('Projected $3,025')
- await expect(balances).toContainText('Estimated opening balance')
- await expect(balances).toContainText('Excluded from today’s projection')
- await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
  await expect(balances).toContainText('$4,600.00')
  await expect(balances).toContainText('$3,225.00')
  if(testInfo.project.name!=='iphone')await expect(page.locator('.cal-cell.is-today')).toContainText('Projected $3,225')
- await page.getByRole('button',{name:/^Stop reconciling with bank for /}).click()
- await expect(balances).toContainText('$3,025.00')
+ await expect(balances).toContainText('Last saved bank balance')
+ await expect(balances).toContainText('Excluded from today’s projection')
+ await page.getByRole('button',{name:/^(Show|Hide) bank activity for /}).click()
+ await expect(balances).toContainText('$4,600.00')
+ await expect(balances).toContainText('$3,225.00')
+ if(testInfo.project.name!=='iphone')await expect(page.locator('.cal-cell.is-today')).toContainText('Projected $3,225')
+ await page.getByRole('button',{name:/^(Show|Hide) bank activity for /}).click()
+ await expect(balances).toContainText('$3,225.00')
 })
 
 test('Meal Ideas compares ingredients, images and per-serving macros then saves only the selected recipe',async({page},testInfo)=>{
@@ -2850,7 +2852,7 @@ test('Cash Forecast planned balance excludes prior-day pending income carryover'
   await expect(summary).not.toContainText('$9,305.87')
   await expect(summary).not.toContainText('Earlier scheduled activity settling now')
   const writesBeforeToggle=writes
-  await page.getByRole('button',{name:/^Reconcile with bank for /}).click()
+  await page.getByRole('button',{name:/^(Show|Hide) bank activity for /}).click()
   await expect(summary).toContainText('$4,910.20')
   await expect(summary).toContainText('Additional pending adjustment')
   expect(writes).toBe(writesBeforeToggle)
