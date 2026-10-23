@@ -36,6 +36,8 @@ const PILLAR_META = {
   ministry: ['Ministry & Fellowship', 'ti-users'],
 }
 
+function TodayBills(props) { return <TodayFinanceBrief {...props} compact/> }
+
 function formatDate(dateKey) {
   const date = new Date(`${dateKey}T12:00:00`)
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
@@ -279,10 +281,11 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
   return <div className="today-dashboard">
     <WeatherHeader date={dailyPlan.date}/>
     <nav className="today-quick-actions" aria-label="Today planning actions"><button onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'}>Review Scheduled Draft</button><button onClick={()=>setShowDecisions(true)}>Review decisions</button>
-      {!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}
+      {browsingDate&&<button disabled={readOnly} onClick={onStartTodayAlignment}>Adjust this day’s plan</button>}{!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}
     </nav>
     {courseConversation}
-    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1></header>:<TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
+    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1><p>{dailyPlan.household?.keyFocus || 'No focus saved for this day.'}</p><ul>{(dailyPlan.household?.priorities||[]).map((item,index)=><li key={item.id||index}>{typeof item==='string'?item:item.title}</li>)}</ul></header>:<TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
+    <TodayBills date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
     {!browsingDate&&<HouseholdCheckin key={currentMember} currentMember={currentMember}/>}
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
 

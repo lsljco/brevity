@@ -1,0 +1,70 @@
+/* Shared, restrained surfaces; existing domain components retain their controls. */
+:root { --life-line:rgba(197,164,109,.22); --life-surface:rgba(25,25,24,.91); }
+[data-theme="dark"] .app-main { background:radial-gradient(ellipse at 85% 0%,#292820 0,transparent 45%),#101211; }
+[data-theme="dark"] .app-sidebar { background:#111412; border-right:1px solid var(--life-line); }
+.app-main h1,.life-workspace h2 { font-family:'Book Antiqua',Palatino,'Palatino Linotype',Georgia,serif; font-weight:400; letter-spacing:-.025em; }
+.app-main :is(button,a,input,select,textarea):focus-visible { outline:2px solid var(--gold); outline-offset:4px; }
+.life-workspace { max-width:1440px; margin:auto; padding:clamp(18px,3vw,48px); }
+.app-main[data-life-view="home"]>.app-context-navigation,.app-main[data-life-view="home"]>.app-archive-entry { display:none; }
+.life-home-tools { margin:0 clamp(18px,3vw,48px) 32px; border-top:1px solid var(--life-line); padding:20px 0; }
+.life-home-tools>summary { cursor:pointer; color:var(--gold); padding:12px 0; }
+.life-hero { padding:clamp(28px,5vw,76px) clamp(22px,4vw,56px); border:1px solid var(--life-line); border-radius:24px; background:linear-gradient(90deg,rgba(12,17,15,.8),rgba(12,17,15,.15)),url('/imagery/home-lounge.webp') center/cover; color:#f4f1e9; }
+.life-hero h1 { font-size:clamp(32px,4vw,58px); line-height:1.13; margin:14px 0 18px; }
+.life-hero p:last-child { max-width:540px; font-size:17px; line-height:1.6; color:#dedbd3; }
+.life-eyebrow { text-transform:uppercase; letter-spacing:.2em; color:var(--gold); font-size:11px; font-weight:600; }
+.life-destinations { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:28px 0; }
+.life-destination { min-width:0; display:flex; align-items:center; gap:18px; text-align:left; color:inherit; border:1px solid var(--life-line); background:var(--life-surface); border-radius:18px; padding:28px 22px; cursor:pointer; transition:border-color .2s,transform .2s; }
+.life-destination:hover { border-color:var(--gold); transform:translateY(-2px); }
+.life-destination-copy { display:flex; align-items:center; gap:18px; width:100%; }
+.life-destination-copy>i:first-child { color:var(--gold); font-size:25px; }
+.life-destination-copy>i:last-child { margin-left:auto; color:var(--gold); }
+.life-destination--photo { display:block; padding:0!important; overflow:hidden; }
+.life-destination--photo>img { width:100%; height:clamp(140px,16vw,220px); object-fit:cover; display:block; }
+.life-destination--photo .life-destination-copy { padding:24px 20px; box-sizing:border-box; }
+.today-overview>header,.today-dashboard>.today-hero { padding:clamp(24px,4vw,48px); border-radius:20px; background:linear-gradient(90deg,rgba(9,15,12,.88),rgba(9,15,12,.32)),url('/imagery/home-lounge.webp') center/cover; color:#f5f1e8; min-height:180px; }
+.today-overview>header h1 { color:#f5f1e8; }
+.life-hero--household { background-position:center 65%; }
+.app-main[data-life-pillar="spiritual"] .pillar-analysis-hero,.app-main[data-life-pillar="ministry"] .pillar-analysis-hero { background:linear-gradient(90deg,rgba(9,15,12,.9),rgba(9,15,12,.55)),url('/imagery/garden-path.webp') center/cover; color:#f5f1e8; }
+.app-main[data-life-pillar="health"] .pillar-analysis-hero,.estate-header { background:linear-gradient(90deg,rgba(9,15,12,.9),rgba(9,15,12,.55)),url('/imagery/home-lounge.webp') center/cover; color:#f5f1e8; }
+.life-destination span { display:grid; gap:10px; }
+.life-destination strong { font-family:'Book Antiqua',Palatino,Georgia,serif; font-size:23px; font-weight:400; }
+.life-destination small { font-size:13px; line-height:1.6; color:#bdbdb3; }
+.life-destinations--primary .life-destination { min-height:180px; }
+.life-tabs { display:flex; gap:28px; border-bottom:1px solid var(--life-line); margin-top:24px; overflow-x:auto; }
+.life-tabs button { background:none; color:inherit; border:0; border-bottom:2px solid transparent; padding:18px 8px; font-size:15px; cursor:pointer; }
+.life-tabs button[aria-current] { color:var(--gold); border-color:var(--gold); }
+.life-workspace-nav { display:flex; gap:8px; overflow-x:auto; padding:12px 4px 18px; margin:0 0 16px; border-bottom:1px solid var(--life-line); scrollbar-width:thin; }
+.life-workspace-nav button { flex:0 0 auto; min-height:44px; padding:10px 16px; background:transparent; color:inherit; border:1px solid transparent; border-radius:24px; cursor:pointer; }
+.life-workspace-nav button[aria-current] { border-color:var(--life-line); color:var(--gold); background:var(--life-surface); }
+.family-calendar-day-number button { background:none; color:inherit; font:inherit; border:0; min-width:44px; min-height:44px; cursor:pointer; }
+.today-bills-glance { display:flex; flex-wrap:wrap; align-items:center; gap:18px; margin:20px 0; padding:20px 24px; border:1px solid var(--life-line); border-radius:16px; background:var(--life-surface); }
+.today-bills-glance header { flex:1; min-width:180px; }
+.today-bills-glance h2 { margin:0 0 8px; font-size:19px; }
+.today-bills-glance p { margin:0; font-size:13px; }
+.today-bills-glance ul { display:flex; flex-wrap:wrap; gap:12px 24px; list-style:none; padding:0; margin:0; }
+.today-bills-glance li { display:grid; gap:5px; font-size:13px; }
+.today-bills-glance button { background:none; border:1px solid var(--life-line); color:var(--gold); border-radius:10px; min-height:44px; padding:10px 16px; cursor:pointer; }
+.life-concierge { display:flex; align-items:center; gap:18px; width:100%; padding:22px; border-radius:16px; border:1px solid var(--life-line); background:var(--life-surface); color:var(--gold); text-align:left; cursor:pointer; font-size:15px; }
+.life-concierge>i:last-child { margin-left:auto; }
+.life-pillars { margin-top:52px; scroll-margin-top:30px; }
+.life-pillars h2 { font-size:34px; margin:12px 0 24px; }
+.life-pillars>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.life-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:16px; margin-top:36px; }
+.life-footer button { border:0; background:none; color:var(--gold); padding:12px 0; cursor:pointer; }
+.life-shared-focus { margin:28px 0; padding:12px 0; }
+.life-shared-focus h2 { font-size:clamp(24px,3vw,36px); max-width:850px; }
+.life-shared-focus button { background:none; border:0; color:var(--gold); padding:12px 0; cursor:pointer; }
+.life-date-nav { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:16px 0; margin-bottom:20px; border-bottom:1px solid var(--life-line); }
+.life-date-nav button,.life-date-nav input { min-height:44px; border:1px solid var(--life-line); border-radius:10px; padding:9px 14px; background:var(--life-surface); color:inherit; font:inherit; }
+.life-date-nav label { display:flex; align-items:center; gap:12px; }
+.life-date-nav button { cursor:pointer; }
+[data-theme="dark"] .app-main :is(.today-section,.today-next-step,.pillar-analysis-section,.maintenance-day,.household-operations-tabs) { background:var(--life-surface); border-color:var(--life-line); border-radius:18px; }
+[data-theme="dark"] .app-main :is(.finance-card,.estate-sections>article,.estate-vault-list,.daily-fitness-workout,.fitness-exercise-card,.meal-day,.learning-card,.settings-page>section) { background:var(--life-surface); border-color:var(--life-line); border-radius:18px; }
+.app-main :is(.pillar-analysis-hero,.estate-header,.daily-fitness-header,.household-maintenance-header) { padding:clamp(20px,3vw,40px); border:1px solid var(--life-line); border-radius:20px; margin-bottom:24px; }
+.app-main :is(.pillar-analysis-hero,.estate-header,.daily-fitness-header,.household-maintenance-header) h1 { font-size:clamp(30px,3.4vw,48px); line-height:1.16; }
+.app-main :is(.pillar-analysis-section,.estate-vault-list,.daily-fitness-workout) { padding:clamp(18px,2.5vw,32px); }
+[data-theme="light"] { --life-surface:#fffdf8; --life-line:rgba(110,88,45,.23); }
+[data-theme="light"] .life-destination small { color:#625e52; }
+@media(max-width:1000px) { .life-destinations { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:640px) { .mobile-app-nav { grid-template-columns:repeat(4,1fr); } .life-destinations,.life-pillars>div { grid-template-columns:1fr; } .life-workspace { padding:16px 8px; } .life-destinations--primary .life-destination { min-height:110px; } .life-destination { padding:22px 18px; } .life-date-nav { gap:8px; } .life-date-nav label span { display:none; } }
+@media(prefers-reduced-motion:reduce) { .life-destination { transition:none; } .life-destination:hover { transform:none; } }

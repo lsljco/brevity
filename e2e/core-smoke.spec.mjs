@@ -100,6 +100,45 @@ test('seven pillars remain in the approved order', async ({ page }) => {
   ])
 })
 
+test('daily date browsing edits the selected plan and returns to today', async ({ page }) => {
+  const picker=page.getByLabel('Daily plan date',{exact:true})
+  await picker.fill('2026-02-17')
+  await expect(page.locator('.today-hero')).toContainText('February 17')
+  await expect(page.locator('.today-bills-glance')).toContainText('2026-02-17')
+  await page.getByRole('button',{name:'Adjust this day’s plan',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Adjust this day',exact:true})).toBeVisible()
+  await expect(page.locator('.morning-alignment-header')).toContainText('2026-02-17')
+  await page.getByRole('button',{name:'Next day',exact:true}).click()
+  await expect(picker).toHaveValue('2026-02-18')
+  await expect(page.locator('.today-hero')).toContainText('February 18')
+  await page.locator('.life-date-nav').getByRole('button',{name:'Today',exact:true}).click()
+  await expect(picker).toHaveValue(today())
+  await expect(page.locator('.today-overview')).toBeVisible()
+})
+
+test('Home and Household destinations remain usable without horizontal overflow', async ({ page },testInfo) => {
+  const nav=page.locator(testInfo.project.name==='iphone'?'.mobile-app-nav':'.sidebar-nav')
+  await nav.getByRole('button',{name:'Home',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Welcome home, Larry.'})).toBeVisible()
+  await page.screenshot({path:testInfo.outputPath('home.png')})
+  await page.getByRole('button',{name:/Our household Shared responsibilities/}).click()
+  await expect(page.getByRole('heading',{name:'Household',exact:true})).toBeVisible()
+  await page.screenshot({path:testInfo.outputPath('household.png')})
+  await page.getByRole('navigation',{name:'Household sections'}).getByRole('button',{name:'Manage',exact:true}).click()
+  await page.getByRole('button',{name:/Supplies & inventory What/}).click()
+  await expect(page.locator('.household-operations-shell')).toBeVisible()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth+1)).toBe(true)
+})
+
+test('calendar dates open the matching daily plan',async({page})=>{
+  await page.getByRole('button',{name:'Open calendar',exact:true}).click()
+  await page.getByRole('button',{name:'Month',exact:true}).click()
+  const date=`${today().slice(0,7)}-01`
+  await page.getByRole('button',{name:`Review plan for ${date}`,exact:true}).click()
+  await expect(page.getByLabel('Daily plan date',{exact:true})).toHaveValue(date)
+  await expect(page.locator('.today-bills-glance')).toContainText(date)
+})
+
 test('Today displays every recorded Pillar 7 prayer request', async ({ page }) => {
   const prayers = Array.from({ length:14 }, (_, index) => `Household prayer request ${index + 1}`)
   await page.route('**/.netlify/functions/household-data?*', async route => {
@@ -163,7 +202,7 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
     await expect(page.locator('#primary-navigation-drawer')).toHaveClass(/is-expanded/)
   }
   await page.getByRole('button', { name:'Household Management' }).click()
-  await expect(page.getByRole('button', { name:'Household Operations' })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations' })).toBeVisible()
   await expect(page.getByRole('button', { name:'Family Calendar' })).toBeVisible()
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
@@ -845,7 +884,7 @@ test('routine source review shows proposals without silently saving them', async
  await page.route('**/.netlify/functions/household-routine-review?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({week:[{member:'Nyla',date:today(),weekday:5,items:[{id:'one',title:'Living room care',timing:'2–4 PM',source:'Chore',status:'pending'}],conflicts:[]}],proposals:[{sourceId:'one',title:'Living room care',owner:'Nyla',days:[5],startTime:'14:00',endTime:'14:30',sourceTitle:'Saved recurring chore'}],questions:['Javin: confirm the after-work time.'],notice:'Proposed work blocks are not completion records.',scheduleVersion:1})}))
  if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Menu'}).click()
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
- await page.getByRole('button',{name:'Household Operations',exact:true}).click()
+ await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations',exact:true}).click()
  if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
  await page.getByRole('button',{name:'Routines',exact:true}).click()
  const review=page.getByRole('region',{name:'Build routines from household records'})
@@ -1184,6 +1223,8 @@ test('Today personal guidance groups household work and highlights major appoint
  const attention=overview.getByRole('region',{name:'Needs your attention'})
  await expect(attention).not.toContainText('Overdue:');await expect(attention).not.toContainText('Lorenzo')
  await overview.getByRole('button',{name:'Household',exact:true}).click()
+ const showAll=remaining.getByRole('button',{name:/^Show all .* remaining$/})
+ if(await showAll.isVisible())await showAll.click()
  await expect(remaining.getByText('Financial Review',{exact:true})).toHaveCount(1)
  await expect(remaining.getByText('Daily Schedule Alignment',{exact:true})).toHaveCount(1)
  await remaining.getByRole('button',{name:'Update Financial Review',exact:true}).click()

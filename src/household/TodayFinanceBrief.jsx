@@ -15,7 +15,7 @@ function readSnapshot() {
   } catch { return { data:null, actuals:null, balanceStatus:{status:'unknown'}, transactionStatus:{status:'unknown'} } }
 }
 
-export default function TodayFinanceBrief({ date, finance = {}, canViewFinance = false, onOpenFinance }) {
+export default function TodayFinanceBrief({ date, finance = {}, canViewFinance = false, onOpenFinance, compact = false }) {
   const [snapshot, setSnapshot] = useState(() => canViewFinance ? readSnapshot() : null)
   useEffect(() => {
     if (!canViewFinance) return undefined
@@ -31,6 +31,11 @@ export default function TodayFinanceBrief({ date, finance = {}, canViewFinance =
     return () => { window.removeEventListener(FINANCE_REFRESH_EVENT, refresh); window.removeEventListener(SHARED_STATE_EVENT, refresh); window.removeEventListener('storage', refresh) }
   }, [canViewFinance])
   const model = useMemo(() => canViewFinance ? dailyFinancialBrief({date,finance:snapshot?.data,actuals:snapshot?.actuals,updatedAt:snapshot?.balanceStatus?.checkedAt,plan:{finance}}) : null,[date,snapshot,canViewFinance,finance])
+  if (compact) {
+    if (!canViewFinance) return null
+    const knownAmounts = model.bills.every(item=>Number.isFinite(item.amount))
+    return <section className="today-bills-glance" aria-label="Bills due on selected day"><header><h2>Bills due · {date}</h2><p>{!snapshot?.data?'Financial records unavailable':model.bills.length?`${model.bills.length} due${knownAmounts?` · ${money(model.bills.reduce((total,item)=>total+item.amount,0))}`:''}`:'No bills recorded for this day'}</p></header><ul>{model.bills.map(item=><li key={item.id}><strong>{item.title} · {Number.isFinite(item.amount)?money(item.amount):'Amount unavailable'}</strong><span>{item.status==='Expected'?'Scheduled · payment not confirmed':item.status}</span></li>)}</ul><button type="button" onClick={()=>onOpenFinance?.('finance')}>Review Finance</button></section>
+  }
   return <section className="today-section today-finance-brief" data-pillar="finance" aria-label="Pillar 6 Finance"><div className="today-section-heading"><div><span>Pillar 6 · Finance</span><h2>Balances &amp; today’s cash flow</h2></div><button onClick={()=>onOpenFinance?.('finance')}>Open Finance</button></div>
   {!canViewFinance?<p className="today-finance-restricted">Financial details require your existing Finance permission.</p>:<>
    <div className="today-finance-metrics today-cash-accounts">{[['Operating',model.operatingBalance,model.projectedOperatingMonthEnd],['Savings',model.savingsBalance,model.projectedSavingsMonthEnd]].map(([label,balance,projected])=><article key={label}><h3>{label}</h3><span>Current bank balance</span><strong>{balance===null?'Unavailable':money(balance)}</strong><span>Projected month end · {model.endingDate}</span><strong>{projected===null?'Unavailable':money(projected)}</strong></article>)}</div>
