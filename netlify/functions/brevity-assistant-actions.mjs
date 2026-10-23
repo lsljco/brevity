@@ -257,6 +257,9 @@ export async function prepareDirectProposal({input,session,permissions,repositor
     proposal=await captureExpectedVersions(proposal,resources)
     if(proposal.expectedVersions[resource]!==expectedVersion)throw Object.assign(Error('The meal calendar changed. Refresh before review.'),{code:'VERSION_CONFLICT'})
   }
+  // Direct plan editors need the same server-captured inherited-outcome
+  // dependency as assistant proposals. Keep the editor's exact plan version.
+  if(resource.startsWith('plan:'))proposal=await captureExpectedVersions(proposal,resources)
   proposal={...proposal,expectedVersions:multiResource?input.expectedVersions:{[resource]:expectedVersion}}
   // This dry preparation validates the exact target and current permission
   // against the reviewed version without mutating anything.
