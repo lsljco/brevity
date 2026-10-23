@@ -1066,7 +1066,7 @@ test('Today opens with four questions and seven visible daily pillars while hist
  const ordered=await page.locator('.today-dashboard > [data-pillar]').evaluateAll(nodes=>[...new Set(nodes.map(node=>node.dataset.pillar))])
  expect(ordered).toEqual(['spiritual','health','fitness','household','education','finance','ministry'])
  for(const pillar of ordered)await expect(page.locator(`.today-dashboard > [data-pillar="${pillar}"]`).first()).toBeVisible()
- await expect(page.getByText('Old August responsibility 0',{exact:true})).not.toBeVisible()
+ await expect(page.getByText('Old August responsibility 0',{exact:true}).filter({visible:true})).toHaveCount(0)
  const care=page.getByRole('region',{name:'Scheduled health appointments',exact:true})
  await expect(care).toContainText('Scheduled dental visit');await expect(care).not.toContainText('Unscheduled old need');await expect(care).not.toContainText('Other member appointment')
  await expect(page.locator('.today-four-questions')).not.toContainText('Old August responsibility')
