@@ -785,7 +785,7 @@ test('iPad already-linked accounts ignore additional institution accounts withou
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(page.getByRole('status').filter({hasText:'The latest available transactions were checked.'})).toBeVisible()
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Accounts',exact:true}).click()
+  await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:'Accounts',exact:true}).click()
   await expect(page.getByRole('note')).toContainText('All 3 Brevity accounts are linked to verified bank sources. No action is required.')
   await expect(page.getByRole('button',{name:'Linked'})).toHaveCount(3)
   await expect(page.getByRole('button',{name:'Review link'})).toHaveCount(0)
