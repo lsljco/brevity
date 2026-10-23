@@ -14,5 +14,12 @@ test('suggestions exclude completed, future and other-member work, expired appoi
 test('same source ID is only suggested once; similar titles remain distinct records',()=>{
  const item={id:'p',title:'Review',owner:'Larry'}
  const result=suggestDailyOutcomes({...base,plan:{...base.plan,topPriorities:[item]},openWork:[{...item,originalDate:date,source:{id:'p',kind:'priority',date}},{...item,originalDate:date,source:{id:'p2',kind:'priority',date}}]})
- assert.deepEqual(result.map(x=>x.id),['p','p2'])
+ assert.deepEqual(result.map(x=>x.id),['p'])
+ const distinct=suggestDailyOutcomes({...base,plan:{...base.plan,topPriorities:[item,{...item,id:'p2'}]}})
+ assert.deepEqual(distinct.map(x=>x.id),['p','p2'])
+})
+
+test('clearing standing outcomes does not propose removed historical priorities again',()=>{
+ const result=suggestDailyOutcomes({...base,plan:{...base.plan,outcomesReviewed:true},openWork:[{title:'Removed',owner:'Larry',originalDate:'2026-10-20',source:{id:'removed',kind:'priority',date:'2026-10-20'}}]})
+ assert.deepEqual(result,[])
 })
