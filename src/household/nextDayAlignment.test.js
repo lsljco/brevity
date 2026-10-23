@@ -34,7 +34,7 @@ test('today alignment is a separate reviewed action scoped only to today', () =>
   assert.match(overviewSource, /Chart the Course/)
   assert.match(meetingSource, /do not close the day or create an evening recap/)
   assert.match(householdTodaySource, /mode === 'today-alignment'/)
-  assert.match(householdTodaySource, /timing="today" plan=\{planWithMeals\}/)
+  assert.match(householdTodaySource, /timing=\{browsingDate\?'selected':'today'\} plan=\{planWithMeals\}/)
   assert.match(householdTodaySource, /onComplete=\{completeTodayAlignment\}/)
   assert.match(householdTodaySource, /stageDailyPlanReview/)
   assert.doesNotMatch(householdTodaySource, /savePlan\(/)

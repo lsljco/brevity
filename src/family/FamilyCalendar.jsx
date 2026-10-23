@@ -117,7 +117,7 @@ function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, on
   </div>
 }
 
-export default function FamilyCalendar({ currentMember = 'Family', includeFamily = false, lockMember = false, title = 'Family Calendar', subtitle = 'Shared Apple events and Brevity-managed commitments from their authoritative records' }){
+export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', includeFamily = false, lockMember = false, title = 'Family Calendar', subtitle = 'Shared Apple events and Brevity-managed commitments from their authoritative records' }){
   const today = getHouseholdCalendarDate()
   const todayKey = getHouseholdDateKey()
   const [member,setMember]=useState(currentMember || 'Family')
@@ -347,7 +347,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
         if(!day)return <div key={index} style={{minHeight:108}}/>
         const key=iso(new Date(year,month,day)); const dayEvents=byDate[key]||[]; const isToday=key===todayKey
         return <div className="family-calendar-day" key={key} style={{minHeight:108,padding:8,borderRadius:9,border:`1px solid ${isToday?'rgba(197,164,109,.48)':border}`,background:isToday?'rgba(197,164,109,.08)':'rgba(255,255,255,.035)'}}>
-          <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{day}</div>
+          <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{onOpenDay?<button type="button" aria-label={`Review plan for ${key}`} onClick={()=>onOpenDay(key)}>{day}</button>:day}</div>
           {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
             <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}><i className="ti ti-external-link" aria-hidden="true"/></button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
             <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.sourceReadOnly?`${event.appleCalendarName} · Edit in Apple Calendar`:event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
@@ -357,7 +357,7 @@ export default function FamilyCalendar({ currentMember = 'Family', includeFamily
     </div></div>
     <div className={`family-calendar-mobile-agenda${viewMode==='agenda'?' is-selected':''}`}>
       {agendaDays.map(([date,events])=><section key={date} className="family-calendar-agenda-day">
-        <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span></header>
+        <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</strong><span>{events.length} {events.length===1?'commitment':'commitments'}</span>{onOpenDay&&<button type="button" onClick={()=>onOpenDay(date)}>Review day</button>}</header>
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>
           <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.sourceReadOnly?`${event.appleCalendarName} · Edit in Apple Calendar`:event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>

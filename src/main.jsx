@@ -9,6 +9,7 @@ import './household/SpiritualLayoutFixes.css'
 import './ResponsiveHardening.css'
 import './BottomDock.css'
 import './DeviceResponsive.css'
+import './LuxuryWorkspace.css'
 import './household/spiritualMetadataEnhancer.js'
 
 ReactDOM.createRoot(document.getElementById('root')).render(

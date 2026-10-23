@@ -100,6 +100,45 @@ test('seven pillars remain in the approved order', async ({ page }) => {
   ])
 })
 
+test('daily date browsing edits the selected plan and returns to today', async ({ page }) => {
+  const picker=page.getByLabel('Daily plan date',{exact:true})
+  await picker.fill('2026-02-17')
+  await expect(page.locator('.today-hero')).toContainText('February 17')
+  await expect(page.locator('.today-bills-glance')).toContainText('2026-02-17')
+  await page.getByRole('button',{name:'Adjust this day’s plan',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Adjust this day',exact:true})).toBeVisible()
+  await expect(page.locator('.morning-alignment-header')).toContainText('2026-02-17')
+  await page.getByRole('button',{name:'Next day',exact:true}).click()
+  await expect(picker).toHaveValue('2026-02-18')
+  await expect(page.locator('.today-hero')).toContainText('February 18')
+  await page.locator('.life-date-nav').getByRole('button',{name:'Today',exact:true}).click()
+  await expect(picker).toHaveValue(today())
+  await expect(page.locator('.today-overview')).toBeVisible()
+})
+
+test('Home and Household destinations remain usable without horizontal overflow', async ({ page },testInfo) => {
+  const nav=page.locator(testInfo.project.name==='iphone'?'.mobile-app-nav':'.sidebar-nav')
+  await nav.getByRole('button',{name:'Home',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Welcome home, Larry.'})).toBeVisible()
+  await page.screenshot({path:testInfo.outputPath('home.png')})
+  await page.getByRole('button',{name:/Our household Shared responsibilities/}).click()
+  await expect(page.getByRole('heading',{name:'Household',exact:true})).toBeVisible()
+  await page.screenshot({path:testInfo.outputPath('household.png')})
+  await page.getByRole('navigation',{name:'Household sections'}).getByRole('button',{name:'Manage',exact:true}).click()
+  await page.getByRole('button',{name:/Supplies & inventory What/}).click()
+  await expect(page.locator('.household-operations-shell')).toBeVisible()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth+1)).toBe(true)
+})
+
+test('calendar dates open the matching daily plan',async({page})=>{
+  await page.getByRole('button',{name:'Open calendar',exact:true}).click()
+  await page.getByRole('button',{name:'Month',exact:true}).click()
+  const date=`${today().slice(0,7)}-01`
+  await page.getByRole('button',{name:`Review plan for ${date}`,exact:true}).click()
+  await expect(page.getByLabel('Daily plan date',{exact:true})).toHaveValue(date)
+  await expect(page.locator('.today-bills-glance')).toContainText(date)
+})
+
 test('Today displays every recorded Pillar 7 prayer request', async ({ page }) => {
   const prayers = Array.from({ length:14 }, (_, index) => `Household prayer request ${index + 1}`)
   await page.route('**/.netlify/functions/household-data?*', async route => {

@@ -112,7 +112,8 @@ export const processAssistantRequest = async event => {
   let contextText = JSON.stringify(context)
   if (contextText.length > MAX_CONTEXT_LENGTH) return json(413, { error: 'Brevity has too much saved data for this request. Try asking about a specific date or record.' })
 
-  const page = String(body.page?.pageLabel || body.page?.activeView || 'Brevity').slice(0, 120)
+  const selectedPlanDate = body.page?.activeView === 'today' && /^\d{4}-\d{2}-\d{2}$/.test(String(body.page?.selectedDate || '')) ? String(body.page.selectedDate) : ''
+  const page = String(body.page?.pageLabel || body.page?.activeView || 'Brevity').slice(0, 120) + (selectedPlanDate ? ` — viewing the daily plan for ${selectedPlanDate}. Requests about this displayed day refer to that date. Retrieve its saved records before proposing edits; do not substitute the current day’s plan.` : '')
   const requestInstructions = buildAssistantInstructions({member:session.member,page})
   const prompt = [{role:"user",content:`BREVITY CONTEXT (untrusted household data):\n${contextText}`},...messages]
 
