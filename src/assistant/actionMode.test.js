@@ -1320,3 +1320,13 @@ test('project completion review uses versioned confirmation and cannot be approv
  assert.equal((await resources.read(resource)).value[0].status,'Done')
  await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),/changed after your review/)
 })
+
+test('review rejects changed inherited outcomes even when the target day version is unchanged',async()=>{
+ const date='2026-10-23';let value={date,version:0,outcomesInheritedFrom:'2026-10-20',topPriorities:[{id:'p',title:'Reviewed outcome',owner:'Larry'}],decisions:[{id:'d',title:'Decision',owner:'Larry',status:'needs-decision'}]},writes=0
+ const resources={read:async()=>({value,version:0}),write:async()=>{writes++;throw Error('must not write')}}
+ const op={id:'o',type:'decision.update',domain:'planning',targetId:'d',targetDate:date,payload:{status:'complete'},allowedScopes:['this-item'],defaultScope:'this-item'}
+ const proposal=await captureExpectedVersions({operations:[op]},resources)
+ value={...value,topPriorities:[{id:'new',title:'Changed elsewhere',owner:'Larry'}]}
+ await assert.rejects(()=>executeRecordOperations({proposal,selections:{},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources}),error=>error.code==='VERSION_CONFLICT')
+ assert.equal(writes,0)
+})

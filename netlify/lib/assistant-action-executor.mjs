@@ -1,6 +1,7 @@
 import { validateRecovery } from '../../src/finance/recoveryScenario.js'
 import {submitProjectCompletion,reviewProjectCompletion} from '../../src/homehq/projectSignoff.js'
 import {LEARNING_HUB_RESOURCE,applyLearningItem} from '../../src/education/learningHub.js'
+import dailyOutcomes from './daily-outcomes.cjs'
 import {CARE_RESOURCE,applyCareAction} from '../../src/health/healthCare.js'
 import {GOVERNANCE_TYPES,preferenceResource,applyGovernance} from '../../src/governance/governanceModel.js'
 import {validateGovernance} from './governance-service.mjs'
@@ -176,6 +177,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   }
   if (operation.type === 'plan.overview.update') {
     const after = { ...(value || {}), ...clone(payload.patch) }
+    if (Object.hasOwn(payload.patch, 'topPriorities')) { after.household = { ...(after.household || {}), priorities:clone(payload.patch.topPriorities) }; after.outcomesReviewed = true; delete after.outcomesInheritedFrom }
     if (payload.origin === 'generated-draft') after.generatedBy = 'brevity-daily-household-plan'
     if (JSON.stringify(after) === JSON.stringify(value)) throw new Error('The daily-plan overview already has the reviewed values. Refresh before preparing another change.')
     return { before, after }
@@ -189,7 +191,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       ? { ...current, ...patch, isaiah:{ ...(current.isaiah || {}), ...patch.isaiah } }
       : { ...current, ...patch }
     const after = { ...(value || {}), [pillar]:nextPillar }
-    if (pillar === 'household' && Object.hasOwn(patch, 'priorities')) after.topPriorities = clone(patch.priorities)
+    if (pillar === 'household' && Object.hasOwn(patch, 'priorities')) { after.topPriorities = clone(patch.priorities); after.outcomesReviewed = true; delete after.outcomesInheritedFrom }
     if (payload.origin === 'generated-draft') after.generatedBy = 'brevity-daily-household-plan'
     if (JSON.stringify(after) === JSON.stringify(value)) throw new Error(`The ${pillar} daily plan already has the reviewed values. Refresh before preparing another change.`)
     return { before, after }
@@ -568,7 +570,7 @@ export function createProductionActionResources({ now = () => new Date(), shared
       if (resource.startsWith('shared:')) { const key=resource.slice(7), entry=await readStoreEntry(shared,sharedKey(key)),record=entry?.data; return { value:record?.value ? JSON.parse(record.value) : key===SHARED_KEYS.finance?{accounts:[],transactions:[]}:key===SHARED_KEYS.overrides||key===SHARED_KEYS.budget?{}:[], version:Number(record?.version||0), missing:!record, record, etag:entry?.etag||null } }
       if (resource.startsWith('plan:')) {
         const date=resource.slice(5),entry=await readStoreEntry(plans,planKey(date)),value=entry?.data
-        return { value:value||createEmptyDailyPlan(date), version:Number(value?.version||0), missing:!value, etag:entry?.etag||null }
+        return { value:(await dailyOutcomes.resolveDailyOutcomes(plans,HOUSEHOLD_ID,date,value))||createEmptyDailyPlan(date), version:Number(value?.version||0), missing:!value, etag:entry?.etag||null }
       }
       if(resource.startsWith('meal:')){
         const date=resource.slice(5),entry=await readStoreEntry(mealStorage(),mealKey(date)),value=entry?.data
@@ -692,6 +694,7 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
   for (const [resource, resourceOperations] of grouped) {
     const current=await resources.read(resource); let value=current.value
     const reviewedVersion=proposal.expectedVersions[resource]
+    if(resource.startsWith('plan:')&&(current.value?.outcomesInheritedFrom||proposal.expectedOutcomeSources?.[resource])&&proposal.expectedOutcomeSources?.[resource]!==JSON.stringify([current.value?.outcomesInheritedFrom||'',current.value?.topPriorities||[]]))throw Object.assign(new Error('The standing outcomes changed after review. Refresh and review again.'),{code:'VERSION_CONFLICT'})
     if(Number(current.version)!==reviewedVersion)throw Object.assign(new Error('Household data changed after your review. Refresh and try again.'),{code:'VERSION_CONFLICT'})
     for(const operation of resourceOperations){
       if(operation.type.startsWith('orchestration.')&&!phaseOneEnabled())throw Error('GOV-001 has not been activated.')
@@ -770,7 +773,7 @@ export async function executeRecordOperations({ proposal, selections = {}, sessi
 }
 
 export async function captureExpectedVersions(proposal, resources) {
-  const expectedVersions={},snapshots=new Map(),operations=[]
+  const expectedVersions={},expectedOutcomeSources={},snapshots=new Map(),operations=[]
   for(const operation of proposal.operations){
     if(operation.type.startsWith('calendar.')){operations.push(operation);continue}
     const resource=resourceForOperation(operation)
@@ -778,6 +781,7 @@ export async function captureExpectedVersions(proposal, resources) {
       const snapshot=await resources.read(resource),version=snapshot.version
       if(typeof version!=='number'||!Number.isInteger(version)||version<0)throw Object.assign(new Error('Household data did not provide an exact version for Action Mode review.'),{code:'VERSION_CONFLICT'})
       expectedVersions[resource]=version;snapshots.set(resource,snapshot)
+      if(resource.startsWith('plan:'))expectedOutcomeSources[resource]=JSON.stringify([snapshot.value?.outcomesInheritedFrom||'',snapshot.value?.topPriorities||[]])
     }
     if(operation.type==='meal.schedule.update'){
       const command=normalizeMealScheduleCommand(operation.payload.commandJson),days={},versions={}
@@ -806,5 +810,5 @@ export async function captureExpectedVersions(proposal, resources) {
       operations.push({...operation,voiceTarget})
     }else operations.push(operation)
   }
-  return {...proposal,operations,expectedVersions}
+  return {...proposal,operations,expectedVersions,expectedOutcomeSources}
 }

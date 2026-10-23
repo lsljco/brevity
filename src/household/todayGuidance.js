@@ -24,7 +24,7 @@ export function dailyGuidance({plan,agenda,member,scope='mine',minute=0,openWork
  // Prefer a unique exact focus match among equally urgent flexible work. Keep source IDs intact.
  const focusMatches=focus?flexible.filter(item=>item.title===focus):[]
  const suggested=rankDirectionPriorities(focusMatches.length===1?[focusMatches[0],...flexible.filter(item=>item!==focusMatches[0])]:flexible)[0]||null
- return {focus,focusItems:focusBubbles(focus,priorities),priorities:groupTodayItems(priorities).slice(0,3),now:active[0]||null,suggested,next:future[0]||null,remaining:present([...active,...future,...untimed]),earlier:present(earlier),attention:groupTodayItems(attention),completed:items.filter(item=>['complete','completed','approved','done'].includes(String(item.status||'').toLowerCase())&&!item.cancelled)}
+ return {savedOutcomes:list(plan.topPriorities).filter(item=>belongsToDay(item,plan.date)&&belongsToViewer(item,member,scope)),focus,focusItems:focusBubbles(focus,priorities),priorities:groupTodayItems(priorities).slice(0,3),now:active[0]||null,suggested,next:future[0]||null,remaining:present([...active,...future,...untimed]),earlier:present(earlier),attention:groupTodayItems(attention),completed:items.filter(item=>['complete','completed','approved','done'].includes(String(item.status||'').toLowerCase())&&!item.cancelled)}
 }
 
 // Saved dated records only: no inference of schedules from a draft's creation date.

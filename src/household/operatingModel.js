@@ -44,7 +44,7 @@ const fallbackOutcomeItems=plan=>{
     ...arrayOrEmpty(plan.dayparts).flatMap(part=>arrayOrEmpty(part?.items).map((item,index)=>({id:item.id||`daypart-${part?.id||'block'}-${index}`,title:item.title,owner:item.owner||'Family',pillar:item.pillar||'',status:ITEM_STATUS.pending,priority:'normal',startTime:item.time||''}))),
   ].filter(item=>clean(item?.title))
   const seen=new Set()
-  return candidates.filter(item=>{const key=clean(item.title).toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true}).slice(0,3)
+  return candidates.filter(item=>{const key=clean(item.title).toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true})
 }
 const hasOperatingPlan=plan=>Boolean(
   clean(plan.theme)||clean(plan.dayObjective)||clean(plan.governingPrinciple)||clean(plan.successStandard)
@@ -86,8 +86,8 @@ export function buildTodayReadModel({plan,calendarAppointments=[],calendarHealth
   const commitments=calendarAppointments.map((item,index)=>appointmentRecord(item,index,normalized.date,calendarHealth))
   const decisions=normalized.decisions.map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.decision,'decision',index,normalized.date)).filter(item=>item.state!==DECISION_STATUS.complete&&item.state!==DECISION_STATUS.deferred).sort((left,right)=>(decisionStateScore[left.state]??2)-(decisionStateScore[right.state]??2)||byPriorityThenTime(left,right))
   const actions=normalized.assignments.map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.action,'assignment',index,normalized.date)).filter(item=>unresolved(item.state)).filter(item=>item.owner===currentMember||item.participants.includes(currentMember)).sort(byPriorityThenTime)
-  const outcomeItems=normalized.topPriorities.length?normalized.topPriorities:fallbackOutcomeItems(normalized)
-  const outcomes=outcomeItems.slice(0,3).map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.outcome,normalized.topPriorities.length?'top-priority':'derived-outcome',index,normalized.date))
+  const outcomeItems=normalized.topPriorities.length?normalized.topPriorities:(normalized.outcomesReviewed || normalized.outcomesInheritedFrom ? [] : fallbackOutcomeItems(normalized))
+  const outcomes=outcomeItems.map((item,index)=>recordFromPlanItem(item,OPERATING_KIND.outcome,normalized.topPriorities.length?'top-priority':'derived-outcome',index,normalized.date))
   const memberOutcomes=outcomes.filter(item=>item.owner===currentMember||item.participants.includes(currentMember))
   const operatingSignals=householdSignals.filter(item=>item?.id&&item?.title).map(item=>createOperatingRecord({id:item.id,kind:OPERATING_KIND.signal,title:item.title,detail:item.detail,priority:item.priority==='medium'?'normal':item.priority,state:'needs-attention',source:source('household-operations','operating-exception',item.id),pillar:'household'}))
   const signals=[...operatingSignals,...(planEstablished?planSignals(normalized):[]),integrationSignal(calendarHealth)].filter(Boolean).sort(byPriorityThenTime)
