@@ -1330,3 +1330,34 @@ test('review rejects changed inherited outcomes even when the target day version
  await assert.rejects(()=>executeRecordOperations({proposal,selections:{},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources}),error=>error.code==='VERSION_CONFLICT')
  assert.equal(writes,0)
 })
+
+test('direct focus review captures inherited outcomes and applies without a false conflict',async()=>{
+ const date='2026-10-23',resource=`plan:${date}`,session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+ let value={...createEmptyDailyPlan(date),outcomesInheritedFrom:'2026-10-20',topPriorities:[{id:'p',title:'Standing outcome',owner:'Larry'}]},version=0,writes=0
+ const resources={read:async()=>({value:structuredClone(value),version}),write:async(key,next,expected)=>{assert.equal(key,resource);assert.equal(expected,version);writes++;value=structuredClone(next);version++;return{value,version}}}
+ const repository=createAssistantActionRepository({store:versionedBlobStore()})
+ const input={summary:'Set focus',expectedVersion:0,expectedOutcomeSources:{[resource]:'untrusted'},operation:{type:'plan.pillar.update',targetId:'household',targetDate:date,payload:{pillar:'household',patch:{keyFocus:'Finance meeting'}}}}
+ const proposal=await prepareDirectProposal({input,session,permissions,repository,resources})
+ assert.equal(writes,0);assert.equal(value.household.keyFocus,'')
+ assert.equal(proposal.expectedVersions[resource],0)
+ assert.equal(proposal.expectedOutcomeSources[resource],JSON.stringify(['2026-10-20',value.topPriorities]))
+ const retained=await repository.getProposal(proposal.id)
+ assert.deepEqual(retained.expectedOutcomeSources,proposal.expectedOutcomeSources)
+ await executeRecordOperations({proposal:retained,session,permissions,resources})
+ assert.equal(writes,1);assert.equal(value.household.keyFocus,'Finance meeting');assert.equal(value.topPriorities[0].id,'p')
+ await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),error=>error.code==='VERSION_CONFLICT')
+})
+
+test('direct focus review still rejects inherited source changes after review without target version changes',async()=>{
+ const date='2026-10-23',session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+ let value={...createEmptyDailyPlan(date),outcomesInheritedFrom:'2026-10-20',topPriorities:[{id:'p',title:'Standing outcome',owner:'Larry'}]},writes=0
+ const resources={read:async()=>({value:structuredClone(value),version:0}),write:async()=>{writes++;throw Error('must not write')}}
+ const repository=createAssistantActionRepository({store:versionedBlobStore()})
+ const input={expectedVersion:0,operation:{type:'plan.pillar.update',targetId:'household',targetDate:date,payload:{pillar:'household',patch:{keyFocus:'New focus'}}}}
+ const proposal=await prepareDirectProposal({input,session,permissions,repository,resources})
+ value.topPriorities[0].title='Changed on another device'
+ await assert.rejects(()=>executeRecordOperations({proposal,session,permissions,resources}),error=>error.code==='VERSION_CONFLICT')
+ assert.equal(writes,0);assert.equal(value.household.keyFocus,'')
+ const refreshed=await prepareDirectProposal({input,session,permissions,repository,resources})
+ assert.notEqual(refreshed.expectedOutcomeSources[`plan:${date}`],proposal.expectedOutcomeSources[`plan:${date}`])
+})
