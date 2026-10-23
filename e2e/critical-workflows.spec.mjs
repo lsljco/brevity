@@ -1193,7 +1193,7 @@ test('Finance combines Operating and Savings while excluding Renovation across v
   await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
   await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
   for(const view of ['Transactions','Cash Forecast','Reporting']){
-    await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:view,exact:true}).click();await closeMenuIfMobile(page,testInfo)
+    await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:view,exact:true}).click();await closeMenuIfMobile(page,testInfo)
     await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
     await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
     await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
