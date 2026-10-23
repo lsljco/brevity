@@ -113,9 +113,11 @@ export function buildPlanDraftOperations(currentInput, draftInput, { origin = 'g
   if (current.date !== draft.date) throw new Error('The generated draft does not match the open daily-plan date.')
   const operations = []
   const overview = changedPatch(current, draft, ['theme', 'dayObjective', 'governingPrinciple', 'successStandard', 'topPriorities', 'decisions', 'dayparts'])
+  if (current.outcomesReviewed || current.outcomesInheritedFrom || current.topPriorities.length || current.household.priorities.length) delete overview.topPriorities
   if (Object.keys(overview).length) operations.push(operation('plan.overview.update', draft.date, 'overview', `Review the generated overview and decision board for ${draft.date}`, { patch:overview, origin }))
   for (const pillar of pillars) {
     const patch = changedPatch(current[pillar], draft[pillar], PILLAR_EDITABLE_FIELDS[pillar])
+    if (pillar === 'household' && (current.outcomesReviewed || current.outcomesInheritedFrom || current.topPriorities.length || current.household.priorities.length)) delete patch.priorities
     if (Object.keys(patch).length) operations.push(operation('plan.pillar.update', draft.date, pillar, `Review the generated ${pillar} draft for ${draft.date}`, { pillar, patch, origin }))
   }
   if (includeRecap) {

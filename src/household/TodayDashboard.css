@@ -34,3 +34,8 @@
 .calendar-scope-filter{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.calendar-scope-filter button{padding:8px 12px;border:1px solid #776649;border-radius:20px;background:transparent;color:inherit;cursor:pointer}.calendar-scope-filter button[aria-pressed="true"]{background:#c5a46d;color:#171612}
 
 .today-quick-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}.today-quick-actions button{min-height:44px;padding:8px 12px;border:1px solid rgba(197,164,109,.35);border-radius:10px;background:rgba(197,164,109,.08);color:var(--gold-light);font:500 13px/1.3 var(--font);cursor:pointer}.today-quick-actions button:hover:not(:disabled){background:rgba(197,164,109,.16)}.today-quick-actions button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}.today-quick-actions button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:640px){.today-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.today-quick-actions button{padding:8px;font-size:12px;overflow-wrap:anywhere}.today-quick-actions button:last-child:nth-child(odd){grid-column:1/-1}}
+.today-outcome-field { display: grid; gap: .5rem; width: 100%; min-width: 0; }
+.today-top-three .today-outcome-field > span { margin: 0; font-size: .8rem; }
+.today-outcome-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: .75rem; border: 1px solid #8a7046; border-radius: .5rem; background: #111; color: #fff; font: inherit; }
+.today-outcome-field input:focus-visible { outline: 2px solid #d4a54f; outline-offset: 2px; }
+.today-outcome-field input[readonly] { border-color: #444; opacity: .7; }
