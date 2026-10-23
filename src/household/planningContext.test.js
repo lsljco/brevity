@@ -30,3 +30,10 @@ test('past, canceled, completed, other dates and mirrored timeline entries canno
  const items=[event('active','09:00','10:00'),event('past','08:00','09:00'),event('canceled','09:00','10:00',{status:'canceled'}),event('done','09:00','10:00',{status:'complete'}),event('future','09:00','10:00',{date:'2026-10-24'}),event('mirror','09:00','10:00',{sourceKind:'timeline'})]
  assert.equal(planningConflicts({items,date,minute:540}).conflicts.length,0)
 })
+test('calendar projections of the same schedule record cannot conflict with their source',()=>{
+ const routine=event('routine-1:2026-10-23','09:00','10:00',{sourceKind:'routine',routineId:'routine-1'})
+ const copy=event('calendar-copy','09:00','10:00',{calendarSourceId:'household-schedule-routine-1:2026-10-23'})
+ const separate=event('real-event','09:00','10:00')
+ const result=planningConflicts({items:[copy,routine,separate],date})
+ assert.equal(result.conflicts.length,1);assert.deepEqual(result.conflicts[0].records.map(x=>x.id),[routine.id,'real-event']);assert.equal(result.conflicts[0].records[0].routineId,'routine-1')
+})

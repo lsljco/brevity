@@ -1,3 +1,4 @@
+import {HOUSEHOLD_SCHEDULE_SOURCE} from './householdScheduleData.js'
 import {HOUSEHOLD_MEMBERS, PILLAR_IDS} from './dailyPlan.js'
 import {isPersonalItem} from './todayPresentation.js'
 import {minuteOfDay} from './dailyRhythm.js'
@@ -17,7 +18,9 @@ export function pillarPlanningContext({plan,member,scope='mine',canViewFinance=f
 const people=item=>[...new Set([item.owner,...list(item.owners),...list(item.participants),...list(item.members)].filter(name=>HOUSEHOLD_MEMBERS.includes(name)))]
 export function planningConflicts({items=[],date,minute=0}){
  const seen=new Set(),eligible=[];let incomplete=0
+ const scheduleCopies=new Set(items.filter(x=>['routine','block'].includes(x.sourceKind)&&x.id).map(x=>`${HOUSEHOLD_SCHEDULE_SOURCE}-${x.id}`))
  for(const item of items){
+  if(item.sourceKind==='appointment'&&scheduleCopies.has(item.calendarSourceId||((item.calendarSource===HOUSEHOLD_SCHEDULE_SOURCE)?item.calendarEventId:'')))continue
   // Timeline rows can mirror assigned work and do not have independent record IDs.
   if(!item.id||!item.sourceKind||item.sourceKind==='timeline'||finished(item)||(item.date&&item.date!==date))continue
   const key=JSON.stringify([item.sourceKind,item.id]);if(seen.has(key))continue;seen.add(key)
@@ -31,7 +34,7 @@ export function planningConflicts({items=[],date,minute=0}){
  for(let i=0;i<eligible.length;i++)for(let j=i+1;j<eligible.length;j++){
   const a=eligible[i],b=eligible[j],owners=a.owners.filter(name=>b.owners.includes(name))
   if(!owners.length||a.start>=b.end||b.start>=a.end)continue
-  conflicts.push({id:JSON.stringify([a.key,b.key]),owners,records:[a.item,b.item].map(x=>({id:x.id,sourceKind:x.sourceKind,title:x.title,date,startTime:x.startTime||x.time,endTime:x.endTime}))})
+  conflicts.push({id:JSON.stringify([a.key,b.key]),owners,records:[a.item,b.item].map(x=>({id:x.id,sourceKind:x.sourceKind,title:x.title,date,startTime:x.startTime||x.time,endTime:x.endTime,routineId:x.routineId,calendarEventId:x.calendarEventId,calendarSourceId:x.calendarSourceId,appleCalendarId:x.appleCalendarId,choreOccurrenceId:x.choreOccurrenceId}))})
  }
  return {conflicts,incomplete}
 }
