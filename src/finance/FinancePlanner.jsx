@@ -49,6 +49,8 @@ import { getHouseholdCalendarDate, getHouseholdDateKey, getHouseholdDateLabel, g
 import { buildScheduledActionPayload, scheduledActionScope } from './scheduledActionReview.js'
 import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
 import CashForecastBalances from './CashForecastBalances.jsx'
+import './FinanceOverview.css'
+const FinanceOverview = lazy(() => import('./FinanceOverview.jsx'))
 import { buildOutstandingCashForecast } from './outstandingCashForecast.js'
 const CashForecastAgenda = lazy(() => import('./CashForecastAgenda.jsx'))
 const CashForecastIntro = lazy(() => import('./CashForecastAgenda.jsx').then(module => ({ default:module.CashForecastIntro })))
@@ -2359,7 +2361,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts · select multiple</span>
-      {view !== 'budget' && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
+      {!['budget','calendar','overview'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
 
       {/* All pill */}
       <button
@@ -2395,7 +2397,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         )
       })}
 
-      {view !== 'calendar' && (
+      {!['calendar','overview'].includes(view) && (
         <>
           {/* Cash Forecast owns its month-scoped bank-activity toggle. */}
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 6px', flexShrink: 0 }} />
@@ -2438,8 +2440,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
       {view !== 'scenario-modeling' && AccountFilterBar}
-      {!isForm&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
-      {!formView && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {!isForm&&['transactions','vendors','recurring','reporting'].includes(view)&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
+      {!formView && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
         <div role="status" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10, margin:'10px 28px 0', padding:'10px 13px', borderRadius:10, border:'1px solid rgba(232,150,122,.30)', background:'rgba(232,150,122,.08)', color:'var(--soft-white)', fontSize:11, lineHeight:1.45 }}>
           <span><strong>Account-linkage status:</strong> {unmappedActuals.length} bank transaction{unmappedActuals.length === 1 ? '' : 's'} across all available history {unmappedActuals.length === 1 ? 'is' : 'are'} not linked to a unique Brevity account. {unmappedActuals.length === 1 ? 'It is' : 'They are'} excluded from account balances, reconstruction, and Cash Forecast totals; use the all-bank-activity ledger to review {unmappedActuals.length === 1 ? 'it' : 'them'}.</span>
@@ -2448,6 +2450,15 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       )}
 
       {/* ══════════ DASHBOARD ══════════ */}
+      {view === 'overview' && <Suspense fallback={<p>Loading Finance overview.</p>}><FinanceOverview
+        accounts={forecastScope.accounts} projection={cashForecastProjection} today={toISO(getHouseholdCalendarDate())}
+        live={forecastBalanceVerifiedLive} transactionStatus={actualsFreshness?.status}
+        unmappedCount={unmappedActuals.length} error={actualsError}
+        scopeLabel={financeAccountScopeLabel} onNavigate={destination=>destination==='transactions'?openAllBankActivity():setView(destination)}
+        onOpenForecast={date=>{if(date){const day=new Date(date+'T12:00:00');setCalYear(day.getFullYear());setCalMonth(day.getMonth());setSelDay(date)}setView('calendar')}}
+        onReviewEarlier={()=>{openScheduledTransactions({range:{from:fd.transactions.reduce((first,tx)=>tx.start&&tx.start<first?tx.start:first,toISO(getHouseholdCalendarDate())),to:toISO(addDays(getHouseholdCalendarDate(),-1))},label:'Earlier scheduled items — confirm bank matching before rescheduling'})}}
+      /></Suspense>}
+
       {view === 'dashboard' && (
         <div className="dash-body">
           {/* ── Greeting header ── */}
@@ -4638,7 +4649,16 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
         todayPlanUnresolved={todayPlanUnresolved}
       /></Suspense>
 
+      <details className="finance-forecast-details"><summary>Projection details &amp; forecast help</summary>
       <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
+      <p>The forecast carries the preceding balance forward. Scheduled items are plans, not proof of payment. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.</p>
+      <p>Reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</p>
+      <p>{balanceSource}. {actualsFreshnessMessage}</p>
+      {balanceDataMessage && <p>{balanceDataMessage}</p>}
+      {actualsError && <p role="alert">{actualsError}</p>}
+      {excludedAccountCount > 0 && <p>{excludedAccountCount} non-cash accounts excluded.</p>}
+      {unmappedTransactionCount > 0 && <p>{unmappedTransactionCount} unlinked bank transactions excluded. Review Finance → Transactions.</p>}
+      </details>
 
       {/* ── Month navigation and bank-activity overlay ── */}
       <div className="finance-calendar-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
