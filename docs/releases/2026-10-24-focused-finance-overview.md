@@ -7,3 +7,5 @@ Cash Forecast retains a compact source qualification beside its title. Reconcili
 Other existing pillar analysis landing pages show navigation and optional Insights. They do not request pillar analysis until Insights is opened. Scheduled analysis, meeting report preparation, report edits, permissions, audit, Undo, bank refresh behavior and all financial calculation rules are preserved.
 
 Validation: model coverage for shared anchor/floor, missing evidence, zero, leap-year boundaries and source exceptions; browser coverage for overview navigation, collapsed details, explicit insights, and pending-hold reconciliation on desktop, iPhone, portrait tablet and landscape tablet. Production build and bundle/source budgets checked. Full repository verification also runs in GitHub Actions.
+
+Browser workflows pin Ubuntu 24.04 because the project's Playwright 1.55 browser dependencies do not support the newly selected Ubuntu 26.04 image. The persistent meeting utility stays mounted across page navigation so entering Finance cannot interrupt an active recording.
