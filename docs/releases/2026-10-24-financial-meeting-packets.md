@@ -18,10 +18,24 @@ Download packet exports the current report as text. Review & archive packet uses
 
 ## Operation and rollout
 
-This change reuses Brevity's existing bank-sync and shared-state paths. It introduces no bank credentials, new provider connections, paid bank-refresh requests, AI calls, independent background scheduler or new notification channel. Packets prepare on opening Finance Meetings and recompute from arriving source updates. Unattended overnight bank refresh and scheduled delivery are separate operational work requiring verification of the deployed household configuration.
+Packets prepare without filling forms. The page immediately calculates feedback, direction, risk explanations and proposed commitments with owners/deadlines. Saved schedules automatically provide a separately labeled planning baseline when approved budget targets are missing. This does not invent an approved budget.
+
+The authenticated report endpoint loads financial facts from shared household storage and applies saved report edits before analysis. It reuses the deployed `OPENAI_API_KEY` / `BREVITY_AI_MODEL` connection, caches analysis by evidence, and prevents concurrent duplicate calls with a bounded lease. Missing credentials or an unavailable AI service leave useful calculated feedback visible and retry automatically. A response based on different financial facts is not displayed as analysis of the current report.
+
+A protected background job prepares all five cadences for current and previous periods at 5:00 AM America/New_York. The scheduled UTC pair and local-hour guard cover daylight/standard time. Preview deployments skip scheduled dispatch. This job reads existing synchronized financial records; it does not create bank connections, request paid transaction refreshes, execute payments or deliver messages to others. A failed/stale bank sync remains visible as a source issue.
+
+The existing bank-sync and shared-state paths supply household data. No additional daily data-entry requirement is introduced. Live deployment must have the existing AI and automation credentials available; local tests use injected services and synthetic reports, not household banking credentials.
+
+## Optional household edits
+
+Edit report, insights or numbers opens a populated field selector. Notes, summary, direction, insights, proposed actions, narrative warnings and reported financial figures can be changed, including unknown values and zero. Choose one report period or the cadence going forward. Restore automatic value removes the selected override. Array rows use stable identities so a removed obligation's edit cannot move to a different bill.
+
+`meeting.packet.edit` uses the existing administrator financial permission, exact shared-state version check, Action Mode review, immutable before/after audit and Undo. Edits persist across refreshes in the shared meeting record. They adjust the reported household view; source bank records remain intact. Current source and overridden values are shown in the report. Component edits recalculate dependent net, category remaining amounts, monthly net, card utilization and analysis. Explicit total overrides remain independent and visible as adjustments.
+
+Suggested commitments can be reviewed into the existing action register without retyping. The narrative advice and proposed commitments remain editable. Generation does not mark actions complete, approve budgets or certify closes. Downloaded and archived packets include the effective analysis, notes and adjustment provenance.
 
 Source basis: user-specified FIN-001 durations and reporting distinctions; accessible `LSLJ HFOS v2 05 20 2026.docx`, revised May 20, 2026, including the financial meeting cadence, HFOS reporting standards and annual budget timeline. The separate cadence document and prior assistant responses were unavailable. No private household balances are committed in this change.
 
 ## Verification
 
-Domain tests cover household date boundaries, completed/current periods, transfers, replaced pending charges, missing versus zero inputs, duplicate account links, source aging, budget targets and action carry-forward. The reviewed archive test checks exact text retention above the normal notes limit, immutable snapshot fields, size rejection, audit and Undo. Browser coverage exercises all five cadences, period selection, populated posted/pending/projected sections, download and responsive overflow using synthetic data.
+Domain tests cover household dates, reporting periods, transfers, superseded holds, missing versus zero inputs, links, source aging, budget targets, action carry-forward, calculated recommendations, override persistence/reset, row identity, AI caching/failure, authorization and morning scheduling. Review tests verify snapshot retention and numeric overrides with audit/Undo. Browser checks exercise all five cadences, prepared insights, number-edit review (including zero), period selection, download and phone layout using synthetic data. Live AI availability and deployed schedule execution require deployment verification.

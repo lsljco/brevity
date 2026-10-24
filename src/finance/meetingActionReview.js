@@ -2,8 +2,13 @@ import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { getAcknowledgedSharedStateVersion } from '../household/sharedState.js'
 import { canonicalMeetingAction, canonicalMeetingCorrection, canonicalMeetingHistory, canonicalMeetingNameText } from './meetingNames.js'
+import {normalizePacketEdit} from './meetingPacketIntelligence.js'
 
 export const FINANCE_MEETINGS_STORAGE_KEY='brevity_finance_meetings_v1'
+export function meetingPacketEditOperation(command){
+  const normalized=normalizePacketEdit(command)
+  return {type:'meeting.packet.edit',targetId:normalized.packetId,payload:{commandJson:JSON.stringify(normalized)},description:`${normalized.reset?'Restore generated':'Adjust reported'} ${normalized.field} for ${normalized.scope==='cadence'?'this cadence going forward':'this report period'}. ${normalized.reason}`}
+}
 
 const same=(left,right)=>JSON.stringify(left??'')===JSON.stringify(right??'')
 const quote=value=>`“${String(value||'').trim().slice(0,80)}${String(value||'').trim().length>80?'…':''}”`

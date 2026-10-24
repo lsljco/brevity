@@ -6,6 +6,7 @@ import { createAssistantActionRepository } from '../../netlify/lib/assistant-act
 import { executeActionWithJournal, prepareDirectProposal, undoActionWithJournal } from '../../netlify/functions/brevity-assistant-actions.mjs'
 import {
   meetingActionCreateOperation,
+  meetingPacketEditOperation,
   meetingActionOperation,
   meetingCorrectionCreateOperation,
   meetingCorrectionOperation,
@@ -36,6 +37,23 @@ function versionedBlobStore(){
 const action={id:'commitment-1',text:'Jabin will send dates',owner:'Jabin',due:'2026-09-10',status:'open'}
 const correction={id:'correction-1',label:'cash on hand',value:'286',reason:'Legacy note',source:'Proposed',scope:'this occurrence',status:'proposed',origin:'meeting transcript'}
 const meeting={id:'meeting-1',cadence:'weekly',summary:'Old summary',notes:'Old notes',transcript:'Old transcript'}
+
+test('numeric report overrides require financial authority, version-check, preserve originals in audit, and support Undo',async()=>{
+  const store=versionedBlobStore(),instant=new Date('2026-10-24T13:00:00Z')
+  const repository=createAssistantActionRepository({store,householdId:'packet-edits-house',now:()=>instant})
+  let value={meetings:[],packetEdits:{}},version=1
+  const resources={read:async()=>({value:structuredClone(value),version,record:{}}),write:async(resource,next,expected)=>{assert.equal(expected,version);value=structuredClone(next);return{value,version:++version}}}
+  const operation=meetingPacketEditOperation({packetId:'daily:current:2026-10-24',cadence:'daily',scope:'period',field:'cashBalance',value:0,reason:'Expected settlement correction'})
+  const args={input:{summary:'Adjust reported cash',operation,expectedVersion:1},repository,resources,now:instant,id:'packet-edit'}
+  await assert.rejects(()=>prepareDirectProposal({...args,session:{member:'Terica',role:'member'},permissions:defaultActionPermissions('member')}),error=>error.code==='FORBIDDEN')
+  const proposal=await prepareDirectProposal({...args,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin')})
+  const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources,event:{},leaseMs:0,now:()=>instant})
+  assert.equal(value.packetEdits['daily:current:2026-10-24'].cashBalance.value,0)
+  assert.equal(value.packetEdits['daily:current:2026-10-24'].cashBalance.by,'Larry')
+  assert.deepEqual(result.audit.changes[0].before.packetEdits,{})
+  await undoActionWithJournal({repository,auditId:result.audit.id,session:{member:'Larry',role:'admin'},resources,event:{},leaseMs:0,now:()=>new Date('2026-10-24T13:01:00Z')})
+  assert.deepEqual(value.packetEdits,{})
+})
 
 test('report packet survives reviewed save exactly and history edits cannot rewrite its snapshot',async()=>{
   const store=versionedBlobStore(),instant=new Date('2026-10-24T13:15:00Z')

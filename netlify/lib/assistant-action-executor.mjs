@@ -1,4 +1,5 @@
 import { validateRecovery } from '../../src/finance/recoveryScenario.js'
+import {applyPacketEdit} from '../../src/finance/meetingPacketIntelligence.js'
 import {submitProjectCompletion,reviewProjectCompletion} from '../../src/homehq/projectSignoff.js'
 import {LEARNING_HUB_RESOURCE,applyLearningItem} from '../../src/education/learningHub.js'
 import dailyOutcomes from './daily-outcomes.cjs'
@@ -123,6 +124,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type==='meeting.packet.edit')return {before,after:applyPacketEdit(value||{},JSON.parse(operation.payload.commandJson),{actor:context.actor,at:nowIso(context.now||(()=>new Date()))})}
   if(operation.type.startsWith('health.care.'))return {before,after:applyCareAction(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(GOVERNANCE_TYPES.includes(operation.type))return {before,after:applyGovernance(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,governanceContext:context.governanceContext})}
   if(operation.type.startsWith('orchestration.'))return {before,after:applyOrchestration(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,orchestrationCase:context.orchestrationCase})}

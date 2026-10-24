@@ -81,19 +81,21 @@ function budgetReport({scheduled,budget,accounts,period,posted,legacyYear,legacy
   const owners=buildLegacyBudgetOwners(lines),months=monthsFor(period),categories=new Map()
   for(const line of lines){
     const category=budgetCategory({cat:line.category,amount:1})
-    const row=categories.get(category)||{category,budget:0,missingTargets:0}
+    const row=categories.get(category)||{category,budget:0,missingTargets:0,planningBaseline:0,missingPlan:false}
     for(const m of months){
       const target=budgetTargetForLine({budget,line,year:m.year,month:m.month,legacyYear,legacyAccountId,legacyOwners:owners})
       if(!validNumber(target))row.missingTargets++
       else row.budget+=Number(target)
+      if(!line.transactions.length)row.missingPlan=true
+      for(const t of line.transactions)row.planningBaseline+=transactionOccurrencesForRange(t,range(new Date(m.year,m.month,1),new Date(m.year,m.month+1,0))).reduce((s,o)=>s+o.amount,0)
     }
     categories.set(category,row)
   }
   for(const t of posted.filter(t=>Number(t.amount)>=0)){
-    const cat=budgetCategory(t)||'Other',row=categories.get(cat)||{category:cat,budget:0,missingTargets:1}
+    const cat=budgetCategory(t)||'Other',row=categories.get(cat)||{category:cat,budget:0,missingTargets:1,planningBaseline:null,missingPlan:true}
     row.posted=(row.posted||0)+Number(t.amount);categories.set(cat,row)
   }
-  return [...categories.values()].map(r=>({...r,budget:r.missingTargets?null:round(r.budget),posted:round(r.posted||0),remaining:r.missingTargets?null:round(r.budget-(r.posted||0))})).sort((a,b)=>b.posted-a.posted)
+  return [...categories.values()].map(r=>{const {missingPlan,...report}=r;return {...report,planningBaseline:missingPlan?null:round(r.planningBaseline),budget:r.missingTargets?null:round(r.budget),posted:round(r.posted||0),remaining:r.missingTargets?null:round(r.budget-(r.posted||0))}}).sort((a,b)=>b.posted-a.posted)
 }
 
 export function buildMeetingPacket({cadence='daily',mode='current',now=new Date(),accounts=[],scheduled=[],actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,actions=[],balanceHistory=[],balanceDataStatus='unknown',transactionFreshnessStatus='unknown',balanceCheckedAt='',transactionCheckedAt=''}={}){
@@ -134,7 +136,7 @@ export function buildMeetingPacket({cadence='daily',mode='current',now=new Date(
   if(openActions.some(a=>a.missingOwner||a.missingDeadline))warnings.push('Some open commitments need an individual owner or deadline.')
   const observations=balanceHistory.filter(h=>h.date===toISO(addDays(parseISODate(asOf),-1))).map(h=>({...h,balances:Object.fromEntries(Object.entries(h.balances||{}).filter(([id])=>cash.some(a=>a.plaidAccountId===id)))})).filter(h=>Object.keys(h.balances).length)
   const year=Number(asOf.slice(0,4))
-  return {projectedInflows,schemaVersion:1,policy:'FIN-001 v2.0 · May 20, 2026',cadence,label:policy.label,duration:policy.duration,agenda:policy.agenda.map((title,i)=>({title,minutes:policy.minutes[i]})),inputs:policy.inputs,deliverables:policy.deliverables,generatedAt:now.toISOString(),asOf,period,horizon,scope:accounts.map(a=>({id:a.id,name:a.name,type:a.type})),sources:{balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt},status:'Draft · review required',warnings,cashBalance,priorDayObservations:observations,posted:currentTotals,prior:priorTotals,pending:linked&&(pending.length||transactionFreshnessStatus==='fresh')?totals(pending):null,pendingItems:pending.map(t=>({id:t.id,title:labelOf(t),date:t.date,amount:Number(t.amount),account:links.get(t.accountId)})),categoryBudget:categoryBudget.map(r=>currentTotals?r:{...r,posted:null,remaining:null}),monthly:monthsFor(period).map(m=>({month:m.key,...(currentTotals?totals(posted.filter(t=>t.date.startsWith(m.key))):{income:null,otherInflows:null,expenses:null,net:null})})),payables,openActions,creditCards:accounts.filter(a=>a.type==='credit').map(a=>({name:a.name,balance:validNumber(a.balance)?Math.abs(Number(a.balance)):null,limit:validNumber(a.creditLimit)?Number(a.creditLimit):null})),budgetMilestones:[{title:`Proposed ${year+1} budget submitted`,due:`${year}-09-30`,owner:'Larry Jenkins',status:'Approval evidence required'},{title:`${year+1} budget finalized and approved`,due:`${year}-10-31`,owner:'Larry Jenkins / Terica Seay / Lorenzo Seay',status:'Approval evidence required'}]}
+  return {projectedInflows,schemaVersion:1,policy:'FIN-001 v2.0 · May 20, 2026',cadence,label:policy.label,duration:policy.duration,agenda:policy.agenda.map((title,i)=>({title,minutes:policy.minutes[i]})),inputs:policy.inputs,deliverables:policy.deliverables,generatedAt:now.toISOString(),asOf,period,horizon,scope:accounts.map(a=>({id:a.id,name:a.name,type:a.type})),sources:{balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt},status:'Draft · review required',warnings,cashBalance,priorDayObservations:observations,posted:currentTotals,prior:priorTotals,pending:linked&&(pending.length||transactionFreshnessStatus==='fresh')?totals(pending):null,pendingItems:pending.map(t=>({id:t.id,title:labelOf(t),date:t.date,amount:Number(t.amount),account:links.get(t.accountId)})),categoryBudget:categoryBudget.map(r=>currentTotals?r:{...r,posted:null,remaining:null}),monthly:monthsFor(period).map(m=>({month:m.key,...(currentTotals?totals(posted.filter(t=>t.date.startsWith(m.key))):{income:null,otherInflows:null,expenses:null,net:null})})),payables,openActions,creditCards:accounts.filter(a=>a.type==='credit').map(a=>({id:a.id,name:a.name,balance:validNumber(a.balance)?Math.abs(Number(a.balance)):null,limit:validNumber(a.creditLimit)?Number(a.creditLimit):null})),budgetMilestones:[{title:`Proposed ${year+1} budget submitted`,due:`${year}-09-30`,owner:'Larry Jenkins',status:'Approval evidence required'},{title:`${year+1} budget finalized and approved`,due:`${year}-10-31`,owner:'Larry Jenkins / Terica Seay / Lorenzo Seay',status:'Approval evidence required'}]}
 }
 
 const dollars=v=>v==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v)
@@ -151,5 +153,6 @@ export function meetingPacketText(p){
     '\nCREDIT CARD SUMMARY',...p.creditCards.map(r=>`${r.name}: balance ${dollars(r.balance)}; limit ${dollars(r.limit)}; payoff target/progress requires review`),
     '\nDECISIONS / OPEN ACTIONS',...p.openActions.map(a=>`${a.text} · ${a.owner||'Owner required'} · due ${a.due||'Deadline required'} · ${a.overdue?'OVERDUE':a.status||'open'}`),
     '\nBUDGET MILESTONES',...p.budgetMilestones.map(m=>`${m.title} · ${m.due} · ${m.owner} · ${m.status}`),
-    '\nDELIVERABLES',...p.deliverables,'\nHUMAN REVIEW REQUIRED','Explain deviations, behavior changes, account balances and strategic findings. Confirm reconciliation, communication, approval evidence and delivery. Archiving a packet does not certify a close or approve a budget.'].join('\n')
+    '\nDELIVERABLES',...p.deliverables,'\nHUMAN REVIEW REQUIRED','Explain deviations, behavior changes, account balances and strategic findings. Confirm reconciliation, communication, approval evidence and delivery. Archiving a packet does not certify a close or approve a budget.',
+    ...(p.analysis?['\nAUTOMATIC ANALYSIS',p.analysis.mode,p.analysis.summary,p.analysis.direction,p.analysis.insights,p.analysis.actions,'\nREPORT NOTES',p.notes||'','\nHOUSEHOLD ADJUSTMENTS',...(p.adjustments||[]).map(a=>`${a.field}: source ${String(a.sourceValue??'unknown')}; reported ${String(a.value??'unknown')}; ${a.by}; ${a.at}; ${a.reason}`)]:[])].join('\n')
 }

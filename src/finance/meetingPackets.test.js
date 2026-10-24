@@ -44,7 +44,7 @@ test('budget targets are category/account/year/month specific and missing is not
   const scheduled=[{id:'food',acct:'cash',type:'expense',cat:'Food',name:'Groceries',amount:50,freq:'monthly',start:'2026-01-01'}]
   const budget={schemaVersion:2,targets:{cash:{2026:{'cash:food':{9:300}}}}}
   const p=buildMeetingPacket({...options,cadence:'monthly',mode:'current',scheduled,budget,actuals:[bank('expense','2026-10-23',100)]})
-  assert.deepEqual(p.categoryBudget[0],{category:'Food',budget:300,missingTargets:0,posted:100,remaining:200})
+  assert.deepEqual(p.categoryBudget[0],{category:'Food',budget:300,missingTargets:0,planningBaseline:50,posted:100,remaining:200})
   const missing=buildMeetingPacket({...options,cadence:'quarterly',mode:'current',scheduled,budget,actuals:[bank('expense','2026-10-23',100)]})
   // Current quarter only touches October; future months aren't compared to posted actuals yet.
   assert.equal(missing.categoryBudget[0].budget,300)

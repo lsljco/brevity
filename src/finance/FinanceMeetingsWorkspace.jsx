@@ -10,6 +10,7 @@ import { HOUSEHOLD_MEMBERS } from '../household/dailyPlan.js'
 import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 import {
   meetingActionCreateOperation,
+  meetingPacketEditOperation,
   meetingActionOperation,
   meetingCorrectionCreateOperation,
   meetingCorrectionOperation,
@@ -138,7 +139,7 @@ export default function FinanceMeetingsWorkspace({packetData={},liveSnapshot={},
 
   const reviewMutation=async({summary,operation,label,onApplied})=>{
     if(meetingPlanningReadOnly)throw new Error('Plans & decisions access is required to edit Finance Meeting narrative and commitments.')
-    if(financeReadOnly&&['meeting.correction.create','meeting.correction.update','meeting.workspace.update'].includes(operation.type))throw new Error('Financial corrections and Finance Meeting guidance require household-administrator access.')
+    if(financeReadOnly&&['meeting.correction.create','meeting.correction.update','meeting.workspace.update','meeting.packet.edit'].includes(operation.type))throw new Error('Financial corrections and Finance Meeting guidance require household-administrator access.')
     setMutationNotice('')
     const proposal=await requestMeetingActionReview({summary,operation})
     pendingReviewsRef.current.set(proposal.id,{label,onApplied})
@@ -239,7 +240,7 @@ export default function FinanceMeetingsWorkspace({packetData={},liveSnapshot={},
   return <section className={`finance-meetings${isRecording?' is-recording':''}${financeReadOnly&&meetingPlanningReadOnly?' is-read-only':''}`}>
     {capture.error&&<p role="alert">{capture.error}</p>}<button type="button" onClick={openMeetingHistory}>Meeting History</button><header className="fm-header"><div><p className="fm-eyebrow">Finance · Meetings</p><h1>Financial Operating Rhythm</h1><p>{JOBS[cadence]}</p><small className="fm-data-scope">Data scope: {accountScope}</small></div>{!meetingPlanningReadOnly&&<div className="fm-header-actions">{isRecording?<button className="fm-stop" onClick={endMeeting}><span className="fm-record-dot"/> Stop Meeting</button>:<button className="fm-primary" disabled={capture.starting||capture.saving||transcribing>0} onClick={startMeeting}><i className="ti ti-microphone"/> Start Meeting</button>}</div>}</header>
     <nav className="fm-tabs">{CADENCES.map(item=><button key={item} className={cadence===item?'active':''} onClick={()=>setCadence(item)} disabled={isRecording}>{LABELS[item]}</button>)}</nav>
-    <FinanceMeetingPacket cadence={cadence} data={packetData} actions={workspace.openActions||[]} onArchive={archivePacket} readOnly={meetingPlanningReadOnly} recording={isRecording}/>
+    <FinanceMeetingPacket cadence={cadence} data={packetData} actions={workspace.openActions||[]} edits={workspace.packetEdits||{}} onEdit={command=>reviewMutation({summary:'Update household financial report',operation:meetingPacketEditOperation(command),label:'Report adjustment'})} onProposeAction={action=>reviewMutation({summary:'Add suggested financial commitment',operation:meetingActionCreateOperation(action,{cadence,date:meetingDate()}),label:'Suggested commitment'})} onArchive={archivePacket} readOnly={meetingPlanningReadOnly} editReadOnly={financeReadOnly} recording={isRecording}/>
     <div className="fm-command-notice" role="status" aria-label="Finance Meeting data quality"><i className="ti ti-database" aria-hidden="true"/><span><strong>Balance:</strong> {balanceQualification} <strong>Actual bank activity:</strong> {transactionQualification} <strong>Scheduled activity:</strong> projections until explicitly reconciled to posted bank activity. Transfers within selected cash are neutral; transfers crossing the cash boundary count as projected inflows or obligations.</span></div>
     {!hasCashAccounts&&<div className="fm-command-notice" role="status" aria-label="Cash metrics unavailable"><i className="ti ti-alert-circle" aria-hidden="true"/><span><strong>Cash metrics unavailable.</strong> No checking or savings account is selected. Select an eligible cash account to calculate balances, inflows, obligations, and cash-flow totals; unavailable values are shown as —.</span></div>}
     {isRecording&&<div className="fm-recording-banner"><div><span className="fm-record-dot"/><strong>Recording is sacred</strong><span>One microphone stream feeds the uninterrupted master recording and Brevity transcription.</span></div><span>{transcribing?'Transcribing…':'Recording + transcription healthy'}</span></div>}
