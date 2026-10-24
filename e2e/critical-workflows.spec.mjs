@@ -535,6 +535,35 @@ test('Project review repairs stale local synchronization metadata before opening
 
 test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
 
+test('Cash Forecast FIN-001 packets populate all five meetings and export the selected report',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Meetings',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  const packet=page.getByRole('region',{name:'Prepared FIN-001 meeting packet'})
+  await expect(packet).toBeVisible()
+  for(const [label,duration] of [['Daily','7–10 minutes'],['Weekly','20–30 minutes'],['Monthly','45–60 minutes'],['Quarterly','75–90 minutes'],['Annual','2.5–3 hours']]){
+    await page.locator('.fm-tabs').getByRole('button',{name:label,exact:true}).click()
+    await expect(packet.getByRole('heading',{name:`${label} meeting packet`})).toBeVisible()
+    await expect(packet).toContainText(duration)
+  }
+  await page.locator('.fm-tabs').getByRole('button',{name:'Daily',exact:true}).click()
+  await packet.getByLabel('Report period').selectOption('current')
+  await expect(packet.locator('.fm-packet-summary')).toContainText('-$25')
+  await packet.getByText('Cash position, posted activity and pending transactions',{exact:true}).click()
+  await expect(packet.getByRole('table',{name:'Pending transactions (USD)'})).toContainText('Gas station authorization')
+  await expect(packet.getByRole('table',{name:'Posted period activity (USD)'})).toContainText('$25')
+  await packet.getByText('Standing payables and forecasted obligations',{exact:true}).click()
+  await expect(packet.getByRole('table',{name:'Scheduled obligations (USD)'})).toContainText('Planned groceries')
+  const download=page.waitForEvent('download')
+  await packet.getByRole('button',{name:'Download packet',exact:true}).click()
+  expect((await download).suggestedFilename()).toContain('Jenkins-Seay-daily-')
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)
+  expect(overflow).toBe(false)
+  await page.screenshot({path:testInfo.outputPath('hfos-packet.png'),fullPage:true})
+})
+
 test('Projected Expenses includes one-time calendar obligations in the selected timeframe',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Finance',exact:true}).click()

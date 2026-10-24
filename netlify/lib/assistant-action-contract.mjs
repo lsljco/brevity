@@ -147,7 +147,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.action.update': ['text', 'owner', 'due', 'status'],
   'meeting.correction.create': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin', 'meetingDate', 'cadence'],
   'meeting.correction.update': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin'],
-  'meeting.session.create': ['cadence', 'meetingDate', 'startedAt', 'endedAt', 'summary', 'notes', 'transcript', 'actions', 'corrections'],
+  'meeting.session.create': ['cadence', 'meetingDate', 'startedAt', 'endedAt', 'summary', 'notes', 'transcript', 'packetText', 'actions', 'corrections'],
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
@@ -354,6 +354,10 @@ function normalizeActionPayload(type, input) {
       normalized.commandJson=JSON.stringify(normalizeMealScheduleCommand(value))
     }else if(type==='recurring.update'&&field==='reconciliation'){
       normalized.reconciliation=normalizeReconciliationEvidence(value)
+    }else if(type==='meeting.session.create'&&field==='packetText'){
+      assertString(type,field,value)
+      if(!value.trim()||value.length>100_000)throw new Error('The report snapshot must contain between 1 and 100,000 characters. Download a larger packet instead.')
+      normalized.packetText=value
     }else if(type==='meeting.session.create'&&field==='actions'){
       normalized.actions=normalizeMeetingSessionActions(value)
     }else if(type==='meeting.session.create'&&field==='corrections'){

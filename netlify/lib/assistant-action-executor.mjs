@@ -231,7 +231,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const changedAt=nowIso(context.now||(()=>new Date())),meetingDate=payload.meetingDate||payload.endedAt.slice(0,10)
     const actions=(payload.actions||[]).map(item=>({id:createId(),text:item.text,owner:item.owner||'',due:item.due||'',meetingDate,financialEffect:item.financialEffect||'',status:'open',createdAt:changedAt,cadence:payload.cadence,createdBy:context.actor||'Household member'}))
     const corrections=(payload.corrections||[]).map(item=>({id:createId(),label:item.label,value:item.value,source:item.source||'Proposed',scope:item.scope||'this occurrence',reason:item.reason||'',origin:item.origin||'meeting transcript analysis',meetingDate,status:'proposed',createdAt:changedAt,cadence:payload.cadence,createdBy:context.actor||'Household member'}))
-    const meeting={id:createId(),cadence:payload.cadence,startedAt:payload.startedAt,endedAt:payload.endedAt,summary:payload.summary||'',notes:payload.notes||'',transcript:payload.transcript||'',createdAt:changedAt,createdBy:context.actor||'Household member'}
+    const meeting={id:createId(),cadence:payload.cadence,startedAt:payload.startedAt,endedAt:payload.endedAt,summary:payload.summary||'',notes:payload.notes||'',transcript:payload.transcript||'',...(payload.packetText?{packetText:payload.packetText}:{}),createdAt:changedAt,createdBy:context.actor||'Household member'}
     const current=value&&!Array.isArray(value)?value:{}
     return{before,after:{...current,openActions:[...actions,...(current.openActions||[])],corrections:[...corrections,...(current.corrections||[])],meetings:[meeting,...(current.meetings||[])]},createdId:meeting.id}
   }

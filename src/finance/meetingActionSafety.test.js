@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { defaultActionPermissions } from '../../netlify/lib/assistant-action-contract.mjs'
+import { defaultActionPermissions, normalizeActionOperation } from '../../netlify/lib/assistant-action-contract.mjs'
 import { resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
 import { executeActionWithJournal, prepareDirectProposal, undoActionWithJournal } from '../../netlify/functions/brevity-assistant-actions.mjs'
@@ -36,6 +36,23 @@ function versionedBlobStore(){
 const action={id:'commitment-1',text:'Jabin will send dates',owner:'Jabin',due:'2026-09-10',status:'open'}
 const correction={id:'correction-1',label:'cash on hand',value:'286',reason:'Legacy note',source:'Proposed',scope:'this occurrence',status:'proposed',origin:'meeting transcript'}
 const meeting={id:'meeting-1',cadence:'weekly',summary:'Old summary',notes:'Old notes',transcript:'Old transcript'}
+
+test('report packet survives reviewed save exactly and history edits cannot rewrite its snapshot',async()=>{
+  const store=versionedBlobStore(),instant=new Date('2026-10-24T13:15:00Z')
+  const repository=createAssistantActionRepository({store,householdId:'packet-house',now:()=>instant})
+  let value={meetings:[],openActions:[],corrections:[]},version=1
+  const resources={read:async()=>({value:structuredClone(value),version,record:{}}),write:async(resource,next,expected)=>{assert.equal(expected,version);value=structuredClone(next);return{value,version:++version}}}
+  const packetText='FIN-001\nPosted: $100\nPending: $20\nProjected: $80\n'+('Source evidence\n'.repeat(600))
+  const operation=meetingSessionCreateOperation({cadence:'daily',meetingDate:'2026-10-24',startedAt:instant.toISOString(),endedAt:instant.toISOString(),summary:'Draft packet archived',packetText})
+  const proposal=await prepareDirectProposal({input:{summary:'Archive packet',operation,expectedVersion:1},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),repository,resources,now:instant,id:'packet-archive'})
+  const executed=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources,event:{},leaseMs:0,now:()=>instant})
+  assert.equal(value.meetings[0].packetText,packetText)
+  assert.equal(executed.audit.changes[0].after.meetings[0].packetText,packetText)
+  assert.throws(()=>normalizeActionOperation({type:'meeting.history.update',targetId:value.meetings[0].id,payload:{packetText:'Changed'}}),/unsupported field/)
+  assert.throws(()=>normalizeActionOperation({...operation,payload:{...operation.payload,packetText:'x'.repeat(100001)}}),/100,000/)
+  await undoActionWithJournal({repository,auditId:executed.audit.id,session:{member:'Larry',role:'admin'},resources,event:{},leaseMs:0,now:()=>new Date('2026-10-24T13:16:00Z')})
+  assert.equal(value.meetings.length,0)
+})
 
 test('Finance Meeting editors produce exact, minimal reviewed operations',()=>{
   const actionOperation=meetingActionOperation(action,{...action,text:'Javin will send dates',owner:'Javin'})

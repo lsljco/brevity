@@ -81,7 +81,7 @@ export function meetingHistoryOperation(before,draft){
   }
 }
 
-export function meetingSessionCreateOperation({cadence='weekly',meetingDate='',startedAt='',endedAt='',summary='',notes='',transcript='',actions=[],corrections=[]}={}){
+export function meetingSessionCreateOperation({cadence='weekly',meetingDate='',startedAt='',endedAt='',summary='',notes='',transcript='',packetText='',actions=[],corrections=[]}={}){
   const normalizedActions=actions.flatMap(item=>{
     const repaired=canonicalMeetingAction(item),text=repaired.text.trim()
     if(!text)return[]
@@ -99,7 +99,7 @@ export function meetingSessionCreateOperation({cadence='weekly',meetingDate='',s
   ].join('')
   return{
     type:'meeting.session.create',
-    payload:{cadence,meetingDate,startedAt,endedAt,summary:canonicalMeetingNameText(summary),notes:canonicalMeetingNameText(notes),transcript:canonicalMeetingNameText(transcript),actions:normalizedActions,corrections:normalizedCorrections},
+    payload:{cadence,meetingDate,startedAt,endedAt,summary:canonicalMeetingNameText(summary),notes:canonicalMeetingNameText(notes),transcript:canonicalMeetingNameText(transcript),...(packetText?{packetText}:{}),actions:normalizedActions,corrections:normalizedCorrections},
     description:`Save the reviewed ${cadence} Finance Meeting with ${normalizedActions.length} commitment${normalizedActions.length===1?'':'s'} and ${normalizedCorrections.length} proposed correction${normalizedCorrections.length===1?'':'s'}.${reviewedDetails}`,
   }
 }
