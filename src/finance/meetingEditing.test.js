@@ -114,7 +114,7 @@ test('finance meetings separate member planning edits from administrator financi
     assert.match(meetings,new RegExp(`const ${mutation}=[\\s\\S]{0,100}if\\(meetingPlanningReadOnly`),`${mutation} must require planning access`)
   }
   assert.match(meetings,/const addCorrection=async\(\)=>\{\s*if\(financeReadOnly/)
-  assert.match(meetings,/if\(financeReadOnly&&\['meeting\.correction\.create','meeting\.correction\.update','meeting\.workspace\.update'\]\.includes\(operation\.type\)\)/)
+  assert.match(meetings,/if\(financeReadOnly&&\['meeting\.correction\.create','meeting\.correction\.update','meeting\.workspace\.update','meeting\.packet\.edit'\]\.includes\(operation\.type\)\)/)
   assert.match(meetings,/!meetingPlanningReadOnly&&<div className="fm-header-actions"/)
   assert.match(meetings,/!meetingPlanningReadOnly&&<div className="fm-form-grid"/)
   assert.match(meetings,/!financeReadOnly&&<div className="fm-correction-grid"/)

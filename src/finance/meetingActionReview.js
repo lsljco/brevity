@@ -2,8 +2,13 @@ import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { getAcknowledgedSharedStateVersion } from '../household/sharedState.js'
 import { canonicalMeetingAction, canonicalMeetingCorrection, canonicalMeetingHistory, canonicalMeetingNameText } from './meetingNames.js'
+import {normalizePacketEdit} from './meetingPacketEdits.js'
 
 export const FINANCE_MEETINGS_STORAGE_KEY='brevity_finance_meetings_v1'
+export function meetingPacketEditOperation(command){
+  const normalized=normalizePacketEdit(command)
+  return {type:'meeting.packet.edit',targetId:normalized.packetId,payload:{commandJson:JSON.stringify(normalized)},description:`${normalized.reset?'Restore generated':'Adjust reported'} ${normalized.field} for ${normalized.scope==='cadence'?'this cadence going forward':'this report period'}. ${normalized.reason}`}
+}
 
 const same=(left,right)=>JSON.stringify(left??'')===JSON.stringify(right??'')
 const quote=value=>`“${String(value||'').trim().slice(0,80)}${String(value||'').trim().length>80?'…':''}”`
@@ -81,7 +86,7 @@ export function meetingHistoryOperation(before,draft){
   }
 }
 
-export function meetingSessionCreateOperation({cadence='weekly',meetingDate='',startedAt='',endedAt='',summary='',notes='',transcript='',actions=[],corrections=[]}={}){
+export function meetingSessionCreateOperation({cadence='weekly',meetingDate='',startedAt='',endedAt='',summary='',notes='',transcript='',packetText='',actions=[],corrections=[]}={}){
   const normalizedActions=actions.flatMap(item=>{
     const repaired=canonicalMeetingAction(item),text=repaired.text.trim()
     if(!text)return[]
@@ -99,7 +104,7 @@ export function meetingSessionCreateOperation({cadence='weekly',meetingDate='',s
   ].join('')
   return{
     type:'meeting.session.create',
-    payload:{cadence,meetingDate,startedAt,endedAt,summary:canonicalMeetingNameText(summary),notes:canonicalMeetingNameText(notes),transcript:canonicalMeetingNameText(transcript),actions:normalizedActions,corrections:normalizedCorrections},
+    payload:{cadence,meetingDate,startedAt,endedAt,summary:canonicalMeetingNameText(summary),notes:canonicalMeetingNameText(notes),transcript:canonicalMeetingNameText(transcript),...(packetText?{packetText}:{}),actions:normalizedActions,corrections:normalizedCorrections},
     description:`Save the reviewed ${cadence} Finance Meeting with ${normalizedActions.length} commitment${normalizedActions.length===1?'':'s'} and ${normalizedCorrections.length} proposed correction${normalizedCorrections.length===1?'':'s'}.${reviewedDetails}`,
   }
 }

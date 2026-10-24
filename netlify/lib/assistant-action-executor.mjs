@@ -1,4 +1,5 @@
 import { validateRecovery } from '../../src/finance/recoveryScenario.js'
+import {applyPacketEdit} from '../../src/finance/meetingPacketIntelligence.js'
 import {submitProjectCompletion,reviewProjectCompletion} from '../../src/homehq/projectSignoff.js'
 import {LEARNING_HUB_RESOURCE,applyLearningItem} from '../../src/education/learningHub.js'
 import dailyOutcomes from './daily-outcomes.cjs'
@@ -123,6 +124,7 @@ function mergeAllowed(record, payload) { return { ...record, ...clone(payload), 
 
 export function applyRecordOperation(value, operation, createId = randomUUID, context = {}) {
   const before = clone(value)
+  if(operation.type==='meeting.packet.edit')return {before,after:applyPacketEdit(value||{},JSON.parse(operation.payload.commandJson),{actor:context.actor,at:nowIso(context.now||(()=>new Date()))})}
   if(operation.type.startsWith('health.care.'))return {before,after:applyCareAction(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(GOVERNANCE_TYPES.includes(operation.type))return {before,after:applyGovernance(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,governanceContext:context.governanceContext})}
   if(operation.type.startsWith('orchestration.'))return {before,after:applyOrchestration(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId,orchestrationCase:context.orchestrationCase})}
@@ -231,7 +233,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const changedAt=nowIso(context.now||(()=>new Date())),meetingDate=payload.meetingDate||payload.endedAt.slice(0,10)
     const actions=(payload.actions||[]).map(item=>({id:createId(),text:item.text,owner:item.owner||'',due:item.due||'',meetingDate,financialEffect:item.financialEffect||'',status:'open',createdAt:changedAt,cadence:payload.cadence,createdBy:context.actor||'Household member'}))
     const corrections=(payload.corrections||[]).map(item=>({id:createId(),label:item.label,value:item.value,source:item.source||'Proposed',scope:item.scope||'this occurrence',reason:item.reason||'',origin:item.origin||'meeting transcript analysis',meetingDate,status:'proposed',createdAt:changedAt,cadence:payload.cadence,createdBy:context.actor||'Household member'}))
-    const meeting={id:createId(),cadence:payload.cadence,startedAt:payload.startedAt,endedAt:payload.endedAt,summary:payload.summary||'',notes:payload.notes||'',transcript:payload.transcript||'',createdAt:changedAt,createdBy:context.actor||'Household member'}
+    const meeting={id:createId(),cadence:payload.cadence,startedAt:payload.startedAt,endedAt:payload.endedAt,summary:payload.summary||'',notes:payload.notes||'',transcript:payload.transcript||'',...(payload.packetText?{packetText:payload.packetText}:{}),createdAt:changedAt,createdBy:context.actor||'Household member'}
     const current=value&&!Array.isArray(value)?value:{}
     return{before,after:{...current,openActions:[...actions,...(current.openActions||[])],corrections:[...corrections,...(current.corrections||[])],meetings:[meeting,...(current.meetings||[])]},createdId:meeting.id}
   }

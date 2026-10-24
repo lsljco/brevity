@@ -1,10 +1,14 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import {getHouseholdCalendarDate} from './financeTime.js'
 import { buildCanonicalFinanceModel } from './financeDomain.js'
 import { buildMeetingCashScope, meetingBalanceQualification, meetingTransactionQualification, normalizeMeetingSourceStatus } from './financeMeetingTruth.js'
 import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
 
-export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',balanceDataStatus='unknown',transactionFreshnessStatus='unknown',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
-  const today=useMemo(()=>new Date(),[])
+export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',balanceDataStatus='unknown',transactionFreshnessStatus='unknown',balanceCheckedAt='',transactionCheckedAt='',balanceHistory=[],readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
+  const [clock,setClock]=useState(()=>new Date())
+  useEffect(()=>{const timer=setInterval(()=>setClock(new Date()),60000);return()=>clearInterval(timer)},[])
+  const today=useMemo(()=>getHouseholdCalendarDate(clock),[clock])
+  const packetData=useMemo(()=>({accounts,scheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt,balanceHistory}),[accounts,scheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt,balanceHistory])
   const meetingScope=useMemo(()=>buildMeetingCashScope({accounts,scheduled,cashFlowScheduled,actuals,balanceDataStatus,transactionFreshnessStatus,today}),[accounts,scheduled,cashFlowScheduled,actuals,balanceDataStatus,transactionFreshnessStatus,today])
   const model=useMemo(()=>{
     const canonical=buildCanonicalFinanceModel({accounts:meetingScope.accounts,scheduled:meetingScope.scheduled,cashFlowScheduled:meetingScope.cashFlowScheduled,actuals:meetingScope.actuals,budget,budgetLegacyYear,budgetLegacyAccountId,today})
@@ -54,5 +58,5 @@ export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlow
     const transferScope=meetingScope.boundaryTransferCount||meetingScope.internalCashTransferCount?` ${meetingScope.boundaryTransferCount} boundary transfer${meetingScope.boundaryTransferCount===1?'':'s'} count as projected cash movement; ${meetingScope.internalCashTransferCount} transfer${meetingScope.internalCashTransferCount===1?'':'s'} within selected cash remain neutral.`:''
     return `${cashLabel}.${accountExclusion}${activityExclusion}${transferScope}`
   },[meetingScope])
-  return <FinanceMeetingsWorkspace liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember} balanceDataStatus={meetingScope.balanceDataStatus} transactionFreshnessStatus={normalizeMeetingSourceStatus(transactionFreshnessStatus)} hasDistinctCurrentBalance={meetingScope.hasDistinctCurrentBalance} hasCashAccounts={meetingScope.hasCashAccounts} actualMetricsAvailable={meetingScope.actualMetricsAvailable} readOnly={readOnly} financeReadOnly={financeReadOnly} meetingPlanningReadOnly={meetingPlanningReadOnly}/>
+  return <FinanceMeetingsWorkspace packetData={packetData} liveSnapshot={model.liveSnapshot} drilldowns={model.drilldowns} accountScope={accountScope} currentMember={currentMember} balanceDataStatus={meetingScope.balanceDataStatus} transactionFreshnessStatus={normalizeMeetingSourceStatus(transactionFreshnessStatus)} hasDistinctCurrentBalance={meetingScope.hasDistinctCurrentBalance} hasCashAccounts={meetingScope.hasCashAccounts} actualMetricsAvailable={meetingScope.actualMetricsAvailable} readOnly={readOnly} financeReadOnly={financeReadOnly} meetingPlanningReadOnly={meetingPlanningReadOnly}/>
 }

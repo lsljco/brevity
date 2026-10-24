@@ -10,6 +10,7 @@ import { HOUSEHOLD_MEMBERS } from '../household/dailyPlan.js'
 import { SHARED_STATE_EVENT } from '../household/sharedState.js'
 import {
   meetingActionCreateOperation,
+  meetingPacketEditOperation,
   meetingActionOperation,
   meetingCorrectionCreateOperation,
   meetingCorrectionOperation,
@@ -19,10 +20,12 @@ import {
   requestMeetingActionReview,
 } from './meetingActionReview.js'
 import './FinanceMeetings.css'
+import FinanceMeetingPacket from './FinanceMeetingPacket.jsx'
+import {meetingPacketText} from './meetingPackets.js'
 
 const STORAGE_KEY='brevity_finance_meetings_v1'
 const CADENCES=['daily','weekly','monthly','quarterly','yearly']
-const LABELS={daily:'Daily',weekly:'Weekly',monthly:'Monthly',quarterly:'Quarterly',yearly:'Yearly'}
+const LABELS={daily:'Daily',weekly:'Weekly',monthly:'Monthly',quarterly:'Quarterly',yearly:'Annual'}
 const JOBS={daily:'Protect today’s cash and execute today’s commitments.',weekly:'Resolve exceptions and coordinate the next two weeks.',monthly:'Measure performance and update the household plan.',quarterly:'Reassess trajectory and reallocate priorities.',yearly:'Close the year and set the next year’s financial direction.'}
 const SOURCE_STATES=['Bank Verified','Forecast','User Confirmed','Proposed']
 const AUTO_KEYS=['currentMonthlyNet','actualMonthlyNet','projectedMonthlyNet','operatingBalance','operatingAvailable','todayInflows','todayObligations','approvedDiscretionary','weekInflows','weekObligations','monthForecast']
@@ -71,10 +74,10 @@ function HistoryRow({item,onSave,readOnly=false}){
   useEffect(()=>setDraft(canonicalMeetingHistory(item)),[item])
   const review=async()=>{setSaving(true);setError('');try{await onSave(item,draft,()=>setEditing(false))}catch(saveError){setError(saveError.message||'Brevity could not prepare this meeting change for review.')}finally{setSaving(false)}}
   if(editing&&!readOnly)return <article className="fm-history-edit"><div className="fm-inline-editor"><textarea aria-label="Meeting summary" value={draft.summary||''} onChange={event=>setDraft(value=>({...value,summary:event.target.value}))} placeholder="Meeting summary"/><textarea aria-label="Meeting notes" value={draft.notes||''} onChange={event=>setDraft(value=>({...value,notes:event.target.value}))} placeholder="Meeting notes"/><textarea aria-label="Meeting transcript" value={draft.transcript||''} onChange={event=>setDraft(value=>({...value,transcript:event.target.value}))} placeholder="Meeting transcript"/>{error&&<p className="fm-edit-error" role="alert">{error}</p>}<div><button type="button" disabled={saving} onClick={()=>{setDraft(item);setError('');setEditing(false)}}>Cancel</button><button type="button" className="fm-save" disabled={saving} onClick={review}>{saving?'Preparing review…':'Review changes'}</button></div></div></article>
-  return <article><div><strong>{LABELS[item.cadence]} Finance Meeting</strong><span>{new Date(item.endedAt).toLocaleString()}{item.updatedBy?` · edited by ${item.updatedBy}`:''}</span></div><small>{display.summary||display.notes||'Meeting captured and reconciled.'}</small>{!readOnly&&<div className="fm-row-actions">{needsNameRepair&&<button type="button" className="fm-edit" disabled={saving} onClick={()=>onSave(item,display)}><i className="ti ti-spellcheck"/> Apply name corrections</button>}<button type="button" className="fm-edit" onClick={()=>setEditing(true)}><i className="ti ti-edit"/> Edit</button></div>}</article>
+  return <article><div><strong>{LABELS[item.cadence]} Finance Meeting</strong><span>{new Date(item.endedAt).toLocaleString()}{item.updatedBy?` · edited by ${item.updatedBy}`:''}</span></div><small>{display.summary||display.notes||'Meeting captured and reconciled.'}</small>{item.packetText&&<details><summary className="fm-packet-archive-summary">View archived report snapshot</summary><pre className="fm-packet-archive">{item.packetText}</pre></details>}{!readOnly&&<div className="fm-row-actions">{needsNameRepair&&<button type="button" className="fm-edit" disabled={saving} onClick={()=>onSave(item,display)}><i className="ti ti-spellcheck"/> Apply name corrections</button>}<button type="button" className="fm-edit" onClick={()=>setEditing(true)}><i className="ti ti-edit"/> Edit</button></div>}</article>
 }
 
-export default function FinanceMeetingsWorkspace({liveSnapshot={},drilldowns={},accountScope='Selected checking and savings accounts',currentMember='Household member',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly,balanceDataStatus='unknown',transactionFreshnessStatus='unknown',hasDistinctCurrentBalance=false,hasCashAccounts=true,actualMetricsAvailable=true}){
+export default function FinanceMeetingsWorkspace({packetData={},liveSnapshot={},drilldowns={},accountScope='Selected checking and savings accounts',currentMember='Household member',readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly,balanceDataStatus='unknown',transactionFreshnessStatus='unknown',hasDistinctCurrentBalance=false,hasCashAccounts=true,actualMetricsAvailable=true}){
   const[workspace,setWorkspace]=useState(readStore)
   const capture=useMeetingSession(),captured=capture.record?.member===currentMember&&capture.record?.kind==='finance'?capture.record:null
   const isRecording=capture.recording,startedAt=captured?.startedAt,transcript=captured?.transcript||'',notes=captured?.notes||'',transcribing=capture.transcribing
@@ -136,7 +139,7 @@ export default function FinanceMeetingsWorkspace({liveSnapshot={},drilldowns={},
 
   const reviewMutation=async({summary,operation,label,onApplied})=>{
     if(meetingPlanningReadOnly)throw new Error('Plans & decisions access is required to edit Finance Meeting narrative and commitments.')
-    if(financeReadOnly&&['meeting.correction.create','meeting.correction.update','meeting.workspace.update'].includes(operation.type))throw new Error('Financial corrections and Finance Meeting guidance require household-administrator access.')
+    if(financeReadOnly&&['meeting.correction.create','meeting.correction.update','meeting.workspace.update','meeting.packet.edit'].includes(operation.type))throw new Error('Financial corrections and Finance Meeting guidance require household-administrator access.')
     setMutationNotice('')
     const proposal=await requestMeetingActionReview({summary,operation})
     pendingReviewsRef.current.set(proposal.id,{label,onApplied})
@@ -228,9 +231,16 @@ export default function FinanceMeetingsWorkspace({liveSnapshot={},drilldowns={},
 
   const visionToggle=<div className="fm-vision-toggle" role="group" aria-label="Vision calculation"><button type="button" className={visionMode==='actual'?'active':''} onClick={()=>setVisionMode('actual')}>Actual</button><button type="button" className={visionMode==='projected'?'active':''} onClick={()=>setVisionMode('projected')}>Projected</button></div>
 
+  const archivePacket=async packet=>{
+    if(meetingPlanningReadOnly)throw Error('Plans & decisions access is required to archive a packet.')
+    const archivedAt=new Date().toISOString()
+    return reviewMutation({summary:`Archive ${packet.label} FIN-001 report packet`,operation:meetingSessionCreateOperation({cadence,meetingDate:packet.asOf,startedAt:archivedAt,endedAt:archivedAt,summary:`${packet.label} report packet: ${packet.period.from} through ${packet.period.to}. Draft financial results; close and budget approval require evidence.`,packetText:meetingPacketText(packet)}),label:'Financial report packet'})
+  }
+
   return <section className={`finance-meetings${isRecording?' is-recording':''}${financeReadOnly&&meetingPlanningReadOnly?' is-read-only':''}`}>
     {capture.error&&<p role="alert">{capture.error}</p>}<button type="button" onClick={openMeetingHistory}>Meeting History</button><header className="fm-header"><div><p className="fm-eyebrow">Finance · Meetings</p><h1>Financial Operating Rhythm</h1><p>{JOBS[cadence]}</p><small className="fm-data-scope">Data scope: {accountScope}</small></div>{!meetingPlanningReadOnly&&<div className="fm-header-actions">{isRecording?<button className="fm-stop" onClick={endMeeting}><span className="fm-record-dot"/> Stop Meeting</button>:<button className="fm-primary" disabled={capture.starting||capture.saving||transcribing>0} onClick={startMeeting}><i className="ti ti-microphone"/> Start Meeting</button>}</div>}</header>
     <nav className="fm-tabs">{CADENCES.map(item=><button key={item} className={cadence===item?'active':''} onClick={()=>setCadence(item)} disabled={isRecording}>{LABELS[item]}</button>)}</nav>
+    <FinanceMeetingPacket cadence={cadence} data={packetData} actions={workspace.openActions||[]} edits={workspace.packetEdits||{}} onEdit={command=>reviewMutation({summary:'Update household financial report',operation:meetingPacketEditOperation(command),label:'Report adjustment'})} onProposeAction={action=>reviewMutation({summary:'Add suggested financial commitment',operation:meetingActionCreateOperation(action,{cadence,date:meetingDate()}),label:'Suggested commitment'})} onArchive={archivePacket} readOnly={meetingPlanningReadOnly} editReadOnly={financeReadOnly} recording={isRecording}/>
     <div className="fm-command-notice" role="status" aria-label="Finance Meeting data quality"><i className="ti ti-database" aria-hidden="true"/><span><strong>Balance:</strong> {balanceQualification} <strong>Actual bank activity:</strong> {transactionQualification} <strong>Scheduled activity:</strong> projections until explicitly reconciled to posted bank activity. Transfers within selected cash are neutral; transfers crossing the cash boundary count as projected inflows or obligations.</span></div>
     {!hasCashAccounts&&<div className="fm-command-notice" role="status" aria-label="Cash metrics unavailable"><i className="ti ti-alert-circle" aria-hidden="true"/><span><strong>Cash metrics unavailable.</strong> No checking or savings account is selected. Select an eligible cash account to calculate balances, inflows, obligations, and cash-flow totals; unavailable values are shown as —.</span></div>}
     {isRecording&&<div className="fm-recording-banner"><div><span className="fm-record-dot"/><strong>Recording is sacred</strong><span>One microphone stream feeds the uninterrupted master recording and Brevity transcription.</span></div><span>{transcribing?'Transcribing…':'Recording + transcription healthy'}</span></div>}

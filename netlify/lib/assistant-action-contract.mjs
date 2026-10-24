@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto'
 import { MEALS_BY_ID, MEAL_TYPES } from '../../src/meals/mealLibrary.js'
 import { householdPermissionForOperation, householdResourceKeyForAction } from '../../src/household/householdActionModel.js'
 import { canonicalMeetingNameText } from '../../src/finance/meetingNames.js'
+import {normalizePacketEdit} from '../../src/finance/meetingPacketEdits.js'
 import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-plan-action-fields.mjs'
 
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']
@@ -79,6 +80,7 @@ export const ACTION_TYPES = {
   'meeting.correction.update': 'finance',
   'meeting.session.create': 'planning',
   'meeting.workspace.update': 'finance',
+  'meeting.packet.edit': 'finance',
   'meeting.history.update': 'planning',
   'budget.update': 'finance',
   'forecast.update': 'finance',
@@ -102,6 +104,7 @@ export const ACTION_TYPES = {
 export const FORBIDDEN_ACTION_PATTERN = /payment|purchase|transfer|withdraw|deposit|connect|disconnect|password|credential|bank\.account/i
 export const SCOPES = ['this-item', 'this-and-future']
 const ACTION_PAYLOAD_FIELDS = {
+  'meeting.packet.edit':['commandJson'],
   'member.preference.set':['category','value'],
   'improvement.propose':['title','problem','evidence','solution','benefit','risks','successMetric'],
   'improvement.transition':['stage','notes','previewUrl','commitSha','evaluationSummary','requirements','userStories','dataChanges','permissionChanges','testPlan','rolloutPlan','rollbackPlan'],
@@ -147,7 +150,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.action.update': ['text', 'owner', 'due', 'status'],
   'meeting.correction.create': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin', 'meetingDate', 'cadence'],
   'meeting.correction.update': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin'],
-  'meeting.session.create': ['cadence', 'meetingDate', 'startedAt', 'endedAt', 'summary', 'notes', 'transcript', 'actions', 'corrections'],
+  'meeting.session.create': ['cadence', 'meetingDate', 'startedAt', 'endedAt', 'summary', 'notes', 'transcript', 'packetText', 'actions', 'corrections'],
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
@@ -339,7 +342,10 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='forecast.update'&&field==='recoveryJson'){
+    if(type==='meeting.packet.edit'&&field==='commandJson'){
+      if(typeof value!=='string'||value.length>20000)throw Error('The report adjustment is too large.')
+      normalized.commandJson=JSON.stringify(normalizePacketEdit(JSON.parse(value)))
+    }else if(type==='forecast.update'&&field==='recoveryJson'){
       if(typeof value!=='string'||value.length>12000)throw Error('Invalid recovery assumptions.');
       const assumptions=JSON.parse(value)
       if(Object.keys(RECOVERY_DEFAULT).some(key=>!Object.hasOwn(assumptions,key)))throw Error('Provide the complete recovery assumptions, preserving unchanged fields.')
@@ -354,6 +360,10 @@ function normalizeActionPayload(type, input) {
       normalized.commandJson=JSON.stringify(normalizeMealScheduleCommand(value))
     }else if(type==='recurring.update'&&field==='reconciliation'){
       normalized.reconciliation=normalizeReconciliationEvidence(value)
+    }else if(type==='meeting.session.create'&&field==='packetText'){
+      assertString(type,field,value)
+      if(!value.trim()||value.length>100_000)throw new Error('The report snapshot must contain between 1 and 100,000 characters. Download a larger packet instead.')
+      normalized.packetText=value
     }else if(type==='meeting.session.create'&&field==='actions'){
       normalized.actions=normalizeMeetingSessionActions(value)
     }else if(type==='meeting.session.create'&&field==='corrections'){
@@ -624,6 +634,7 @@ export function normalizeActionOperation(input = {}) {
     const hasContent=Boolean(payload.summary||payload.notes||payload.transcript||payload.actions?.length||payload.corrections?.length)
     if(!hasContent)throw new Error('A saved Finance Meeting requires notes, a transcript, or at least one reviewed update.')
   }
+  if(type==='meeting.packet.edit'&&operation.targetId!==JSON.parse(payload.commandJson).packetId)throw Error('The report adjustment requires the exact report identity.')
   if(type==='meeting.workspace.update'){
     const fields=Object.keys(payload)
     const snapshotFields=['monthStatus','expenseFocus']

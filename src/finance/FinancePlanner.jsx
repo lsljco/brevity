@@ -3011,6 +3011,9 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           actuals={filteredActuals}
           balanceDataStatus={balanceDataStatus}
           transactionFreshnessStatus={actualsFreshness?.status || 'unknown'}
+          transactionCheckedAt={actualsFreshness?.checkedAt || ''}
+          balanceCheckedAt={readLatestBalanceRefreshStatus().checkedAt || ''}
+          balanceHistory={loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || []}
           budget={dailyBudget}
           budgetLegacyYear={t.getFullYear()}
           budgetLegacyAccountId={data.accounts.find(account => /\boperating\s+account\b/i.test(String(account?.name || '')))?.id || data.accounts.find(account => account.id === 'a1')?.id || ''}
