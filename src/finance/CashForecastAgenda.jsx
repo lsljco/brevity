@@ -6,38 +6,13 @@ import { transactionDescription } from './transactionList.js'
 
 export function CashForecastIntro({ monthName, showBankActivity, error, freshnessMessage, freshnessStatus, balanceMessage, balanceStatus, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false }) {
   const sourceSeverity = cashForecastSourceSeverity({ error, freshnessStatus, balanceStatus, unmappedTransactionCount })
-  return (
-    <>
-      <section className="finance-calendar-intro" aria-labelledby="cash-forecast-title">
-        <p>Finance planning</p>
-        <h1 id="cash-forecast-title">Cash Forecast</h1>
-        <p className="finance-calendar-simple-guide">The plan starts from the prior day’s ending balance, with estimated openings labeled. Reconcile with bank switches to the latest bank balance plus outstanding activity. Future dates carry the resulting forecast forward. Scheduled items are plans, not proof of payment.</p>
-        {todayPlanUnresolved && <p className="finance-calendar-simple-guide">Some of today’s scheduled items have not been matched to bank activity. They remain in the projection as expected activity until matched.</p>}
-        <details className="finance-calendar-explanation"><summary>How this forecast works</summary><span>
-          Scheduled activity, reconstructed posted closes, and forward cash-balance projections for {monthName}.
-          {showBankActivity ? ' Bank activity is shown separately from the plan.' : ' Turn on bank activity to compare posted and pending transactions with the plan.'}
-          {excludedAccountCount ? ` ${excludedAccountCount} selected non-cash account${excludedAccountCount === 1 ? ' is' : 's are'} excluded; this forecast includes checking and savings only.` : ''}
-          {unmappedTransactionCount ? ` Across all bank history, ${unmappedTransactionCount} transaction${unmappedTransactionCount === 1 ? ' is' : 's are'} not linked to one unique Brevity account and ${unmappedTransactionCount === 1 ? 'is' : 'are'} excluded from this forecast.` : ''}
-          {` The balance anchor uses ${balanceSource}.`}
-          {' Posted items are already in the bank balance. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.'}
-        </span></details>
-      </section>
-      {(error || freshnessMessage || balanceMessage || unmappedTransactionCount > 0) && (
-        <div
-          className={`finance-calendar-source-status finance-calendar-source-status--${sourceSeverity}`}
-          role={sourceSeverity === 'error' ? 'alert' : 'status'}
-        >
-          <details><summary className="finance-calendar-source-status-label">
-            {sourceSeverity === 'error' ? 'Bank update failed — view details' : sourceSeverity === 'attention' ? 'Bank update needs attention — view details' : 'Bank update details'}
-          </summary>
-          {balanceMessage && <span><strong>Balance anchor status:</strong> {balanceMessage}</span>}
-          {(error || freshnessMessage) && <span><strong>Transaction snapshot status:</strong> {error || freshnessMessage} Bank activity below uses this exact-account snapshot; reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</span>}
-          {unmappedTransactionCount > 0 && <span><strong>Excluded bank activity:</strong> Review unlinked rows in Finance › Transactions with all accounts selected.</span>}
-          </details>
-        </div>
-      )}
-    </>
-  )
+  return <header className="finance-calendar-intro finance-calendar-intro--compact" aria-labelledby="cash-forecast-title">
+    <h1 id="cash-forecast-title">Cash Forecast</h1>
+    <span className={`finance-calendar-source-status finance-calendar-source-status--${sourceSeverity}`} role="status" title={error || balanceMessage || freshnessMessage || balanceSource}>
+      {error ? 'Bank update failed' : !balanceVerifiedLive ? 'Estimated · bank freshness unverified' : freshnessStatus !== 'fresh' ? 'Estimated · transaction update needed' : todayPlanUnresolved ? 'Payments need confirmation' : 'Bank snapshot verified'}
+    </span>
+  </header>
+
 }
 
 export default function CashForecastAgenda({

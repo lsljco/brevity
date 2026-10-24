@@ -5,7 +5,7 @@ import DailyFitnessWorkout from '../fitness/DailyFitnessWorkout.jsx'
 export default function PillarAnalysis(props) {
   if (props.pillar?.id === 'education') return <EducationHub key={props.currentMember} currentMember={props.currentMember}/>
   if (props.pillar?.id === 'fitness') return <DailyFitnessWorkout currentMember={props.currentMember}/>
-  return <PillarAnalysisCore {...props}/>
+  return <PillarAnalysisCore key={props.pillar?.id} {...props}/>
 }
 
 /*

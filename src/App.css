@@ -677,6 +677,9 @@ html, body {
   background: #000000;
 }
 
+.app-main>.app-support-tools { margin:0 24px; padding:0; border:0; }
+.app-support-tools>summary { color:var(--gold); padding:10px 0; cursor:pointer; font-size:12px; }
+.app-main:not([data-life-pillar="finance"]):not([data-life-view="home"]) .app-support-tools>summary { display:none; }
 .app-context-navigation {
   position: sticky;
   z-index: 90;

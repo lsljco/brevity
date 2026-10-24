@@ -7,6 +7,7 @@ import { collectPillarContext, generatePillarAnalysis, PILLAR_ANALYSIS_EVENT, pi
 import { useDailyPlan } from './useDailyPlan.js'
 import SermonRepository from './SermonRepository.jsx'
 import './PillarAnalysis.css'
+import '../finance/FinanceOverview.css'
 
 function List({ items = [], empty = 'Nothing needs special attention.' }) {
   return items.length ? <ul>{items.map((item,index)=><li key={`${index}-${typeof item==='string'?item:item.title||item.owner}`}>{typeof item==='string'?item:item.title}</li>)}</ul> : <p className="pillar-analysis-empty">{empty}</p>
@@ -35,8 +36,9 @@ const applyRollingHealthPlan = (plan,rollingPlan) => {
   }
 }
 
-export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
+export default function PillarAnalysis({ pillar, currentMember = 'Larry', onNavigate }) {
   const { plan, state:planState, error:planError, reload:reloadPlan } = useDailyPlan()
+  const [showAnalysis,setShowAnalysis]=useState(false)
   const isHealth=pillar.id==='health'
   const rollingMeals=useRollingMealPlan({enabled:isHealth,startDate:plan?.date,requireFresh:true,reloadOnRefreshEvents:true})
   const analysisPlan=useMemo(()=>pillar.id==='health'?applyRollingHealthPlan(plan,rollingMeals.data):plan,[pillar.id,plan,rollingMeals.data])
@@ -127,7 +129,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
   },[plan?.date])
 
   useEffect(()=>{
-    if(planState!=='ready' || planRefreshError || !analysisPlan?.date || (isHealth&&rollingMeals.state!=='ready')) return
+    if(!showAnalysis || planState!=='ready' || planRefreshError || !analysisPlan?.date || (isHealth&&rollingMeals.state!=='ready')) return
     const force=isHealth&&forceAfterMealReloadRef.current
     forceAfterMealReloadRef.current=false
     if(!force){
@@ -135,7 +137,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
       if (cached) { errorScopeRef.current=''; setError(''); setResult(cached); setState('ready'); return }
     }
     run(Boolean(force))
-  },[analysisPlan,contextRevision,contextSignature,currentMember,isHealth,pillar.id,planRefreshError,planState,rollingMeals.state,run])
+  },[showAnalysis,analysisPlan,contextRevision,contextSignature,currentMember,isHealth,pillar.id,planRefreshError,planState,rollingMeals.state,run])
 
   useEffect(()=>{
     const receive = event => {
@@ -162,9 +164,13 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
     {pillar.id==='spiritual'&&<ReadAloud getText={()=>readableText(readingRef.current)} label="Read Spiritual Maturity aloud" contentKey={plan?.date+pillar.id}/>}
     <header className="pillar-analysis-hero">
       <div className="pillar-analysis-icon"><i className={`ti ${pillar.icon}`} /></div>
-      <div className="pillar-analysis-title"><span>Seven Pillars · AI Analysis</span><h1>{pillar.label}</h1><p>{pillar.description}</p></div>
-      <button type="button" className="pillar-analysis-refresh" disabled={state==='loading'||planState!=='ready'||Boolean(planRefreshError)||(isHealth&&rollingMeals.state!=='ready')} onClick={refreshAnalysis}><i className="ti ti-refresh" /> {isHealth&&rollingMeals.state==='loading'?'Loading Meals…':state==='loading'?(analysis?'Refreshing analysis…':'Analyzing…'):'Refresh Analysis'}</button>
+      <div className="pillar-analysis-title"><span>Seven Pillars</span><h1>{pillar.label}</h1><p>{pillar.description}</p></div>
+      <button type="button" className="pillar-analysis-refresh" aria-expanded={showAnalysis} onClick={()=>setShowAnalysis(value=>!value)}>{showAnalysis?'Close insights':'Insights'}</button>
     </header>
+
+    {pillar.items?.length>0&&<nav className="pillar-overview-destinations" aria-label={pillar.label+' destinations'}>{pillar.items.map(item=><button type="button" key={item.id} onClick={()=>onNavigate?.(pillar.id,item.id)}><i className={`ti ${item.icon}`} aria-hidden="true"/>{item.label}</button>)}</nav>}
+    {showAnalysis&&<>
+      <button type="button" className="pillar-analysis-refresh" disabled={state==='loading'||planState!=='ready'||Boolean(planRefreshError)||(isHealth&&rollingMeals.state!=='ready')} onClick={refreshAnalysis}><i className="ti ti-refresh" /> {isHealth&&rollingMeals.state==='loading'?'Loading Meals…':state==='loading'?(analysis?'Refreshing analysis…':'Analyzing…'):'Refresh Analysis'}</button>
 
     {planError && <div className="pillar-analysis-error" role="alert"><strong>Household plan unavailable.</strong> {planError} <button type="button" onClick={reloadPlan}>Retry daily plan</button></div>}
     {!planError&&planRefreshError&&<div className="pillar-analysis-error" role="alert"><strong>Household plan could not be reverified.</strong> {planRefreshError} <button type="button" onClick={reloadPlan}>Retry daily plan</button></div>}
@@ -192,6 +198,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry' }) {
       {decisions.length > 0 && <section className="pillar-analysis-section"><div className="pillar-analysis-heading"><span>Real Choices</span><h2>Decisions That Need Attention</h2></div><List items={decisions} /></section>}
 
       <section className="pillar-analysis-section pillar-analysis-standard"><div className="pillar-analysis-heading"><span>Growth Signal</span><h2>How Progress Will Show</h2></div><p>{analysis.growthSignal}</p><blockquote>{analysis.governingPrinciple}</blockquote></section>
+    </>}
     </>}
     {pillar.id==='spiritual'&&planState==='ready'&&<SermonRepository notes={plan?.spiritual?.sermonNotes} source={plan?.spiritual?.sermonSource}/>}
   </div>
