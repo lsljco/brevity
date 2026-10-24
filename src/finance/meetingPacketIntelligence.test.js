@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {buildMeetingPacket} from './meetingPackets.js'
-import {analyzeMeetingPacket,applyPacketEdit,effectiveMeetingPacket,editablePacketFields,packetIdentity,normalizePacketEdit} from './meetingPacketIntelligence.js'
+import {analyzeMeetingPacket,applyPacketEdit,effectiveMeetingPacket,editablePacketFields,packetIdentity,normalizePacketEdit,packetMatchesRequest} from './meetingPacketIntelligence.js'
 import {createFinancePacketService,generatePacketNarrative} from '../../netlify/lib/finance-packet-service.mjs'
 import {createFinancePacketHandler} from '../../netlify/functions/finance-meeting-packet.mjs'
 import {createPacketBackgroundHandler} from '../../netlify/functions/finance-meeting-packets-background.mjs'
@@ -12,6 +12,18 @@ const input={now,accounts:[{id:'cash',name:'Operating',type:'checking',plaidAcco
 const packet=()=>buildMeetingPacket(input)
 const command=(p,field,value,scope='period')=>({packetId:packetIdentity(p),cadence:p.cadence,scope,field,value,reason:'Reviewed household context'})
 const memoryStore=()=>{const values=new Map();let n=0;return {get:async k=>structuredClone(values.get(k)?.data??null),getWithMetadata:async k=>structuredClone(values.get(k)||null),setJSON:async(k,data,opts={})=>{const prev=values.get(k);if(opts.onlyIfNew&&prev||opts.onlyIfMatch&&opts.onlyIfMatch!==prev?.etag)return{modified:false};values.set(k,{data:structuredClone(data),etag:String(++n)});return{modified:true}}}}
+
+test('prepared server snapshots remain usable across freshness differences but never cross scope or period',()=>{
+  const local=packet(),remote=structuredClone(local)
+  remote.sources.transactionFreshnessStatus='unknown'
+  remote.posted=null
+  remote.cashBalance=250
+  assert.equal(packetMatchesRequest(local,remote),true)
+  assert.equal(packetMatchesRequest(local,{...remote,scope:[{id:'other'}]}),false)
+  assert.equal(packetMatchesRequest(local,{...remote,period:{...remote.period,mode:'previous'}}),false)
+  assert.equal(packetMatchesRequest(local,{...remote,asOf:'2026-10-25'}),false)
+  assert.equal(packetMatchesRequest(local,null),false)
+})
 
 test('automatically produces concrete direction, proposed actions, owners and deadlines without any form input',()=>{
   const p=packet(),analysis=analyzeMeetingPacket(p)
