@@ -564,6 +564,30 @@ test('Cash Forecast FIN-001 packets populate all five meetings and export the se
   await page.screenshot({path:testInfo.outputPath('hfos-packet.png'),fullPage:true})
 })
 
+test('Cash Forecast renders canonical AI figures and guidance together despite browser freshness differences',async({page},testInfo)=>{
+  const {buildMeetingPacket}=await import('../src/finance/meetingPackets.js')
+  const {effectiveMeetingPacket}=await import('../src/finance/meetingPacketIntelligence.js')
+  await page.route('**/.netlify/functions/finance-meeting-packet',async route=>{
+    const request=route.request().postDataJSON()
+    const accounts=request.accountIds.map(id=>({id,name:'Synchronized account',type:'checking',balance:777,plaidAccountId:`bank-${id}`}))
+    const source=buildMeetingPacket({...request,accounts,now:new Date(),transactionFreshnessStatus:'cached'})
+    const packet=effectiveMeetingPacket(source,{}, {summary:'Server synchronized AI guidance',direction:'Review synchronized obligations.',mode:'AI analysis'})
+    await route.fulfill({json:{packet,analysisState:'ready',notice:''}})
+  })
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Meetings',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  const packet=page.getByRole('region',{name:'Prepared FIN-001 meeting packet'})
+  await expect(packet).toContainText('Server synchronized AI guidance')
+  await expect(packet.locator('.fm-packet-summary')).toContainText('$777')
+  await expect(packet).toContainText('Prepared from synchronized household records.')
+  await packet.getByRole('button',{name:'Edit report, insights or numbers'}).click()
+  await packet.getByLabel('Report field',{exact:true}).selectOption('cashBalance')
+  await expect(packet.getByLabel('Reported value',{exact:true})).toHaveValue('777')
+})
+
 test('Cash Forecast automatic analysis allows reviewing reported zero and insight edits without data preparation',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Finance',exact:true}).click()

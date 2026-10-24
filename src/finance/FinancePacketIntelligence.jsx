@@ -1,9 +1,9 @@
 import {useEffect,useMemo,useState} from 'react'
-import {editablePacketFields,effectiveMeetingPacket,packetEvidenceIdentity,packetIdentity} from './meetingPacketIntelligence.js'
+import {editablePacketFields,effectiveMeetingPacket,packetEvidenceIdentity,packetIdentity,packetMatchesRequest} from './meetingPacketIntelligence.js'
 
 export function usePacketIntelligence(source,edits={}){
   const base=useMemo(()=>effectiveMeetingPacket(source,edits),[source,edits])
-  const key=packetEvidenceIdentity(base)
+  const key=JSON.stringify([packetEvidenceIdentity(base),edits])
   const [remote,setRemote]=useState(null),[retry,setRetry]=useState(0)
   useEffect(()=>{
     const controller=new AbortController()
@@ -14,15 +14,15 @@ export function usePacketIntelligence(source,edits={}){
         const result=await response.json()
         if(!response.ok||!result.packet)throw Error(result.error||'Automatic AI analysis is temporarily unavailable.')
         if(controller.signal.aborted)return
-        const matched=packetEvidenceIdentity(result.packet)===key
-        setRemote({key,narrative:matched?result.packet.analysis:null,notice:matched?result.notice:'Calculated insights are current. AI analysis is waiting for the same financial snapshot to finish synchronizing.',state:matched?result.analysisState:'syncing',analyzedAt:result.analyzedAt})
+        const matched=packetMatchesRequest(source,result.packet)
+        setRemote({key,packet:matched?result.packet:null,notice:matched?['Prepared from synchronized household records.',result.notice].filter(Boolean).join(' '):'Calculated insights are current. The requested report is synchronizing.',state:matched?result.analysisState:'syncing',analyzedAt:result.analyzedAt})
         if(!matched||result.analysisState!=='ready')retryTimer=setTimeout(()=>setRetry(v=>v+1),60000)
       }catch(error){if(!controller.signal.aborted){setRemote({key,notice:'Calculated insights are available now. The deployed AI connection is unavailable or still synchronizing.',state:'unavailable'});retryTimer=setTimeout(()=>setRetry(v=>v+1),60000)}}
     },1500)
     return()=>{clearTimeout(timer);clearTimeout(retryTimer);controller.abort()}
   },[key,retry])
   const current=remote?.key===key?remote:null
-  const packet=useMemo(()=>effectiveMeetingPacket(source,edits,current?.narrative),[source,edits,current?.narrative])
+  const packet=current?.packet||base
   return {packet,analysisNotice:current?.notice||'Automatic analysis is preparing. Calculated feedback and proposed actions are available now.'}
 }
 

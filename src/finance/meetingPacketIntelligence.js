@@ -104,3 +104,10 @@ export function packetEvidenceIdentity(packet){
   const {generatedAt,analysis,adjustments,orphanedAdjustments,sources,warnings,...facts}=packet
   return JSON.stringify(facts)
 }
+
+// Keep the server's figures and narrative together as one prepared snapshot.
+export function packetMatchesRequest(source,prepared){
+  return Boolean(prepared&&source.cadence===prepared.cadence&&source.asOf===prepared.asOf&&
+    ['mode','from','to'].every(k=>source.period[k]===prepared.period?.[k])&&
+    JSON.stringify(source.scope.map(a=>a.id).sort())===JSON.stringify((prepared.scope||[]).map(a=>a.id).sort()))
+}
