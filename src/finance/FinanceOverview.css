@@ -14,6 +14,7 @@
 .finance-overview button:hover{border-color:var(--gold)}
 .app-main[data-life-pillar="finance"]>.finance-archive-entry{padding:4px 24px}.finance-archive-entry button{min-height:32px;padding:5px 12px;font-size:12px}
 .app-main[data-life-pillar="finance"] .finance-utilities{margin-top:28px}
+.app-main:not([data-life-pillar="finance"]):not([data-life-view="home"]) .app-support-tools>summary{display:none}
 .finance-forecast-details{margin:0 0 16px}.finance-forecast-details>summary{cursor:pointer;color:var(--gold);font-size:12px;padding:10px 0}.finance-forecast-details>.finance-card{margin-top:12px}
 .finance-calendar-intro--compact{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}.finance-calendar-intro--compact h1{margin:0;font-size:clamp(25px,3vw,34px)}.finance-calendar-intro--compact .finance-calendar-source-status{margin:0;padding:7px 10px;font-size:11px;background:transparent;border-radius:20px}
 .pillar-overview-destinations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:24px 0}.pillar-overview-destinations button{border:1px solid var(--life-line);background:var(--life-surface);color:inherit;border-radius:16px;padding:22px;display:flex;align-items:center;gap:12px;cursor:pointer;text-align:left;font:inherit}.pillar-overview-destinations i{color:var(--gold)}
