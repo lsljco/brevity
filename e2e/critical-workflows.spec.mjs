@@ -2417,10 +2417,14 @@ test('Finance hero cards keep graphs and captions separate and expose a page scr
  }
  await expect.poll(()=>page.locator('.app-main').evaluate(e=>e.scrollWidth-e.clientWidth)).toBeLessThanOrEqual(1)
  await page.screenshot({path:`test-results/finance-hero-${testInfo.project.name}.png`,fullPage:true})
- const filterBox=await page.locator('.finance-account-filter').boundingBox(),vendorBox=await page.locator('.finance-vendor-controls').boundingBox()
- expect(vendorBox.y).toBeGreaterThanOrEqual(filterBox.y+filterBox.height-1)
+ await expect(page.locator('.finance-vendor-controls')).toHaveCount(0)
  const scroll=await page.locator('.app-main').evaluate(e=>{e.scrollTop=e.scrollHeight;return{top:e.scrollTop,style:getComputedStyle(e).overflowY,color:getComputedStyle(e).scrollbarColor}})
  expect(scroll.style).toBe('scroll');expect(scroll.top).toBeGreaterThan(0);expect(scroll.color).not.toBe('auto')
+ await openMenuIfMobile(page,testInfo)
+ await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Transactions',exact:true}).click()
+ await closeMenuIfMobile(page,testInfo)
+ const filterBox=await page.locator('.finance-account-filter').boundingBox(),vendorBox=await page.locator('.finance-vendor-controls').boundingBox()
+ expect(vendorBox.y).toBeGreaterThanOrEqual(filterBox.y+filterBox.height-1)
 })
 
 test('Assistant restores failed requests and retries without duplicating messages',async({page})=>{
