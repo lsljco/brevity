@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto'
 import { MEALS_BY_ID, MEAL_TYPES } from '../../src/meals/mealLibrary.js'
 import { householdPermissionForOperation, householdResourceKeyForAction } from '../../src/household/householdActionModel.js'
 import { canonicalMeetingNameText } from '../../src/finance/meetingNames.js'
-import {normalizePacketEdit} from '../../src/finance/meetingPacketIntelligence.js'
+import {normalizePacketEdit} from '../../src/finance/meetingPacketEdits.js'
 import { DAILY_PLAN_PILLARS, normalizeDailyPlanActionPayload } from './daily-plan-action-fields.mjs'
 
 export const HOUSEHOLD_MEMBERS = ['Larry', 'Lorenzo', 'Terica', 'Nyla', 'Javin', 'Isaiah']

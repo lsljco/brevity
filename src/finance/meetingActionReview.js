@@ -2,7 +2,7 @@ import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { getAcknowledgedSharedStateVersion } from '../household/sharedState.js'
 import { canonicalMeetingAction, canonicalMeetingCorrection, canonicalMeetingHistory, canonicalMeetingNameText } from './meetingNames.js'
-import {normalizePacketEdit} from './meetingPacketIntelligence.js'
+import {normalizePacketEdit} from './meetingPacketEdits.js'
 
 export const FINANCE_MEETINGS_STORAGE_KEY='brevity_finance_meetings_v1'
 export function meetingPacketEditOperation(command){

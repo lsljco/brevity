@@ -1,17 +1,13 @@
-import {MEETING_POLICIES} from './meetingPackets.js'
+import {normalizePacketEdit,PACKET_EDIT_ROOTS as roots} from './meetingPacketEdits.js'
+export {normalizePacketEdit,packetEditReviewFields} from './meetingPacketEdits.js'
 
 export const packetIdentity=p=>`${p.cadence}:${p.period.mode}:${p.period.from}`
-export function packetEditReviewFields(json){
-  try{const e=normalizePacketEdit(JSON.parse(json));return [['report field',e.field],['reported value',e.reset?'Restore automatic value':e.value===null?'Unknown':e.value],['applies to',e.scope==='cadence'?'This meeting cadence going forward':'This report period'],['reason',e.reason],['source records','Retained unchanged; reported values and dependent analysis update']]}
-  catch{return [['report adjustment','Invalid; cannot apply']]}
-}
 const clone=value=>JSON.parse(JSON.stringify(value))
 const dollars=n=>n==null?'unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n)
 const known=n=>typeof n==='number'&&Number.isFinite(n)
 const sum=rows=>rows.reduce((n,r)=>n+Number(r.amount||0),0)
 const rowKey=(row,index)=>typeof row==='string'?row:String(row.id??row.category??row.month??row.name??index)
 const encode=value=>encodeURIComponent(String(value))
-const roots=new Set(['cashBalance','posted','prior','pending','categoryBudget','monthly','payables','projectedInflows','pendingItems','creditCards','priorDayObservations','budgetMilestones','agenda','inputs','deliverables','warnings','notes','analysis','openActions','duration'])
 
 // No population work is required: these recommendations are calculated from
 // the current report even when the language-model service is unavailable.
@@ -57,17 +53,6 @@ export function editablePacketFields(packet){
   return fields
 }
 
-export function normalizePacketEdit(payload={}){
-  const allowed=['packetId','cadence','scope','field','value','reason','reset']
-  if(Object.keys(payload).some(k=>!allowed.includes(k)))throw Error('Unsupported report edit field.')
-  if(!MEETING_POLICIES[payload.cadence]||!new RegExp(`^${payload.cadence}:(current|previous):\\d{4}-\\d{2}-\\d{2}$`).test(payload.packetId||''))throw Error('A valid report period is required.')
-  if(!['period','cadence'].includes(payload.scope))throw Error('Choose this report period or this cadence going forward.')
-  if(typeof payload.field!=='string'||payload.field.length>1200||!roots.has(payload.field.split('/')[0])||/(__proto__|prototype|constructor)/.test(payload.field))throw Error('Choose an editable report field.')
-  if(payload.reset!==true&&payload.value!==null&&typeof payload.value!=='string'&&!(typeof payload.value==='number'&&Number.isFinite(payload.value)))throw Error('Use text, a finite number or an explicit unknown value.')
-  if(typeof payload.value==='string'&&payload.value.length>12000)throw Error('Report text is limited to 12,000 characters per field.')
-  const reason=String(payload.reason||'Household report adjustment').trim().slice(0,1000)
-  return {packetId:payload.packetId,cadence:payload.cadence,scope:payload.scope,field:payload.field,...(payload.reset===true?{reset:true}:{value:payload.value}),reason}
-}
 export function applyPacketEdit(state={},payload,{actor='Household member',at=new Date().toISOString()}={}){
   const e=normalizePacketEdit(payload),key=e.scope==='cadence'?e.cadence:e.packetId,edits=clone(state.packetEdits||{})
   const prior=edits[key]||{}

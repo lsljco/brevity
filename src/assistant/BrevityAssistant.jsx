@@ -1,5 +1,5 @@
 import { READING_EVENT } from './readingText.js'
-import {packetEditReviewFields} from '../finance/meetingPacketIntelligence.js'
+import {packetEditReviewFields} from '../finance/meetingPacketEdits.js'
 import { createPortal } from 'react-dom'
 import SavedTask from './SavedTask.jsx'
 import {taskReceiptText} from '../../netlify/lib/task-receipt.mjs'
