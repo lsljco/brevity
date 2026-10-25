@@ -42,3 +42,21 @@ export function summarizeActualActivity(transactions = []) {
   const largestExpense = [...expenses].sort((a, b) => Math.abs(Number(b.amount) || 0) - Math.abs(Number(a.amount) || 0))[0] || null
   return { rows, expenses, income, spent, received, net: received - spent, largestExpense }
 }
+
+// A household bill label may differ from the bank's statement descriptor.
+// This fallback is deliberately exact in date/amount; callers must also require
+// a unique match on the linked account. It does not redefine merchant identity.
+export function matchesExpenseDescriptor(plan, actual, occurrenceDate) {
+  if (plan?.type !== 'expense' || isTransferTransaction(actual) || transactionDirection(actual) !== 'expense') return false
+  if (plan.vendorId && actual.vendorId && plan.vendorId !== actual.vendorId) return false
+  if (occurrenceDate !== actual.date || Number(plan.amount) <= 0
+    || Math.round(Number(plan.amount) * 100) !== Math.round(Number(actual.amount) * 100)) return false
+  const label = normalizeMerchantName(plan)
+  const descriptions = [actual.merchant_name, actual.name, actual.originalStatement, actual.original_description]
+    .filter(Boolean).map(name => normalizeMerchantName({ name }))
+  return descriptions.some(description => {
+    if (label.length >= 5 && (` ${description} `).includes(` ${label} `)) return true
+    return /^(cell phones?|cellphones?|mobile phones?)$/.test(label)
+      && /\bat t mobility\b/.test(description)
+  })
+}
