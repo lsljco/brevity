@@ -7,7 +7,7 @@ import { transactionDescription } from './transactionList.js'
 export function CashForecastIntro({ monthName, showBankActivity, error, freshnessMessage, freshnessStatus, balanceMessage, balanceStatus, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false }) {
   const sourceSeverity = cashForecastSourceSeverity({ error, freshnessStatus, balanceStatus, unmappedTransactionCount })
   return <header className="finance-calendar-intro finance-calendar-intro--compact" aria-labelledby="cash-forecast-title">
-    <h1 id="cash-forecast-title">Cash Forecast</h1>
+    <div><h1 id="cash-forecast-title">Cash Forecast</h1><p className="finance-forecast-subtitle">View upcoming cash activity and select a date for details.</p></div>
     <span className={`finance-calendar-source-status finance-calendar-source-status--${sourceSeverity}`} role="status" title={error || balanceMessage || freshnessMessage || balanceSource}>
       {error ? 'Bank update failed' : !balanceVerifiedLive ? 'Estimated · bank freshness unverified' : freshnessStatus !== 'fresh' ? 'Estimated · transaction update needed' : todayPlanUnresolved ? 'Payments need confirmation' : 'Bank snapshot verified'}
     </span>
@@ -70,7 +70,7 @@ export default function CashForecastAgenda({
     if (!selectedDay || !pendingDetailFocusRef.current || typeof window === 'undefined') return undefined
     const frame = window.requestAnimationFrame(() => {
       pendingDetailFocusRef.current = false
-      const detailHeader = agendaRef.current?.parentElement?.querySelector('.finance-calendar-day-header')
+      const detailHeader = agendaRef.current?.closest('.finance-forecast-workspace')?.querySelector('.finance-calendar-day-header')
       const detail = detailHeader?.closest('.finance-card')
       if (!detail) return
       detail.id = detailId

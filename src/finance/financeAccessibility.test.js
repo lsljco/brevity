@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
+const forecastToolbar = readFileSync(new URL('./CashForecastToolbar.jsx', import.meta.url), 'utf8')
 const actualTransaction = readFileSync(new URL('./ActualTxModal.jsx', import.meta.url), 'utf8')
 const transactionRule = readFileSync(new URL('./TransactionRuleModal.jsx', import.meta.url), 'utf8')
 const actionsFunction = readFileSync(new URL('../../netlify/functions/brevity-assistant-actions.mjs', import.meta.url), 'utf8')
@@ -23,7 +24,7 @@ test('finance navigation and dialog icon controls expose explicit accessible nam
     'Close category details',
     'Previous financial calendar month',
     'Next financial calendar month',
-  ]) assert.match(planner, new RegExp(`aria-label="${label}"`))
+  ]) assert.match(planner + forecastToolbar, new RegExp(`aria-label="${label}"`))
 
   assert.ok(planner.includes('aria-label={`Edit ${tx.name}`}'))
   assert.ok(planner.includes('aria-label={`Delete ${tx.name}`}'))

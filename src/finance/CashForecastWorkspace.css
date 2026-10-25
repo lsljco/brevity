@@ -1,0 +1,57 @@
+.finance-root .finance-inner.finance-forecast-page{background:linear-gradient(135deg,rgba(20,25,30,.85),rgba(9,12,15,.96));border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:24px}
+.finance-forecast-shell{container-type:inline-size;min-width:0}
+.app-main[data-life-pillar="finance"][data-life-view="calendar"]{display:flex;flex-direction:column}
+.app-main[data-life-pillar="finance"][data-life-view="calendar"]>.app-context-navigation{margin:12px 24px 0}
+.app-main[data-life-pillar="finance"][data-life-view="calendar"]>.finance-archive-entry{padding:0 24px}
+.app-main[data-life-pillar="finance"][data-life-view="calendar"]>.app-support-tools{order:5;margin:16px 24px 90px}
+.finance-root .finance-inner.finance-forecast-page{margin-top:12px!important}
+.finance-root .finance-forecast-subtitle{margin:4px 0 0;font-size:12px;font-weight:400;color:var(--muted)}
+
+.finance-root .finance-inner.finance-forecast-page{background:linear-gradient(135deg,rgba(20,25,30,.94),rgba(9,12,15,.98))!important;border-radius:18px!important;padding:20px!important}
+.finance-root .finance-forecast-page::before,.finance-root .finance-forecast-page::after{opacity:.14}
+.finance-root .finance-card.finance-forecast-day-detail{background:rgba(12,17,22,.95)!important;border-radius:12px!important;box-shadow:none!important}
+.finance-root .finance-forecast-day-detail::before,.finance-root .finance-forecast-day-detail::after{opacity:.12}
+.finance-forecast-workspace{display:grid;grid-template-columns:minmax(0,1fr);position:relative;align-items:start;gap:20px}
+.finance-forecast-workspace.has-selection{grid-template-columns:minmax(0,1fr) minmax(260px,30%)}
+.finance-forecast-calendar{min-width:0}
+.finance-root .finance-calendar-header.finance-forecast-toolbar{display:flex!important;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0}
+.finance-forecast-toolbar button,.finance-forecast-accounts>summary{box-sizing:border-box;min-height:44px;border:1px solid var(--glass-border);border-radius:10px;padding:9px 12px;color:var(--soft-white);background:rgba(255,255,255,.025);font:inherit;font-size:12px;cursor:pointer}
+.finance-forecast-toolbar button:focus-visible,.finance-forecast-shell summary:focus-visible,.finance-forecast-close:focus-visible,.finance-forecast-calendar .cal-cell:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.finance-forecast-month{display:flex;align-items:center;gap:4px;border:1px solid var(--glass-border);border-radius:10px;flex:1 1 220px;max-width:330px}
+.finance-forecast-month button{border:0;background:transparent;min-width:44px}
+.finance-forecast-month p{margin:0;flex:1;text-align:center;white-space:nowrap;font-size:14px}
+.finance-forecast-accounts{position:relative;flex:1 1 180px;max-width:300px;min-width:0}
+.finance-forecast-accounts>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none}
+.finance-forecast-accounts>summary::-webkit-details-marker{display:none}
+.finance-forecast-accounts[open]>summary{border-color:var(--gold)}
+.finance-forecast-accounts>.finance-account-filter{position:absolute!important;top:calc(100% + 8px)!important;left:0;z-index:30;display:flex;flex-wrap:wrap;white-space:normal;overflow:visible!important;width:min(370px,75vw);box-sizing:border-box;padding:16px!important;border:1px solid var(--glass-border);border-radius:12px;background:rgba(13,17,21,.98)!important;box-shadow:0 14px 32px rgba(0,0,0,.5)}
+.finance-forecast-accounts .finance-account-filter>button{min-height:44px}
+.finance-forecast-toolbar .finance-forecast-actuals{display:flex;align-items:center;gap:8px;border-color:transparent;white-space:nowrap}
+.finance-forecast-switch{width:30px;height:18px;border-radius:12px;background:#444;display:inline-flex;align-items:center;padding:2px;box-sizing:border-box}
+.finance-forecast-switch:after{content:'';width:14px;height:14px;background:#eee;border-radius:50%;transition:transform .15s}
+.finance-forecast-actuals[aria-pressed=true] .finance-forecast-switch{background:var(--gold)}
+.finance-forecast-actuals[aria-pressed=true] .finance-forecast-switch:after{transform:translateX(12px)}
+.finance-forecast-toolbar .finance-forecast-reconcile-button{border-color:rgba(197,164,109,.5);color:var(--gold);margin-left:auto}
+.finance-root .finance-forecast-calendar .cal-grid{gap:0!important}
+.finance-root .finance-forecast-calendar .cal-cell{min-height:72px!important;border-radius:0!important;padding:8px!important;background:rgba(255,255,255,.015)!important;box-shadow:none!important;overflow:hidden}
+.finance-root .finance-forecast-calendar .cal-cell.is-selected{background:rgba(197,164,109,.14)!important;border-color:var(--gold)!important;border-radius:8px!important;opacity:1}
+.finance-root .finance-forecast-calendar .cal-cell.is-past{opacity:1}.finance-root .finance-forecast-calendar .cal-cell:not(.is-today) .finance-calendar-day-number{color:#b9bdc2!important}
+.finance-root .finance-forecast-calendar .finance-calendar-event{flex-direction:row!important;align-items:center!important;overflow:hidden!important;padding:2px!important;line-height:1.4!important}
+.finance-root .finance-forecast-calendar .finance-calendar-description{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.finance-root .finance-forecast-calendar .finance-calendar-amount{font-size:9px}
+.finance-forecast-calendar .finance-calendar-weekday{padding:10px 0}
+.finance-root .finance-card.finance-forecast-day-detail{position:relative;padding:18px!important;border-radius:12px;background:rgba(255,255,255,.025);border:1px solid var(--glass-border);margin:0;min-width:0;max-height:720px;overflow:auto!important;scroll-margin-top:16px}
+.finance-forecast-day-detail .finance-calendar-day-header{padding-right:30px}
+.finance-root .finance-forecast-day-detail>.finance-forecast-close{z-index:4}
+.finance-root .finance-forecast-day-detail>.finance-forecast-close{position:absolute;top:8px;right:6px;width:40px;height:40px;border:0;border-radius:8px;background:transparent;color:var(--soft-white);cursor:pointer;font:inherit;font-size:24px}
+.finance-forecast-day-filters,.finance-forecast-day-balance{margin:12px 0;font-size:12px}
+.finance-forecast-day-detail summary{cursor:pointer;padding:8px 0;color:var(--muted)}
+.finance-forecast-day-filters .transaction-list-controls{grid-template-columns:minmax(0,1fr);margin-top:12px}
+.finance-forecast-projected{display:inline-block;color:var(--gold);margin-left:6px}
+.finance-forecast-day-source{display:flex;justify-content:space-between;gap:12px;margin-top:18px;padding-top:14px;border-top:1px solid var(--glass-border);font-size:12px;color:var(--muted)}
+.finance-forecast-day-source strong{font-weight:500;color:var(--soft-white)}
+.finance-forecast-shell>.finance-forecast-details,.finance-forecast-reconciliation{margin:18px 0 0;padding:12px 0;border-top:1px solid var(--glass-border);font-size:12px;color:var(--muted);scroll-margin-top:16px}
+.finance-forecast-shell>.finance-forecast-details>summary,.finance-forecast-reconciliation>summary{min-height:24px;cursor:pointer;color:var(--soft-white)}
+.finance-forecast-reconciliation[open]>summary{margin-bottom:12px}
+@container(max-width:780px){.finance-forecast-workspace.has-selection{grid-template-columns:minmax(0,1fr)}.finance-root .finance-card.finance-forecast-day-detail{position:absolute!important;z-index:5;right:0;top:0;width:min(360px,85%);box-sizing:border-box;background:rgba(13,17,21,.98);box-shadow:-16px 0 40px rgba(0,0,0,.4)}.finance-root .finance-forecast-calendar .cal-cell{min-height:72px!important}}
+@media(max-width:720px){.finance-root .finance-calendar-header.finance-forecast-toolbar{display:flex!important}.finance-forecast-month{max-width:none;flex-basis:100%}.finance-forecast-accounts{max-width:none;flex-basis:60%}.finance-forecast-toolbar .finance-forecast-reconcile-button{margin-left:0;flex:1}.finance-forecast-workspace.has-selection{grid-template-columns:minmax(0,1fr)}.finance-root .finance-card.finance-forecast-day-detail{position:relative!important;inset:auto;width:100%;max-height:none;box-shadow:none}.finance-forecast-accounts>.finance-account-filter{width:min(340px,75vw)}.finance-forecast-toolbar .finance-forecast-today{flex:0}.finance-forecast-shell>.finance-forecast-details{margin-top:12px}}

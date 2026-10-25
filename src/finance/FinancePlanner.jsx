@@ -52,6 +52,7 @@ import CashForecastBalances from './CashForecastBalances.jsx'
 import './FinanceOverview.css'
 const FinanceOverview = lazy(() => import('./FinanceOverview.jsx'))
 import { buildOutstandingCashForecast } from './outstandingCashForecast.js'
+const CashForecastToolbar = lazy(() => import('./CashForecastToolbar.jsx'))
 const CashForecastAgenda = lazy(() => import('./CashForecastAgenda.jsx'))
 const CashForecastIntro = lazy(() => import('./CashForecastAgenda.jsx').then(module => ({ default:module.CashForecastIntro })))
 import { USER_SIDEPANEL_IMAGE } from './financeAssets.js'
@@ -2439,7 +2440,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
-      {view !== 'scenario-modeling' && AccountFilterBar}
+      {!['scenario-modeling','calendar'].includes(view) && AccountFilterBar}
       {!isForm&&['transactions','vendors','recurring','reporting'].includes(view)&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
       {!formView && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
@@ -3042,8 +3043,9 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {/* ══════════ CALENDAR ══════════ */}
       {view === 'calendar' && (
-        <div className="finance-inner">
-          <CalendarView vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
+        <div className="finance-inner finance-forecast-page">
+          <CalendarView accountFilter={AccountFilterBar} scopeLabel={financeAccountScopeLabel}
+            reconciliationReport={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />} vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
             readOnly={readOnly}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
@@ -3059,7 +3061,6 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             balanceVerifiedLive={forecastBalanceVerifiedLive}
             todayPlanUnresolved={forecastTodayPlanUnresolved}
             onActualTxClick={openActualTxModal} />
-          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
 
         </div>
       )}
@@ -4439,7 +4440,10 @@ function plaidCatToLocal(plaidCats = []) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
+function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
+  const reconciliationRef=useRef(null)
+  const forecastRef=useRef(null)
+  const closeDay=()=>{const day=forecastRef.current?.querySelector('.cal-cell.is-selected, .finance-calendar-mobile-agenda > .is-selected');setSelDay(null);day?.focus({preventScroll:true})}
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
@@ -4543,7 +4547,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
 
   // ── Calendar grid ────────────────────────────────────────────────────────
   return (
-    <div>
+    <div className="finance-forecast-shell" ref={forecastRef}>
       {!readOnly && (selTx || pendingScope || pendingMove) && createPortal(<div className="finance-root finance-calendar-portal">
       {/* ── Edit transaction modal (overlay — stays above calendar) ── */}
       {!readOnly && selTx && (
@@ -4649,43 +4653,17 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
         todayPlanUnresolved={todayPlanUnresolved}
       /></Suspense>
 
-      <details className="finance-forecast-details"><summary>Projection details &amp; forecast help</summary>
-      <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
-      <p>The forecast carries the preceding balance forward. Scheduled items are plans, not proof of payment. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.</p>
-      <p>Reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</p>
-      <p>{balanceSource}. {actualsFreshnessMessage}</p>
-      {balanceDataMessage && <p>{balanceDataMessage}</p>}
-      {actualsError && <p role="alert">{actualsError}</p>}
-      {excludedAccountCount > 0 && <p>{excludedAccountCount} non-cash accounts excluded.</p>}
-      {unmappedTransactionCount > 0 && <p>{unmappedTransactionCount} unlinked bank transactions excluded. Review Finance → Transactions.</p>}
-      </details>
+
 
       {/* ── Month navigation and bank-activity overlay ── */}
-      <div className="finance-calendar-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button aria-label="Previous financial calendar month" onClick={prevMonth} style={{ padding: '6px 10px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent' }}>
-          <i className="ti ti-chevron-left" aria-hidden="true" />
-        </button>
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 600, flex: 1, textAlign: 'center' }}>{monthName}</p>
-        <button aria-label="Next financial calendar month" onClick={nextMonth} style={{ padding: '6px 10px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent' }}>
-          <i className="ti ti-chevron-right" aria-hidden="true" />
-        </button>
-        <button onClick={() => { const householdToday = getHouseholdCalendarDate(); setSelDay(null); setCalMonth(householdToday.getMonth()); setCalYear(householdToday.getFullYear()) }}
-          style={{ padding: '5px 10px', cursor: 'pointer', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', fontSize: 12 }}>
-          Today
-        </button>
-        <button onClick={toggleActuals} disabled={actualsLoading} aria-pressed={showActuals}
-          aria-label={actualsLoading ? 'Loading bank activity' : `${showActuals ? 'Hide' : 'Show'} bank activity for ${monthName}`}
-          style={{ padding: '5px 10px', cursor: actualsLoading ? 'default' : 'pointer', borderRadius: 8, fontSize: 12,
-            border: showActuals ? '1px solid rgba(197,164,109,0.55)' : '1px solid var(--glass-border)',
-            background: showActuals ? 'rgba(197,164,109,0.18)' : 'transparent',
-            color: showActuals ? 'var(--gold)' : 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
-             style={{ fontSize: 11, animation: actualsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
-          {actualsLoading ? 'Loading bank activity…' : `${showActuals ? 'Hide bank activity' : 'Show bank activity'} (${monthBankCount})`}
-          {actualsError && <span style={{ fontSize: 10, color: 'var(--expense-color)', marginLeft: 4 }} title={actualsError}>⚠ Error</span>}
-        </button>
-      </div>
-
+      <Suspense fallback={<p>Loading forecast controls…</p>}><CashForecastToolbar
+        monthName={monthName} previous={prevMonth} next={nextMonth}
+        today={()=>{const day=getHouseholdCalendarDate();setSelDay(null);setCalMonth(day.getMonth());setCalYear(day.getFullYear())}}
+        scopeLabel={scopeLabel} accountFilter={accountFilter} showActuals={showActuals} toggleActuals={toggleActuals} loading={actualsLoading} bankCount={monthBankCount}
+        onReconcile={()=>{const panel=reconciliationRef.current;if(panel){panel.open=true;panel.scrollIntoView({block:'start'});panel.querySelector('summary')?.focus({preventScroll:true})}}}
+      /></Suspense>
+      <div className={selDay&&selPt?'finance-forecast-workspace has-selection':'finance-forecast-workspace'}>
+      <div className="finance-forecast-calendar">
       <Suspense fallback={<p>Loading forecast days…</p>}><CashForecastAgenda vendorOrder={vendorOrder}
         cells={cells}
         projection={proj}
@@ -4727,7 +4705,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           // Plaid actuals for this cell (only meaningful on past/today dates)
           const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
-          const maxBudget      = showActualPills ? 5 : 10
+          const maxBudget      = showActualPills ? 1 : 2
           const dayReconciliation = reconciliationByDate.get(key)
           const matchedRows = showActualPills ? (dayReconciliation?.rows || []).filter(row => row.state === 'matched') : []
           const matchedPlanIds = new Set(matchedRows.map(row => row.expected.id))
@@ -4735,7 +4713,10 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
           const approvedActualIds = new Set(matchedRows.filter(row=>row.approved).map(row=>row.actual.id))
           const visiblePlans = (pt?.txns || []).filter(tx => !matchedPlanIds.has(tx.id))
           return (
-            <div key={key}
+            <div key={key} role="button" tabIndex={0} data-date={key}
+              aria-label={new Date(key+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
+              aria-expanded={isSel}
+              onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();setSelDay(isSel?null:key)}}}
               className={`cal-cell ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''} ${isPast ? 'is-past' : ''} ${dragOver === key ? 'drag-over' : ''}`}
               style={!cur ? { opacity: 0.38, background: 'rgba(255,255,255,0.01)' } : undefined}
               onClick={() => setSelDay(isSel ? null : key)}
@@ -4785,7 +4766,7 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
               {/* Actual (Plaid) transaction pills (teal/blue) */}
               {showActualPills && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginTop: hasTxns ? 2 : 0 }}>
-                  {sortAndFilterTransactions(dayActuals).slice(0, 3).map((tx, j) => {
+                  {sortAndFilterTransactions(dayActuals).slice(0, 1).map((tx, j) => {
                     const isIncome = tx.amount < 0 // Plaid: negative = credit
                     const isTransfer = isTransferTransaction(tx)
                     return (
@@ -4802,8 +4783,8 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                       </div>
                     )
                   })}
-                  {dayActuals.length > 3 && (
-                    <div style={{ fontSize: 9, color: '#90AADE', lineHeight: '13px', paddingLeft: 2 }}>+{dayActuals.length - 3} actual</div>
+                  {dayActuals.length > 1 && (
+                    <div style={{ fontSize: 9, color: '#90AADE', lineHeight: '13px', paddingLeft: 2 }}>+{dayActuals.length - 1} actual</div>
                   )}
                 </div>
               )}
@@ -4832,54 +4813,23 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
       </div>
 
       {/* ── Day detail panel ── */}
+      </div>
       {selDay && selPt && (
-        <div className="finance-card" style={{ marginTop: 16 }}>
+        <aside className="finance-card finance-forecast-day-detail" aria-label="Selected day details">
+          <button type="button" className="finance-forecast-close" aria-label="Close day details" onClick={closeDay}><span aria-hidden="true">×</span></button>
           <div className="finance-calendar-day-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
                 {new Date(selDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                {selPt.delta !== 0 ? `Net: ${selPt.delta > 0 ? '+' : ''}${fmtMoney(selPt.delta)}` : 'No budgeted transactions'}
-                {selPt.txns.length > 0 && !readOnly ? ' · click to edit · drag to move' : ''}
+                {selPt.txns.length} scheduled item{selPt.txns.length===1?'':'s'}
               </p>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              {(() => {
-                const isSelPast    = selDay < todayStr
-                const isSelToday   = selDay === todayStr
-                const selReconstructedBal = isSelPast && historicalBals[selDay] !== undefined
-                  ? historicalBals[selDay] : undefined
-                // Reconstructed history takes priority; fall back to the
-                // backward-anchored projection estimate when history is unavailable.
-                const displayBal = selReconstructedBal !== undefined ? selReconstructedBal : selPt.bal
-                const balColor   = displayBal < 0 ? 'var(--expense-color)' : selReconstructedBal !== undefined ? '#90AADE' : 'var(--gold)'
-                const balLabel   = selReconstructedBal !== undefined
-                  ? 'Reconstructed end-of-day balance'
-                  : isSelToday
-                    ? 'Projected after today’s activity'
-                    : isSelPast
-                      ? `Estimated from ${balanceSource}`
-                      : todayPlanUnresolved
-                        ? 'Projected cash balance · today unresolved'
-                        : 'Projected cash balance'
-                return (
-                  <>
-                    <p style={{ margin: 0, fontSize: 11, color: selReconstructedBal !== undefined ? '#90AADE' : 'var(--muted)' }}>
-                      {balLabel}
-                    </p>
-                    <p title={selReconstructedBal !== undefined ? 'Calculated backward from the latest source-managed balance and bank transaction history' : 'Read-only forecast; manual balance overrides are disabled'}
-                      style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor,
-                        opacity: isSelPast && selReconstructedBal === undefined ? 0.85 : 1 }}>
-                      {fmtMoney(displayBal)}
-                    </p>
-                  </>
-                )
-              })()}
-            </div>
+
           </div>
 
-          <TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/>
+          <details className="finance-forecast-day-filters"><summary>Filter day activity</summary><TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/></details>
 
           {/* Planned transactions */}
           {selPt.txns.length > 0 && (
@@ -4903,8 +4853,8 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
                           ? (acctIdSet.has(tx.acct)
                               ? `→ ${accounts.find(a => a.id === tx.transferTo)?.name || 'Unknown account'}`
                               : `← from ${accounts.find(a => a.id === tx.acct)?.name || 'Unknown account'}`)
-                          : `${tx.cat} · ${FREQ_OPTS.find(f => f.v === tx.freq)?.l}`}
-                        {!readOnly && <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>}
+                          : `${tx.cat || 'Uncategorized'} · ${FREQ_OPTS.find(f => f.v === tx.freq)?.l || 'Scheduled'}`}
+                        <span className="finance-forecast-projected">Projected</span>{!readOnly && <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>}
                       </p>
                     </div>
                     <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
@@ -5037,8 +4987,55 @@ function CalendarView({ vendorOrder='', proj, calYear, calMonth, setCalYear, set
               + Add Transaction
             </button>
           </div>}
-        </div>
+          <div className="finance-forecast-day-source"><span>Scheduled expenses</span><strong>{fmtMoney(selPt.txns.filter(tx=>tx.type==='expense').reduce((sum,tx)=>sum+Number(tx.amount||0),0))}</strong></div>
+          <div className="finance-forecast-day-source"><span>Source</span><strong>{balanceVerifiedLive?'Verified balance':balanceDataStatus==='cached'?'Cached':'Balance unverified'}</strong></div>
+          <details className="finance-forecast-day-balance"><summary>Projected balance &amp; movement</summary>            <div style={{ textAlign: 'right' }}>
+              {(() => {
+                const isSelPast    = selDay < todayStr
+                const isSelToday   = selDay === todayStr
+                const selReconstructedBal = isSelPast && historicalBals[selDay] !== undefined
+                  ? historicalBals[selDay] : undefined
+                // Reconstructed history takes priority; fall back to the
+                // backward-anchored projection estimate when history is unavailable.
+                const displayBal = selReconstructedBal !== undefined ? selReconstructedBal : selPt.bal
+                const balColor   = displayBal < 0 ? 'var(--expense-color)' : selReconstructedBal !== undefined ? '#90AADE' : 'var(--gold)'
+                const balLabel   = selReconstructedBal !== undefined
+                  ? 'Reconstructed end-of-day balance'
+                  : isSelToday
+                    ? 'Projected after today’s activity'
+                    : isSelPast
+                      ? `Estimated from ${balanceSource}`
+                      : todayPlanUnresolved
+                        ? 'Projected cash balance · today unresolved'
+                        : 'Projected cash balance'
+                return (
+                  <>
+                    <p style={{ margin: 0, fontSize: 11, color: selReconstructedBal !== undefined ? '#90AADE' : 'var(--muted)' }}>
+                      {balLabel}
+                    </p>
+                    <p title={selReconstructedBal !== undefined ? 'Calculated backward from the latest source-managed balance and bank transaction history' : 'Read-only forecast; manual balance overrides are disabled'}
+                      style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor,
+                        opacity: isSelPast && selReconstructedBal === undefined ? 0.85 : 1 }}>
+                      {fmtMoney(displayBal)}
+                    </p>
+                  </>
+                )
+              })()}
+            </div><p>Scheduled net: {fmtMoney(selPt.delta)}</p></details>
+        </aside>
       )}
+      </div>
+      <details className="finance-forecast-details"><summary>Projection details &amp; forecast help</summary>
+      <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
+      <p>The forecast carries the preceding balance forward. Scheduled items are plans, not proof of payment. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.</p>
+      <p>Reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</p>
+      <p>{balanceSource}. {actualsFreshnessMessage}</p>
+      {balanceDataMessage && <p>{balanceDataMessage}</p>}
+      {actualsError && <p role="alert">{actualsError}</p>}
+      {excludedAccountCount > 0 && <p>{excludedAccountCount} non-cash accounts excluded.</p>}
+      {unmappedTransactionCount > 0 && <p>{unmappedTransactionCount} unlinked bank transactions excluded. Review Finance → Transactions.</p>}
+      </details>
+      <details ref={reconciliationRef} className="finance-forecast-reconciliation"><summary>Reconciliation recommendations</summary>{reconciliationReport}</details>
     </div>
   )
 }

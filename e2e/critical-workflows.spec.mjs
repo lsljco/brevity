@@ -12,6 +12,49 @@ async function openTodayDetails(page) {
 import { test, expect } from '@playwright/test'
 test.use({launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']},permissions:['microphone']})
 
+test('approved Cash Forecast layout keeps selected-day details alongside the calendar',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  const toolbar=page.locator('.finance-forecast-toolbar')
+  await expect(toolbar).toBeVisible()
+  await expect(page.locator('.finance-forecast-details')).not.toHaveAttribute('open','')
+  await expect(page.locator('.finance-forecast-reconciliation')).not.toHaveAttribute('open','')
+  await toolbar.locator('.finance-forecast-accounts > summary').click()
+  await expect(page.getByRole('navigation',{name:'Finance account filters'})).toBeVisible()
+  await toolbar.locator('.finance-forecast-accounts > summary').press('Escape')
+  await expect(page.getByRole('navigation',{name:'Finance account filters'})).not.toBeVisible()
+  if(testInfo.project.name==='iphone')await page.locator('.finance-calendar-mobile-agenda > button').first().click()
+  else await page.locator('.cal-cell.is-today').press('Enter')
+  const detail=page.getByRole('complementary',{name:'Selected day details'})
+  await expect(detail).toBeVisible()
+  if(testInfo.project.name!=='iphone'){
+    const calendarBox=await page.locator('.finance-forecast-calendar').boundingBox(),detailBox=await detail.boundingBox()
+    expect(Math.abs(detailBox.y-calendarBox.y)).toBeLessThan(5)
+    expect(detailBox.x).toBeGreaterThan(calendarBox.x+calendarBox.width*.4)
+  }
+  await page.locator('.app-main').evaluate(el=>{el.scrollTop=0})
+  await page.screenshot({path:testInfo.outputPath('approved-cash-forecast.png'),fullPage:false})
+  if(testInfo.project.name==='desktop-chromium'){
+    await page.setViewportSize({width:1440,height:1100})
+    await page.locator('.app-main').evaluate(el=>{el.scrollTop=0})
+    await page.screenshot({path:testInfo.outputPath('cash-forecast-desktop-full.png')})
+  }
+  await expect(detail).toContainText('Scheduled expenses')
+  const workspaceBox=await page.locator('.finance-forecast-page').boundingBox()
+  const toolsBox=await page.locator('.app-support-tools').boundingBox()
+  expect(toolsBox.y).toBeGreaterThanOrEqual(workspaceBox.y+workspaceBox.height)
+  await detail.getByRole('button',{name:'Close day details'}).click()
+  await expect(detail).toHaveCount(0)
+  await toolbar.getByRole('button',{name:'Reconcile with bank',exact:true}).click()
+  await expect(page.getByRole('region',{name:'Automatic reconciliation recommendations'})).toBeVisible()
+  await toolbar.getByRole('button',{name:'Next financial calendar month'}).click()
+  await expect(detail).toHaveCount(0)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+})
+
 const dateKey=()=>{
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]))
   return `${parts.year}-${parts.month}-${parts.day}`
@@ -1277,6 +1320,7 @@ test('Finance combines Operating and Savings while excluding Renovation across v
   await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
   for(const view of ['Transactions','Cash Forecast','Reporting']){
     await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:view,exact:true}).click();await closeMenuIfMobile(page,testInfo)
+    if(view==='Cash Forecast')await page.locator('.finance-forecast-accounts > summary').click()
     await expect(filters.getByRole('button',{name:'Operating Account',exact:true})).toHaveAttribute('aria-pressed','true')
     await expect(filters.getByRole('button',{name:'Savings Account',exact:true})).toHaveAttribute('aria-pressed','true')
     await expect(filters.getByRole('button',{name:'Renovation Account',exact:true})).toHaveAttribute('aria-pressed','false')
