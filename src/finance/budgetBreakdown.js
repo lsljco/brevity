@@ -54,6 +54,7 @@ function storedBudgetLines(budget = {}, accountIds = null) {
       recordId: stringValue(value.recordId),
       accountId,
       name: stringValue(value.name) || 'Unnamed budget line',
+      cashAllowance:Boolean(value.cashAllowance),
       category: value.direction === 'income' ? 'Income' : stringValue(value.category) || 'Other',
       direction: value.direction,
       transactions: [],
@@ -85,8 +86,9 @@ export function buildBudgetLines(transactions = [], budget = {}, { accountIds = 
     ) : []
     if (matching.length === 1 && !lines.has(stored.id)) {
       lines.delete(matching[0].id)
-      lines.set(stored.id, { ...matching[0], id:stored.id })
+      lines.set(stored.id, { ...matching[0], id:stored.id, cashAllowance:stored.cashAllowance })
     } else if (!lines.has(stored.id)) lines.set(stored.id, stored)
+    else if(stored.cashAllowance)lines.set(stored.id,{...lines.get(stored.id),cashAllowance:true})
   }
   return [...lines.values()].sort((left, right) => (
     left.category.localeCompare(right.category)
@@ -155,7 +157,7 @@ export function budgetTargetRow(options = {}) {
   return Array.from({ length: 12 }, (_, month) => budgetTargetForLine({ ...options, month }))
 }
 
-export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = new Date().getUTCFullYear() } = {}) {
+export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = new Date().getUTCFullYear(), changedAt = new Date().toISOString(), actor = 'Household member' } = {}) {
   const month = Number(payload.month)
   const year = Number(payload.year)
   const lineId = stringValue(payload.lineId)
@@ -187,6 +189,18 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
   const accountTargets = { ...(next.targets[accountId] || {}) }
   const yearTargets = { ...(accountTargets[String(year)] || {}) }
   const row = Array.isArray(yearTargets[lineId]) ? [...yearTargets[lineId]] : Array(12).fill(null)
+  const originalAccount = {...(next.originalTargets?.[accountId] || {})}
+  const originalYear = {...(originalAccount[String(year)] || {})}
+  const originalRow = {...(originalYear[lineId] || {})}
+  const priorLine = {id:lineId,accountId,name:stringValue(payload.lineName),direction}
+  const previous = budgetTargetForLine({budget:value,line:priorLine,year,month,legacyYear:payload.legacyYear,legacyAccountId:payload.legacyAccountId,legacyOwners:new Map([[priorLine.name,lineId]])})
+  if (!Object.prototype.hasOwnProperty.call(originalRow,month)) {
+    const targetMonth = `${year}-${String(month+1).padStart(2,'0')}-01`
+    originalRow[month] = previous ?? (targetMonth >= changedAt.slice(0,10) ? Number(payload.value ?? payload.amount) || 0 : null)
+  }
+  originalYear[lineId]=originalRow;originalAccount[String(year)]=originalYear
+  next.originalTargets={...(next.originalTargets || {}),[accountId]:originalAccount}
+  next.revisions=[...(next.revisions || []),{lineId,accountId,year,month,before:previous??null,after:Number(payload.value ?? payload.amount)||0,changedAt,actor}]
   row[month] = Number(payload.value ?? payload.amount) || 0
   yearTargets[lineId] = row
   accountTargets[String(year)] = yearTargets
@@ -198,6 +212,7 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
     name:stringValue(payload.lineName) || stringValue(next.lines[lineId]?.name) || 'Unnamed budget line',
     category:direction === 'income' ? 'Income' : stringValue(payload.category) || stringValue(next.lines[lineId]?.category) || 'Other',
     direction,
+    cashAllowance:payload.cashAllowance ?? next.lines[lineId]?.cashAllowance ?? false,
   }
   return next
 }

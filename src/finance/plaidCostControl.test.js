@@ -81,3 +81,10 @@ test('transaction endpoint refuses paid calls before contacting Plaid', async ()
     if(previousHandler)require.cache[handlerPath]=previousHandler;else delete require.cache[handlerPath]
   }
 })
+
+test('deliberate refreshes bypass Brevity cooldown and monthly cutoff while recording estimated cost', async () => {
+ const store=memoryStore({month:'2026-10',reservedCents:500,lastAttempts:{}})
+ assert.equal((await reserve(store,{onDemand:true})).monthlyReservedCents,510)
+ assert.equal((await reserve(store,{onDemand:true,now:now+1000})).monthlyReservedCents,520)
+ await assert.rejects(reserve(store,{onDemand:true,session:{role:'member'}}),{code:'PLAID_PAID_FORBIDDEN'})
+})

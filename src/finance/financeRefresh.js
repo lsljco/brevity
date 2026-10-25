@@ -285,6 +285,7 @@ function cachedPlaidTransactions(storage) {
 
 export async function fetchLatestPlaidTransactions({
   requestBankUpdate = false,
+  recoverHistory = false,
   suppressRefreshRequestErrors = false,
   fetcher = apiFetch,
 } = {}) {
@@ -306,7 +307,7 @@ export async function fetchLatestPlaidTransactions({
       }
     }
   }
-  const initial = await fetcher('/plaid-transactions', { timeoutMs:TRANSACTION_SYNC_REQUEST_TIMEOUT_MS })
+  const initial = await fetcher(recoverHistory ? '/plaid-transactions?history=1' : '/plaid-transactions', { timeoutMs:TRANSACTION_SYNC_REQUEST_TIMEOUT_MS })
   const requested = Boolean(refreshResponse?.refresh?.requested)
   const accepted = Number(refreshResponse?.refresh?.accepted || 0)
   if (!requested || accepted === 0) return refreshResponse?.refresh

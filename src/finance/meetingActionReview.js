@@ -42,7 +42,7 @@ export function meetingActionCreateOperation(draft,{cadence='weekly',date}={}){
   if(!text)throw new Error('Commitment text is required.')
   return{
     type:'meeting.action.create',
-    payload:{text,owner,due:draft?.due||'',financialEffect:repaired.financialEffect.trim(),meetingDate:date||'',cadence,status:'open'},
+    payload:{text,owner,due:draft?.due||'',financialEffect:repaired.financialEffect.trim(),...(draft.transactionId?{transactionId:draft.transactionId}:{}),meetingDate:date||'',cadence,status:'open'},
     description:`Add Finance Meeting commitment ${quote(text)}.`,
   }
 }

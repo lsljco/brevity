@@ -1,3 +1,4 @@
+import {applyBudgetAllowances} from './budgetAllowances.js'
 import { buildProjection, today0, toISO, parseISODate, addDays } from './projection.js'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
 import { normalizeMerchantName } from './financialTruth.js'
@@ -125,7 +126,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     })
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
-      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
+      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', anchorEstimated:Boolean(options.anchorEstimated), openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
         anchorKind:availableIds.size === accounts.length ? 'available' : availableIds.size ? 'mixed' : 'current',
         pendingActivity:bank.filter(actual => actual.pending).map(actual => ({ id:actual.id, date:actual.date, name:actual.name || actual.merchant_name || 'Pending transaction', accountName:accounts.find(account => account.id === accountMap[actual.accountId])?.name || 'Cash account', delta:-cents(actual.amount) / 100, applied:reconcile && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]) })),
         pendingDelta:reconcile ? pendingDelta / 100 : 0,
@@ -134,5 +135,5 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
         pendingExcluded:bank.filter(actual => actual.pending && !ledgerIds.has(accountMap[actual.accountId])).length,
         unmatchedCount:realization.filter(row => row.statuses.some(status => status.status === 'expected')).length } : {}) })
   }
-  return projection
+  return applyBudgetAllowances(projection,{accounts,scheduled:transactions,actuals,budget:options.budget,today})
 }

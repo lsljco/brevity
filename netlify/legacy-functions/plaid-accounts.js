@@ -50,7 +50,7 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ accounts: [], connected: false }) }
     }
 
-    if (liveBalance) await reservePaidCalls({ event, session, product:'balance', tokens })
+    if (liveBalance) await reservePaidCalls({ event, session, product:'balance', tokens, onDemand:true })
 
     const allAccounts = []
     const cacheUpdateTimes = []

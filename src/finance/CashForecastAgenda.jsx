@@ -62,7 +62,7 @@ export default function CashForecastAgenda({
         balanceIsReconstructed:reconstructedBalance !== undefined,
       }
     })
-    .filter(day => day.key === todayKey || day.key === selectedDay || day.balanceIsRecorded || day.planned.length > 0 || day.bank.length > 0)
+    .filter(day => day.key === todayKey || day.key === selectedDay || day.balanceIsRecorded || day.balanceIsReconstructed || day.planned.length > 0 || day.bank.length > 0)
 
   const includesToday = days.some(day => day.key === todayKey)
   const earlierCount = includesToday ? days.filter(day => day.key < todayKey).length : 0
@@ -109,7 +109,7 @@ export default function CashForecastAgenda({
         const dateLabel = new Date(`${day.key}T12:00:00`).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
         const plannedNetLabel = `${day.plannedNet >= 0 ? 'plus' : 'minus'} ${fmtMoney(Math.abs(day.plannedNet))}`
         const balanceKind = day.balanceIsRecorded ? 'User-recorded ending balance' : day.balanceIsReconstructed
-          ? 'Balance from posted activity'
+          ? 'Estimated balance from posted activity'
           : day.key < todayKey
             ? 'Past balance unavailable'
             : day.key === todayKey

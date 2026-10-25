@@ -49,7 +49,11 @@ import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
 import { getHouseholdCalendarDate, getHouseholdDateKey, getHouseholdDateLabel, getHouseholdDateTimeLabel, getHouseholdGreeting, getHouseholdTimeLabel } from './financeTime.js'
 import { buildScheduledActionPayload, scheduledActionScope } from './scheduledActionReview.js'
-import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, reconstructHistoricalCashBalances, transactionsForCalendarMonth } from './calendarSemantics.js'
+import { mergeStatementHistory } from './statementHistory.js'
+const AccountHistory = lazy(() => import('./AccountHistory.jsx'))
+const SpendingReview = lazy(() => import('./SpendingReview.jsx'))
+import { buildDatedCashLedger } from './datedCashLedger.js'
+import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, transactionsForCalendarMonth } from './calendarSemantics.js'
 import CashForecastBalances from './CashForecastBalances.jsx'
 import './FinanceOverview.css'
 const FinanceOverview = lazy(() => import('./FinanceOverview.jsx'))
@@ -1234,6 +1238,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const [plaidActuals, setPlaidActuals] = useState(() => {
     try { const v = localStorage.getItem('plaid_actuals_cache'); return v ? JSON.parse(v) : null } catch { return null }
   })
+  const [dailyBudget,setDailyBudget] = useState(loadBudget)
   const [actualsLoading, setActualsLoading] = useState(false)
   const [actualsError, setActualsError] = useState(null)
   const [actualsNotice, setActualsNotice] = useState('')
@@ -1389,19 +1394,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     [data.accounts, data.transactions],
   )
 
-  const proj = useMemo(() => {
-    // Pass today's actual account balance as an anchor so the projection for
-    // future dates always starts from the real current balance, not a
-    // reconstructed estimate that may drift from reality.
-    const todayAnchor = fd.accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0)
-    // Manual balance overrides are intentionally ignored. The projection must
-    // remain anchored to source-managed account balances and planned activity.
-    return buildProjection(fd.accounts, fd.transactions, 365, {}, 365, todayAnchor)
-  }, [fd])
-
-
   // ── Actuals (Plaid posted/pending transactions) ──────────────────────────
-  const fetchActuals = useCallback(async ({ requestBankUpdate = false } = {}) => {
+  const fetchActuals = useCallback(async ({ requestBankUpdate = false, recoverHistory = false } = {}) => {
     if (readOnly) {
       showToast('Finance is read-only for this household member')
       return { error: 'Finance is read-only for this household member' }
@@ -1410,7 +1404,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     setActualsError(null)
     setActualsNotice(requestBankUpdate ? 'Requesting a paid transaction update…' : 'Loading Plaid’s latest available transactions…')
     try {
-      let json = await fetchLatestPlaidTransactions({ requestBankUpdate })
+      let json = await fetchLatestPlaidTransactions({ requestBankUpdate, recoverHistory })
       // A successful HTTP response may still be a partial multi-institution
       // snapshot. Retain the last-known rows for failed institutions instead
       // of silently erasing them from KPIs and reconciliation.
@@ -1506,7 +1500,6 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const linkedForecastAccountCount = forecastScope.accounts.filter(account => linkedLocalAccountIds.has(account.id)).length
   const forecastHasLedgerAnchors = hasVerifiedCashLedgerAnchors(forecastScope.accounts, plaidIdToLocal)
   const forecastBalanceVerifiedLive = balanceDataStatus === 'fresh' && forecastHasLedgerAnchors
-  const forecastCanReconstructHistory = forecastBalanceVerifiedLive && actualsFreshness?.status === 'fresh' && String(readLatestBalanceRefreshStatus().checkedAt || '').length > 0 && getHouseholdDateKey(new Date(readLatestBalanceRefreshStatus().checkedAt)) === getHouseholdDateKey()
   const forecastBalanceSource = forecastBalanceVerifiedLive
     ? 'live bank balances confirmed for every included cash account'
     : forecastScope.accounts.length > 0 && linkedForecastAccountCount === forecastScope.accounts.length
@@ -1515,11 +1508,12 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       ? 'a mix of last stored linked-account values and unlinked household values'
       : 'stored household values that are not currently linked to a unique bank source'
 
+  const retainedActuals = useMemo(() => mergeStatementHistory(plaidActuals || [],data.statementTransactions || [],data.accounts),[plaidActuals,data.statementTransactions,data.accounts])
   const actualAccountScope = useMemo(
-    () => scopePlaidTransactionsByAccount(plaidActuals || [], plaidIdToLocal, activeAcctIds, {
+    () => scopePlaidTransactionsByAccount(retainedActuals, plaidIdToLocal, activeAcctIds, {
       includeUnmapped:!selectedAccts || selectedAccts.size === data.accounts.length,
     }),
-    [plaidActuals, plaidIdToLocal, activeAcctIds, selectedAccts, data.accounts.length],
+    [retainedActuals, plaidIdToLocal, activeAcctIds, selectedAccts, data.accounts.length],
   )
   const unmappedActuals = actualAccountScope.unmapped
 
@@ -1631,26 +1625,24 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     return map
   }, [cashForecastActuals])
 
-  // Historical ending balances are reconstructed from the verified live cash
-  // anchor and exact-account posted rows. The helper owns Plaid sign semantics.
-  const historicalBals = useMemo(() => {
-    if (!forecastCanReconstructHistory || !cashForecastPostedActuals?.length) return {}
-    const currentBal = forecastScope.accounts.reduce((sum, account) => {
-      return sum + (Number.isFinite(account.plaidCurrentBalance) ? account.plaidCurrentBalance : parseFloat(account.balance || 0))
-    }, 0)
-    return reconstructHistoricalCashBalances({
-      transactions:cashForecastPostedActuals,
-      currentBalance:currentBal,
-      todayKey:getHouseholdDateKey(),
-    })
-  }, [cashForecastPostedActuals, forecastCanReconstructHistory, forecastScope.accounts])
+  const cashLedger = useMemo(() => {
+    const meta = loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9 || {}
+    const sourceAt = meta.plaidAccountReceipt?.sourceUpdatedAt || meta.plaidAccountReceipt?.issuedAt
+    const legacyAt = sourceAt ? new Date(sourceAt) : new Date(localStorage.getItem('plaid_synced_at') || '')
+    return buildDatedCashLedger({accounts:forecastScope.accounts, transactions:cashForecastPostedActuals,
+      balanceHistory:meta.plaidBalanceHistory || [], closingRecords:data.dailyClosingBalances || {},
+      today:getHouseholdDateKey(), legacyAnchorDate:Number.isFinite(legacyAt.getTime()) ? getHouseholdDateKey(legacyAt) : ''})
+  }, [cashForecastPostedActuals, forecastScope.accounts, data.dailyClosingBalances, balanceDataStatus, actualsFreshness])
+  const historicalBals = cashLedger.balances
 
   const recordedClosingBals = useMemo(() => scopedClosingBalances(forecastScope.accounts, data.dailyClosingBalances), [forecastScope.accounts, data.dailyClosingBalances])
 
   const cashForecastProjection = useMemo(() => buildOutstandingCashForecast(
-    forecastScope.accounts, forecastScope.transactions, cashForecastActuals,
-    { reconcile:true, reconstructedBalances:historicalBals, recordedClosingBalances:recordedClosingBals, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
-  ), [forecastScope, cashForecastActuals, historicalBals, recordedClosingBals])
+    cashLedger.forecastAccounts, forecastScope.transactions, cashForecastActuals,
+    { reconcile:true, reconstructedBalances:historicalBals, recordedClosingBalances:recordedClosingBals, anchorEstimated:cashLedger.estimatedAnchor, budget:dailyBudget, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
+  ), [forecastScope, cashLedger, cashForecastActuals, historicalBals, recordedClosingBals, dailyBudget])
+  // Dashboard, reporting and calendar share the same reconciled cash forecast.
+  const proj = cashForecastProjection
   const forecastTodayPlanUnresolved = Boolean(cashForecastProjection.get(toISO(getHouseholdCalendarDate()))?.unmatchedCount)
 
   // Balance history is only comparable when every selected account is in the
@@ -1878,6 +1870,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         lineName:line.name,
         category:line.category,
         direction:line.direction,
+        cashAllowance:Boolean(line.cashAllowance),
         accountId:line.accountId,
         legacyYear:getHouseholdCalendarDate().getFullYear(),
         legacyAccountId:data.accounts.find(account => /\boperating\s+account\b/i.test(String(account?.name || '')))?.id || data.accounts.find(account => account.id === 'a1')?.id || '',
@@ -2129,7 +2122,14 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     () => fd.transactions.filter(transaction => transaction.type === 'expense' && calculateTransactionAmountForRange(transaction, financeRange) > 0),
     [fd.transactions, financeRange],
   )
-  const dailyBudget = useMemo(() => loadBudget(), [view])
+  const [spendingActions,setSpendingActions] = useState(() => loadSavedValue('brevity_finance_meetings_v1',{}).openActions || [])
+  useEffect(() => {
+    const refresh = () => { setDailyBudget(loadBudget());setSpendingActions(loadSavedValue('brevity_finance_meetings_v1',{}).openActions || []) }
+    refresh();window.addEventListener(SHARED_STATE_EVENT,refresh);window.addEventListener('storage',refresh)
+    return () => {window.removeEventListener(SHARED_STATE_EVENT,refresh);window.removeEventListener('storage',refresh)}
+  },[view])
+  const allSpendingActuals = useMemo(() => retainedActuals.map(tx => applyTransactionRules(tx,txRules,data.accounts)).map(tx => txOverrides[tx.id]?{...tx,...txOverrides[tx.id]}:tx).filter(tx=>!tx._deleted),[retainedActuals,txRules,txOverrides,data.accounts])
+  const spendingSources = useMemo(() => ({accounts:data.accounts,scheduled:data.transactions,actuals:allSpendingActuals,budget:dailyBudget,reviews:data.spendingReviews,period:{from:todayKey.slice(0,7)+'-01',to:todayKey},budgetLegacyYear:t.getFullYear(),budgetLegacyAccountId:data.accounts.find(a=>a.id==='a1')?.id}),[data,allSpendingActuals,dailyBudget,todayKey])
   const todayAlignment = useMemo(() => buildDailyAlignmentSnapshot({
     date: todayKey,
     accounts: fd.accounts,
@@ -2455,9 +2455,10 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       )}
 
       {/* ══════════ DASHBOARD ══════════ */}
+      {['overview','accounts'].includes(view) && !readOnly && <div style={{padding:'16px 28px'}}><Suspense fallback={<p>Loading bank controls…</p>}><PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={()=>fetchActuals({requestBankUpdate:true})} onSyncAvailableTransactions={()=>fetchActuals()} onRecoverTransactions={()=>fetchActuals({recoverHistory:true})} onReviewAccountLinks={()=>setView('accounts')}/></Suspense></div>}
       {view === 'overview' && <Suspense fallback={<p>Loading Finance overview.</p>}><FinanceOverview
-        accounts={forecastScope.accounts} projection={cashForecastProjection} today={toISO(getHouseholdCalendarDate())}
-        live={forecastBalanceVerifiedLive} transactionStatus={actualsFreshness?.status}
+        accounts={forecastScope.accounts} reserveAccounts={data.accounts.filter(a=>a.type==='savings')} spendingSources={spendingSources} reserveMinimum={data.cashReserveMinimum} readOnly={readOnly} onReviewReserve={amount=>stageDirectFinanceReview({summary:'Set operating cash reserve minimum',storageKey:LS_KEY,operation:{type:'finance.reserve.set',payload:{amount}},surfaceError:true})} projection={cashForecastProjection} today={toISO(getHouseholdCalendarDate())}
+        live={forecastBalanceVerifiedLive && !cashLedger.estimatedAnchor} transactionStatus={actualsFreshness?.status}
         unmappedCount={unmappedActuals.length} error={actualsError}
         scopeLabel={financeAccountScopeLabel} onNavigate={destination=>destination==='transactions'?openAllBankActivity():setView(destination)}
         onOpenForecast={date=>{if(date){const day=new Date(date+'T12:00:00');setCalYear(day.getFullYear());setCalMonth(day.getMonth());setSelDay(date)}setView('calendar')}}
@@ -2473,7 +2474,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
               <div className="dash-date">{todayLabel}</div>
             </div>
             <div className="dash-actions">
-              {!readOnly && <Suspense fallback={<p role="status">Loading bank controls…</p>}><PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onSyncAvailableTransactions={() => fetchActuals({ requestBankUpdate:false })} onReviewAccountLinks={() => setView('accounts')} /></Suspense>}
+              {!readOnly && <Suspense fallback={<p role="status">Loading bank controls…</p>}><PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onSyncAvailableTransactions={() => fetchActuals({ requestBankUpdate:false })} onRecoverTransactions={() => fetchActuals({ recoverHistory:true })} onReviewAccountLinks={() => setView('accounts')} /></Suspense>}
               <div className="dash-search">
                 <i className="ti ti-search" />
                 <input aria-label="Search transactions" placeholder="Search transactions…" value={dashboardSearch} onChange={event => setDashboardSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && dashboardSearch.trim()) openFilteredTransactions({ query: dashboardSearch.trim(), label: `Search: ${dashboardSearch.trim()}` }) }} />
@@ -3031,6 +3032,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           balanceCheckedAt={readLatestBalanceRefreshStatus().checkedAt || ''}
           balanceHistory={loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || []}
           budget={dailyBudget}
+          spendingReviews={data.spendingReviews || {}} spendingSources={spendingSources}
           budgetLegacyYear={t.getFullYear()}
           budgetLegacyAccountId={data.accounts.find(account => /\boperating\s+account\b/i.test(String(account?.name || '')))?.id || data.accounts.find(account => account.id === 'a1')?.id || ''}
           projection={proj}
@@ -3041,6 +3043,15 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       )}
 
       {/* ══════════ SCENARIO MODELING ══════════ */}
+      {view === 'spending-review' && <Suspense fallback={<p>Loading spending review…</p>}><SpendingReview
+        accounts={data.accounts} scheduled={data.transactions} actuals={allSpendingActuals} budget={dailyBudget}
+        reviews={data.spendingReviews || {}} actions={spendingActions} period={financeRange} readOnly={readOnly}
+        budgetLegacyYear={t.getFullYear()} budgetLegacyAccountId={data.accounts.find(a=>a.id==='a1')?.id}
+        onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})} onBudget={reviewBudgetChange}
+        onTransaction={id=>{const tx=allSpendingActuals.find(row=>row.id===id);if(tx)openActualTxModal(tx)}}
+        onReconcile={()=>setView('calendar')}
+      /></Suspense>}
+
       {view === 'scenario-modeling' && (
         <ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} financeData={recoveryFinanceSources.data} actuals={recoveryFinanceSources.actuals} debts={debts} freshness={`${balanceDataMessage} ${actualsFreshnessMessage}`} />
       )}
@@ -3058,13 +3069,13 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             actualsFreshnessMessage={actualsFreshnessMessage} actualsFreshnessStatus={actualsFreshness?.status}
             balanceDataMessage={balanceDataMessage} balanceDataStatus={balanceDataStatus}
             actualsByDate={cashForecastActualsByDate} plaidActuals={cashForecastActuals}
-            historicalBals={historicalBals}
+            historicalBals={historicalBals} ledgerSources={cashLedger.sources}
             recordedClosingBals={recordedClosingBals} closingRecords={data.dailyClosingBalances || {}}
             onReviewClosingBalance={input => stageDirectFinanceReview({...input,storageKey:LS_KEY,surfaceError:true})}
             excludedAccountCount={fd.accounts.length - forecastScope.accounts.length}
             unmappedTransactionCount={unmappedActuals.length}
-            balanceSource={forecastBalanceSource}
-            balanceVerifiedLive={forecastBalanceVerifiedLive}
+            balanceSource={cashLedger.estimatedAnchor ? 'estimated current cash rolled forward from dated balances and later posted transactions' : forecastBalanceSource}
+            balanceVerifiedLive={forecastBalanceVerifiedLive && !cashLedger.estimatedAnchor}
             todayPlanUnresolved={forecastTodayPlanUnresolved}
             onActualTxClick={openActualTxModal} />
 
@@ -3209,6 +3220,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ ACCOUNTS ══════════ */}
       {view === 'accounts' && (
         <div className="finance-inner">
+          <Suspense fallback={<p>Loading source history…</p>}><AccountHistory accounts={data.accounts} actuals={plaidActuals || []} history={loadSavedValue('brevity_shared_state_meta_v1',{})?.lslj_finance_v9?.plaidBalanceHistory || []} readOnly={readOnly} onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}/></Suspense>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>{data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</p>
           </div>
@@ -4446,7 +4458,7 @@ function plaidCatToLocal(plaidCats = []) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, recordedClosingBals = {}, closingRecords = {}, onReviewClosingBalance, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
+function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, ledgerSources = [], recordedClosingBals = {}, closingRecords = {}, onReviewClosingBalance, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
   const reconciliationRef=useRef(null)
   const forecastRef=useRef(null)
   const closeDay=()=>{const day=forecastRef.current?.querySelector('.cal-cell.is-selected, .finance-calendar-mobile-agenda > .is-selected');setSelDay(null);day?.focus({preventScroll:true})}
@@ -4800,9 +4812,9 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
               {(pt || reconstructedBal !== undefined) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
                   {recordedBal !== undefined ? <span title="User-recorded ending balance" style={{fontSize:9,fontWeight:700,color:'var(--gold)'}}>Recorded {fmtK(recordedBal)}</span> : reconstructedBal !== undefined ? (
-                    <span title="Reconstructed end-of-day balance from the latest bank balance and transaction history"
+                    <span title="Estimated end-of-day balance from dated bank observations and posted history"
                       style={{ fontSize: 9, fontWeight: 700, color: reconstructedBal < 0 ? 'var(--expense-color)' : '#90AADE' }}>
-                      {fmtK(reconstructedBal)}
+                      Est. {fmtK(reconstructedBal)}
                     </span>
                   ) : isPast ? <span style={{fontSize:9,color:'var(--muted)'}}>Balance unavailable</span> : pt ? (
                     <span title={isPast ? `Estimated historical cash balance from ${balanceSource}` : isToday ? `Projected after today’s activity from ${balanceSource}` : todayPlanUnresolved ? `Projected from ${balanceSource}; today’s scheduled-item completion is unresolved` : `Projected from ${balanceSource}`}
@@ -5008,7 +5020,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                 const displayBal = recordedBal !== undefined ? recordedBal : selReconstructedBal !== undefined ? selReconstructedBal : isSelPast ? undefined : selPt.bal
                 const balColor   = displayBal < 0 ? 'var(--expense-color)' : selReconstructedBal !== undefined ? '#90AADE' : 'var(--gold)'
                 const balLabel   = recordedBal !== undefined ? 'User-recorded ending balance' : isSelPast && selReconstructedBal === undefined ? 'Past balance unavailable · record an ending balance below' : selReconstructedBal !== undefined
-                  ? 'Reconstructed end-of-day balance'
+                  ? 'Reconstructed end-of-day balance · estimate'
                   : isSelToday
                     ? 'Projected after today’s activity'
                     : isSelPast
@@ -5021,7 +5033,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                     <p style={{ margin: 0, fontSize: 11, color: selReconstructedBal !== undefined ? '#90AADE' : 'var(--muted)' }}>
                       {balLabel}
                     </p>
-                    <p title={selReconstructedBal !== undefined ? 'Calculated backward from the latest source-managed balance and bank transaction history' : 'Past balances require posted bank history or a user-recorded close'}
+                    <p title={selReconstructedBal !== undefined ? 'Estimated from dated balance observations and posted bank history' : 'Past balances require posted bank history or a user-recorded close'}
                       style={{ margin: 0, fontSize: 20, fontWeight: 600, color: balColor,
                         opacity: isSelPast && selReconstructedBal === undefined ? 0.85 : 1 }}>
                       {displayBal === undefined ? '—' : fmtMoney(displayBal)}
@@ -5036,8 +5048,10 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
       </div>
       <details className="finance-forecast-details"><summary>Projection details &amp; forecast help</summary>
       <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
+      <p>Explicit category allowances reserve remaining capacity today and at the start of future months. Posted purchases, pending holds and remaining scheduled payments reduce that reservation so they are counted once.</p>
       <p>The forecast carries the preceding balance forward. Scheduled items are plans, not proof of payment. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.</p>
-      <p>Reconstructed closes appear only when every included cash account has a verified live ledger anchor and this transaction snapshot is fresh.</p>
+      <p>Historical estimates use saved dated bank balances, posted activity, and your recorded closes. A failed refresh does not erase history. Intraday balances and incomplete bank history can differ from statement closes; record a confirmed ending balance to reconcile a date.</p>
+      <ul aria-label="Balance history sources">{ledgerSources.map(source => <li key={source.id}>{source.name}: {source.anchorDate ? `${source.anchorKind === 'recorded' ? 'Recorded close' : 'Bank observation'} ${source.anchorDate}` : 'No dated balance anchor — record a closing balance'}; {source.postedCount} retained posted transactions.</li>)}</ul>
       <p>{balanceSource}. {actualsFreshnessMessage}</p>
       {balanceDataMessage && <p>{balanceDataMessage}</p>}
       {actualsError && <p role="alert">{actualsError}</p>}
