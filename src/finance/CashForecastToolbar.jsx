@@ -8,7 +8,7 @@ export default function CashForecastToolbar({ monthName, previous, next, today, 
       <button type="button" aria-label="Next financial calendar month" onClick={next}><span aria-hidden="true">›</span></button>
     </div>
     <details className="finance-forecast-accounts" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus()}}}>
-      <summary aria-label={`Choose forecast accounts: ${scopeLabel}`}>{scopeLabel}<i className="ti ti-chevron-down" aria-hidden="true" /></summary>
+      <summary aria-label={`Choose forecast accounts: ${scopeLabel}`}>{scopeLabel}<span aria-hidden="true">▾</span></summary>
       {accountFilter}
     </details>
     <button type="button" className="finance-forecast-today" onClick={today}>Today</button>

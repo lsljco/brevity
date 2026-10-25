@@ -37,7 +37,11 @@ test('approved Cash Forecast layout keeps selected-day details alongside the cal
   }
   await page.locator('.app-main').evaluate(el=>{el.scrollTop=0})
   await page.screenshot({path:testInfo.outputPath('approved-cash-forecast.png'),fullPage:false})
-  await page.locator('.finance-forecast-page').screenshot({path:testInfo.outputPath('cash-forecast-workspace.png')})
+  if(testInfo.project.name==='desktop-chromium'){
+    await page.setViewportSize({width:1440,height:1100})
+    await page.locator('.app-main').evaluate(el=>{el.scrollTop=0})
+    await page.screenshot({path:testInfo.outputPath('cash-forecast-desktop-full.png')})
+  }
   await expect(detail).toContainText('Scheduled expenses')
   const workspaceBox=await page.locator('.finance-forecast-page').boundingBox()
   const toolsBox=await page.locator('.app-support-tools').boundingBox()

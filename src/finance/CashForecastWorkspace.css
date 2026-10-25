@@ -6,7 +6,7 @@
 .app-main[data-life-pillar="finance"][data-life-view="calendar"]>.app-support-tools{order:5;margin:16px 24px 90px}
 .finance-root .finance-inner.finance-forecast-page{margin-top:12px!important}
 .finance-root .finance-forecast-subtitle{margin:4px 0 0;font-size:12px;font-weight:400;color:var(--muted)}
-.finance-root .finance-forecast-calendar .cal-cell.is-past{opacity:.9}
+
 .finance-root .finance-inner.finance-forecast-page{background:linear-gradient(135deg,rgba(20,25,30,.94),rgba(9,12,15,.98))!important;border-radius:18px!important;padding:20px!important}
 .finance-root .finance-forecast-page::before,.finance-root .finance-forecast-page::after{opacity:.14}
 .finance-root .finance-card.finance-forecast-day-detail{background:rgba(12,17,22,.95)!important;border-radius:12px!important;box-shadow:none!important}
@@ -35,7 +35,7 @@
 .finance-root .finance-forecast-calendar .cal-grid{gap:0!important}
 .finance-root .finance-forecast-calendar .cal-cell{min-height:72px!important;border-radius:0!important;padding:8px!important;background:rgba(255,255,255,.015)!important;box-shadow:none!important;overflow:hidden}
 .finance-root .finance-forecast-calendar .cal-cell.is-selected{background:rgba(197,164,109,.14)!important;border-color:var(--gold)!important;border-radius:8px!important;opacity:1}
-.finance-root .finance-forecast-calendar .cal-cell.is-past{opacity:.7}
+.finance-root .finance-forecast-calendar .cal-cell.is-past{opacity:1}.finance-root .finance-forecast-calendar .cal-cell:not(.is-today) .finance-calendar-day-number{color:#b9bdc2!important}
 .finance-root .finance-forecast-calendar .finance-calendar-event{flex-direction:row!important;align-items:center!important;overflow:hidden!important;padding:2px!important;line-height:1.4!important}
 .finance-root .finance-forecast-calendar .finance-calendar-description{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 .finance-root .finance-forecast-calendar .finance-calendar-amount{font-size:9px}
