@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
-import BankReconnect from './BankReconnect.jsx'
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
+const BankReconnect = lazy(() => import('./BankReconnect.jsx'))
 import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
 import { HOUSEHOLD_TIME_ZONE } from './financeTime.js'
 import { APP_REFRESH_EVENT, APP_REFRESH_STARTED_EVENT } from '../household/appRefresh.js'
@@ -333,11 +333,11 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
 
   return (
     <div className="plaid-connect" onKeyDown={event => {if(event.key === 'Escape' && expanded){setExpanded(false);event.currentTarget.querySelector('[aria-controls="bank-information-panel"]')?.focus()}}} style={{ marginBottom: 20 }}>
-      {requiresUpdate.length > 0 && <BankReconnect items={requiresUpdate} connections={connections} checkedLabel={syncedAt ? formatTime(syncedAt) : 'Not yet verified'} canReconnect={canReconnect} request={apiFetch} onViewAccounts={onReviewAccountLinks} onReconnected={() => {
+      {requiresUpdate.length > 0 && <Suspense fallback={<p role="status">Loading secure reconnection…</p>}><BankReconnect items={requiresUpdate} connections={connections} checkedLabel={syncedAt ? formatTime(syncedAt) : 'Not yet verified'} canReconnect={canReconnect} request={apiFetch} onViewAccounts={onReviewAccountLinks} onReconnected={() => {
         setError(null)
         setSyncNotice('Secure sign-in completed. Saved balances remain unchanged until a successful balance refresh.')
         checkConnectionStatus()
-      }}/>}
+      }}/></Suspense>}
       <div className="plaid-connect-status" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
         {!requiresUpdate.length && <div style={{flex:'1 1 190px',minWidth:0}}>
           <div style={{fontSize:13,color:'#F7F6F2'}}>Balance checked: {syncedAt ? formatTime(syncedAt) : 'Not yet verified'}</div>
