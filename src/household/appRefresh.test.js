@@ -120,3 +120,11 @@ test('an automatic gateway failure can preserve verified finance data without an
   assert.equal(bankRefresh.status,'preserved')
   assert.deepEqual(buildRefreshIssues({financeResult:{status:'fulfilled',value:finance},planResult:{status:'fulfilled',value:{}},calendar:{events:[]},bankRefresh}),[])
 })
+
+test('sign-in-required bank errors direct the household to reconnect rather than automatic retries',()=>{
+ const issues=buildRefreshIssues({financeResult:{status:'fulfilled',value:{errors:['Pinnacle: ITEM_LOGIN_REQUIRED']}},planResult:{status:'fulfilled'},calendar:{},healthResult:{status:'fulfilled',value:{}}})
+ const bank=issues.find(issue=>issue.source==='Finance & Plaid')
+ assert.match(bank.message,/secure sign-in/)
+ assert.match(bank.action,/Reconnect securely/)
+ assert.doesNotMatch(bank.action,/retries automatically|paid/)
+})
