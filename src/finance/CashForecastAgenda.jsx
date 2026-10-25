@@ -24,6 +24,7 @@ export default function CashForecastAgenda({
   todayKey,
   selectedDay,
   historicalBalances,
+  recordedBalances = {},
   monthName,
   balanceSource,
   balanceVerifiedLive,
@@ -56,11 +57,12 @@ export default function CashForecastAgenda({
         pendingNet:bankBalanceMovement(pendingBank),
         postedBankCount:postedBank.length,
         pendingBankCount:pendingBank.length,
-        balance:reconstructedBalance !== undefined ? reconstructedBalance : key < todayKey ? undefined : point?.bal,
+        balanceIsRecorded:Number.isFinite(recordedBalances[key]),
+        balance:Number.isFinite(recordedBalances[key]) ? recordedBalances[key] : reconstructedBalance !== undefined ? reconstructedBalance : key < todayKey ? undefined : point?.bal,
         balanceIsReconstructed:reconstructedBalance !== undefined,
       }
     })
-    .filter(day => day.key === todayKey || day.key === selectedDay || day.planned.length > 0 || day.bank.length > 0)
+    .filter(day => day.key === todayKey || day.key === selectedDay || day.balanceIsRecorded || day.planned.length > 0 || day.bank.length > 0)
 
   const includesToday = days.some(day => day.key === todayKey)
   const earlierCount = includesToday ? days.filter(day => day.key < todayKey).length : 0
@@ -106,7 +108,7 @@ export default function CashForecastAgenda({
         const selected = day.key === selectedDay
         const dateLabel = new Date(`${day.key}T12:00:00`).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
         const plannedNetLabel = `${day.plannedNet >= 0 ? 'plus' : 'minus'} ${fmtMoney(Math.abs(day.plannedNet))}`
-        const balanceKind = day.balanceIsReconstructed
+        const balanceKind = day.balanceIsRecorded ? 'User-recorded ending balance' : day.balanceIsReconstructed
           ? 'Balance from posted activity'
           : day.key < todayKey
             ? 'Past balance unavailable'
@@ -147,7 +149,7 @@ export default function CashForecastAgenda({
               </span>
             )}
             <span className="finance-calendar-agenda-activity">
-              {day.key < todayKey && !day.balanceIsReconstructed && <small>Past bank balance unavailable from the current bank data.</small>}
+              {day.key < todayKey && !day.balanceIsReconstructed && !day.balanceIsRecorded && <small>Past bank balance unavailable from the current bank data.</small>}
               {!showBankActivity && day.key <= todayKey && <small>Bank transactions are hidden. Use “Show bank activity” above to compare.</small>}
               {day.planned.length > 0 && (
                 <span className="finance-calendar-agenda-group finance-calendar-agenda-group--planned">

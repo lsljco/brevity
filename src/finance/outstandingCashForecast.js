@@ -102,7 +102,13 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   // to reconciled mode; changing a plan's date requires an explicit reschedule.
   let balance = reconcile ? anchor + pendingDelta : opening
   for (const [date, point] of projection) {
-    if (date < today) continue
+    if (date < today) {
+      const recorded = options.recordedClosingBalances?.[date]
+      const reconstructed = options.reconstructedBalances?.[date]
+      projection.set(date, {...point, bal:Number.isFinite(recorded) ? recorded : Number.isFinite(reconstructed) ? reconstructed : undefined,
+        balanceSource:Number.isFinite(recorded) ? 'user-recorded' : Number.isFinite(reconstructed) ? 'reconstructed' : 'unavailable'})
+      continue
+    }
     let remaining = 0
     const realization = point.txns.map(plan => {
       const occurrence = { date, plan, key:`${date}:${plan.id}` }
