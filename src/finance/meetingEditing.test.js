@@ -134,7 +134,7 @@ test('member Finance stays visible while only planning-authorized meeting narrat
   assert.match(planner,/const fetchActuals = useCallback\(async \(\{ requestBankUpdate = false \} = \{\}\) => \{\s*if \(readOnly\)/)
   assert.doesNotMatch(planner,/addDashboardProjectWithImage|updateDashboardProjectImage|localStorage\.setItem\('homehq_items_v1'/)
   assert.match(planner,/Project images are view-only until reviewed image changes support Audit History and safe Undo/)
-  assert.match(planner,/\{!readOnly && <PlaidConnect/)
+  assert.match(planner,/\{!readOnly && <Suspense[^\n]*<PlaidConnect/)
   assert.match(planner,/\{!readOnly && view === 'tx-form'/)
   assert.doesNotMatch(planner,/view === 'acct-form'/)
   assert.match(planner,/\{!readOnly && selActualTx && \(/)
