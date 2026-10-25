@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import BankReconnect from './BankReconnect.jsx'
 import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
 import { HOUSEHOLD_TIME_ZONE } from './financeTime.js'
 import { APP_REFRESH_EVENT, APP_REFRESH_STARTED_EVENT } from '../household/appRefresh.js'
@@ -17,9 +18,10 @@ async function apiFetch(path, options = {}) {
       signal: options.signal || controller?.signal,
     })
     if (!res.ok) {
-      let detail = ''
-      try { const body = await res.json(); detail = body.detail || body.error || '' } catch {}
-      throw new Error(`API ${path} failed: ${res.status}${detail ? ' — ' + detail : ''}`)
+      const body = await res.json().catch(() => ({}))
+      const failure = new Error(body.detail || body.error || 'The bank service is temporarily unavailable.')
+      failure.requiresUpdate = body.requiresUpdate || []
+      throw failure
     }
     return res.json()
   } catch (error) {
@@ -79,7 +81,20 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
   // Startup refresh owns automatic synchronization. Remounts render cached state.
   const [error, setError]               = useState(null)
   const [syncNotice, setSyncNotice]     = useState('')
-  const [requiresUpdate, setRequiresUpdate] = useState([]) // items needing re-auth
+  const [requiresUpdate, setRequiresUpdate] = useState([])
+  const [canReconnect,setCanReconnect] = useState(false)
+  const checkConnectionStatus = useCallback(async () => {
+    try {
+      const data = await apiFetch('/plaid-create-link-token')
+      setCanReconnect(data.canReconnect === true)
+      setRequiresUpdate(current => {
+        const unknown = current.filter(item => !data.connections?.some(conn => conn.item_id===item.item_id && conn.verified))
+        const needed = (data.connections || []).filter(item => item.code==='ITEM_LOGIN_REQUIRED')
+        return Array.from(new Map([...unknown,...needed].map(item=>[item.item_id,item])).values())
+      })
+    } catch { /* A failed status lookup never clears a known recovery requirement. */ }
+  },[])
+  useEffect(() => { checkConnectionStatus() },[checkConnectionStatus])
   const [statusTime, setStatusTime] = useState(Date.now)
   useEffect(() => {
     const timer = setInterval(() => setStatusTime(Date.now()), 60000)
@@ -105,6 +120,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
       setAppSyncing(false)
       const issue=event.detail?.issues?.find(item=>item.source==='Finance & Plaid')
       if(issue)setError(issue.message)
+      checkConnectionStatus()
       try {
         const savedConnections = JSON.parse(localStorage.getItem('plaid_connections') || '[]')
         const savedAt = localStorage.getItem('plaid_synced_at') || null
@@ -124,9 +140,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
     }
   }, [])
 
-  // Existing connections remain readable and can be explicitly synchronized.
-  // Institution credential mutations remain disabled; reviewed local account
-  // mapping does not touch Plaid credentials or the connected institution.
+  // Existing accounts retain their reviewed mappings during update-mode recovery.
   const syncAccounts = useCallback(async ({ refreshTransactions = false } = {}) => {
     setSyncing(true)
     setError(null)
@@ -240,6 +254,8 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
           }
         }
       } catch (cause) {
+        if (cause?.requiresUpdate?.length) setRequiresUpdate(cause.requiresUpdate)
+        checkConnectionStatus()
         // Keep the cached connection display on transient account failures.
         balanceState = 'failed'
         balanceDetail = `Could not complete the bank balance check. ${cause?.message || 'The bank sync service was unavailable.'}`
@@ -317,24 +333,29 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
 
   return (
     <div className="plaid-connect" onKeyDown={event => {if(event.key === 'Escape' && expanded){setExpanded(false);event.currentTarget.querySelector('[aria-controls="bank-information-panel"]')?.focus()}}} style={{ marginBottom: 20 }}>
+      {requiresUpdate.length > 0 && <BankReconnect items={requiresUpdate} connections={connections} checkedLabel={syncedAt ? formatTime(syncedAt) : 'Not yet verified'} canReconnect={canReconnect} request={apiFetch} onViewAccounts={onReviewAccountLinks} onReconnected={() => {
+        setError(null)
+        setSyncNotice('Secure sign-in completed. Saved balances remain unchanged until a successful balance refresh.')
+        checkConnectionStatus()
+      }}/>}
       <div className="plaid-connect-status" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-        <div style={{flex:'1 1 190px',minWidth:0}}>
+        {!requiresUpdate.length && <div style={{flex:'1 1 190px',minWidth:0}}>
           <div style={{fontSize:13,color:'#F7F6F2'}}>Balance checked: {syncedAt ? formatTime(syncedAt) : 'Not yet verified'}</div>
           <div role="status" style={{fontSize:12,color:needsRefresh ? '#C5A46D' : '#aaa99f',marginTop:4}}>
             {needsRefresh ? 'Needs refresh' : 'Last successful live check'}
           </div>
-        </div>
-        <button type="button" onClick={() => syncAccounts({ refreshTransactions:true })} disabled={syncBusy}
+        </div>}
+        {!requiresUpdate.length && <button type="button" onClick={() => syncAccounts({ refreshTransactions:true })} disabled={syncBusy}
           title="Requests a paid update from existing bank connections. Estimated $0.22 per connection; six-hour cooldown and $5 monthly allowance. Open Bank information for details."
           style={{minHeight:44,padding:'10px 16px',borderRadius:10,border:'1px solid #C5A46D',background:'#C5A46D',color:'#17150f',fontFamily:'inherit',fontWeight:600,cursor:syncBusy?'wait':'pointer',opacity:syncBusy ? 0.65 : 1}}>
           {syncBusy ? 'Updating…' : 'Refresh balance'}
-        </button>
+        </button>}
         <button type="button" aria-label="Bank information" aria-expanded={expanded} aria-controls="bank-information-panel"
           title="Automatic sync checks saved Plaid data. Balance checked shows the last successful live check. Tap for refresh costs and connection details."
           onClick={() => setExpanded(value => !value)}
-          style={{minWidth:44,minHeight:44,borderRadius:22,border:'1px solid rgba(197,164,109,.4)',background:'transparent',color:'#C5A46D',fontSize:20,cursor:'pointer'}}>ⓘ</button>
+          style={{minWidth:44,minHeight:44,borderRadius:22,border:'1px solid rgba(197,164,109,.4)',background:'transparent',color:'#C5A46D',fontSize:requiresUpdate.length ? 13 : 20,cursor:'pointer',marginTop:requiresUpdate.length ? 12 : 0,padding:requiresUpdate.length ? '8px 14px' : undefined}}>{requiresUpdate.length ? 'Connection details' : 'ⓘ'}</button>
       </div>
-      {syncNotice && <p role="status" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.45}}>{syncNotice}</p>}
+      {syncNotice && (!requiresUpdate.length || syncNotice.startsWith('Secure sign-in')) && <p role="status" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.45}}>{syncNotice}</p>}
 
       {/* ── Expanded connections list ── */}
       {expanded && (
@@ -344,6 +365,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
           border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14,
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
+          {error && requiresUpdate.length > 0 && <p role="note" style={{fontSize:12,lineHeight:1.5}}>Connection diagnostic: {error}</p>}
           <p role="note" style={{margin:0,fontSize:13,lineHeight:1.5}}>Refresh balance requests paid balance and transaction updates: estimated $0.22 per connection, with a six-hour cooldown and a shared $5 monthly allowance. Subscription fees are separate.</p>
           <p style={{margin:0,fontSize:13,lineHeight:1.5}}>Automatic sync checks the data Plaid already has when Brevity opens, every 15 minutes while visible, and when you return after five minutes. It does not verify a live balance. “Needs refresh” means the last successful live check is missing or at least 24 hours old.</p>
           <div style={{fontSize:12,color:'#aaa99f',lineHeight:1.7}}>
@@ -352,7 +374,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
             <div>Last live bank check: {syncedAt ? formatTime(syncedAt) : 'Not recorded'}</div>
           </div>
           {!isConnected && <p>No cached bank connection on this device. Refresh to check existing connections.</p>}
-          <p className="plaid-connection-safety-note" role="note" style={{margin:0,fontSize:12,lineHeight:1.5}}>Existing connected sources can still sync. Adding, reauthorizing, or disconnecting an institution is disabled in this release. Mapping a returned account to an existing Brevity account uses reviewed Action Mode and does not change bank credentials. Bank changes unavailable.</p>
+          <p className="plaid-connection-safety-note" role="note" style={{margin:0,fontSize:12,lineHeight:1.5}}>Existing connected sources can still sync. Administrators can securely reconnect an existing institution. Adding or disconnecting banks remains unavailable. Mapping a returned account to an existing Brevity account uses reviewed Action Mode and does not change bank credentials. Bank changes unavailable.</p>
           <p style={{ fontSize: 10, fontWeight: 600, color: '#888884', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
             Connected Banks
           </p>
@@ -379,13 +401,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onRev
         </div>
       )}
 
-      {requiresUpdate.length > 0 && (
-        <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(196,120,90,0.08)', border: '1px solid rgba(196,120,90,0.3)', borderRadius: 10 }}>
-          <p style={{ margin: '0 0 5px', fontSize: 12, color: '#C4785A', fontWeight: 600 }}>Bank session expired for {requiresUpdate.map(item=>item.institution).join(', ')}</p>
-          <p style={{margin:0,fontSize:11,color:'#888884',lineHeight:1.45}}>Re-authentication is unavailable in this release. Brevity will retain the latest verified cached data without changing bank credentials.</p>
-        </div>
-      )}
-      {error && (
+      {error && !requiresUpdate.length && (
         <div role="alert" style={{ marginTop: 8, fontSize: 11, color: '#C4785A', background: 'rgba(196,120,90,0.1)', padding: '9px 12px', borderRadius: 8, border: '1px solid rgba(196,120,90,0.2)' }}>
           <p style={{margin:0,lineHeight:1.5}}>{error}</p>
           {linkReviewCount > 0 && typeof onReviewAccountLinks === 'function' && <button type="button" onClick={onReviewAccountLinks} style={{marginTop:9,padding:'7px 11px',borderRadius:8,border:'1px solid rgba(197,164,109,.35)',background:'rgba(197,164,109,.12)',color:'#C5A46D',fontFamily:'inherit',fontSize:11,fontWeight:600,cursor:'pointer'}}>Review account links</button>}

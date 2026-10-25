@@ -3113,3 +3113,63 @@ test('Finance overview keeps Cash Forecast focused and pillar analysis optional'
   await expect(page.locator('.pillar-analysis-command')).toHaveCount(0)
   expect(analysisCalls).toBe(0)
 })
+
+test('Bank reconnection preserves saved accounts through cancel, provider failure, and secure success',async({page},testInfo)=>{
+  let repaired=false,posts=0,fail=false
+  const paid=[]
+  page.on('request',request=>{if(/plaid-(accounts|transactions).*([?&])(live|refresh)=1/.test(request.url()))paid.push(request.url())})
+  await page.route('**/.netlify/functions/plaid-create-link-token',route=>{
+    if(route.request().method()==='POST'){
+      posts++;expect(route.request().postDataJSON()).toEqual({itemId:'fixture-existing'})
+      return route.fulfill({status:fail?502:200,json:fail?{error:'Secure bank reconnection is temporarily unavailable.'}:{link_token:'fixture-link-token'}})
+    }
+    return route.fulfill({json:{canReconnect:true,connections:[{item_id:'fixture-existing',institution:'Pinnacle Financial Partners – TN',code:repaired?'':'ITEM_LOGIN_REQUIRED',verified:true}]}})
+  })
+  await page.route('https://cdn.plaid.com/link/v2/stable/link-initialize.js',route=>route.fulfill({contentType:'application/javascript',body:`window.Plaid={create:options=>({open:()=>{window.fixturePlaid=options;window.dispatchEvent(new Event('fixture-plaid-open'))},exit:()=>options.onExit(null),destroy:()=>{}})}` }))
+  await page.evaluate(()=>{
+    localStorage.setItem('plaid_connections',JSON.stringify([{itemId:'fixture-existing',institution:'Pinnacle Financial Partners – TN',accounts:Array.from({length:13},(_,i)=>({accountId:'fixture-'+i}))}]))
+    localStorage.setItem('plaid_synced_at','2026-10-20T11:40:00.000Z')
+  })
+  const original=await page.evaluate(()=>({roster:localStorage.getItem('plaid_connections'),time:localStorage.getItem('plaid_synced_at')}))
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Dashboard',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  const card=page.getByRole('region',{name:'Bank connection needs attention'})
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('13 existing accounts')
+  await expect(page.locator('.plaid-connect').getByRole('button',{name:'Refresh balance',exact:true})).toHaveCount(0)
+  await card.scrollIntoViewIfNeeded()
+  await page.screenshot({path:testInfo.outputPath('bank-reconnect-dashboard.png')})
+  const reconnect=card.getByRole('button',{name:'Reconnect securely'})
+  await reconnect.click()
+  const dialog=page.getByRole('dialog',{name:'Reconnect Pinnacle Financial Partners – TN'})
+  await expect(dialog).toBeVisible()
+  const box=await dialog.boundingBox(),size=page.viewportSize()
+  expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.x+box.width).toBeLessThanOrEqual(size.width+1)
+  expect(box.y+box.height).toBeLessThanOrEqual(size.height+1)
+  await page.screenshot({path:testInfo.outputPath('bank-reconnect-dialog.png')})
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
+  await expect(reconnect).toBeFocused();expect(posts).toBe(0)
+  await reconnect.click();fail=true
+  await dialog.getByRole('button',{name:'Continue securely',exact:true}).click()
+  await expect(dialog.getByRole('alert')).toContainText('temporarily unavailable')
+  fail=false
+  await dialog.getByRole('button',{name:'Continue securely',exact:true}).click()
+  await expect.poll(()=>page.evaluate(()=>!!window.fixturePlaid)).toBe(true)
+  await expect(dialog).not.toBeVisible()
+  await page.evaluate(()=>window.fixturePlaid.onExit(null))
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('alert')).toContainText('canceled')
+  await dialog.getByRole('button',{name:'Continue securely',exact:true}).click()
+  await expect(dialog).not.toBeVisible()
+  repaired=true
+  await page.evaluate(()=>window.fixturePlaid.onSuccess('unused-public-token',{}))
+  await expect(card).toHaveCount(0)
+  await expect(page.locator('.plaid-connect')).toContainText('Saved balances remain unchanged')
+  expect(await page.evaluate(()=>({roster:localStorage.getItem('plaid_connections'),time:localStorage.getItem('plaid_synced_at')}))).toEqual(original)
+  expect(paid).toEqual([])
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true)
+})

@@ -94,7 +94,7 @@ export function buildRefreshIssues({ financeResult, planResult, calendar, health
   const issues = []
   const financeErrors = financeResult.status === 'fulfilled' ? financeResult.value?.errors || [] : [financeResult.reason?.message || 'Finance data could not be refreshed.']
   ;(bankRefresh?.status === 'preserved' ? [] : financeErrors)
-    .forEach(message => issues.push({ id:`finance-${issues.length}`, source:'Finance & Plaid', message:String(message), action:'Open Finance > Accounts only if this persists after Brevity retries automatically.' }))
+    .forEach(message => issues.push({ id:`finance-${issues.length}`, source:'Finance & Plaid', message:/ITEM_LOGIN_REQUIRED|re-authenticated/i.test(String(message)) ? 'A bank connection needs secure sign-in. Saved data remains available.' : String(message), action:/ITEM_LOGIN_REQUIRED|re-authenticated/i.test(String(message)) ? 'Open Finance > Dashboard and choose Reconnect securely.' : 'Open Finance > Accounts only if this persists after Brevity retries automatically.' }))
 
   if (bankRefresh?.requested && !['fresh','processing','preserved'].includes(bankRefresh.status) && !issues.some(issue => issue.source === 'Finance & Plaid')) {
     const lastSuccess = bankRefresh.lastSuccessfulAt && Number.isFinite(Date.parse(bankRefresh.lastSuccessfulAt))
