@@ -1,7 +1,7 @@
 import { approvedReconciliationMatches } from './autoReconciliation.js'
 import { txOccursOnDate } from './projection.js'
 import { actualTransactionKind, categoryGroup, isRecognizedIncomeTransaction, isTransferTransaction, transactionDirection } from './reportingData.js'
-import { normalizeMerchantName } from './financialTruth.js'
+import { normalizeMerchantName, matchesExpenseDescriptor } from './financialTruth.js'
 import { getHouseholdDateKey } from './financeTime.js'
 
 const amountOf = transaction => Math.abs(Number(transaction?.amount) || 0)
@@ -90,7 +90,8 @@ function matchScore(expected, actual, expectedDate, accountMap) {
   const categoryScore = expectedCategory !== 'Other' && expectedCategory === actualCategory ? 12 : 0
   const distance = dayDistance(expectedDate, actual.date)
   const timingScore = distance === 0 ? 10 : distance <= 2 ? 7 : distance <= 4 ? 3 : 0
-  return merchantScore(expected, actual) + amountScore + categoryScore + timingScore
+  const descriptorScore = accountMap && matchesExpenseDescriptor(expected, actual, expectedDate) ? 48 : 0
+  return Math.max(merchantScore(expected, actual), descriptorScore) + amountScore + categoryScore + timingScore
 }
 
 function occurrence(transaction, date) {
