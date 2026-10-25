@@ -1481,7 +1481,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     const checkedAt = actualsFreshness?.checkedAt ? getHouseholdDateTimeLabel(new Date(actualsFreshness.checkedAt)) : ''
     const lastFullSuccess = actualsFreshness?.lastFullSuccessAt ? getHouseholdDateTimeLabel(new Date(actualsFreshness.lastFullSuccessAt)) : ''
     if (actualsFreshness?.status === 'stale') return `Transaction history is stale${checkedAt ? ` as of the ${checkedAt} check` : ''}. Brevity is retaining the last verified snapshot${lastFullSuccess && lastFullSuccess !== checkedAt ? `; the last complete check was ${lastFullSuccess}` : ''}.`
-    if (actualsFreshness?.status === 'partial') return `The Plaid transaction snapshot is partial${checkedAt ? ` as of ${checkedAt}` : ''}. Successful sources were updated and unconfirmed sources retain their last verified rows${lastFullSuccess ? `; the last complete check was ${lastFullSuccess}` : ''}.`
+    if (actualsFreshness?.status === 'partial') return `Forecast uses incomplete bank transaction data. The Plaid transaction snapshot is partial${checkedAt ? ` as of ${checkedAt}` : ''}. Successful sources were updated and unconfirmed sources retain their last verified rows${lastFullSuccess ? `; the last complete check was ${lastFullSuccess}` : ''}.`
     if (actualsFreshness?.status === 'fresh') return `The latest Plaid transaction snapshot loaded without source errors${checkedAt ? ` at ${checkedAt}` : ''}. This is Brevity's check time, not a guarantee that every institution posted new activity at that time.`
     return plaidActuals?.length
       ? 'Transaction freshness has not yet been verified on this device; the last cached history remains visible.'
@@ -2469,7 +2469,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
               <div className="dash-date">{todayLabel}</div>
             </div>
             <div className="dash-actions">
-              {!readOnly && <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onReviewAccountLinks={() => setView('accounts')} />}
+              {!readOnly && <PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onSyncAvailableTransactions={() => fetchActuals({ requestBankUpdate:false })} onReviewAccountLinks={() => setView('accounts')} />}
               <div className="dash-search">
                 <i className="ti ti-search" />
                 <input aria-label="Search transactions" placeholder="Search transactions…" value={dashboardSearch} onChange={event => setDashboardSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && dashboardSearch.trim()) openFilteredTransactions({ query: dashboardSearch.trim(), label: `Search: ${dashboardSearch.trim()}` }) }} />
