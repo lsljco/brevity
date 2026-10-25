@@ -62,7 +62,7 @@ export default function CashForecastAgenda({
         balanceIsReconstructed:reconstructedBalance !== undefined,
       }
     })
-    .filter(day => day.key === todayKey || day.key === selectedDay || day.planned.length > 0 || day.bank.length > 0)
+    .filter(day => day.key === todayKey || day.key === selectedDay || day.balanceIsRecorded || day.planned.length > 0 || day.bank.length > 0)
 
   const includesToday = days.some(day => day.key === todayKey)
   const earlierCount = includesToday ? days.filter(day => day.key < todayKey).length : 0
