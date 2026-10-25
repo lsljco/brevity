@@ -14,7 +14,16 @@ test('source history retains one dated observation per household day without inv
  rows=appendBalanceSnapshot(rows,accounts,Date.parse('2026-10-09T12:00:00Z'))
  assert.equal(rows.length,2)
 })
-test('source observations older than the rolling window expire',()=>{
+test('source observations remain available beyond the display window',()=>{
  const rows=appendBalanceSnapshot([{date:'2024-01-01',capturedAt:'2024-01-01T12:00:00Z',balances:{bank:1}}],[],Date.parse('2026-10-09T12:00:00Z'))
  assert.equal(rows.length,1)
+})
+
+test('a partial same-day refresh retains other accounts and their original source times',()=>{
+ const first=appendBalanceSnapshot([],[{plaidAccountId:'a',plaidCurrentBalance:100},{plaidAccountId:'b',plaidCurrentBalance:200}],Date.parse('2026-10-20T12:00:00Z'))
+ const rows=appendBalanceSnapshot(first,[{plaidAccountId:'a',plaidCurrentBalance:50}],Date.parse('2026-10-20T16:00:00Z'))
+ assert.deepEqual(rows[0].balances,{a:50,b:200})
+ assert.equal(rows[0].accountCapturedAt.b,'2026-10-20T12:00:00.000Z')
+ assert.equal(rows[0].accountCapturedAt.a,'2026-10-20T16:00:00.000Z')
+ assert.deepEqual(appendBalanceSnapshot(rows,[],Date.parse('2026-10-21T16:00:00Z')),rows)
 })

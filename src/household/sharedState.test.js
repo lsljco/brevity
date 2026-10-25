@@ -505,3 +505,17 @@ test('acknowledged records do not create another snapshot on every sync',()=>{
  assert.equal(storage.getItem('homehq_items_v1'),'new')
  assert.equal(storage.getItem('homehq_items_v1_local_backup_before_cloud'),null)
 })
+
+test('routine synchronization preserves dated Plaid history and publishes metadata-only evidence updates',()=>{
+ const key='lslj_finance_v9',value=JSON.stringify({accounts:[],transactions:[]})
+ const storage=memoryStorage({[key]:value})
+ const record={key,value,version:1,plaidAccountReceipt:{sourceUpdatedAt:123},plaidBalanceHistory:[{date:'2026-10-20',capturedAt:'2026-10-20T12:00:00Z',balances:{bank:1000}}]}
+ const first=reconcileSharedRecords(storage,{[key]:record})
+ assert.ok(first.applied.includes(key))
+ assert.deepEqual(JSON.parse(storage.getItem('brevity_shared_state_meta_v1'))[key].plaidBalanceHistory,record.plaidBalanceHistory)
+ assert.deepEqual(reconcileSharedRecords(storage,{[key]:record}).applied,[])
+ const updated={...record,version:2,plaidBalanceHistory:[...record.plaidBalanceHistory,{date:'2026-10-21',balances:{bank:1000}}]}
+ assert.ok(reconcileSharedRecords(storage,{[key]:updated}).applied.includes(key))
+ assert.equal(JSON.parse(storage.getItem('brevity_shared_state_meta_v1'))[key].plaidBalanceHistory.length,2)
+ assert.deepEqual(JSON.parse(storage.getItem('brevity_shared_state_meta_v1'))[key].plaidAccountReceipt,{sourceUpdatedAt:123})
+})

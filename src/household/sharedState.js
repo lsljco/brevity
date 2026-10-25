@@ -222,6 +222,13 @@ function reclaimVerifiedDuplicates(storage,remoteRecords) {
   }
 }
 
+function bankEvidence(record) {
+  return JSON.stringify([record?.plaidAccountReceipt, record?.plaidBalanceHistory])
+}
+function bankMetadata(record) {
+  return {...(record.plaidAccountReceipt ? {plaidAccountReceipt:record.plaidAccountReceipt} : {}), ...(record.plaidBalanceHistory ? {plaidBalanceHistory:record.plaidBalanceHistory} : {})}
+}
+
 function applyServerRecord(storage, record) {
   if (!record?.key || !SHARED_STATE_KEY_SET.has(record.key) || typeof record.value !== 'string') return false
   const localValue = storage.getItem(record.key)
@@ -231,29 +238,31 @@ function applyServerRecord(storage, record) {
   suppressWriteThrough = true
   try { setSharedStorageItem(storage,record.key,record.value) } finally { suppressWriteThrough = false }
   const meta = readMeta(storage)
+  const priorEvidence = bankEvidence(meta[record.key])
   meta[record.key] = {
-    ...(record.plaidAccountReceipt ? { plaidAccountReceipt:record.plaidAccountReceipt } : {}),
-    ...(record.plaidBalanceHistory ? { plaidBalanceHistory:record.plaidBalanceHistory } : {}),
+    ...bankMetadata(record),
     hash:record.hash || hashValue(record.value),
     updatedAt:record.updatedAt || new Date().toISOString(),
     version:Math.max(0, Number(record.version || 0)),
   }
   writeMeta(storage, meta)
-  if (localValue !== record.value) dispatchRemoteChange([record.key])
-  return localValue !== record.value
+  const evidenceChanged = priorEvidence !== bankEvidence(record)
+  if (localValue !== record.value || evidenceChanged) dispatchRemoteChange([record.key])
+  return localValue !== record.value || evidenceChanged
 }
 
 function acknowledgeServerRecord(storage, record) {
   if (!record?.key) return
   const meta = readMeta(storage)
+  const priorEvidence = bankEvidence(meta[record.key])
   meta[record.key] = {
-    ...(record.plaidAccountReceipt ? { plaidAccountReceipt:record.plaidAccountReceipt } : {}),
-    ...(record.plaidBalanceHistory ? { plaidBalanceHistory:record.plaidBalanceHistory } : {}),
+    ...bankMetadata(record),
     hash:record.hash || hashValue(record.value || ''),
     updatedAt:record.updatedAt || new Date().toISOString(),
     version:Math.max(0, Number(record.version || 0)),
   }
   writeMeta(storage, meta)
+  if(priorEvidence !== bankEvidence(record))dispatchRemoteChange([record.key])
 }
 
 function uploadRecordNow(storage, record, onError, { applyAcknowledgement = true } = {}) {
@@ -498,8 +507,9 @@ export function reconcileSharedRecords(storage, remoteRecords = {}, _now = new D
         }
         const cacheRecovery=setSharedStorageItem(storage,key,remote.value)
         cacheRecovery.removed.forEach(cacheKey=>recoveredCaches.add(cacheKey))
-        meta[key] = { hash:remote.hash || hashValue(remote.value), updatedAt:remote.updatedAt, version:remoteVersion }
-        if (localValue !== remote.value) applied.push(key)
+        const evidenceChanged = bankEvidence(meta[key]) !== bankEvidence(remote)
+        meta[key] = { ...bankMetadata(remote), hash:remote.hash || hashValue(remote.value), updatedAt:remote.updatedAt, version:remoteVersion }
+        if (localValue !== remote.value || evidenceChanged) applied.push(key)
         return
       }
 

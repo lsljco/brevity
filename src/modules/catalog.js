@@ -24,6 +24,7 @@ export const PILLARS = [
     { id:'scenario-modeling', label:'Scenario Modeling', icon:'ti-chart-arrows' },
     { id:'transactions', label:'Transactions', icon:'ti-list' },
     { id:'calendar', label:'Cash Forecast', icon:'ti-calendar-dollar' },
+    { id:'spending-review', label:'Spending Review', icon:'ti-receipt' },
     { id:'accounts', label:'Accounts', icon:'ti-building-bank' },
     { id:'vendors', label:'Vendors', icon:'ti-building-store' },
     { id:'debts', label:'Debts', icon:'ti-receipt-2' },

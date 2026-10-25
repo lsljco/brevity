@@ -35,7 +35,7 @@ export default function DailyClosingBalanceEditor({ date, accounts, records = {}
   if (!accounts.length) return null
   return <section aria-label="Daily ending balance" style={{marginTop:16,paddingTop:12,borderTop:'1px solid rgba(197,164,109,.25)'}}>
     <h3>Ending balance · {date}</h3>
-    <p style={{fontSize:12}}>Record the closing balance for each selected cash account. This corrects this date’s history; today’s live bank balance remains separate.</p>
+    <p style={{fontSize:12}}>Record the closing balance for each selected cash account. This anchors the date’s history and subsequent estimates until a newer balance observation. Source bank balances remain separate.</p>
     {!editing ? <button type="button" onClick={open}>Edit ending balance</button> : <form style={{display:'grid',gap:10,minWidth:0}} onSubmit={event => {event.preventDefault();review()}}>
       <label style={{display:'grid',gap:4}}>Account<select aria-label="Account" value={accountId} disabled={busy} onChange={event => {const id=event.target.value;setAccountId(id);setAmount(records[id]?.[date] ? String(records[id][date].amount) : '');setNotes(records[id]?.[date]?.notes || '')}}>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
       <label style={{display:'grid',gap:4}}>Ending balance<input type="number" step="0.01" value={amount} required disabled={busy} onChange={event=>setAmount(event.target.value)}/></label>

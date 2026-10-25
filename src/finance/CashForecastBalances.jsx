@@ -12,8 +12,10 @@ export default function CashForecastBalances({ point, live }) {
       <div><p>{planned ? 'Prior day’s ending balance' : available ? (live ? 'Bank available balance' : 'Last saved available balance') : mixed ? 'Combined cash starting balance' : live ? 'Current bank balance' : 'Last saved bank balance'}</p><strong>{fmtMoney(planned ? point.openingBalance : (point.anchorBalance ?? point.currentBalance))}</strong></div>
       <div><p>{planned ? 'Pending excluded from plan' : 'Additional pending adjustment'}</p><strong>{signed(point.pendingDelta)}</strong></div>
       <div><p>{planned ? 'Planned activity today' : 'Remaining scheduled today'}</p><strong>{signed(point.remainingDelta)}</strong></div>
+      {point.budgetAllowanceDelta<0&&<div><p>Unscheduled budget allowance reserve</p><strong>{signed(point.budgetAllowanceDelta)}</strong></div>}
       <div><p>Projected after today’s activity</p><strong>{fmtMoney(point.bal)}</strong></div>
     </div>
+    {point.budgetAllowances?.length>0&&<p>Remaining budget allowances reserved today: {point.budgetAllowances.map(row=>`${row.category} ${fmtMoney(row.amount)}`).join(', ')}. Posted, pending and remaining scheduled spending have already reduced these allowances.</p>}
     {!planned && !live && <p role="status">Estimated forecast: bank balance freshness is not verified. Saved balances and transaction activity may come from different update times.</p>}
     {!planned && (available || mixed) && <p>Available balances already reflect the bank’s holds and availability rules. Pending transactions for those accounts are shown below for reference and are not added or subtracted again.</p>}
     {point.openingSource !== 'verified-close' && planned && <p role="status">Estimated opening balance for {point.openingDate}: {point.openingSource === 'reconstructed-close' ? 'reconstructed from the latest bank balance and posted history' : 'derived from stored balances and available posted activity'}. A verified end-of-day bank balance is not available.</p>}

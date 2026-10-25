@@ -3139,7 +3139,7 @@ test('Bank reconnection preserves saved accounts through cancel, provider failur
   const card=page.getByRole('region',{name:'Bank connection needs attention'})
   await expect(card).toBeVisible()
   await expect(card).toContainText('13 existing accounts')
-  await expect(page.locator('.plaid-connect').getByRole('button',{name:'Refresh balance',exact:true})).toHaveCount(0)
+  await expect(page.locator('.plaid-connect').getByRole('button',{name:'Refresh balance',exact:true})).toBeEnabled()
   await card.scrollIntoViewIfNeeded()
   await page.screenshot({path:testInfo.outputPath('bank-reconnect-dashboard.png')})
   const reconnect=card.getByRole('button',{name:'Reconnect securely'})
@@ -3197,4 +3197,60 @@ test('Cash Forecast ending balance correction reviews a zero close for the selec
   expect(input.operation.payload.amount).toBe(0)
   expect(Number.isInteger(input.expectedVersion)).toBe(true)
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+})
+
+test('Cash Forecast retains dated history without a fresh balance check, including quiet days',async({page},testInfo)=>{
+ const records=cashForecastRecords(),ago=n=>{const d=new Date(`${dateKey()}T12:00:00Z`);d.setUTCDate(d.getUTCDate()-n);return d.toISOString().slice(0,10)}
+ records.lslj_finance_v9.plaidBalanceHistory=[{date:ago(3),capturedAt:`${ago(3)}T16:00:00Z`,kind:'intraday',balances:{'plaid-operating':1000}}]
+ records.plaid_actuals_cache.value=JSON.stringify([...JSON.parse(records.plaid_actuals_cache.value),{id:'old-posted',date:ago(5),amount:25,accountId:'plaid-operating',name:'Earlier payment',pending:false},{id:'later-posted',date:ago(2),amount:100,accountId:'plaid-operating',name:'Later payment',pending:false}])
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ if(testInfo.project.name==='iphone'){
+   await page.getByRole('button',{name:/Show earlier days/}).click()
+   await page.locator('.finance-calendar-mobile-agenda > button').filter({hasText:new Date(`${ago(1)}T12:00:00`).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}).click()
+ }else{
+   await expect(page.locator(`.cal-cell[data-date="${ago(1)}"]`)).toContainText('Est. $900')
+   await page.locator(`.cal-cell[data-date="${ago(1)}"]`).press('Enter')
+ }
+ await page.getByText('Projected balance & movement',{exact:true}).click()
+ await expect(page.getByText('Reconstructed end-of-day balance · estimate',{exact:true})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Daily ending balance'}).getByRole('button',{name:'Edit ending balance'})).toBeVisible()
+ await expect(page.locator('body')).not.toContainText('Something went wrong')
+})
+
+test('Cash Forecast manual balance refresh ignores an old local cooldown and remains available for retry',async({page},testInfo)=>{
+ await page.evaluate(()=>localStorage.setItem('plaid_balance_retry_at',new Date(Date.now()+6*3600000).toISOString()))
+ let attempts=0
+ await page.route('**/.netlify/functions/plaid-accounts?live=1',route=>{attempts++;return route.fulfill({status:503,json:{error:'Institution temporarily unavailable'}})})
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ const status=page.locator('.plaid-connect'),refresh=status.getByRole('button',{name:'Refresh balance',exact:true})
+ await expect(refresh).toBeEnabled();await refresh.click()
+ await expect(status.getByRole('alert')).toContainText('Institution temporarily unavailable')
+ await expect(refresh).toBeEnabled();await refresh.click()
+ await expect.poll(()=>attempts).toBe(2)
+ await expect(refresh).toBeEnabled()
+ await status.getByRole('button',{name:'Bank information',exact:true}).click()
+ await expect(status.getByRole('button',{name:'Reload available bank history'})).toBeVisible()
+})
+
+test('Cash Forecast spending accountability opens evidence and stages reviewed decisions',async({page},testInfo)=>{
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.locator('.app-main').getByRole('button',{name:/^Spending Review/}).click()
+ await expect(page.getByRole('heading',{name:'Know where the money went.'})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Spending accountability'})).toContainText('Unbudgeted')
+ await page.getByRole('button',{name:/Neighborhood Market/}).click()
+ const editor=page.getByRole('region',{name:'Review spending exception'})
+ await expect(editor).toBeVisible()
+ await page.screenshot({path:testInfo.outputPath('spending-review.png')})
+ await editor.getByLabel('Explanation or evidence').fill('One-time household purchase reviewed at the daily meeting.')
+ const req=page.waitForRequest(r=>r.url().includes('action=prepare-direct'))
+ await editor.getByRole('button',{name:'Review spending decision',exact:true}).click()
+ const payload=(await req).postDataJSON()
+ expect(payload.operation.type).toBe('finance.spending.review')
+ expect(payload.operation.targetId).toBe('bank-grocery')
+ expect(payload.operation.payload.status).toBe('reviewed')
+ await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+ await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
 })

@@ -1,3 +1,4 @@
+import SpendingAccountabilityPanel from './SpendingAccountabilityPanel.jsx'
 import {useEffect, useMemo, useState} from 'react'
 import {buildMeetingPacket, meetingPacketText} from './meetingPackets.js'
 import './FinanceMeetingPacket.css'
@@ -22,6 +23,7 @@ export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={
     <p className="fm-packet-source">Updates automatically when Finance data changes and while this page is open. Bank refresh uses Brevity’s existing sync. Balance check: {packet.sources.balanceCheckedAt||'time unavailable'} ({packet.sources.balanceDataStatus}). Transaction check: {packet.sources.transactionCheckedAt||'time unavailable'} ({packet.sources.transactionFreshnessStatus}).</p>
     {error&&<p role="alert" className="fm-edit-error">{error}</p>}
     {packet.adjustments.length>0&&<p className="fm-packet-source" role="status"><strong>Household-adjusted report.</strong> {packet.adjustments.length} saved adjustments affect this view. Review original and reported values in the adjustment history below.</p>}
+    {packet.spending && <SpendingAccountabilityPanel model={packet.spending} onProposeAction={readOnly?undefined:onProposeAction}/>}
     <FinancePacketIntelligence packet={packet} onEdit={onEdit} onProposeAction={onProposeAction} readOnly={editReadOnly} notice={analysisNotice}/>
     <div className="fm-packet-summary"><div><span>Current stored cash</span><strong>{money(packet.cashBalance)}</strong><small>Checking and savings; source status above</small></div><div><span>Posted net in report period</span><strong>{money(packet.posted?.net)}</strong><small>Transfers excluded; retained bank history</small></div><div><span>Prior-period posted net</span><strong>{money(packet.prior?.net)}</strong><small>{packet.period.prior.from} through {packet.period.prior.to}</small></div><div><span>Open commitments</span><strong>{packet.openActions.length}</strong><small>{packet.openActions.filter(a=>a.overdue).length} overdue; carry forward until completed</small></div></div>
     <details open><summary>Executive insights and risks requiring review</summary><ul>{packet.warnings.map(w=><li key={w}>{w}</li>)}</ul><p>Explain spending deviations and behavior changes in the meeting notes. Brevity has not inferred their causes or certified a close.</p></details>

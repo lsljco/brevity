@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 const BankReconnect = lazy(() => import('./BankReconnect.jsx'))
 import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
-import { bankRetryTime, readableBankMessage, normalTransactionSyncNotice } from './bankRefreshStatus.js'
+import { readableBankMessage, normalTransactionSyncNotice } from './bankRefreshStatus.js'
 import { HOUSEHOLD_TIME_ZONE } from './financeTime.js'
 import { APP_REFRESH_EVENT, APP_REFRESH_STARTED_EVENT } from '../household/appRefresh.js'
 
@@ -62,7 +62,7 @@ async function reportUnverifiedBalanceAttempt(onAccountsSync, { status, message,
 }
 
 // ── Main PlaidConnect component ──
-export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyncAvailableTransactions, onReviewAccountLinks }) {
+export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyncAvailableTransactions, onRecoverTransactions, onReviewAccountLinks }) {
   // Restore connected state from localStorage immediately — no flicker
   const [connections, setConnections]   = useState(() => {
     try {
@@ -76,13 +76,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
   const [lastSyncedAt, setLastSyncedAt] = useState(() => { try { return localStorage.getItem('plaid_last_synced_at') || '' } catch { return '' } })
   const [sourceUpdatedAt, setSourceUpdatedAt] = useState(() => { try { return localStorage.getItem('plaid_source_updated_at') || '' } catch { return '' } })
   const formatTime = value => new Date(value).toLocaleString('en-US', {timeZone:HOUSEHOLD_TIME_ZONE,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
-  const [retryAt, setRetryAt] = useState(() => { try { return localStorage.getItem('plaid_balance_retry_at') || '' } catch { return '' } })
   const [normalSyncNotice, setNormalSyncNotice] = useState('')
-  const rememberRetry = value => {
-    if (!Number.isFinite(Date.parse(value))) return
-    setRetryAt(value)
-    try { localStorage.setItem('plaid_balance_retry_at', value) } catch {}
-  }
   const [syncing, setSyncing]           = useState(false)
   const [appSyncing, setAppSyncing] = useState(false)
   const syncBusy = syncing || appSyncing
@@ -108,11 +102,6 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
     const timer = setInterval(() => setStatusTime(Date.now()), 60000)
     return () => clearInterval(timer)
   }, [])
-  const cooldownActive = Date.parse(retryAt) > statusTime
-  useEffect(() => {
-    const value = bankRetryTime(error)
-    if (value) rememberRetry(value)
-  }, [error])
   const needsRefresh = !syncedAt || !Number.isFinite(Date.parse(syncedAt)) || statusTime - Date.parse(syncedAt) >= 24 * 60 * 60 * 1000
   const [expanded, setExpanded]         = useState(false)
   const [linkReviewCount, setLinkReviewCount] = useState(0)
@@ -165,9 +154,7 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
     let transactionDetail = ''
     try {
       try {
-        const requestedAt = Date.now()
         const data = await apiFetch('/plaid-accounts?live=1')
-        if (data.connected) rememberRetry(new Date(requestedAt + 6 * 60 * 60 * 1000).toISOString())
         if (data.connected) {
           const plaidAccounts = Array.isArray(data.accounts) ? data.accounts : []
           // Derive connections list from accounts
@@ -377,11 +364,11 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
             {needsRefresh ? 'Needs refresh' : 'Last successful live check'}
           </div>
         </div>}
-        {!requiresUpdate.length && <button type="button" onClick={() => syncAccounts({ refreshTransactions:true })} disabled={syncBusy || cooldownActive}
-          title="Requests a paid update from existing bank connections. Estimated $0.22 per connection; six-hour cooldown and $5 monthly allowance. Open Bank information for details."
-          style={{minHeight:44,padding:'10px 16px',borderRadius:10,border:'1px solid #C5A46D',background:'#C5A46D',color:'#17150f',fontFamily:'inherit',fontWeight:600,cursor:syncBusy?'wait':cooldownActive?'not-allowed':'pointer',opacity:syncBusy || cooldownActive ? 0.65 : 1}}>
+        <button type="button" onClick={() => syncAccounts({ refreshTransactions:true })} disabled={syncBusy}
+          title="Requests a paid update from existing bank connections. Estimated $0.22 per connection; available whenever you choose. Open Bank information for details."
+          style={{minHeight:44,padding:'10px 16px',borderRadius:10,border:'1px solid #C5A46D',background:'#C5A46D',color:'#17150f',fontFamily:'inherit',fontWeight:600,cursor:syncBusy?'wait':'pointer',opacity:syncBusy ? 0.65 : 1}}>
           {syncBusy ? 'Updating…' : 'Refresh balance'}
-        </button>}
+        </button>
         {typeof onSyncAvailableTransactions === 'function' && <button type="button" onClick={syncAvailableTransactions} disabled={syncBusy}
           title="Sync transactions already available from Plaid without requesting a paid update or a live balance check."
           style={{minHeight:44,padding:'10px 16px',borderRadius:10,border:'1px solid rgba(197,164,109,.4)',background:'transparent',color:'#C5A46D',fontFamily:'inherit',cursor:syncBusy?'wait':'pointer'}}>Sync transactions</button>}
@@ -390,7 +377,6 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
           onClick={() => setExpanded(value => !value)}
           style={{minWidth:44,minHeight:44,borderRadius:22,border:'1px solid rgba(197,164,109,.4)',background:'transparent',color:'#C5A46D',fontSize:requiresUpdate.length ? 13 : 20,cursor:'pointer',marginTop:requiresUpdate.length ? 12 : 0,padding:requiresUpdate.length ? '8px 14px' : undefined}}>{requiresUpdate.length ? 'Connection details' : 'ⓘ'}</button>
       </div>
-      {cooldownActive && <p role="status" style={{margin:'8px 0 0',fontSize:12,color:'#C5A46D'}}>Paid balance refresh available {readableBankMessage(retryAt)}. Normal transaction sync remains available.</p>}
       {normalSyncNotice && <p role="status" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.45}}>{normalSyncNotice}</p>}
       {syncNotice && (!requiresUpdate.length || syncNotice.startsWith('Secure sign-in')) && <p role="status" style={{margin:'8px 0 0',fontSize:12,color:'#aaa99f',lineHeight:1.45}}>{syncNotice}</p>}
 
@@ -403,13 +389,20 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
           {error && requiresUpdate.length > 0 && <p role="note" style={{fontSize:12,lineHeight:1.5}}>Connection diagnostic: {readableBankMessage(error)}</p>}
-          <p role="note" style={{margin:0,fontSize:13,lineHeight:1.5}}>Refresh balance requests paid balance and transaction updates: estimated $0.22 per connection, with a six-hour cooldown and a shared $5 monthly allowance. Subscription fees are separate.</p>
+          <p role="note" style={{margin:0,fontSize:13,lineHeight:1.5}}>Refresh balance requests paid balance and transaction updates: estimated $0.22 per connection, with no Brevity waiting period or monthly cutoff for manual refreshes. Bank availability and Plaid rate limits still apply. Subscription fees are separate.</p>
           <p style={{margin:0,fontSize:13,lineHeight:1.5}}>Automatic sync checks the data Plaid already has when Brevity opens, every 15 minutes while visible, and when you return after five minutes. It does not verify a live balance. “Needs refresh” means the last successful live check is missing or at least 24 hours old.</p>
           <div style={{fontSize:12,color:'#aaa99f',lineHeight:1.7}}>
             <div>Last synced: {lastSyncedAt ? formatTime(lastSyncedAt) : 'Not recorded'}</div>
             <div>Plaid last updated: {sourceUpdatedAt ? formatTime(sourceUpdatedAt) : 'Not recorded'}</div>
             <div>Last live bank check: {syncedAt ? formatTime(syncedAt) : 'Not recorded'}</div>
           </div>
+          {typeof onRecoverTransactions === 'function' && <button type="button" disabled={syncBusy} onClick={async () => {
+            setSyncing(true); setNormalSyncNotice('Reloading available bank history…')
+            try { const result = await onRecoverTransactions(); setNormalSyncNotice(result?.error ? result.error : 'Available history reloaded. Saved rows are retained; Plaid may not hold every older statement. If a prior sync was pending, reload once more after it finishes.') }
+            catch (error) { setNormalSyncNotice(error.message || 'History reload failed; saved rows remain available.') }
+            finally { setSyncing(false) }
+          }}>Reload available bank history</button>}
+          <p style={{margin:0,fontSize:12}}>History reload retrieves the transactions Plaid already holds for existing connections. It does not disconnect a bank or request a paid bank refresh.</p>
           {!isConnected && <p>No cached bank connection on this device. Refresh to check existing connections.</p>}
           <p className="plaid-connection-safety-note" role="note" style={{margin:0,fontSize:12,lineHeight:1.5}}>Existing connected sources can still sync. Administrators can securely reconnect an existing institution. Adding or disconnecting banks remains unavailable. Mapping a returned account to an existing Brevity account uses reviewed Action Mode and does not change bank credentials. Bank changes unavailable.</p>
           <p style={{ fontSize: 10, fontWeight: 600, color: '#888884', textTransform: 'uppercase', letterSpacing: '0.12em' }}>

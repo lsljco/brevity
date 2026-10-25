@@ -85,6 +85,9 @@ export const ACTION_TYPES = {
   'budget.update': 'finance',
   'forecast.update': 'finance',
   'finance.account.link': 'finance',
+  'finance.reserve.set': 'finance',
+  'finance.statement.import': 'finance',
+  'finance.spending.review': 'finance',
   'finance.close.set': 'finance',
   'finance.close.delete': 'finance',
   'recurring.create': 'finance',
@@ -148,16 +151,19 @@ const ACTION_PAYLOAD_FIELDS = {
   'transaction.update': ['name', 'category'],
   'transaction.rule.create': ['title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
   'transaction.rule.delete': [],
-  'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence'],
-  'meeting.action.update': ['text', 'owner', 'due', 'status'],
+  'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence', 'transactionId'],
+  'meeting.action.update': ['text', 'owner', 'due', 'status', 'verifiedResult'],
   'meeting.correction.create': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin', 'meetingDate', 'cadence'],
   'meeting.correction.update': ['label', 'value', 'reason', 'source', 'scope', 'status', 'origin'],
   'meeting.session.create': ['cadence', 'meetingDate', 'startedAt', 'endedAt', 'summary', 'notes', 'transcript', 'packetText', 'actions', 'corrections'],
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
-  'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount'],
+  'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount', 'cashAllowance'],
   'forecast.update': ['recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
+  'finance.reserve.set': ['amount'],
+  'finance.statement.import': ['configJson'],
+  'finance.spending.review': ['status','notes'],
   'finance.close.set': ['amount','notes'],
   'finance.close.delete': [],
   'recurring.create': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
@@ -177,9 +183,9 @@ const ACTION_PAYLOAD_FIELDS = {
   'nutrition.meal.remove': ['entryId', 'reason'],
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
-const STRING_FIELDS = new Set(['creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
+const STRING_FIELDS = new Set(['verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
-const BOOLEAN_FIELDS = new Set(['allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
+const BOOLEAN_FIELDS = new Set(['cashAllowance', 'allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'recurrenceEndDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
 const ACTION_ENUMS = {
   'decision.create': { status:['needs-decision', 'determined', 'complete', 'deferred'] },
@@ -248,7 +254,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:lslj_tx_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
-  if (operation.type === 'finance.account.link' || operation.type.startsWith('finance.close.')) return 'shared:lslj_finance_v9'
+  if (operation.type === 'finance.account.link' || (operation.type.startsWith('finance.close.') || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return 'shared:lslj_finance_v9'
   if (operation.type.startsWith('recurring.')) return 'shared:brevity_recurring_plan_v1'
   if (operation.domain === 'calendar') return 'calendar:apple-family'
   return operation.domain
@@ -660,6 +666,8 @@ export function normalizeActionOperation(input = {}) {
     if (!['income', 'expense'].includes(payload.direction)) throw new Error('A budget update requires an income or expense direction.')
   }
   if (type === 'forecast.update' && !operation.targetId) throw new Error('A forecast update requires the exact scenario id, or model for the shared planning expense.')
+  if(type === 'finance.reserve.set' && (!Number.isFinite(payload.amount)||payload.amount<0))throw new Error('Enter a non-negative operating reserve minimum.')
+  if (type === 'finance.spending.review' && (!operation.targetId || !['reviewed','reduce','unresolved'].includes(payload.status))) throw new Error('A spending review needs a transaction and a supported decision.')
   if (type.startsWith('finance.close.') && (!operation.targetId || !operation.targetDate || (type === 'finance.close.set' && !Number.isFinite(payload.amount)))) throw new Error('An ending balance requires an exact account, date and numeric amount.')
   if (type === 'finance.account.link' && (!operation.targetId || !payload.plaidAccountId)) throw new Error('A bank-source link requires the exact Brevity account and returned bank account ids.')
   if (type === 'recurring.create') {

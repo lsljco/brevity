@@ -185,6 +185,7 @@ async function syncAndStageItem({
   itemId = '',
   institution = '',
   event,
+  recoverHistory = false,
   readState = getTransactionSyncState,
   writeState = setTransactionSyncState,
   now = () => new Date().toISOString(),
@@ -193,7 +194,7 @@ async function syncAndStageItem({
   const cursorEntry = await readState(cursorIdentity, event)
   if (cursorEntry.state?.pendingDelta) return pendingDeltaResult(cursorIdentity, cursorEntry.state.pendingDelta, { replayed:true })
   const initialCursor = String(cursorEntry.state?.cursor || '')
-  const result = await syncItemTransactions({ client, accessToken, initialCursor })
+  const result = await syncItemTransactions({ client, accessToken, initialCursor:recoverHistory ? '' : initialCursor })
   const pendingDelta = buildPendingDelta({
     cursorIdentity,
     fromCursor:initialCursor,
@@ -297,12 +298,14 @@ exports.handler = async event => {
 
   const params = new URLSearchParams(event.rawQuery || '')
   const requestRefresh = params.get('refresh') === '1'
+  const recoverHistory = params.get('history') === '1'
   const refreshOnly = params.get('refresh_only') === '1'
   const refreshStatusOnly = params.get('refresh_status') === '1'
 
   try {
     const session = await readSession(event)
     if (!session) return { statusCode:401, headers, body:JSON.stringify({ error:'Sign in to view financial transactions.' }) }
+    if (recoverHistory && session.role !== 'admin') return {statusCode:403,headers,body:JSON.stringify({error:'A household administrator must reload bank history.'})}
     const tokens = uniqueConnections(await getTokens(event) || [])
     if (!Array.isArray(tokens) || tokens.length === 0) {
       return { statusCode:200, headers, body:JSON.stringify(responseBody({ connected:false, refresh:{ requested:requestRefresh, accepted:0, errors:[] } })) }
@@ -331,7 +334,7 @@ exports.handler = async event => {
       })) }
     }
 
-    if (requestRefresh) await reservePaidCalls({ event, session, product:'transactions', tokens })
+    if (requestRefresh) await reservePaidCalls({ event, session, product:'transactions', tokens, onDemand:true })
 
     const changedTransactions = []
     const removedTransactionIds = new Set()
@@ -363,7 +366,7 @@ exports.handler = async event => {
       if (refreshOnly) return
 
       try {
-        const { pendingDelta, receipt } = await syncAndStageItem({ client:getPlaidClient(), accessToken, itemId, institution, event })
+        const { pendingDelta, receipt } = await syncAndStageItem({ client:getPlaidClient(), accessToken, itemId, institution, event, recoverHistory })
         pendingDelta.transactions.forEach(transaction => changedTransactions.push(transaction))
         pendingDelta.removed.forEach(transactionId => removedTransactionIds.add(transactionId))
         delta.added += Number(pendingDelta.delta?.added || 0)

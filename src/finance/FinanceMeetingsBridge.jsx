@@ -4,11 +4,11 @@ import { buildCanonicalFinanceModel } from './financeDomain.js'
 import { buildMeetingCashScope, meetingBalanceQualification, meetingTransactionQualification, normalizeMeetingSourceStatus } from './financeMeetingTruth.js'
 import FinanceMeetingsWorkspace from './FinanceMeetingsWorkspace.jsx'
 
-export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',balanceDataStatus='unknown',transactionFreshnessStatus='unknown',balanceCheckedAt='',transactionCheckedAt='',balanceHistory=[],readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
+export default function FinanceMeetingsBridge({accounts=[],scheduled=[],cashFlowScheduled,actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,projection,currentMember='Household member',balanceDataStatus='unknown',transactionFreshnessStatus='unknown',balanceCheckedAt='',transactionCheckedAt='',balanceHistory=[],spendingReviews={},spendingSources,readOnly=false,financeReadOnly=readOnly,meetingPlanningReadOnly=readOnly}){
   const [clock,setClock]=useState(()=>new Date())
   useEffect(()=>{const timer=setInterval(()=>setClock(new Date()),60000);return()=>clearInterval(timer)},[])
   const today=useMemo(()=>getHouseholdCalendarDate(clock),[clock])
-  const packetData=useMemo(()=>({accounts,scheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt,balanceHistory}),[accounts,scheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt,balanceHistory])
+  const packetData=useMemo(()=>({accounts,scheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt,balanceHistory,spendingReviews,spendingSources}),[accounts,scheduled,actuals,budget,budgetLegacyYear,budgetLegacyAccountId,balanceDataStatus,transactionFreshnessStatus,balanceCheckedAt,transactionCheckedAt,balanceHistory,spendingReviews,spendingSources])
   const meetingScope=useMemo(()=>buildMeetingCashScope({accounts,scheduled,cashFlowScheduled,actuals,balanceDataStatus,transactionFreshnessStatus,today}),[accounts,scheduled,cashFlowScheduled,actuals,balanceDataStatus,transactionFreshnessStatus,today])
   const model=useMemo(()=>{
     const canonical=buildCanonicalFinanceModel({accounts:meetingScope.accounts,scheduled:meetingScope.scheduled,cashFlowScheduled:meetingScope.cashFlowScheduled,actuals:meetingScope.actuals,budget,budgetLegacyYear,budgetLegacyAccountId,today})

@@ -27,7 +27,7 @@ function costStore(event) {
   return getStore(options)
 }
 
-async function reservePaidCalls({ event, session, product, tokens, now = Date.now(), store }) {
+async function reservePaidCalls({ event, session, product, tokens, now = Date.now(), store, onDemand = false }) {
   if (session?.role !== 'admin') throw failure('Only a household administrator can request paid bank updates.', 'PLAID_PAID_FORBIDDEN', 403)
   if (!RATES[product]) throw failure('Unknown paid bank update.', 'PLAID_COST_UNAVAILABLE', 503)
   const connections = uniqueConnections(tokens)
@@ -43,8 +43,10 @@ async function reservePaidCalls({ event, session, product, tokens, now = Date.no
       const prior = entry?.data || { month, reservedCents:0, lastAttempts:{} }
       const used = prior.month === month ? prior.reservedCents : 0
       const nextAllowed = Math.max(0, ...ids.map(id => Number(prior.lastAttempts[id] || 0) + COOLDOWN_MS))
-      if (nextAllowed > now) throw failure(`A paid ${product === 'balance' ? 'balance check' : 'transaction refresh'} was already requested for this connection. Try after ${new Date(nextAllowed).toISOString()}. Normal sync remains available.`, 'PLAID_PAID_COOLDOWN')
-      if (used + cost > MONTHLY_LIMIT_CENTS) throw failure('The household’s $5 monthly estimated paid-refresh allowance has been reached. Normal transaction sync remains available; paid updates resume next month.', 'PLAID_PAID_BUDGET')
+      // Explicit administrator refreshes have no Brevity waiting period or
+      // monthly cutoff. Continue recording costs; background callers retain limits.
+      if (!onDemand && nextAllowed > now) throw failure(`A paid ${product === 'balance' ? 'balance check' : 'transaction refresh'} was already requested for this connection. Try after ${new Date(nextAllowed).toISOString()}. Normal sync remains available.`, 'PLAID_PAID_COOLDOWN')
+      if (!onDemand && used + cost > MONTHLY_LIMIT_CENTS) throw failure('The household’s $5 monthly estimated paid-refresh allowance has been reached. Normal transaction sync remains available; paid updates resume next month.', 'PLAID_PAID_BUDGET')
       const lastAttempts = Object.fromEntries(Object.entries(prior.lastAttempts).filter(([,time]) => Number(time) + COOLDOWN_MS > now))
       ids.forEach(id => { lastAttempts[id] = now })
       try {

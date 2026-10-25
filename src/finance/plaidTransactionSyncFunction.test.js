@@ -361,3 +361,20 @@ test('transaction diagnostics distinguish provider timeouts and storage failures
   assert.doesNotMatch(JSON.stringify(result),/secret|private/)
   assert.match(transactionError('item','Bank',{code:'PLAID_CURSOR_WRITE_FAILED'}).message,/could not be saved/)
 })
+
+test('history recovery pages from the beginning but retains the acknowledged checkpoint until receipt persistence', async () => {
+ const requests=[]
+ const result=await syncAndStageItem({
+   client:{transactionsSync:async request=>{requests.push(request);return {data:{added:[{transaction_id:'recovered',date:'2025-01-01',amount:25,account_id:'bank'}],modified:[],removed:[],has_more:false,next_cursor:'recovered-end'}}}},
+   accessToken:'access',itemId:'item',recoverHistory:true,
+   readState:async()=>({state:{cursor:'acknowledged'},etag:'v1',exists:true}),
+   writeState:async(id,state,event,expected)=>{
+     assert.equal(state.cursor,'acknowledged')
+     assert.equal(state.pendingDelta.fromCursor,'acknowledged')
+     assert.equal(state.pendingDelta.nextCursor,'recovered-end')
+     assert.equal(expected.etag,'v1')
+   },
+ })
+ assert.equal(requests[0].cursor,undefined)
+ assert.equal(result.pendingDelta.transactions[0].id,'recovered')
+})

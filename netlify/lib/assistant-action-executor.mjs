@@ -85,7 +85,7 @@ export function resourceForOperation(operation) {
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
-  if (operation.type === 'finance.account.link' || operation.type.startsWith('finance.close.')) return `shared:${SHARED_KEYS.finance}`
+  if (operation.type === 'finance.account.link' || (operation.type.startsWith('finance.close.') || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('debt.')) return `shared:${SHARED_KEYS.debts}`
   throw new Error(`No action resource exists for ${operation.type}.`)
@@ -221,7 +221,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   }
   if(operation.type==='meeting.action.create'){
     const createdAt=nowIso(context.now||(()=>new Date()))
-    const item={id:createId(),text:payload.text,owner:payload.owner||'',due:payload.due||'',meetingDate:payload.meetingDate||createdAt.slice(0,10),financialEffect:payload.financialEffect||'',status:'open',createdAt,cadence:payload.cadence||'weekly',createdBy:context.actor||'Household member'}
+    const item={id:createId(),text:payload.text,owner:payload.owner||'',due:payload.due||'',meetingDate:payload.meetingDate||createdAt.slice(0,10),financialEffect:payload.financialEffect||'',...(payload.transactionId?{transactionId:payload.transactionId}:{}),status:'open',createdAt,cadence:payload.cadence||'weekly',createdBy:context.actor||'Household member'}
     return{before,after:{...(value&&!Array.isArray(value)?value:{}),openActions:[item,...(value?.openActions||[])]},createdId:item.id}
   }
   if(operation.type==='meeting.correction.create'){
@@ -328,7 +328,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   }
   if (operation.type === 'budget.update') {
     if (operation.targetId !== payload.lineId) throw new Error('The reviewed budget line no longer matches the requested target.')
-    return { before, after:applyBudgetTarget(value, payload) }
+    return { before, after:applyBudgetTarget(value, payload, {changedAt:nowIso(context.now||(()=>new Date())),actor:context.actor}) }
   }
   if (operation.type === 'forecast.update') {
     if (payload.recoveryJson !== undefined) {
@@ -379,6 +379,27 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     }) }
     if (!found) throw new Error('That forecast scenario no longer exists. Refresh Brevity and ask again.')
     return { before, after }
+  }
+  if(operation.type === 'finance.reserve.set') return {before,after:{...value,cashReserveMinimum:payload.amount,cashReserveHistory:[...(value?.cashReserveHistory||[]),{amount:payload.amount,by:context.actor,at:nowIso(context.now||(()=>new Date()))}]}}
+  if (operation.type === 'finance.statement.import') {
+    const account=(value?.accounts||[]).find(a=>a.id===operation.targetId)
+    if(!account?.plaidAccountId)throw Error('Select an existing linked account for statement history.')
+    const rows=JSON.parse(payload.configJson),today=getHouseholdDateKey(new Date(context.now?context.now():Date.now()))
+    if(!Array.isArray(rows)||!rows.length||rows.length>500)throw Error('Review 1–500 statement transactions at a time.')
+    const imported=rows.map(row=>{
+      if(row.localAccountId!==account.id||typeof row.id!=='string'||!row.id.startsWith(`statement:${account.id}:`)||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(row.date||'')||!Number.isFinite(Date.parse(row.date))||new Date(row.date).toISOString().slice(0,10)!==row.date||row.date>today||typeof row.name!=='string'||!row.name.trim()||!Number.isFinite(row.amount))throw Error('Invalid statement transaction or account.')
+      return {id:row.id,localAccountId:account.id,date:row.date,name:row.name.slice(0,200),amount:Math.round(row.amount*100)/100,category:String(row.category||'Other').slice(0,100),source:'statement',pending:false,importedAt:nowIso(context.now||(()=>new Date())),importedBy:context.actor}
+    })
+    const existing=new Map((value?.statementTransactions||[]).map(row=>[row.id,row]))
+    const retainedDates=new Set([...existing.values()].filter(row=>row.localAccountId===account.id).map(row=>row.date))
+    if(imported.some(row=>!existing.has(row.id)&&retainedDates.has(row.date)))throw Error('This statement overlaps previously imported dates. Import a non-overlapping statement period to avoid duplicate cash movements.')
+    imported.forEach(row=>{if(!existing.has(row.id))existing.set(row.id,row)})
+    return {before,after:{...value,statementTransactions:[...existing.values()]}}
+  }
+  if (operation.type === 'finance.spending.review') {
+    const previous=value?.spendingReviews?.[operation.targetId]
+    const review={status:payload.status,notes:payload.notes||'',at:nowIso(context.now||(()=>new Date())),by:context.actor||'Household member'}
+    return {before,after:{...value,spendingReviews:{...(value?.spendingReviews||{}),[operation.targetId]:{...review,history:[...(previous?.history||[]),review]}}}}
   }
   if (operation.type.startsWith('finance.close.')) {
     const account = value?.accounts?.find(row => row.id === operation.targetId)
