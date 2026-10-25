@@ -11,9 +11,10 @@ const {handler:exchangePlaidToken}=require('../../netlify/legacy-functions/plaid
 const {handler:disconnectPlaid}=require('../../netlify/legacy-functions/plaid-disconnect.js')
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 
-test('Plaid connection mutation endpoints reject before touching bank credentials or token storage',async()=>{
+test('Plaid add and disconnect endpoints remain disabled while reconnection requires authentication',async()=>{
+  assert.equal((await createPlaidLink({httpMethod:'GET',headers:{}})).statusCode,401)
+  assert.equal((await createPlaidLink({httpMethod:'POST',headers:{},body:'{}'})).statusCode,401)
   const endpoints=[
-    [createPlaidLink,{httpMethod:'GET'}],
     [exchangePlaidToken,{httpMethod:'POST',body:JSON.stringify({public_token:'must-not-exchange'})}],
     [disconnectPlaid,{httpMethod:'POST',body:JSON.stringify({item_id:'must-not-remove'})}],
   ]
@@ -25,13 +26,13 @@ test('Plaid connection mutation endpoints reject before touching bank credential
     assert.equal(result.headers['Cache-Control'],'no-store')
     assert.equal(result.headers['set-cookie'],undefined)
   }
-  for(const file of ['../../netlify/legacy-functions/plaid-create-link-token.js','../../netlify/legacy-functions/plaid-exchange-token.js','../../netlify/legacy-functions/plaid-disconnect.js']){
+  for(const file of ['../../netlify/legacy-functions/plaid-exchange-token.js','../../netlify/legacy-functions/plaid-disconnect.js']){
     const source=read(file)
     assert.doesNotMatch(source,/readSession|getTokens|setTokens|plaidClient|itemPublicTokenExchange|itemRemove|linkTokenCreate/)
   }
 })
 
-test('Plaid UI keeps existing-source sync but exposes no connection mutation path',()=>{
+test('Plaid UI offers approved existing-connection recovery without add, disconnect, or token exchange',()=>{
   const source=read('../finance/PlaidConnect.jsx')
   assert.match(source,/Existing connected sources can still sync/)
   assert.match(source,/apiFetch\('\/plaid-accounts\?live=1'\)/)
@@ -39,11 +40,14 @@ test('Plaid UI keeps existing-source sync but exposes no connection mutation pat
   assert.match(source,/const balanceAttemptErrors = plaidAccounts\.length \? endpointErrors/)
   assert.match(source,/await onAccountsSync\(plaidAccounts, data\.syncedAt, data\.accountSourceReceipt, balanceAttemptErrors\)/)
   assert.match(source,/reportUnverifiedBalanceAttempt\(onAccountsSync/)
-  assert.match(source,/Adding, reauthorizing, or disconnecting an institution is disabled/)
+  assert.match(source,/Adding or disconnecting banks remains unavailable/)
   assert.match(source,/Mapping a returned account to an existing Brevity account uses reviewed Action Mode/)
   assert.match(source,/Add bank unavailable/)
-  assert.match(source,/Re-authentication is unavailable in this release/)
-  assert.doesNotMatch(source,/usePlaidLink|plaid-create-link-token|plaid-exchange-token|plaid-disconnect|handleRelink|handleDisconnect|plaid_oauth_link_token|window\.confirm/)
+  assert.match(source,/<BankReconnect/)
+  const endpoint=read('../../netlify/legacy-functions/plaid-create-link-token.js')
+  assert.doesNotMatch(endpoint,/setTokens|itemPublicTokenExchange|itemRemove/)
+  assert.match(endpoint,/access_token:token.access_token/)
+  assert.doesNotMatch(source,/plaid-exchange-token|plaid-disconnect|handleRelink|handleDisconnect|plaid_oauth_link_token|window\.confirm/)
 })
 
 test('member-password mutation requires authenticated current-password verification and rotates account sessions',()=>{
