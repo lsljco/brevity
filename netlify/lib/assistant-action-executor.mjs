@@ -85,7 +85,7 @@ export function resourceForOperation(operation) {
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
-  if (operation.type === 'finance.account.link') return `shared:${SHARED_KEYS.finance}`
+  if (operation.type === 'finance.account.link' || operation.type.startsWith('finance.close.')) return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('debt.')) return `shared:${SHARED_KEYS.debts}`
   throw new Error(`No action resource exists for ${operation.type}.`)
@@ -379,6 +379,24 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     }) }
     if (!found) throw new Error('That forecast scenario no longer exists. Refresh Brevity and ask again.')
     return { before, after }
+  }
+  if (operation.type.startsWith('finance.close.')) {
+    const account = value?.accounts?.find(row => row.id === operation.targetId)
+    if (!account || !['checking','savings'].includes(account.type)) throw new Error('Select an existing checking or savings account.')
+    const date = operation.targetDate
+    const now = (context.now || (()=>new Date()))()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date > getHouseholdDateKey(now)) throw new Error('An ending balance must be for today or an earlier date.')
+    const dailyClosingBalances = { ...(value.dailyClosingBalances || {}) }
+    const closes = { ...(dailyClosingBalances[account.id] || {}) }
+    if (operation.type === 'finance.close.delete') {
+      if (!closes[date]) throw new Error('That recorded ending balance no longer exists.')
+      delete closes[date]
+    } else {
+      if (!Number.isFinite(payload.amount)) throw new Error('Enter a valid ending balance.')
+      closes[date] = {amount:Math.round(payload.amount * 100) / 100,source:'user-recorded',notes:payload.notes || '',updatedAt:nowIso(()=>now),updatedBy:context.actor || 'Household member'}
+    }
+    dailyClosingBalances[account.id] = closes
+    return {before, after:{...value,dailyClosingBalances}}
   }
   if (operation.type === 'finance.account.link') {
     const accounts = [...(value?.accounts || [])]
