@@ -388,3 +388,15 @@ test('history recovery pages from the beginning but retains the acknowledged che
  assert.equal(requests[0].cursor,undefined)
  assert.equal(result.pendingDelta.transactions[0].id,'recovered')
 })
+
+
+test('sync keeps account evidence from earlier pages when the final page omits that account',async()=>{
+ const pages=[
+  {accounts:[{account_id:'checking',type:'depository',balances:{current:100}}],has_more:true,next_cursor:'one'},
+  {accounts:[{account_id:'savings',type:'depository',balances:{current:200}}],has_more:true,next_cursor:'two'},
+  {accounts:[],has_more:false,next_cursor:'three'},
+ ]
+ const result=await syncItemTransactions({accessToken:'test',client:{transactionsSync:async()=>({data:{added:[],modified:[],removed:[],transactions_update_status:'HISTORICAL_UPDATE_COMPLETE',...pages.shift()}})}})
+ const batch=buildPendingDelta({cursorIdentity:'item',fromCursor:'',result,createdAt:'2026-10-25T13:00:00Z'})
+ assert.deepEqual(batch.balanceAccounts.map(row=>[row.accountId,row.current]),[['checking',100],['savings',200]])
+})
