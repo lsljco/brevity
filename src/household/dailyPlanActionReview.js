@@ -19,7 +19,7 @@ export const PILLAR_EDITABLE_FIELDS = {
 }
 const ITEM_ARRAY_FIELDS = new Set(['topPriorities', 'decisions', 'appointments', 'priorities', 'bills', 'purchases', 'transfers', 'accountsToFund', 'meetings', 'fellowshipFollowUps'])
 
-const cleanPlanItem = item => Object.fromEntries(Object.entries(item || {})
+export const cleanPlanItem = item => Object.fromEntries(Object.entries(item || {})
   .filter(([field]) => PLAN_ITEM_FIELDS.has(field))
   .map(([field, value]) => [field, clone(value)]))
 

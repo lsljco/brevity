@@ -1,0 +1,14 @@
+.day-outcomes-dialog { width: min(760px,calc(100vw - 32px)); }
+.day-outcomes-fields { overflow-y: auto; min-height: 0; padding: 16px; }
+.day-outcomes-fields fieldset { border: 1px solid rgba(197,164,109,.3); border-radius: 12px; padding: 16px; margin: 0 0 16px; }
+.day-outcomes-fields legend { color: #c5a46d; padding: 0 6px; }
+.day-outcomes-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.day-outcomes-fields label { display: grid; gap: 6px; margin-bottom: 12px; }
+.day-outcomes-fields input,.day-outcomes-fields select { min-width: 0; width: 100%; box-sizing: border-box; min-height: 44px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 10px; background: #191917; color: #f7f3ea; }
+.day-outcomes-order { display: flex; flex-wrap: wrap; gap: 8px; }
+.day-outcomes-dialog button { min-height: 44px; }
+.today-focus-bubbles small { display: block; color: #c5a46d; }
+@media(max-width:520px){.day-outcomes-grid{grid-template-columns:1fr}.day-outcomes-dialog footer{flex-wrap:wrap}}
+.today-focus-dialog.day-outcomes-dialog { max-height: calc(100dvh - 48px); display: flex; flex-direction: column; box-sizing: border-box; min-height: 0; }
+.day-outcomes-dialog > header,.day-outcomes-dialog > footer { flex-shrink: 0; }
+.day-outcomes-dialog > footer p { margin: 0; font-size: 13px; }

@@ -1,3 +1,4 @@
+import TodayOverview from './TodayOverview.jsx'
 import { AlignmentPillarPreview } from './TodayDashboard.jsx'
 import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -144,6 +145,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
   const [draft, setDraft] = useState(() => loadLocalAlignmentDraft(globalThis.localStorage, plan, openedVersionRef.current))
   const latestDraftRef = useRef(draft)
   const [stepIndex, setStepIndex] = useState(0)
+  const [overviewScope,setOverviewScope]=useState('mine')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [draftSaveState, setDraftSaveState] = useState('saved')
@@ -158,7 +160,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
   const update = (section, patch) => {
     if (readOnly || (section === 'finance' && financeReadOnly)) return
     setDraft(current => {
-      const next = { ...current, [section]: { ...current[section], ...patch }, updatedAt: new Date().toISOString() }
+      const next = { ...current, [section]: { ...current[section], ...patch }, ...(section === 'household' && patch.priorities ? {topPriorities:patch.priorities} : {}), updatedAt: new Date().toISOString() }
       latestDraftRef.current = next
       return next
     })
@@ -267,6 +269,7 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
     {timing !== 'selected' && <AlignmentMeetingCapture plan={draft} timing={timing} currentMember={currentMember} readOnly={readOnly} financeReadOnly={financeReadOnly} onApply={applyMeetingResult} />}
     {readOnly && <div className="alignment-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>This alignment is view-only</strong><span>{readOnlyMessage || 'Plans & decisions permission is required to change the shared household plan.'}</span></div></div>}
     <div className="alignment-progress"><span style={{ width: `${progress}%` }} /></div>
+    <TodayOverview planning plan={draft} currentMember={currentMember} scope={overviewScope} onScopeChange={setOverviewScope} householdChores={householdChores} calendarAppointments={calendarAppointmentsForPlan(draft,calendarEvents)} calendarHealth={calendarHealth} onOpenCalendar={onOpenCalendar} canViewFinance={!financeReadOnly} readOnly={readOnly} onChangeOutcomes={patch=>update('household',patch)} />
     <nav className="alignment-step-nav" aria-label="Alignment progress">
       {STEPS.map(([stepId, stepLabel, stepIcon], index) => <button type="button" key={stepId} className={`${index === stepIndex ? 'is-active' : ''}${index < stepIndex ? ' is-complete' : ''}`} onClick={() => setStepIndex(index)}><i className={`ti ${stepIcon}`} /><span>{index + 1}</span><small>{stepLabel}</small></button>)}
     </nav>

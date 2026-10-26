@@ -227,22 +227,9 @@ export function AlignmentPillarPreview({ pillar, plan, currentMember, meals, mea
     {pillar === 'fitness' && <TodayFitnessWorkout date={plan.date} currentMember={currentMember} fitness={plan.fitness} />}
     {pillar === 'household' && <>
       <DailyRhythm plan={plan} currentMember={currentMember} chores={householdChores} />
-      <section className="today-focus-card"><div><span>Daily Focus</span><h2>{plan.household?.keyFocus || 'No focus has been set for this day.'}</h2></div></section>
       <TodayHouseholdChores chores={householdChores} browsingDate />
       <TodayCalendarAgenda filters={<CalendarScopeFilter selected={selectedCalendars} onChange={setSelectedCalendars}/>} commitments={model.commitments} health={calendarHealth} onOpenCalendar={onOpenCalendar} browsingDate />
-      <section className="today-section today-outcomes"><div className="today-section-heading"><h2>Daily Outcomes</h2><small>{outcomesReadOnly ? 'View only' : 'Outcomes carry forward until changed in Alignment. Review & Complete Alignment applies your changes.'}</small></div><ol className="today-top-three">{Array.from({ length: Math.max(1, plan.household?.priorities?.length || 0) }, (_, index) => {
-        const priority = plan.household?.priorities?.[index]
-        const title = typeof priority === 'string' ? priority : priority?.title || ''
-        return <li key={index}><label className="today-outcome-field"><span>Outcome {index + 1}</span><input aria-label={`Outcome ${index + 1}`} value={title} readOnly={outcomesReadOnly} placeholder="Enter an outcome" onChange={event => {
-          if (outcomesReadOnly || !onChangeOutcomes) return
-          const priorities = Array.from({ length: Math.max(1, plan.household?.priorities?.length || 0) }, (_, slot) => {
-            const existing = plan.household?.priorities?.[slot]
-            return typeof existing === 'object' && existing ? { ...existing } : { id: `household-priority-${slot}`, title: existing || '', owner: 'Family', status: 'pending' }
-          })
-          priorities[index] = { ...priorities[index], title: event.target.value }
-          onChangeOutcomes(priorities)
-        }} /></label>{!outcomesReadOnly && <button type="button" className="today-focus-edit" aria-label={`Remove outcome ${index + 1}`} onClick={() => onChangeOutcomes?.((plan.household?.priorities || []).filter((_, slot) => slot !== index))}>Remove</button>}</li>
-      })}</ol>{!outcomesReadOnly && <button type="button" className="today-focus-edit" onClick={() => onChangeOutcomes?.([...(plan.household?.priorities?.length ? plan.household.priorities : [{ id:`outcome-${crypto.randomUUID()}`, title:'', owner:'Family', status:'pending' }]), { id: `outcome-${crypto.randomUUID()}`, title:'', owner:'Family', status:'pending' }])}>Add Outcome</button>}</section>
+
     </>}
     {pillar === 'education' && <PillarBrief number={5} pillar="education" {...education} />}
     {pillar === 'finance' && <TodayFinanceBrief date={plan.date} finance={plan.finance} canViewFinance={canViewFinance} />}
@@ -257,26 +244,12 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
   const visibleChores = householdChores.filter(item=>belongsToViewer({...item,owner:item.occurrence?.coveredBy||item.owner,owners:item.occurrence?.coveredBy?[item.occurrence.coveredBy]:item.owners},currentMember,scope))
   const readModel = buildTodayReadModel({plan:dailyPlan,calendarAppointments:visibleAppointments,calendarHealth,currentMember,householdSignals})
   const [showDecisions, setShowDecisions] = useState(false)
-  const [editingFocus, setEditingFocus] = useState(false)
-  const [focusDraft, setFocusDraft] = useState(dailyPlan.household?.keyFocus || '')
-  const [focusState, setFocusState] = useState('idle')
-  const [focusError, setFocusError] = useState('')
   const closed = Boolean(dailyPlan.recap?.completedAt)
   const generated = dailyPlan.generatedBy === 'brevity-daily-household-plan'
 
   const saveDecision = async (updatedDecision, decisionId, expectedVersion) => {
     if (readOnly) throw new Error('Plans & decisions permission is required to update the shared decision queue.')
     await onReviewDecision?.(decisionId, updatedDecision, expectedVersion)
-  }
-
-  const reviewFocus = async () => {
-    setFocusState('saving'); setFocusError('')
-    try {
-      await onReviewDailyFocus?.(focusDraft, Number(dailyPlan.version || 0))
-      setFocusState('reviewing')
-    } catch (reviewError) {
-      setFocusState('error'); setFocusError(reviewError.message || 'Could not open Today’s Focus review.')
-    }
   }
 
   useEffect(() => {
@@ -293,10 +266,10 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
   return <div className="today-dashboard">
     <WeatherHeader date={dailyPlan.date}/>
     <nav className="today-quick-actions" aria-label="Today planning actions"><button onClick={onGeneratePlan} disabled={readOnly || !canGeneratePlan || generationState === 'generating'}>Review Scheduled Draft</button><button onClick={()=>setShowDecisions(true)}>Review decisions</button>
-      {browsingDate&&<button disabled={readOnly} onClick={onStartTodayAlignment}>Adjust this day’s plan</button>}{!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button><button disabled={readOnly} onClick={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}}>Set Today’s Focus</button></>}
+      {browsingDate&&<button disabled={readOnly} onClick={onStartTodayAlignment}>Adjust this day’s plan</button>}{!browsingDate&&<><button onClick={onStartTodayAlignment}>Edit today’s plan</button><button onClick={onStartAlignment}>Edit tomorrow’s plan</button></>}
     </nav>
     {courseConversation}
-    {browsingDate?<header className="today-hero"><h1>{formatDate(dailyPlan.date)}</h1><p>{dailyPlan.household?.keyFocus || 'No focus saved for this day.'}</p><ul>{(dailyPlan.household?.priorities||[]).map((item,index)=><li key={item.id||index}>{typeof item==='string'?item:item.title}</li>)}</ul></header>:<TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} canViewFinance={canViewFinance} onEditOutcomes={onStartTodayAlignment} onEditFocus={()=>{setFocusDraft(dailyPlan.household?.keyFocus||'');setEditingFocus(true)}} />}
+    <TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} canViewFinance={canViewFinance} planning={browsingDate} />
     <TodayBills date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
     {!browsingDate&&<HouseholdCheckin key={currentMember} currentMember={currentMember}/>}
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
@@ -325,7 +298,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
 
     {showDecisions && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowDecisions(false) }}><section className="today-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="today-decision-dialog-title"><header><div><span>Decision Queue</span><h2 id="today-decision-dialog-title">Decisions needing attention</h2><p>{readModel.counts.decisions} active {readModel.counts.decisions === 1 ? 'decision' : 'decisions'} for {formatDate(dailyPlan.date)}. A determined decision remains visible until its resulting work is complete.</p></div><button type="button" onClick={() => setShowDecisions(false)} aria-label="Close decision list"><i className="ti ti-x" /></button></header><div className="today-decision-dialog-list">{readModel.decisions.map((decision, index) => <DecisionEditor key={decision.id} decision={decision} number={index + 1} expectedVersion={Number(dailyPlan.version || 0)} readOnly={readOnly} onSave={(updated, version) => saveDecision(updated, decision.id, version)} />)}{!readModel.decisions.length && <div className="today-decision-all-clear"><i className="ti ti-circle-check" /><strong>All decisions are resolved.</strong><span>There are no remaining decisions needing attention.</span></div>}</div></section></div>}
 
-    {editingFocus && <div className="today-decision-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditingFocus(false) }}><section className="today-focus-dialog" role="dialog" aria-modal="true" aria-labelledby="today-focus-dialog-title"><header><div><span>Household Management</span><h2 id="today-focus-dialog-title">Set Today’s Focus</h2><p>Choose the single focus the household should keep in view today. Calendar appointments remain visible below, but they will not replace this focus.</p></div><button type="button" onClick={() => setEditingFocus(false)} aria-label="Close Today’s Focus editor"><i className="ti ti-x" /></button></header><label><span>Today’s Focus</span><textarea autoFocus value={focusDraft} maxLength={240} onChange={event => { setFocusDraft(event.target.value); setFocusState('idle'); setFocusError('') }} placeholder="What should the household focus on today?" /></label>{focusError && <p className="today-decision-save-error">{focusError}</p>}<footer><small>{focusState === 'reviewing' ? 'Review and approve this change in Action Mode.' : 'Nothing changes until this exact plan version is approved in Action Mode.'}</small><div><button type="button" onClick={() => setEditingFocus(false)}>Cancel</button><button type="button" className="primary" onClick={reviewFocus} disabled={focusState === 'saving' || !focusDraft.trim()}><i className="ti ti-shield-check" /> {focusState === 'saving' ? 'Opening review…' : 'Review focus'}</button></div></footer></section></div>}
+
 
 
 

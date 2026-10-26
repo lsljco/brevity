@@ -37,7 +37,7 @@ test('Today Pillar 4 names calendar commitments and synchronized Household Opera
   assert.match(today,/SHARED_STATE_EVENT/)
   assert.match(today,/householdChores=\{householdChores\}/)
   assert.ok(dashboard.indexOf('<TodayHouseholdChores') < dashboard.indexOf('<TodayCalendarAgenda'),'today’s chores should appear before the calendar agenda')
-  assert.match(dashboard,/Set Today’s Focus/)
+  assert.doesNotMatch(dashboard,/Set Today’s Focus|No focus has been set for this day/)
   assert.match(today,/dailyFocusUpdateOperation/)
 })
 
