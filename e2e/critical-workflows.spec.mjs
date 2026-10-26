@@ -3282,7 +3282,7 @@ test('sermon activation refreshes an open tomorrow plan and clears stale artifac
     requested=route.request().postDataJSON()
     return route.fulfill({json:{document:{id:'new-document',activeVersion:3,files:{}}}})
   })
-  await page.getByRole('button',{name:'Create teaching documents only',exact:true}).click()
+  await page.getByRole('button',{name:/Create teaching documents only$/}).click()
   await expect.poll(()=>requested?.activeVersion).toBe(3)
   expect(requested.sourceHash).toBe('b'.repeat(64))
 })
