@@ -69,6 +69,7 @@ export const ACTION_TYPES = {
   'project.delete': 'projects',
   'calendar.create': 'calendar',
   'calendar.update': 'calendar',
+  'calendar.move': 'calendar',
   'calendar.delete': 'calendar',
   'transaction.categorize': 'finance',
   'transaction.allocate': 'finance',
@@ -150,6 +151,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'calendar.create': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.delete': [],
+  'calendar.move': ['calendarId','calendarName'],
   'transaction.categorize': ['category'],
   'transaction.allocate': ['budgetLineId','category'],
   'transaction.update': ['name', 'category'],
@@ -189,7 +191,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'nutrition.meal.remove': ['entryId', 'reason'],
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
-const STRING_FIELDS = new Set(['budgetLineId', 'verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
+const STRING_FIELDS = new Set(['calendarId','calendarName','budgetLineId', 'verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
 const BOOLEAN_FIELDS = new Set(['cashAllowance', 'allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'recurrenceEndDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
@@ -640,6 +642,7 @@ export function normalizeActionOperation(input = {}) {
   if (type.startsWith('calendar.') && payload.recurrenceFrequency && !['none','daily','weekdays','weekly','monthly','yearly'].includes(payload.recurrenceFrequency)) throw new Error('The calendar recurrence frequency is not supported.')
   if (type.startsWith('calendar.') && payload.recurrenceFrequency === 'weekly' && payload.recurrenceDays && !payload.recurrenceDays.length) throw new Error('A weekly calendar recurrence requires at least one weekday.')
   if (type.startsWith('calendar.') && [payload.alert1Minutes,payload.alert2Minutes].some(value=>value!==undefined&&(value < -1 || value > 525600))) throw new Error('Calendar notifications must be disabled or between the event time and one year before it.')
+  if(type==='calendar.move'&&(!operation.targetId||!/^apple-[a-f0-9]{64}$/.test(payload.calendarId||'')||!payload.calendarName))throw Error('Choose an exact event and connected calendar.')
   if (type === 'transaction.allocate' && (!operation.targetId || !payload.budgetLineId || !payload.category)) throw new Error('Choose an exact bank transaction and budget category or line.')
   if (type === 'transaction.categorize' && !payload.category) throw new Error('A transaction category is required.')
   if (type === 'transaction.update' && !operation.targetId) throw new Error('A transaction update requires the exact bank transaction id.')
@@ -765,6 +768,7 @@ export function permissionForOperation({ operation, member, role, permissions, c
   if(operation.type==='orchestration.pause.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Only the household administrator may pause household assistance.'}
   if(operation.type==='orchestration.case.update')return role==='admin'||permissions?.planning?{allowed:true}:{allowed:false,reason:'Planning permission is required for reviewed assistance records.'}
   if(operation.type==='apple.sources.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Apple calendar connections require administrator review.'}
+  if(operation.type==='calendar.move')return role==='admin'&&currentRecord?.calendarCanMove?{allowed:true}:{allowed:false,reason:'Moving connected calendar events requires administrator access and Apple move permissions.'}
   if(operation.type.startsWith('calendar.')&&currentRecord?.sourceReadOnly)return {allowed:false,reason:'Edit this connected calendar in Apple Calendar.'}
   if(operation.type==='module.configuration.update')return role==='admin'?{allowed:true}:{allowed:false,reason:'Household module configuration requires administrator review.'}
   if(operation.type.startsWith('activity.')){

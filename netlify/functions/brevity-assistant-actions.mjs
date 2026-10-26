@@ -76,7 +76,7 @@ const sameCalendarValue=(current,planned)=>calendarFields.every(field=>{
   return JSON.stringify(current?.[field]??(Array.isArray(planned[field])?[]:''))===JSON.stringify(planned[field])
 })
 const calendarCreateSourceId=operation=>operation.projectSource ? `project-${operation.projectSource.id}` : `assistant-${operation.targetId||operation.id}`
-const sourceManagedCalendarEvent=event=>/^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(String(event?.sourceId||''))
+const sourceManagedCalendarEvent=event=>/^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(String(event?.sourceId||event?.originalSourceId||''))
 const calendarCreateCandidate=(operation,member)=>{
   const payload=operation.payload||{},optional=['endDate','endTime','location','url','recurrenceFrequency','recurrenceInterval','recurrenceDays','recurrenceEndDate','alert1Minutes','alert2Minutes']
   return{sourceId:calendarCreateSourceId(operation),title:payload.title||operation.description,date:payload.date||operation.targetDate,time:payload.time||'',allDay:payload.allDay!==false,pillar:payload.owner==='Church Triumphant'?'ministry':'household',owner:payload.owner||member,participants:payload.participants||[],notes:payload.notes||'',priority:payload.priority==='high',...Object.fromEntries(optional.filter(field=>field in payload).map(field=>[field,payload[field]]))}
@@ -117,9 +117,9 @@ export async function prepareProjectCalendarProposal({input,session,events,repos
   return proposal
 }
 
-export async function prepareCalendarProposal({input,session,permissions,events,repository,now=new Date(),id}) {
+export async function prepareCalendarProposal({input,session,permissions,events,destinations=[],repository,now=new Date(),id}) {
   const rawOperation=input?.operation
-  if(!rawOperation||!['calendar.create','calendar.update'].includes(rawOperation.type)){
+  if(!rawOperation||!['calendar.create','calendar.update','calendar.move'].includes(rawOperation.type)){
     throw Object.assign(new Error('Direct Family Calendar review supports creating or updating a Brevity calendar event.'),{code:'INVALID_ACTION'})
   }
   let proposal
@@ -128,8 +128,8 @@ export async function prepareCalendarProposal({input,session,permissions,events,
   }catch(error){throw Object.assign(error,{code:'INVALID_ACTION'})}
   const operations=[]
   for(const operation of proposal.operations){
-    const current=operation.type==='calendar.update'?calendarRecord(events,operation.targetId):null
-    if(operation.type==='calendar.update'){
+    const current=operation.type==='calendar.move'?events.find(item=>item.id===operation.targetId):operation.type!=='calendar.create'?calendarRecord(events,operation.targetId):null
+    if(operation.type!=='calendar.create'){
       if(!current)throw Object.assign(new Error('That Family Calendar event no longer exists. Refresh the calendar before reviewing this change.'),{code:'VERSION_CONFLICT'})
       if(current.recurring&&!current.recurrenceEditable)throw Object.assign(new Error('Brevity could not safely load this recurring Apple Calendar series. Sync again or edit the series in Apple Calendar.'),{code:'INVALID_ACTION'})
       if(sourceManagedCalendarEvent(current))throw Object.assign(new Error('This event is managed by another Brevity workflow. Edit it in its source so the calendar remains reconciled.'),{code:'FORBIDDEN'})
@@ -137,6 +137,7 @@ export async function prepareCalendarProposal({input,session,permissions,events,
       const currentToken=eventToken(current)
       if(!reviewedToken||!currentToken||reviewedToken!==currentToken)throw Object.assign(new Error('This calendar event changed after you opened it, or Apple did not provide a safe version marker. Refresh and review the newer version before trying again.'),{code:'VERSION_CONFLICT'})
     }
+    if(operation.type==='calendar.move'){const destination=destinations.find(c=>c.id===operation.payload.calendarId);if(!destination||destination.name!==operation.payload.calendarName||destination.id===current.appleCalendarId)throw Error('Refresh and choose a different writable connected calendar.')}
     const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:current})
     if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
     if(operation.type==='calendar.create'){
@@ -238,7 +239,7 @@ export async function prepareRepeatMealProposal({input,session,permissions,repos
   return proposal
 }
 
-const DIRECT_REVIEW_TYPES=new Set(['education.hub.create','education.hub.update','health.care.create','health.care.update',...GOVERNANCE_TYPES,'orchestration.case.update','orchestration.pause.update','meal.schedule.update','apple.sources.update',...VENDOR_TYPES,'meal.recipe.update','nutrition.meal.update','nutrition.meal.remove','nutrition.targets.update','household.intelligence.config.update','debt.create','debt.update','debt.delete','debt.transaction.apply','decision.create','decision.update','assignment.create','assignment.update','plan.overview.update','plan.pillar.update','plan.alignment.update','plan.recap.update','household.schedule.block.create','household.schedule.block.update','household.schedule.block.delete','household.schedule.invitation.update','household.schedule.routine.create','household.schedule.routine.update','household.schedule.routine.delete','household.schedule.occurrence.update','household.maintenance.coverage.update','household.maintenance.exception.update','household.maintenance.completion.update','household.maintenance.chore.create','household.maintenance.chore.update','household.maintenance.chore.delete','household.inventory.item.create','household.inventory.quantity.update','household.inventory.waste.create','project.review','project.create','project.update','project.delete','transaction.update','transaction.rule.create','transaction.rule.delete','meeting.action.create','meeting.action.update','meeting.correction.create','meeting.correction.update','meeting.session.create','meeting.packet.edit','meeting.workspace.update','meeting.history.update','budget.update','forecast.update','finance.account.link','recurring.create','recurring.update','recurring.delete'])
+const DIRECT_REVIEW_TYPES=new Set(['transaction.allocate','transaction.categorize','education.hub.create','education.hub.update','health.care.create','health.care.update',...GOVERNANCE_TYPES,'orchestration.case.update','orchestration.pause.update','meal.schedule.update','apple.sources.update',...VENDOR_TYPES,'meal.recipe.update','nutrition.meal.update','nutrition.meal.remove','nutrition.targets.update','household.intelligence.config.update','debt.create','debt.update','debt.delete','debt.transaction.apply','decision.create','decision.update','assignment.create','assignment.update','plan.overview.update','plan.pillar.update','plan.alignment.update','plan.recap.update','household.schedule.block.create','household.schedule.block.update','household.schedule.block.delete','household.schedule.invitation.update','household.schedule.routine.create','household.schedule.routine.update','household.schedule.routine.delete','household.schedule.occurrence.update','household.maintenance.coverage.update','household.maintenance.exception.update','household.maintenance.completion.update','household.maintenance.chore.create','household.maintenance.chore.update','household.maintenance.chore.delete','household.inventory.item.create','household.inventory.quantity.update','household.inventory.waste.create','project.review','project.create','project.update','project.delete','transaction.update','transaction.rule.create','transaction.rule.delete','meeting.action.create','meeting.action.update','meeting.correction.create','meeting.correction.update','meeting.session.create','meeting.packet.edit','meeting.workspace.update','meeting.history.update','budget.update','forecast.update','finance.account.link','recurring.create','recurring.update','recurring.delete'])
 export async function prepareDirectProposal({input,session,permissions,repository,resources,now=new Date(),id}) {
   const requested=Array.isArray(input?.operations)?input.operations:input?.operation?[input.operation]:[]
   if(!requested.length||requested.some(operation=>!DIRECT_REVIEW_TYPES.has(operation?.type))){
@@ -276,7 +277,7 @@ export async function prepareCalendarOperations({event,operations,session,permis
   const prepared=[]
   for(const operation of selected){
     if(operation.projectSource)await assertProjectPublicationSource({source:operation.projectSource,session,resources})
-    const current=(remote.events||[]).find(item=>[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
+    const current=(remote.events||[]).find(item=>operation.type==='calendar.move'?item.id===operation.targetId:[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
     if(current?.sourceId?.startsWith('project-')&&!operation.projectSource)throw Object.assign(new Error('Review Apple project publications from Projects.'),{code:'FORBIDDEN'})
     const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:current})
     if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
@@ -287,6 +288,10 @@ export async function prepareCalendarOperations({event,operations,session,permis
       const duplicate=calendarRecord(remote.events,candidate.sourceId)
       if(duplicate)throw Object.assign(new Error('A Family Calendar event already uses this Action Mode identifier. Refresh before trying again.'),{code:'VERSION_CONFLICT'})
       prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:null,after:candidate})
+    }else if(operation.type==='calendar.move'){
+      const destination=remote.destinations?.find(c=>c.id===operation.payload.calendarId)
+      if(!destination||destination.name!==operation.payload.calendarName||destination.id===current.appleCalendarId||sourceManagedCalendarEvent(current)||sourceManagedCalendarEvent({...current,sourceId:current.originalSourceId}))throw Error('This event or destination calendar is no longer available for the reviewed move.')
+      prepared.push({resource:'calendar:apple-family',operationType:operation.type,before:current,after:{...current,_moveToCalendarId:destination.id,calendarName:destination.name}})
     }else if(operation.type==='calendar.update'){
       const candidate={...current,...operation.payload,...(operation.payload.owner==='Church Triumphant'?{pillar:'ministry'}:{}),...(operation.projectSource?{priority:operation.payload.priority==='high'}:{}),id:current.uid||current.id,href:current.href,etag:current.etag}
       prepared.push({projectSource:operation.projectSource,resource:'calendar:apple-family',operationType:operation.type,before:current,after:candidate})
@@ -315,6 +320,11 @@ export async function commitPreparedCalendarOperations({event,prepared=[],calend
       await beforeWrite(change)
       const created=await calendarRequestFn(event,'POST',candidate)
       changes.push({...change,after:{...candidate,...created}});continue
+    }
+    if(change.operationType==='calendar.move'){
+      await beforeWrite(change)
+      const moved=await calendarRequestFn(event,'POST',{...change.before,_moveToCalendarId:change.after._moveToCalendarId,actionId:mutationId})
+      changes.push({...change,after:moved});continue
     }
     if(change.operationType==='calendar.update'){
       if(!current)throw Object.assign(new Error('The Family Calendar event disappeared while Action Mode was recovering.'),{code:'VERSION_CONFLICT'})
@@ -536,7 +546,7 @@ export async function undoAudit({event,audit,session,permissions,resources,calen
     remoteCalendar=remote.events||[]
     for(const change of calendarChanges){
       const reference=change.after||change.before
-      const current=calendarRecord(remoteCalendar,reference?.id||reference?.uid||reference?.sourceId)
+      const current=change.operationType==='calendar.move'?remoteCalendar.find(item=>item.href===reference?.href&&item.appleCalendarId===reference?.appleCalendarId):calendarRecord(remoteCalendar,reference?.id||reference?.uid||reference?.sourceId)
       if(change.before===null&&change.after){
         if(!current||!eventToken(change.after)||eventToken(current)!==eventToken(change.after))throw Object.assign(new Error('The created Family Calendar event changed after this action, so Undo was stopped to protect it.'),{code:'VERSION_CONFLICT'})
       }else if(change.before&&change.after){
@@ -558,6 +568,7 @@ export async function undoAudit({event,audit,session,permissions,resources,calen
     if(change.resource==='calendar:apple-family'){
       const current=preflight.get(change)
       if(change.before===null&&change.after)await calendarRequestFn(event,'DELETE',{...current,...(mutationId?{actionId:mutationId}:{})})
+      else if(change.operationType==='calendar.move')await calendarRequestFn(event,'POST',{...current,_moveToCalendarId:change.before.appleCalendarId,actionId:mutationId})
       else if(change.before&&change.after)await calendarRequestFn(event,'PUT',{...change.before,id:change.before.uid||change.before.id,href:current.href,etag:current.etag,...(mutationId?{actionId:mutationId}:{})})
       else if(change.before&&!change.after)await calendarRequestFn(event,'POST',{...change.before,_restoreDeleted:true,...(mutationId?{actionId:mutationId}:{})})
       restored.push(change.resource);continue
@@ -576,7 +587,13 @@ async function detectUndoRecovery({event,audit,resources,calendarRequestFn,mutat
   for(const change of audit.changes||[]){
     if(change.resource==='calendar:apple-family'){
       const reference=change.after||change.before
-      const current=calendarRecord(remote,reference?.id||reference?.uid||reference?.sourceId)
+      const current=change.operationType==='calendar.move'?remote.find(item=>item.href===reference?.href&&item.appleCalendarId===reference?.appleCalendarId):calendarRecord(remote,reference?.id||reference?.uid||reference?.sourceId)
+      if(change.operationType==='calendar.move'){
+        if(current&&eventToken(current)===eventToken(change.after))pending.push(change)
+        else if(!current&&mutationId){await calendarRequestFn(event,'POST',{...change.after,_moveToCalendarId:change.before.appleCalendarId,actionId:mutationId});restored.push(change.resource)}
+        else throw Object.assign(Error('The moved event changed after this action. Undo stopped.'),{code:'VERSION_CONFLICT'})
+        continue
+      }
       if(change.before===null&&change.after){
         if(current&&eventToken(current)===eventToken(change.after))pending.push(change)
         else if(!current&&mutationId){await calendarRequestFn(event,'DELETE',{...change.after,actionId:mutationId});restored.push(change.resource)}
@@ -693,7 +710,7 @@ const handler=async event=>{
     if(action==='prepare-calendar'){
       const matrix=await repository.getPermissions()
       const remote=await calendarRequest(event,'GET')
-      const proposal=await prepareCalendarProposal({input:body,session,permissions:matrix[session.member],events:remote.events||[],repository})
+      const proposal=await prepareCalendarProposal({input:body,session,permissions:matrix[session.member],events:remote.events||[],destinations:remote.destinations||[],repository})
       return json(200,{proposal})
     }
     if(action==='prepare-meal'){

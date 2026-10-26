@@ -27,7 +27,7 @@ export function isBrevityManagedAppleEvent(event) {
 }
 
 export function isSourceManagedCalendarEvent(event) {
-  const sourceId = clean(event?.sourceId)
+  const sourceId = clean(event?.sourceId || event?.originalSourceId)
   return /^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(sourceId)
 }
 
@@ -97,4 +97,10 @@ export function calendarPermissionForActionMode(actionMode) {
   if (role === 'admin') return { allowed:true, member, reason:'' }
   if (domains?.calendar) return { allowed:true, member, reason:'' }
   return { allowed:false, member, reason:'Your household permissions do not allow Family Calendar changes.' }
+}
+
+export function canMoveAppleCalendarEvent(event, access = {}) {
+  return Boolean(access.allowed && access.role === 'admin' && isAppleCalendarEvent(event)
+    && event.calendarCanMove && event.appleCalendarId && calendarEventVersion(event)
+    && !isSourceManagedCalendarEvent(event) && (!event.recurring || event.recurrenceEditable))
 }

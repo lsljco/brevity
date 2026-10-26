@@ -79,3 +79,8 @@
 .apple-calendar-sources > p { margin: 12px 22px; line-height: 1.5; color: rgba(247,243,234,.72); }
 .apple-calendar-sources fieldset > label { display: grid; width: 100%; }
 .apple-calendar-sources small { overflow-wrap: anywhere; }
+
+.family-calendar-move { padding: 14px; border: 1px solid rgba(197,164,109,.3); border-radius: 12px; }
+.family-calendar-move p { color: rgba(247,243,234,.65); font-size: 13px; line-height: 1.5; }
+.family-calendar-move button { min-height: 44px; padding: 8px 14px; border: 1px solid rgba(197,164,109,.4); border-radius: 8px; color: #c5a46d; background: rgba(197,164,109,.08); cursor: pointer; }
+.family-calendar-move button:disabled { opacity: .45; cursor: default; }
