@@ -124,9 +124,10 @@ async function syncItemTransactions({
         const data = response?.data || {}
         const nextCursor = String(data.next_cursor || '')
         hasMore = Boolean(data.has_more)
-        // Keep the final completed page's balances with this exact delta.
-        // A separate live balance request may reflect a different bank update.
-        accounts = Array.isArray(data.accounts) ? data.accounts : []
+        // Accounts only accompany their transactions on each page. Retain every
+        // account in this completed delta, using its latest page observation.
+        // A pagination mutation discards this entire map with the delta.
+        accounts = [...new Map([...accounts, ...(Array.isArray(data.accounts) ? data.accounts : [])].map(account => [account.account_id, account])).values()]
         updateStatus = data.transactions_update_status || ''
 
         if (!nextCursor || (hasMore && nextCursor === requestCursor)) {

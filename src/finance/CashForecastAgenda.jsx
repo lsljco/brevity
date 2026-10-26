@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { fmtMoney } from './projection.js'
-import { bankActivityPreview, bankBalanceMovement, cashForecastSourceSeverity } from './calendarSemantics.js'
+import { bankBalanceMovement, cashForecastSourceSeverity } from './calendarSemantics.js'
 import { isTransferTransaction } from './reportingData.js'
 import { transactionDescription } from './transactionList.js'
 
@@ -63,7 +63,7 @@ export default function CashForecastAgenda({
         balanceIsReconstructed:reconstructedBalance !== undefined,
       }
     })
-    .filter(day => day.key === todayKey || day.key === selectedDay || day.balanceIsRecorded || day.balanceIsReconstructed || day.planned.length > 0 || day.bank.length > 0)
+    .filter(day => Number.isFinite(day.balance) || day.key === todayKey || day.key === selectedDay || day.balanceIsRecorded || day.balanceIsReconstructed || day.planned.length > 0 || day.bank.length > 0)
 
   const includesToday = days.some(day => day.key === todayKey)
   const earlierCount = includesToday ? days.filter(day => day.key < todayKey).length : 0
@@ -99,9 +99,9 @@ export default function CashForecastAgenda({
     <div ref={agendaRef} className="finance-calendar-mobile-agenda" aria-label={`${monthName} cash forecast agenda`}>
       {earlierCount > 0 && <div className="finance-calendar-earlier"><button type="button" aria-expanded={showEarlier} onClick={() => setShowEarlier(value => !value)}>{showEarlier ? 'Hide' : 'Show'} earlier days ({earlierCount})</button></div>}
       {visibleDays.length > 0 ? visibleDays.map(day => {
-        const plannedPreview = day.planned.slice(0, 3).map(tx => ({ label:tx.vendorName && tx.vendorName !== 'Unassigned' ? `${tx.vendorName} · ${transactionDescription(tx)}` : transactionDescription(tx), amount:Number(tx.amount || 0), direction:tx.type }))
+        const plannedPreview = day.planned.map(tx => ({ label:tx.vendorName && tx.vendorName !== 'Unassigned' ? `${tx.vendorName} · ${transactionDescription(tx)}` : transactionDescription(tx), amount:Number(tx.amount || 0), direction:tx.type }))
         const namedBankTransactions = day.bank.filter(transaction => transactionDescription(transaction))
-        const bankPreview = (vendorOrder?namedBankTransactions.slice(0,2):bankActivityPreview(namedBankTransactions)).map(transaction => {
+        const bankPreview = namedBankTransactions.map(transaction => {
           const label = transactionDescription(transaction)
           const tags = [transaction?.pending ? 'Pending' : 'Posted', isTransferTransaction(transaction) ? 'Transfer' : ''].filter(Boolean)
           return label ? `${tags.join(' · ')} · ${label}` : ''
@@ -146,8 +146,8 @@ export default function CashForecastAgenda({
             {day.balance !== undefined && (
               <span className="finance-calendar-agenda-values" title={`Balance anchor: ${balanceSource}`}>
                 {day.currentBalance !== undefined && <small>{balanceVerifiedLive ? 'Current bank balance' : 'Last saved bank balance'}: {fmtMoney(day.currentBalance)}</small>}
-                <small>{balanceKind}</small>
-                {onEditBalance && day.key <= todayKey ? <button type="button" className="finance-ending-balance-edit" aria-label={`Edit ending balance for ${day.key}`} onClick={event=>{event.stopPropagation();onEditBalance(day.key)}}>{fmtMoney(day.balance)}</button> : <strong>{fmtMoney(day.balance)}</strong>}
+                <small title={balanceKind}>Ending balance</small>
+                {onEditBalance ? <button type="button" className="finance-ending-balance-edit" aria-label={`Edit ending balance for ${day.key}`} onClick={event=>{event.stopPropagation();onEditBalance(day.key)}}>{fmtMoney(day.balance)}</button> : <strong>{fmtMoney(day.balance)}</strong>}
               </span>
             )}
             <span className="finance-calendar-agenda-activity">

@@ -30,7 +30,7 @@ export default function RecoveryWorkspace({financeData={accounts:[],transactions
     const scope=cashForecastScope(financeData.accounts,financeData.transactions)
     const today=getHouseholdDateKey()
     const days=Math.max(0,Math.ceil((Date.parse(`${draft.end}T12:00:00Z`)-Date.parse(`${today}T12:00:00Z`))/86400000))+2
-    const forecast=buildOutstandingCashForecast(scope.accounts,scope.transactions,actuals,{today,days:Math.min(2200,Number.isFinite(days)?days:500),pastDays:0,reconcile:true})
+    const forecast=buildOutstandingCashForecast(scope.accounts,scope.transactions,actuals,{today,days:Math.min(2200,Number.isFinite(days)?days:500),pastDays:0,reconcile:true,projectedClosingBalances:financeData.projectedClosingBalances})
     return {forecast,debts,scope,today,anchor:forecast.get(today)}
   },[financeData,actuals,debts,draft.end])
   const calculation=useMemo(()=>{try{

@@ -88,6 +88,8 @@ export const ACTION_TYPES = {
   'finance.reserve.set': 'finance',
   'finance.statement.import': 'finance',
   'finance.spending.review': 'finance',
+  'finance.forecast-close.set': 'finance',
+  'finance.forecast-close.delete': 'finance',
   'finance.close.set': 'finance',
   'finance.close.delete': 'finance',
   'recurring.create': 'finance',
@@ -164,6 +166,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'finance.reserve.set': ['amount'],
   'finance.statement.import': ['configJson'],
   'finance.spending.review': ['status','notes'],
+  'finance.forecast-close.set': ['amount','notes'],
+  'finance.forecast-close.delete': [],
   'finance.close.set': ['amount','notes'],
   'finance.close.delete': [],
   'recurring.create': ['vendorId', 'title', 'notes', 'category', 'amount', 'frequency', 'date', 'endDate', 'transactionType', 'accountId', 'transferAccountId'],
@@ -254,7 +258,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:lslj_tx_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
-  if (operation.type === 'finance.account.link' || (operation.type.startsWith('finance.close.') || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return 'shared:lslj_finance_v9'
+  if (operation.type === 'finance.account.link' || ((operation.type.startsWith('finance.close.') || operation.type.startsWith('finance.forecast-close.')) || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return 'shared:lslj_finance_v9'
   if (operation.type.startsWith('recurring.')) return 'shared:brevity_recurring_plan_v1'
   if (operation.domain === 'calendar') return 'calendar:apple-family'
   return operation.domain
@@ -668,7 +672,7 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'forecast.update' && !operation.targetId) throw new Error('A forecast update requires the exact scenario id, or model for the shared planning expense.')
   if(type === 'finance.reserve.set' && (!Number.isFinite(payload.amount)||payload.amount<0))throw new Error('Enter a non-negative operating reserve minimum.')
   if (type === 'finance.spending.review' && (!operation.targetId || !['reviewed','reduce','unresolved'].includes(payload.status))) throw new Error('A spending review needs a transaction and a supported decision.')
-  if (type.startsWith('finance.close.') && (!operation.targetId || !operation.targetDate || (type === 'finance.close.set' && !Number.isFinite(payload.amount)))) throw new Error('An ending balance requires an exact account, date and numeric amount.')
+  if ((type.startsWith('finance.close.') || type.startsWith('finance.forecast-close.')) && (!operation.targetId || !operation.targetDate || (type.endsWith('.set') && !Number.isFinite(payload.amount)))) throw new Error('An ending balance requires an exact account, date and numeric amount.')
   if (type === 'finance.account.link' && (!operation.targetId || !payload.plaidAccountId)) throw new Error('A bank-source link requires the exact Brevity account and returned bank account ids.')
   if (type === 'recurring.create') {
     const required = ['title', 'amount', 'frequency', 'transactionType', 'accountId']
