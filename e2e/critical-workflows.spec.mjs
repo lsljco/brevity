@@ -3525,6 +3525,16 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   await toolbar.getByLabel('Export format').selectOption('csv')
   const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
   expect(download.suggestedFilename()).toMatch(/\.csv$/)
+  if(screen==='Reporting')for(const name of ['Overview','Profit & Loss','Cash Flow','Balance Sheet','Budget vs Actual','Vendor Spend']){
+   await page.getByRole('tab',{name,exact:true}).click()
+   const statement=page.locator('.finance-export:visible').last();await statement.getByLabel('Export format').selectOption('csv')
+   const next=page.waitForEvent('download');await statement.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toMatch(/\.csv$/)
+  }
+  if(screen==='Budget'){
+   await page.getByRole('button',{name:'Plan Grid →',exact:true}).click()
+   const grid=page.locator('.finance-export:visible').first();await grid.getByLabel('Export format').selectOption('csv')
+   const next=page.waitForEvent('download');await grid.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toContain('Budget-Plan')
+  }
   await expect(page.getByRole('dialog',{name:'Ask Brevity',exact:true})).toHaveCount(0)
  }
 })

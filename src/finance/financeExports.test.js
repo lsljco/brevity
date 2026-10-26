@@ -47,3 +47,9 @@ test('nested report tables retain amounts and source labels; scheduled details a
  assert.ok(section.rows[0].includes('Checking'))
  assert.ok(!section.rows[0].includes('Posted'))
 })
+
+test('scheduled export preserves per-occurrence amounts and the filtered period total',()=>{
+ const s=transactionSection([{id:'weekly',amount:80,rangeAmount:240,occurrenceCount:3}],[],{scheduled:true})
+ assert.equal(s.rows[0][s.columns.findIndex(c=>c.key==='amount')],80)
+ assert.equal(s.rows[0][s.columns.findIndex(c=>c.key==='selectedPeriodAmount')],240)
+})
