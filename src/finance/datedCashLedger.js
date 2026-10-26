@@ -18,7 +18,28 @@ export function buildDatedCashLedger({ accounts = [], transactions = [], balance
     const rows = bankId ? posted.filter(row => row.accountId === bankId) : []
     const movement = new Map()
     rows.forEach(row => movement.set(row.date, (movement.get(row.date) || 0) - cents(row.amount)))
-    const anchors = bankId ? balanceHistory.filter(row => validDate(row.date) && row.date <= today && Number.isFinite(row.balances?.[bankId])).map(row => ({ date:row.date, amount:cents(row.balances[bankId]), kind:'bank', capturedAt:row.accountCapturedAt?.[bankId] || row.capturedAt || '' })) : []
+    const paired = bankId ? balanceHistory.filter(row => row.kind === 'transaction-sync' && row.historyComplete && Number.isFinite(row.balances?.[bankId]) && Number.isFinite(row.postedTotals?.[bankId])).sort((a,b)=>a.capturedAt.localeCompare(b.capturedAt)).at(-1) : null
+    if (paired) {
+      // The balance belongs to the entire retained posted ledger at this sync,
+      // not to midnight on the day we downloaded it. Include all movements on
+      // the requested posting date, even when the observation was retrieved
+      // the following morning or several days later.
+      const statementTotal = rows.filter(row=>row.source==='statement').reduce((sum,row)=>sum-cents(row.amount),0)
+      const baseline = cents(paired.balances[bankId]) - paired.postedTotals[bankId] - statementTotal
+      const first = rows.map(row=>row.date).sort()[0] || paired.date
+      const balances = {}
+      let total = 0, correction = 0
+      for (let date = first; date <= today; date = nextDay(date)) {
+        total += movement.get(date) || 0
+        const recorded = closingRecords[account.id]?.[date]
+        if (recorded?.source === 'user-recorded' && Number.isFinite(recorded.amount)) correction = cents(recorded.amount) - baseline - total
+        if (date < today) balances[date] = (baseline + total + correction) / 100
+      }
+      sources.push({id:account.id,name:account.name,anchorDate:paired.date,anchorKind:'transaction-sync',postedCount:rows.length,firstActivity:first,reconciliation:paired.reconciliation?.[bankId]})
+      // Historical corrections do not replace today's live bank balance.
+      return {balances,forecastAccount:account}
+    }
+    const anchors = bankId ? balanceHistory.filter(row => row.kind !== 'transaction-sync' && validDate(row.date) && row.date <= today && Number.isFinite(row.balances?.[bankId])).map(row => ({ date:row.date, amount:cents(row.balances[bankId]), kind:'bank', capturedAt:row.accountCapturedAt?.[bankId] || row.capturedAt || '' })) : []
     // Migration fallback uses the saved successful source date, never today's
     // date or the timestamp of a failed refresh attempt.
     if (!anchors.length && bankId && !balanceHistory.length && validDate(legacyAnchorDate) && legacyAnchorDate <= today && Number.isFinite(account.plaidCurrentBalance)) anchors.push({date:legacyAnchorDate,amount:cents(account.plaidCurrentBalance),kind:'bank',capturedAt:''})

@@ -1,4 +1,4 @@
-const { appendBalanceSnapshot } = require('../lib/finance-balance-history.cjs')
+const { appendBalanceSnapshot, appendTransactionBalanceSnapshots } = require('../lib/finance-balance-history.cjs')
 const { getStore } = require('../lib/scoped-store.cjs')
 const { isDeepStrictEqual } = require('node:util')
 const { readSession } = require('../lib/household-auth.cjs')
@@ -423,10 +423,13 @@ async function writePlaidSourceRecord({
   // snapshot does not need to manufacture a new household-state version.
   let record
   let unchanged = false
+  const transactionBalanceHistory = key === 'plaid_actuals_cache'
+    ? appendTransactionBalanceSnapshots(existing?.plaidBalanceHistory, verifiedBatches, parsedCandidate.value) : null
+  const balanceEvidenceUnchanged = !transactionBalanceHistory || isDeepStrictEqual(transactionBalanceHistory, existing?.plaidBalanceHistory || [])
   const watermarkAlreadyApplied = key !== 'lslj_finance_v9'
     || (existing?.plaidAccountReceipt?.issuedAt === accountReceiptWatermark?.issuedAt
       && existing?.plaidAccountReceipt?.receiptId === accountReceiptWatermark?.receiptId)
-  if (existing && existing.value === body.value && String(existing.hash || '') === calculatedHash && watermarkAlreadyApplied) {
+  if (existing && existing.value === body.value && String(existing.hash || '') === calculatedHash && watermarkAlreadyApplied && balanceEvidenceUnchanged) {
     record = { ...existing, version:existingVersion }
     unchanged = true
   } else {
@@ -438,6 +441,7 @@ async function writePlaidSourceRecord({
       updatedAt:now().toISOString(),
       updatedBy:session.member,
       source:'plaid',
+      ...(transactionBalanceHistory ? {plaidBalanceHistory:transactionBalanceHistory} : {}),
       ...(accountReceiptWatermark ? { plaidAccountReceipt:accountReceiptWatermark, plaidBalanceHistory:appendBalanceSnapshot(existing?.plaidBalanceHistory, balanceObservationAccounts, accountReceiptWatermark.sourceUpdatedAt) } : {}),
     }
     const writeOptions = existing ? { onlyIfMatch:entry.etag } : { onlyIfNew:true }

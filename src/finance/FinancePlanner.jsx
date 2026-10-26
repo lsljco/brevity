@@ -16,6 +16,7 @@ import {
 } from 'chart.js'
 import { scopedClosingBalances } from './dailyClosingBalances.js'
 const DailyClosingBalanceEditor = lazy(() => import('./DailyClosingBalanceEditor.jsx'))
+const DailyClosingBalanceDialog = lazy(() => import('./DailyClosingBalanceEditor.jsx').then(module=>({default:module.DailyClosingBalanceDialog})))
 const PlaidConnect = lazy(() => import('./PlaidConnect.jsx'))
 import TransactionRuleModal from './TransactionRuleModal.jsx'
 import { buildProjection, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
@@ -1630,7 +1631,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     const sourceAt = meta.plaidAccountReceipt?.sourceUpdatedAt || meta.plaidAccountReceipt?.issuedAt
     const legacyAt = sourceAt ? new Date(sourceAt) : new Date(localStorage.getItem('plaid_synced_at') || '')
     return buildDatedCashLedger({accounts:forecastScope.accounts, transactions:cashForecastPostedActuals,
-      balanceHistory:meta.plaidBalanceHistory || [], closingRecords:data.dailyClosingBalances || {},
+      balanceHistory:[...(meta.plaidBalanceHistory || []), ...(loadSavedValue('brevity_shared_state_meta_v1', {})?.plaid_actuals_cache?.plaidBalanceHistory || [])], closingRecords:data.dailyClosingBalances || {},
       today:getHouseholdDateKey(), legacyAnchorDate:Number.isFinite(legacyAt.getTime()) ? getHouseholdDateKey(legacyAt) : ''})
   }, [cashForecastPostedActuals, forecastScope.accounts, data.dailyClosingBalances, balanceDataStatus, actualsFreshness])
   const historicalBals = cashLedger.balances
@@ -4463,6 +4464,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
   const forecastRef=useRef(null)
   const closeDay=()=>{const day=forecastRef.current?.querySelector('.cal-cell.is-selected, .finance-calendar-mobile-agenda > .is-selected');setSelDay(null);day?.focus({preventScroll:true})}
   const [selTx,       setSelTx]      = useState(null)   // tx open in edit form
+  const [balanceEditDate,setBalanceEditDate] = useState(null)
   const [dragTx,      setDragTx]     = useState(null)   // { tx, fromDate } being dragged
   const [dragOver,    setDragOver]   = useState(null)   // date string being hovered
   const [pendingMove, setPendingMove]= useState(null)   // { tx, fromDate, toDate }
@@ -4696,6 +4698,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
         todayPlanUnresolved={todayPlanUnresolved}
         hasCashAccounts={viewAcctIds.size > 0}
         onSelectDay={setSelDay}
+        onEditBalance={!readOnly ? setBalanceEditDate : undefined}
       /></Suspense>
 
       {/* ── Day-of-week headers ── */}
@@ -4811,6 +4814,9 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                   dates remain read-only projections from the latest balance. */}
               {(pt || reconstructedBal !== undefined) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
+                  {!readOnly && key <= todayStr ? <button type="button" className="finance-ending-balance-edit" aria-label={`Edit ending balance for ${key}`} onClick={event=>{event.stopPropagation();setBalanceEditDate(key)}}>
+                    {recordedBal !== undefined ? `Recorded ${fmtK(recordedBal)}` : reconstructedBal !== undefined ? `Est. ${fmtK(reconstructedBal)}` : isToday && pt ? `Projected ${fmtK(pt.bal)}` : 'Record ending balance'}
+                  </button> : <>
                   {recordedBal !== undefined ? <span title="User-recorded ending balance" style={{fontSize:9,fontWeight:700,color:'var(--gold)'}}>Recorded {fmtK(recordedBal)}</span> : reconstructedBal !== undefined ? (
                     <span title="Estimated end-of-day balance from dated bank observations and posted history"
                       style={{ fontSize: 9, fontWeight: 700, color: reconstructedBal < 0 ? 'var(--expense-color)' : '#90AADE' }}>
@@ -4823,7 +4829,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                         opacity: isPast || isToday ? 0.75 : 1 }}>
                       {isToday ? 'Projected ' : ''}{fmtK(pt.bal)}
                     </span>
-                  ) : null}
+                  ) : null}</>}
                 </div>
               )}
             </div>
@@ -4832,6 +4838,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
       </div>
 
       {/* ── Day detail panel ── */}
+      {!readOnly && balanceEditDate && <Suspense fallback={<p>Opening balance correction…</p>}><DailyClosingBalanceDialog date={balanceEditDate} accounts={accounts.filter(account=>viewAcctIds.has(account.id))} records={closingRecords} onClose={()=>setBalanceEditDate(null)} onReview={async input=>{const ready=await onReviewClosingBalance(input);if(ready)setBalanceEditDate(null);return ready}}/></Suspense>}
       </div>
       {selDay && selPt && (
         <aside className="finance-card finance-forecast-day-detail" aria-label="Selected day details">

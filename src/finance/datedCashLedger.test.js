@@ -7,6 +7,32 @@ const tx = (id,date,amount,extra={}) => ({id,date,amount,accountId:'bank',...ext
 const snapshot = (date,amount) => ({date,capturedAt:`${date}T16:00:00Z`,kind:'intraday',balances:{bank:amount}})
 const build = extra => buildDatedCashLedger({accounts:[account],today:'2026-10-25',...extra})
 
+test('paired sync reconstructs posting-day closes without moving them to the retrieval day',()=>{
+ // Synthetic reproduction: a large Friday inflow downloaded Saturday must
+ // neither disappear Friday nor be subtracted twice from earlier history.
+ const transactions=[tx('expense','2026-10-08',100),tx('pay','2026-10-09',-4000),tx('later','2026-10-13',3000)]
+ const paired={kind:'transaction-sync',historyComplete:true,date:'2026-10-14',capturedAt:'2026-10-14T12:00:00Z',balances:{bank:1200},postedTotals:{bank:90000}}
+ const result=build({transactions,balanceHistory:[snapshot('2026-10-09',200),paired]})
+ assert.equal(result.balances['2026-10-08'],200)
+ assert.equal(result.balances['2026-10-09'],4200)
+ assert.equal(result.balances['2026-10-10'],4200)
+ assert.equal(result.balances['2026-10-13'],1200)
+ assert.equal(result.balances['2026-10-14'],1200)
+ assert.equal(result.forecastAccounts[0],account)
+ const corrected=build({transactions,balanceHistory:[paired],closingRecords:{a:{'2026-10-09':{source:'user-recorded',amount:4300}}}})
+ assert.equal(corrected.balances['2026-10-09'],4300)
+ assert.equal(corrected.balances['2026-10-13'],1300)
+ assert.equal(corrected.forecastAccounts[0],account)
+ const extended=build({transactions:[...transactions,tx('statement','2026-10-07',200,{source:'statement'})],balanceHistory:[paired]})
+ assert.equal(extended.balances['2026-10-08'],200)
+ assert.equal(extended.balances['2026-10-13'],1200)
+})
+
+test('incomplete paired history is not treated as a daily close',()=>{
+ const result=build({transactions:[tx('one','2026-10-01',100)],balanceHistory:[{kind:'transaction-sync',historyComplete:false,date:'2026-10-24',capturedAt:'2026-10-24T12:00:00Z',balances:{bank:1000},postedTotals:{bank:-10000}}]})
+ assert.deepEqual(result.balances,{})
+})
+
 test('dated stale bank anchor reconstructs both directions using posted cash movements, not today’s date',()=>{
  const result=build({balanceHistory:[snapshot('2026-10-20',1000)],transactions:[tx('old','2026-10-18',30),tx('anchor','2026-10-20',100),tx('later','2026-10-22',200),tx('pending','2026-10-23',50,{pending:true})]})
  assert.equal(result.balances['2026-10-19'],1100)

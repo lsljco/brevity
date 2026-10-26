@@ -356,7 +356,7 @@
 .finance-calendar-source-status--error .finance-calendar-source-status-label,
 .finance-calendar-source-status--error > span > strong { color: var(--expense-color); }
 .finance-calendar-mobile-agenda { display: none; }
-.finance-calendar-mobile-agenda > button {
+.finance-calendar-mobile-agenda > [role="button"] {
   box-sizing: border-box;
   width: 100%;
   min-height: 74px;
@@ -367,7 +367,7 @@
   cursor: pointer;
   text-align: left;
 }
-.finance-calendar-mobile-agenda > button.is-selected {
+.finance-calendar-mobile-agenda > [role="button"].is-selected {
   border-color: rgba(197,164,109,.62);
   background: rgba(197,164,109,.10);
 }
@@ -536,7 +536,7 @@
   .finance-calendar-month-head,
   .finance-calendar-month-grid { display: none !important; }
   .finance-calendar-mobile-agenda { display: grid; gap: 8px; }
-  .finance-calendar-mobile-agenda > button {
+  .finance-calendar-mobile-agenda > [role="button"] {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(118px, auto);
     align-items: start;
@@ -649,7 +649,7 @@
   .finance-budget-plan-actions { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; }
   .finance-budget-plan-actions > * { width: 100%; }
   .finance-budget-plan-actions > div { display: grid !important; grid-template-columns: 1fr 1fr; }
-  .finance-calendar-mobile-agenda > button { grid-template-columns: minmax(0, 1fr) auto; }
+  .finance-calendar-mobile-agenda > [role="button"] { grid-template-columns: minmax(0, 1fr) auto; }
   .finance-calendar-agenda-preview { grid-column: 1 / -1; grid-row: 2; }
   .finance-calendar-day-header { flex-wrap: wrap; gap: 12px; }
   .finance-day-reconciliation-grid { grid-template-columns: minmax(0, 1fr) !important; }
@@ -683,7 +683,7 @@
 .finance-calendar-agenda-item > strong { flex-shrink:0; font-variant-numeric:tabular-nums; }
 .finance-calendar-day-link { color:var(--gold); margin-top:6px; }
 @media (max-width:720px) {
-  .finance-calendar-mobile-agenda > button { grid-template-columns:minmax(0,1fr); }
+  .finance-calendar-mobile-agenda > [role="button"] { grid-template-columns:minmax(0,1fr); }
   .finance-calendar-agenda-values { text-align:left; padding-top:8px; border-top:1px solid var(--glass-border); }
   .finance-calendar-agenda-values strong { font-size:22px; }
   .finance-calendar-agenda-date small,.finance-calendar-agenda-preview small,.finance-calendar-agenda-values small { font-size:12px; }
