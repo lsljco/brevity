@@ -163,6 +163,19 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
       return next
     })
   }
+  // The active sermon is a separate versioned record from this local plan draft.
+  // Refresh only its derived spiritual fields; preserve the other six pillars.
+  useEffect(() => {
+    const source = plan.spiritual?.sermonSource
+    setDraft(current => {
+      const previous = current.spiritual?.sermonSource
+      if (previous?.activeVersion === source?.activeVersion && previous?.sourceHash === source?.sourceHash) return current
+      const next = { ...current, spiritual: { ...current.spiritual, ...plan.spiritual } }
+      latestDraftRef.current = next
+      return next
+    })
+  }, [plan.spiritual])
+
   const unresolved = useMemo(() => [!draft.health.dinner && 'Dinner'].filter(Boolean), [draft])
 
   useEffect(() => {

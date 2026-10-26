@@ -218,19 +218,21 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
 }
 
 export function allocateBudgetActuals(actuals = [], lines = [], accountMap = {}) {
-  const byLine = {}, unallocatedByCategory = {}
+  const byLine = {}, unallocatedByCategory = {}, byCategory = {}
   for (const transaction of actuals) {
     const category = budgetCategoryForTransaction(transaction, {includeAllCredits:true})
     if (!category) continue
     const amount = Math.abs(Number(transaction.amount) || 0)
     // Only reviewed bank-record links may assign actuals to a planned line.
     // Similar names, dates, and amounts are never identity evidence.
-    const matches = lines.filter(line => line.category === category && line.transactions?.some(plan =>
+    const matches = lines.filter(line => (line.category === 'Income') === (category === 'Income') && line.transactions?.some(plan =>
       approvedReconciliationMatches(plan, transaction, transaction.date, accountMap)))
+    const resolvedCategory = matches.length === 1 ? matches[0].category : category
+    byCategory[resolvedCategory] = (byCategory[resolvedCategory] || 0) + amount
     if (matches.length === 1) byLine[matches[0].id] = (byLine[matches[0].id] || 0) + amount
     else unallocatedByCategory[category] = (unallocatedByCategory[category] || 0) + amount
   }
-  return { byLine, unallocatedByCategory }
+  return { byLine, unallocatedByCategory, byCategory }
 }
 
 export function buildBudgetBreakdown({ transactions = [], budget = {}, month = new Date(), direction, legacyYear, legacyAccountId, accountIds = null, useTargets = true }) {
