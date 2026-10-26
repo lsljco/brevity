@@ -1242,7 +1242,8 @@ test('Today personal guidance groups household work and highlights major appoint
  await page.reload();await expect(page.locator('.today-overview')).toBeVisible()
  if((page.viewportSize()?.width||1440)<700&&await page.getByRole('button',{name:'Collapse navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
  const overview=page.getByRole('region',{name:'Your day at a glance',exact:true})
- await expect(overview.locator('.today-focus-bubbles li')).toHaveCount(3)
+ await expect(overview.locator('.today-focus-bubbles li')).toHaveCount(1)
+ await expect(overview.locator('.today-focus-bubbles li')).toContainText('Financial Review / Daily Schedule Alignment / LinkedIn & Résumé Optimization')
  const major=overview.getByRole('region',{name:'Major household calendar items'})
  await expect(major).toContainText('TS- Dr. Appointment');await expect(major).toContainText('3:00 PM');await expect(major).toContainText('Owner unconfirmed');await expect(major).not.toContainText('Isaiah Daily Tutor')
  const remaining=overview.getByRole('region',{name:'Remaining today'})
@@ -1306,4 +1307,21 @@ test('Direct outcomes editing reviews the exact date without opening Ask Brevity
  expect(request.operations[0].targetDate).toBe(today())
  expect(request.operations[0].payload.patch.priorities[0]).toMatchObject({id:'priority-1',title:'Prepare interview notes',status:'complete'})
  await expect(page.getByRole('dialog',{name:'Brevity Assistant',exact:true})).toHaveCount(0)
+})
+
+
+test('Outcomes shows the first three saved priorities and expands the complete list',async({page})=>{
+ await page.route('**/.netlify/functions/household-data*',route=>{
+  const p=plan();p.topPriorities=['First outcome','Second outcome','Third outcome','Fourth outcome'].map((title,index)=>({id:`outcome-${index}`,title,owner:'Family',status:'pending'}));p.household.priorities=p.topPriorities
+  return route.fulfill({json:{householdId:'lslj-family',plan:p}})
+ })
+ await page.reload()
+ const outcomes=page.getByRole('region',{name:'Today’s Outcomes',exact:true})
+ await expect(outcomes.locator('.today-focus-bubbles li')).toHaveCount(3)
+ await expect(outcomes).not.toContainText('Fourth outcome')
+ await outcomes.getByRole('button',{name:'Show all 4 outcomes'}).click()
+ await expect(outcomes.locator('.today-focus-bubbles li')).toHaveCount(4)
+ await expect(outcomes).toContainText('Fourth outcome')
+ await outcomes.getByRole('button',{name:'Show top three'}).click()
+ await expect(outcomes.locator('.today-focus-bubbles li')).toHaveCount(3)
 })
