@@ -1640,8 +1640,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
   const cashForecastProjection = useMemo(() => buildOutstandingCashForecast(
     cashLedger.forecastAccounts, forecastScope.transactions, cashForecastActuals,
-    { reconcile:true, reconstructedBalances:historicalBals, recordedClosingBalances:recordedClosingBals, anchorEstimated:cashLedger.estimatedAnchor, budget:dailyBudget, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
-  ), [forecastScope, cashLedger, cashForecastActuals, historicalBals, recordedClosingBals, dailyBudget])
+    { reconcile:true, reconstructedBalances:historicalBals, recordedClosingBalances:recordedClosingBals, anchorEstimated:cashLedger.estimatedAnchor, budget:dailyBudget, projectedClosingBalances:data.projectedClosingBalances, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
+  ), [forecastScope, cashLedger, cashForecastActuals, historicalBals, recordedClosingBals, dailyBudget, data.projectedClosingBalances])
   // Dashboard, reporting and calendar share the same reconciled cash forecast.
   const proj = cashForecastProjection
   const forecastTodayPlanUnresolved = Boolean(cashForecastProjection.get(toISO(getHouseholdCalendarDate()))?.unmatchedCount)
@@ -2614,7 +2614,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
                           {showActuals && hasPending && <div style={{ fontSize: 9, color: 'rgba(197,164,109,0.65)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pending</div>}
                         </div>
                       )}
-                      {!showActuals && pt && <div style={{ fontSize: 14, fontWeight: 600, color: isToday ? 'var(--gold)' : 'rgba(197,164,109,0.75)', lineHeight: 1, marginTop: 3 }}>{isToday ? 'Projected ' : ''}{fmtK(pt.bal)}</div>}
+                      {!showActuals && pt && <div style={{ fontSize: 14, fontWeight: 600, color: isToday ? 'var(--gold)' : 'rgba(197,164,109,0.75)', lineHeight: 1, marginTop: 3 }}>{fmtK(pt.bal)}</div>}
                     </div>
                   )
                 })}
@@ -3071,7 +3071,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             balanceDataMessage={balanceDataMessage} balanceDataStatus={balanceDataStatus}
             actualsByDate={cashForecastActualsByDate} plaidActuals={cashForecastActuals}
             historicalBals={historicalBals} ledgerSources={cashLedger.sources}
-            recordedClosingBals={recordedClosingBals} closingRecords={data.dailyClosingBalances || {}}
+            recordedClosingBals={recordedClosingBals} closingRecords={data.dailyClosingBalances || {}} projectedClosingRecords={data.projectedClosingBalances || {}}
             onReviewClosingBalance={input => stageDirectFinanceReview({...input,storageKey:LS_KEY,surfaceError:true})}
             excludedAccountCount={fd.accounts.length - forecastScope.accounts.length}
             unmappedTransactionCount={unmappedActuals.length}
@@ -4458,7 +4458,7 @@ function plaidCatToLocal(plaidCats = []) {
 }
 
 // ── Calendar View ────────────────────────────────────────────────────────────────
-function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, ledgerSources = [], recordedClosingBals = {}, closingRecords = {}, onReviewClosingBalance, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
+function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorOrder='', proj, calYear, calMonth, setCalYear, setCalMonth, selDay, setSelDay, accounts, viewAcctIds, onSave, onApplyScopedChange, onMove, onDelete, showActuals, toggleActuals, actualsLoading, actualsError, actualsFreshnessMessage, actualsFreshnessStatus, balanceDataMessage, balanceDataStatus, actualsByDate, plaidActuals, historicalBals = {}, ledgerSources = [], recordedClosingBals = {}, closingRecords = {}, projectedClosingRecords = {}, onReviewClosingBalance, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false, onActualTxClick, readOnly = false }) {
   const reconciliationRef=useRef(null)
   const forecastRef=useRef(null)
   const closeDay=()=>{const day=forecastRef.current?.querySelector('.cal-cell.is-selected, .finance-calendar-mobile-agenda > .is-selected');setSelDay(null);day?.focus({preventScroll:true})}
@@ -4726,7 +4726,6 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
           // Plaid actuals for this cell (only meaningful on past/today dates)
           const dayActuals     = showActuals ? (actualsByDate?.[key] || []) : []
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
-          const maxBudget      = showActualPills ? 1 : 2
           const dayReconciliation = reconciliationByDate.get(key)
           const matchedRows = showActualPills ? (dayReconciliation?.rows || []).filter(row => row.state === 'matched') : []
           const matchedPlanIds = new Set(matchedRows.map(row => row.expected.id))
@@ -4759,7 +4758,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
               {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
               {hasTxns && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
-                  {sortAndFilterTransactions(visiblePlans).slice(0, maxBudget).map((tx, j) => (
+                  {sortAndFilterTransactions(visiblePlans).map((tx, j) => (
                     <div className="finance-calendar-event" key={j}
                       draggable={!readOnly}
                       onDragStart={e => { if (readOnly) return; e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx:{ ...tx, _reviewVersion:captureFinanceReviewVersion() }, fromDate: key }) }}
@@ -4779,15 +4778,13 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                       </span>
                     </div>
                   ))}
-                  {visiblePlans.length > maxBudget && (
-                    <div style={{ fontSize: 9, color: 'var(--muted)', lineHeight: '13px', paddingLeft: 2 }}>+{visiblePlans.length - maxBudget} budgeted</div>
-                  )}
+
                 </div>
               )}
               {/* Actual (Plaid) transaction pills (teal/blue) */}
               {showActualPills && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginTop: hasTxns ? 2 : 0 }}>
-                  {sortAndFilterTransactions(dayActuals).slice(0, 1).map((tx, j) => {
+                  {sortAndFilterTransactions(dayActuals).map((tx, j) => {
                     const isIncome = tx.amount < 0 // Plaid: negative = credit
                     const isTransfer = isTransferTransaction(tx)
                     return (
@@ -4804,29 +4801,27 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                       </div>
                     )
                   })}
-                  {dayActuals.length > 1 && (
-                    <div style={{ fontSize: 9, color: '#90AADE', lineHeight: '13px', paddingLeft: 2 }}>+{dayActuals.length - 1} actual</div>
-                  )}
+
                 </div>
               )}
               {/* Reconstructed history takes priority for past dates. Future
                   dates remain read-only projections from the latest balance. */}
               {(pt || reconstructedBal !== undefined) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
-                  {!readOnly && key <= todayStr ? <button type="button" className="finance-ending-balance-edit" aria-label={`Edit ending balance for ${key}`} onClick={event=>{event.stopPropagation();setBalanceEditDate(key)}}>
-                    {recordedBal !== undefined ? `Recorded ${fmtK(recordedBal)}` : reconstructedBal !== undefined ? `Est. ${fmtK(reconstructedBal)}` : isToday && pt ? `Projected ${fmtK(pt.bal)}` : 'Record ending balance'}
+                  {!readOnly ? <button type="button" className="finance-ending-balance-edit" title={recordedBal !== undefined ? 'User-recorded closing balance' : reconstructedBal !== undefined ? 'Calculated historical closing balance' : pt?.isOverridden ? 'User-set projected ending balance' : 'Projected ending balance'} aria-label={`Edit ending balance for ${key}`} onClick={event=>{event.stopPropagation();setBalanceEditDate(key)}}>
+                    {recordedBal !== undefined ? fmtMoney(recordedBal) : reconstructedBal !== undefined ? fmtMoney(reconstructedBal) : Number.isFinite(pt?.bal) ? fmtMoney(pt.bal) : 'Record ending balance'}
                   </button> : <>
-                  {recordedBal !== undefined ? <span title="User-recorded ending balance" style={{fontSize:9,fontWeight:700,color:'var(--gold)'}}>Recorded {fmtK(recordedBal)}</span> : reconstructedBal !== undefined ? (
+                  {recordedBal !== undefined ? <span title="User-recorded ending balance" style={{fontSize:9,fontWeight:700,color:'var(--gold)'}}>{fmtMoney(recordedBal)}</span> : reconstructedBal !== undefined ? (
                     <span title="Estimated end-of-day balance from dated bank observations and posted history"
                       style={{ fontSize: 9, fontWeight: 700, color: reconstructedBal < 0 ? 'var(--expense-color)' : '#90AADE' }}>
-                      Est. {fmtK(reconstructedBal)}
+                      {fmtMoney(reconstructedBal)}
                     </span>
                   ) : isPast ? <span style={{fontSize:9,color:'var(--muted)'}}>Balance unavailable</span> : pt ? (
                     <span title={isPast ? `Estimated historical cash balance from ${balanceSource}` : isToday ? `Projected after today’s activity from ${balanceSource}` : todayPlanUnresolved ? `Projected from ${balanceSource}; today’s scheduled-item completion is unresolved` : `Projected from ${balanceSource}`}
                       style={{ fontSize: 9, fontWeight: 700,
                         color: isNeg ? 'var(--expense-color)' : 'rgba(197,164,109,0.85)',
                         opacity: isPast || isToday ? 0.75 : 1 }}>
-                      {isToday ? 'Projected ' : ''}{fmtK(pt.bal)}
+                      {fmtMoney(pt.bal)}
                     </span>
                   ) : null}</>}
                 </div>
@@ -4837,7 +4832,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
       </div>
 
       {/* ── Day detail panel ── */}
-      {!readOnly && balanceEditDate && <Suspense fallback={<p>Opening balance correction…</p>}><DailyClosingBalanceDialog date={balanceEditDate} accounts={accounts.filter(account=>viewAcctIds.has(account.id))} records={closingRecords} onClose={()=>setBalanceEditDate(null)} onReview={async input=>{const ready=await onReviewClosingBalance(input);if(ready)setBalanceEditDate(null);return ready}}/></Suspense>}
+      {!readOnly && balanceEditDate && <Suspense fallback={<p>Opening balance correction…</p>}><DailyClosingBalanceDialog date={balanceEditDate} accounts={accounts.filter(account=>viewAcctIds.has(account.id))} projected={balanceEditDate > todayStr} records={balanceEditDate > todayStr ? projectedClosingRecords : closingRecords} onClose={()=>setBalanceEditDate(null)} onReview={async input=>{const ready=await onReviewClosingBalance(input);if(ready)setBalanceEditDate(null);return ready}}/></Suspense>}
       </div>
       {selDay && selPt && (
         <aside className="finance-card finance-forecast-day-detail" aria-label="Selected day details">
@@ -4854,6 +4849,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
 
           </div>
 
+          {selDay > todayStr && selPt.projectionAdjustment !== undefined && <p>Forecast includes a reviewed balance override. Live bank balances are unchanged.</p>}
           <details className="finance-forecast-day-filters"><summary>Filter day activity</summary><TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/></details>
 
           {/* Planned transactions */}
@@ -5048,7 +5044,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                 )
               })()}
             </div><p>Scheduled net: {fmtMoney(selPt.delta)}</p></details>
-          {!readOnly && selDay <= todayStr && <Suspense fallback={<p>Loading ending balance editor…</p>}><DailyClosingBalanceEditor key={selDay + ':' + [...viewAcctIds].join(',')} date={selDay} accounts={accounts.filter(account=>viewAcctIds.has(account.id))} records={closingRecords} onReview={onReviewClosingBalance}/></Suspense>}
+          {!readOnly && <Suspense fallback={<p>Loading ending balance editor…</p>}><DailyClosingBalanceEditor key={selDay + ':' + [...viewAcctIds].join(',')} date={selDay} accounts={accounts.filter(account=>viewAcctIds.has(account.id))} projected={selDay > todayStr} records={selDay > todayStr ? projectedClosingRecords : closingRecords} onReview={onReviewClosingBalance}/></Suspense>}
         </aside>
       )}
       </div>

@@ -135,5 +135,24 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
         pendingExcluded:bank.filter(actual => actual.pending && !ledgerIds.has(accountMap[actual.accountId])).length,
         unmatchedCount:realization.filter(row => row.statuses.some(status => status.status === 'expected')).length } : {}) })
   }
-  return applyBudgetAllowances(projection,{accounts,scheduled:transactions,actuals,budget:options.budget,today})
+  const result = applyBudgetAllowances(projection,{accounts,scheduled:transactions,actuals,budget:options.budget,today})
+  const adjustments = new Map()
+  for (const account of accounts) {
+    const overrides = options.projectedClosingBalances?.[account.id] || {}
+    if (!Object.entries(overrides).some(([date,row]) => date > today && row?.source === 'user-projected' && Number.isFinite(row.amount))) continue
+    const single = buildOutstandingCashForecast([account], transactions.filter(tx=>tx.acct===account.id || tx.transferTo===account.id), actuals, {...options,projectedClosingBalances:null})
+    let offset = 0
+    for (const [date, point] of single) {
+      if (date <= today) continue
+      const row = overrides[date]
+      if (row?.source === 'user-projected' && Number.isFinite(row.amount)) offset = cents(row.amount) - cents(point.bal)
+      const previous = adjustments.get(date) || {offset:0,accounts:[]}
+      adjustments.set(date,{offset:previous.offset+offset,accounts:[...previous.accounts,...(row?.source==='user-projected'?[account.id]:[])]})
+    }
+  }
+  for (const [date, adjustment] of adjustments) {
+    const point=result.get(date)
+    if (point) result.set(date,{...point,bal:(cents(point.bal)+adjustment.offset)/100,projectionAdjustment:adjustment.offset/100,isOverridden:adjustment.accounts.length>0,overriddenAccounts:adjustment.accounts})
+  }
+  return result
 }

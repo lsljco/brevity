@@ -85,7 +85,7 @@ export function resourceForOperation(operation) {
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
-  if (operation.type === 'finance.account.link' || (operation.type.startsWith('finance.close.') || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return `shared:${SHARED_KEYS.finance}`
+  if (operation.type === 'finance.account.link' || (operation.type.startsWith('finance.close.') || operation.type.startsWith('finance.forecast-close.') || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('recurring.')) return `shared:${SHARED_KEYS.finance}`
   if (operation.type.startsWith('debt.')) return `shared:${SHARED_KEYS.debts}`
   throw new Error(`No action resource exists for ${operation.type}.`)
@@ -401,23 +401,26 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     const review={status:payload.status,notes:payload.notes||'',at:nowIso(context.now||(()=>new Date())),by:context.actor||'Household member'}
     return {before,after:{...value,spendingReviews:{...(value?.spendingReviews||{}),[operation.targetId]:{...review,history:[...(previous?.history||[]),review]}}}}
   }
-  if (operation.type.startsWith('finance.close.')) {
+  if (operation.type.startsWith('finance.close.') || operation.type.startsWith('finance.forecast-close.')) {
+    const projected = operation.type.startsWith('finance.forecast-close.')
+    const field = projected ? 'projectedClosingBalances' : 'dailyClosingBalances'
     const account = value?.accounts?.find(row => row.id === operation.targetId)
     if (!account || !['checking','savings'].includes(account.type)) throw new Error('Select an existing checking or savings account.')
     const date = operation.targetDate
     const now = (context.now || (()=>new Date()))()
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date > getHouseholdDateKey(now)) throw new Error('An ending balance must be for today or an earlier date.')
-    const dailyClosingBalances = { ...(value.dailyClosingBalances || {}) }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date) throw new Error('Use a valid calendar date.')
+    if (projected ? date <= getHouseholdDateKey(now) : date > getHouseholdDateKey(now)) throw new Error(projected ? 'A projected ending balance must be for a future date.' : 'An ending balance must be for today or an earlier date.')
+    const dailyClosingBalances = { ...(value[field] || {}) }
     const closes = { ...(dailyClosingBalances[account.id] || {}) }
-    if (operation.type === 'finance.close.delete') {
+    if (operation.type.endsWith('.delete')) {
       if (!closes[date]) throw new Error('That recorded ending balance no longer exists.')
       delete closes[date]
     } else {
       if (!Number.isFinite(payload.amount)) throw new Error('Enter a valid ending balance.')
-      closes[date] = {amount:Math.round(payload.amount * 100) / 100,source:'user-recorded',notes:payload.notes || '',updatedAt:nowIso(()=>now),updatedBy:context.actor || 'Household member'}
+      closes[date] = {amount:Math.round(payload.amount * 100) / 100,source:projected ? 'user-projected' : 'user-recorded',notes:payload.notes || '',updatedAt:nowIso(()=>now),updatedBy:context.actor || 'Household member'}
     }
     dailyClosingBalances[account.id] = closes
-    return {before, after:{...value,dailyClosingBalances}}
+    return {before, after:{...value,[field]:dailyClosingBalances}}
   }
   if (operation.type === 'finance.account.link') {
     const accounts = [...(value?.accounts || [])]

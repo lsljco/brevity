@@ -3286,3 +3286,43 @@ test('sermon activation refreshes an open tomorrow plan and clears stale artifac
   await expect.poll(()=>requested?.activeVersion).toBe(3)
   expect(requested.sourceHash).toBe('b'.repeat(64))
 })
+
+
+test('Cash Forecast future closing balance opens a separate reviewed projection override',async({page},testInfo)=>{
+ const tomorrow=new Date(`${dateKey()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1);const date=tomorrow.toISOString().slice(0,10)
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ const surface=testInfo.project.name==='iphone'?page.locator('.finance-calendar-mobile-agenda'):page.locator('.finance-calendar-month-grid')
+ if(tomorrow.getUTCMonth()!==Number(dateKey().slice(5,7))-1)await page.getByRole('button',{name:'Next financial calendar month',exact:true}).click()
+ await surface.getByRole('button',{name:`Edit ending balance for ${date}`,exact:true}).click()
+ const dialog=page.getByRole('dialog',{name:`Correct ending balance for ${date}`})
+ await expect(dialog).toContainText('Projected ending balance')
+ await dialog.getByLabel('Ending balance',{exact:true}).fill('-25.50')
+ const request=page.waitForRequest(r=>r.url().includes('action=prepare-direct'))
+ await dialog.getByRole('button',{name:'Review forecast override'}).click()
+ const input=(await request).postDataJSON()
+ expect(input.operation.type).toBe('finance.forecast-close.set');expect(input.operation.targetDate).toBe(date);expect(input.operation.payload.amount).toBe(-25.5)
+ await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+})
+
+test('Cash Forecast grows each week to display every scheduled and bank transaction',async({page},testInfo)=>{
+ const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),today=dateKey()
+ finance.transactions=Array.from({length:12},(_,i)=>({id:`busy-${i}`,acct:'a1',name:`Scheduled entry ${i+1}`,type:'expense',cat:'Other',freq:'once',start:today,amount:i+1}))
+ records.lslj_finance_v9.value=JSON.stringify(finance)
+ const actuals=Array.from({length:14},(_,i)=>({id:`posted-${i}`,accountId:'plaid-operating',name:`Posted bank entry ${i+1}`,date:today,amount:i+20,pending:false,category:'Other'}))
+ records.plaid_actuals_cache.value=JSON.stringify(actuals)
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ await page.route('**/.netlify/functions/plaid-transactions*',route=>route.fulfill({json:{connected:true,transactions:actuals,errors:[],syncedAt:new Date().toISOString()}}))
+ await page.reload();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ const toggle=page.getByRole('button',{name:/^(Show|Hide) bank activity for/});if(await toggle.getAttribute('aria-pressed')!=='true')await toggle.click()
+ const cell=testInfo.project.name==='iphone'?page.locator('.finance-calendar-mobile-agenda > [role="button"]').filter({hasText:'Scheduled entry 12'}):page.locator(`.cal-cell[data-date="${today}"]`)
+ await expect(cell).toContainText('Scheduled entry 12');await expect(cell).toContainText('Posted bank entry 14')
+ if(testInfo.project.name!=='iphone'){
+  await expect(cell.locator('.finance-calendar-event')).toHaveCount(26)
+  const fits=await cell.evaluate(el=>{const r=el.getBoundingClientRect();return [...el.querySelectorAll('.finance-calendar-event')].every(item=>item.getBoundingClientRect().bottom<=r.bottom)})
+  expect(fits).toBe(true)
+ }
+ await expect(cell).not.toContainText('Est.')
+ await cell.screenshot({path:testInfo.outputPath('expanded-calendar-day.png')})
+})

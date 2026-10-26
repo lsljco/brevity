@@ -11,7 +11,7 @@ export function DailyClosingBalanceDialog({onClose,...props}) {
   </dialog>
 }
 
-export default function DailyClosingBalanceEditor({ date, accounts, records = {}, onReview, autoOpen = false }) {
+export default function DailyClosingBalanceEditor({ date, accounts, records = {}, onReview, autoOpen = false, projected = false }) {
   const [editing, setEditing] = useState(false)
   const [accountId, setAccountId] = useState(accounts[0]?.id || '')
   const [amount, setAmount] = useState('')
@@ -36,25 +36,27 @@ export default function DailyClosingBalanceEditor({ date, accounts, records = {}
       const account = accounts.find(row => row.id === accountId)
       if (!account) throw Error('Select a cash account.')
       const value = Math.round(Number(amount) * 100) / 100
-      const summary = remove ? `Remove recorded ending balance for ${account.name} on ${date}` : `Record ${fmtMoney(value)} ending balance for ${account.name} on ${date}`
-      const ready = await onReview({ summary, expectedVersion:version, operation:{type:remove ? 'finance.close.delete' : 'finance.close.set',targetId:accountId,targetDate:date,description:`${summary}. User-recorded close; live bank balances remain unchanged.`,payload:remove ? {} : {amount:value,notes}} })
+      const kind = projected ? 'projected' : 'recorded'
+      const action = projected ? 'finance.forecast-close' : 'finance.close'
+      const summary = remove ? `Remove ${kind} ending balance for ${account.name} on ${date}` : `Set ${fmtMoney(value)} ${kind} ending balance for ${account.name} on ${date}`
+      const ready = await onReview({ summary, expectedVersion:version, operation:{type:`${action}.${remove ? 'delete' : 'set'}`,targetId:accountId,targetDate:date,description:`${summary}. ${projected ? 'Forecast override' : 'User-recorded close'}; live bank balances remain unchanged.`,payload:remove ? {} : {amount:value,notes}} })
       if (ready) setEditing(false)
     } catch (cause) { setError(cause.message) }
     finally { setBusy(false) }
   }
   if (!accounts.length) return null
   return <section aria-label="Daily ending balance" style={{marginTop:16,paddingTop:12,borderTop:'1px solid rgba(197,164,109,.25)'}}>
-    <h3>Ending balance · {date}</h3>
-    <p style={{fontSize:12}}>Record the closing balance for each selected cash account. This anchors the date’s history and subsequent estimates until a newer balance observation. Source bank balances remain separate.</p>
+    <h3>{projected ? 'Projected ending balance' : 'Ending balance'} · {date}</h3>
+    <p style={{fontSize:12}}>{projected ? 'Set this account’s projected closing balance. Later forecast days recalculate from this amount; live bank balances and actual history stay unchanged.' : 'Record the closing balance for each selected cash account. This anchors the date’s history and subsequent calculations. Source bank balances remain separate.'}</p>
     {!editing ? <button type="button" onClick={open}>Edit ending balance</button> : <form style={{display:'grid',gap:10,minWidth:0}} onSubmit={event => {event.preventDefault();review()}}>
       <label style={{display:'grid',gap:4}}>Account<select aria-label="Account" value={accountId} disabled={busy} onChange={event => {const id=event.target.value;setAccountId(id);setAmount(records[id]?.[date] ? String(records[id][date].amount) : '');setNotes(records[id]?.[date]?.notes || '')}}>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
       <label style={{display:'grid',gap:4}}>Ending balance<input type="number" step="0.01" value={amount} required disabled={busy} onChange={event=>setAmount(event.target.value)}/></label>
       <label style={{display:'grid',gap:4}}>Note or statement reference<input value={notes} maxLength={500} disabled={busy} onChange={event=>setNotes(event.target.value)}/></label>
-      <button type="submit" disabled={busy}>{busy ? 'Preparing…' : 'Review balance correction'}</button>{' '}
+      <button type="submit" disabled={busy}>{busy ? 'Preparing…' : projected ? 'Review forecast override' : 'Review balance correction'}</button>{' '}
       <button type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancel</button>{' '}
-      {saved && <button type="button" disabled={busy} onClick={()=>review(true)}>Remove recorded balance</button>}
+      {saved && <button type="button" disabled={busy} onClick={()=>review(true)}>Remove {projected ? 'forecast override' : 'recorded balance'}</button>}
     </form>}
-    {accounts.map(account=>records[account.id]?.[date] && <p key={account.id} style={{fontSize:12}}>{account.name}: {fmtMoney(records[account.id][date].amount)} · User-recorded</p>)}
+    {accounts.map(account=>records[account.id]?.[date] && <p key={account.id} style={{fontSize:12}}>{account.name}: {fmtMoney(records[account.id][date].amount)} · {projected ? 'Forecast override' : 'User-recorded'}</p>)}
     {error && <p role="alert">{error}</p>}
   </section>
 }
