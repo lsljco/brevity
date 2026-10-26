@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport,recordsSection,transactionSection} from './financeExportData.js'
 import VendorPicker from './VendorPicker.jsx'
 import {createPortal} from 'react-dom'
 import {useEffect,useMemo,useState,useRef} from 'react'
@@ -31,7 +33,7 @@ export default function VendorWorkspace({actuals=[],planned=[],readOnly=false,cu
  async function uploadFile(file){if(!file)return;if(file.size>3*1024*1024)throw Error('Choose a file up to 3 MB.');const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('File could not be read.'));reader.readAsDataURL(file)});const {upload}=await vendorRequest('stage-document',{vendorId:vendor.id,fileName:file.name,base64});await review({type:'vendor.document.attach',targetId:vendor.id,payload:upload},`Attach ${file.name} to ${vendor.name}`)}
  async function unlock(){const password=currentPassword;setCurrentPassword('');const result=await vendorRequest('unlock',{vendorId:vendor.id,currentPassword:password});setRevealed(result.login);setUnlocking(false)}
  async function copy(value){try{await navigator.clipboard.writeText(value);setMessage('Copied. Paste on the vendor’s website.')}catch{setError('Clipboard access was unavailable. Select and copy the revealed value manually.')}}
- return <section className="vendor-workspace"><header><p className="vendor-eyebrow">Finance</p><h1>Vendors</h1><p>Contacts, payment access, expenses and documents in one place. Payments are completed on the vendor’s website.</p></header>
+ return <section className="vendor-workspace"><FinanceExport buildReport={()=>({title:`Vendors ${vendor?.name||'directory'}`,notes:[`${from||'All retained dates'} through ${to||'latest'}`,`Search: ${search||'All'}; activity: ${expenseFilter}`],sections:[recordsSection('Vendors',vendor?[vendor]:vendors,['name','address','phone','email','website']),...(vendor?[transactionSection(activity.rows.filter(row=>row.vendorId===vendor.id)),transactionSection(activity.planned.filter(row=>row.vendorId===vendor.id),[],{scheduled:true})]:[transactionSection(rows,[],{scheduled:expenseFilter==='planned'})])]})}/><header><p className="vendor-eyebrow">Finance</p><h1>Vendors</h1><p>Contacts, payment access, expenses and documents in one place. Payments are completed on the vendor’s website.</p></header>
  {(error||loadError)&&<p role="alert">{error||loadError} <button onClick={reload}>Refresh vendors</button></p>}{message&&<p role="status">{message}</p>}
  {!directory&&!loadError?<p>Loading vendors…</p>:<>
  <div className="vendor-toolbar"><label>Find vendor<input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label>{!readOnly&&<button onClick={()=>{setEditing('');setForm(blank())}}>Add vendor</button>}</div>

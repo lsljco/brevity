@@ -3484,3 +3484,47 @@ test('Apple event calendar selector reviews a move and refreshes its destination
  await expect(page.getByRole('dialog').getByLabel('Title',{exact:true})).toHaveCount(0)
  await expect(page.locator('.brevity-assistant-panel')).toHaveCount(0)
 })
+
+test('Budget consolidates recurring records and exports matching CSV XLSX and PDF totals',async({page},testInfo)=>{
+ const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),month=dateKey().slice(0,7)
+ finance.transactions=[{id:'dues-a',acct:'a1',name:'HOA Dues',cat:'Housing',type:'expense',freq:'monthly',start:month+'-01',amount:100},{id:'dues-b',acct:'a1',name:'HOA Dues',cat:'Housing',type:'expense',freq:'once',start:month+'-10',amount:200}]
+ records.lslj_finance_v9.value=JSON.stringify(finance)
+ records.lslj_budget_v1={key:'lslj_budget_v1',value:'{}',version:1,updatedAt:new Date().toISOString()}
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ const row=page.locator('.finance-budget-line').filter({hasText:'HOA Dues'})
+ await expect(row).toHaveCount(1);await expect(row.locator('.finance-budget-line-budget')).toHaveText('$300.00')
+ const toolbar=page.locator('.finance-export')
+ const {readFile}=await import('node:fs/promises')
+ for(const format of ['csv','xlsx','pdf']){
+  await toolbar.getByLabel('Export format').selectOption(format)
+  const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
+  expect(download.suggestedFilename()).toContain(`${month}.${format}`)
+  const bytes=await readFile(await download.path())
+  if(format==='csv'){expect(bytes.toString()).toContain('"HOA Dues","Expense","300","0"');expect(bytes.toString().match(/HOA Dues/g)).toHaveLength(1)}
+  if(format==='xlsx'){const {default:JSZip}=await import('jszip');const zip=await JSZip.loadAsync(bytes);expect(await zip.file('xl/worksheets/sheet2.xml').async('string')).toContain('<v>300</v>')}
+  if(format==='pdf'){const {createRequire}=await import('node:module');const parse=createRequire(import.meta.url)('pdf-parse/lib/pdf-parse.js');const pdf=await parse(new Uint8Array(bytes));expect(pdf.text).toContain('HOA Dues');expect(pdf.text).toContain('300')}
+ }
+ await page.getByRole('button',{name:'Next budget month'}).click()
+ await expect(row.locator('.finance-budget-line-budget')).toHaveText('$100.00')
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+})
+
+test('financial workspaces expose working exports without opening Ask Brevity',async({page},testInfo)=>{
+ test.setTimeout(90000)
+ await mockBackend(page,{financeFixture:true});await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[],links:{}}}));await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ for(const screen of ['Overview','Transactions','Cash Forecast','Spending Review','Accounts','Vendors','Debts','Budget','Recurring','Reporting','Scenario Modeling','Meetings']){
+  if(screen!=='Overview'){
+   await openMenuIfMobile(page,testInfo)
+   await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:screen,exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  }
+  const toolbar=page.locator('.finance-export:visible').first();await expect(toolbar,screen).toBeVisible()
+  await toolbar.getByLabel('Export format').selectOption('csv')
+  const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
+  expect(download.suggestedFilename()).toMatch(/\.csv$/)
+  await expect(page.getByRole('dialog',{name:'Ask Brevity',exact:true})).toHaveCount(0)
+ }
+})

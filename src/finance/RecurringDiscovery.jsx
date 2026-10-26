@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import { useMemo, useState, useEffect } from 'react'
 import { discoverRecurring, recurringCoverage } from './recurringDiscovery.js'
 import { getHouseholdDateKey } from './financeTime.js'
@@ -47,7 +49,7 @@ export default function RecurringDiscovery({actuals,scheduled,accounts,accountMa
   const today=getHouseholdDateKey(),[dismissed,setDismissed]=useState(new Set()),[budget,setBudget]=useState(()=>{try{return JSON.parse(localStorage.getItem('lslj_budget_v1'))||{}}catch{return{}}})
   useEffect(()=>{const refresh=()=>{try{setBudget(JSON.parse(localStorage.getItem('lslj_budget_v1'))||{})}catch{}};window.addEventListener('storage',refresh);window.addEventListener(SHARED_STATE_EVENT,refresh);return()=>{window.removeEventListener('storage',refresh);window.removeEventListener(SHARED_STATE_EVENT,refresh)}},[])
   const report=useMemo(()=>discoverRecurring(actuals,{today,accountMap}),[actuals,today,accountMap])
-  return <section aria-label="Discover recurring income and expenses">
+  return <section aria-label="Discover recurring income and expenses"><FinanceExport report={financeReport('Recurring discovery',report,['Suggestions inferred from retained bank activity; not approved budget records.'])}/>
     <div className="finance-card recurring-suggestion"><h2>Discover recurring income & expenses</h2><p>{report.months[0]} through {report.months.at(-1)} · Six completed months · Selected accounts</p><p>Posted transactions only. Amount changes do not prevent a match. Transfers, refunds, pending transactions, and unclassified credits are excluded. Patterns use linked vendors/payers or matching merchant names; unfamiliar statement names may need a vendor link.</p><p>Available activity appears in {report.observedMonths} of 6 months. Missing activity may mean incomplete bank history; “not observed” does not establish that a charge stopped.</p>{dismissed.size>0&&<button onClick={()=>setDismissed(new Set())}>Restore dismissed suggestions this session ({dismissed.size})</button>}</div>
     {!report.suggestions.filter(s=>!dismissed.has(s.key)).length&&<p>No suggestions to review. At least two completed months of matching posted activity are needed.</p>}
     {report.suggestions.filter(s=>!dismissed.has(s.key)).map(s=><Suggestion key={s.key} suggestion={s} {...{accounts,scheduled,budget,today,onReview,readOnly}} onDismiss={()=>setDismissed(prev=>new Set([...prev,s.key]))}/>)}

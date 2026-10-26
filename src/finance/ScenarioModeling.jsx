@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
@@ -237,7 +239,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     })
   }
 
-  return <section className="scenario-page" aria-labelledby="scenario-title">
+  return <section className="scenario-page" aria-labelledby="scenario-title"><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:active,operatingExpense:expense,result},['Hypothetical scenario; does not change bank balances.'])}/>
     <header className="scenario-header">
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>

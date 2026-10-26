@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import {useMemo,useState} from 'react'
 import {buildSpendingAccountability} from './spendingAccountability.js'
 import { fmtMoney } from './projection.js'
@@ -23,7 +25,7 @@ export default function FinanceOverview({ accounts, projection, today, live, tra
   const spending = useMemo(()=>spendingSources ? buildSpendingAccountability(spendingSources) : null,[spendingSources])
   const model = financeOverviewModel({ accounts, projection, today, live, transactionStatus, unmappedCount, error })
   const money = value => Number.isFinite(value) ? fmtMoney(value) : 'Unavailable'
-  return <div className="finance-overview">
+  return <div className="finance-overview"><FinanceExport report={financeReport(`Finance overview ${today}`,{position:model,reserveMinimum,reserveAccounts:reserveAccounts.map(({name,balance})=>({name,balance})),spendingTotals:spending?.totals},[scopeLabel,live?'Verified bank snapshot':'Saved balances; freshness unverified','Spending accountability covers all household accounts for this month.'])}/>
     <header className="finance-overview-hero"><span className="life-eyebrow">Jenkins–Seay Household</span><h1>Finance</h1><p>Steward today. Prepare for tomorrow.</p></header>
     <div className="finance-overview-scope"><span>{scopeLabel} · Checking &amp; savings</span><button type="button" onClick={() => onNavigate('accounts')}>{live ? 'Bank balances verified' : 'Saved balances · freshness unverified'}</button></div>
     <section className="finance-overview-position" aria-label="Financial position">

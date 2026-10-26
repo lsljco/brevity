@@ -1,13 +1,15 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import {getHouseholdDateKey} from './financeTime.js'
 import {useState} from 'react'
 import {fmtMoney} from './projection.js'
 import {SPENDING_LABELS} from './spendingAccountability.js'
 import './SpendingReview.css'
 
-export default function SpendingAccountabilityPanel({model,onSelect,onProposeAction}){
+export default function SpendingAccountabilityPanel({model,onSelect,onProposeAction,exportNotes=[]}){
  const [filter,setFilter]=useState('exceptions'),[expanded,setExpanded]=useState(null),[limit,setLimit]=useState(50),[actionError,setActionError]=useState(''),[actionBusy,setActionBusy]=useState(false)
  const visible=model.rows.filter(row=>filter==='all'||filter==='exceptions'&&['unbudgeted','over','review'].includes(row.classification)||row.classification===filter)
- return <section className="spending-panel" aria-label="Spending accountability">
+ return <section className="spending-panel" aria-label="Spending accountability"><FinanceExport report={financeReport('Spending accountability',{totals:model.totals,transactions:visible,pending:model.pending,categories:model.categories},[...exportNotes,model.scopeLabel||'Household spending evidence',`Transaction filter: ${filter}; includes all matching records, including those below Show more.`, 'Summary totals cover the full selected period; pending items are separate.'])}/>
   <header><div><p className="life-eyebrow">Where the money went</p><h2>Spending accountability</h2><p>{model.scopeLabel || 'Household spending evidence'}</p></div></header>
   <div className="spending-metrics">{[['unbudgeted','Unbudgeted'],['over','Over budget'],['review','Needs review']].map(([key,label])=><button type="button" key={key} onClick={()=>setFilter(key)} aria-pressed={filter===key}><span>{label}</span><strong>{fmtMoney(model.totals[key])}</strong><small>{model.rows.filter(row=>row.classification===key).length} posted transactions</small></button>)}</div>
   <p className="spending-note">{model.notice}</p>

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
+const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8') + readFileSync(new URL('./BudgetView.jsx', import.meta.url), 'utf8')
 const forecastToolbar = readFileSync(new URL('./CashForecastToolbar.jsx', import.meta.url), 'utf8')
 const actualTransaction = readFileSync(new URL('./ActualTxModal.jsx', import.meta.url), 'utf8')
 const transactionRule = readFileSync(new URL('./TransactionRuleModal.jsx', import.meta.url), 'utf8')

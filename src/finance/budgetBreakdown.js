@@ -274,3 +274,16 @@ export function buildBudgetBreakdown({ transactions = [], budget = {}, month = n
 export function budgetBreakdownTotal(lines = []) {
   return lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0)
 }
+
+// Consolidate presentation only. Stable source IDs still own reviewed targets and allocations.
+export function consolidateBudgetLines(lines, budgetForLine, actualForLine) {
+  const groups = new Map()
+  for (const line of lines) {
+    const key = line.name.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+    const row = groups.get(key) || { name:line.name.trim(), budget:0, actual:0 }
+    row.budget += budgetForLine(line)
+    row.actual += actualForLine(line)
+    groups.set(key, row)
+  }
+  return [...groups.values()]
+}
