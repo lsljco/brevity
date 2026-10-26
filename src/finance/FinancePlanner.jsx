@@ -3837,7 +3837,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
       {/* Tab nav */}
       <div className="finance-report-tabs" role="tablist" aria-label="Business statement views" style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 28 }}>
         {REPORT_TABS.map(t => (
-          <button type="button" role="tab" aria-selected={tab === t.id} key={t.id} onClick={() => setTab(t.id)}
+          <button type="button" role="tab" aria-label={t.label} aria-selected={tab === t.id} key={t.id} onClick={() => setTab(t.id)}
             style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 20px', fontSize: 13, fontWeight: 500,
               cursor: 'pointer', border: 'none', borderBottom: `2px solid ${tab === t.id ? 'var(--gold)' : 'transparent'}`,
               background: 'transparent', color: tab === t.id ? 'var(--gold)' : 'var(--muted)', fontFamily: 'var(--font)',
