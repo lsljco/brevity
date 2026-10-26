@@ -1131,7 +1131,7 @@ test('Education saves only an approved item and shows the saved record after ref
  await review.getByRole('button',{name:'Apply approved changes',exact:true}).click()
  await expect(hub.getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()
  expect(executions).toBe(1)
- await page.locator('.brevity-assistant-drawer.is-open').getByRole('button',{name:'Close Brevity Assistant',exact:true}).click()
+ await expect(page.locator('.brevity-assistant-drawer.is-open')).toHaveCount(0)
  await page.reload()
  await page.getByRole('button',{name:'Open Education',exact:true}).click()
  await expect(page.locator('.learning-hub').getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()

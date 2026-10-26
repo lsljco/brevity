@@ -32,6 +32,7 @@ test('meeting-created text exposes editors and routes saves through reviewed Act
 })
 
 test('Action Mode renders extracted meeting records as reviewable fields',()=>{
+  const assistant=readFileSync(new URL('../assistant/ActionReview.jsx',import.meta.url),'utf8')
   assert.match(assistant,/Object\.entries\(item\)/)
   assert.match(assistant,/actionFieldLabel\(field\).*actionFieldValue\(fieldValue\)/)
   assert.doesNotMatch(assistant,/Array\.isArray\(value\)\?value\.join\(', '\)/)

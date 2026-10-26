@@ -1825,13 +1825,13 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           return {transactions:current.transactions,version:getAcknowledgedSharedStateVersion(localStorage,storageKey)}
         },
       })
-      if (!result?.proposal?.id) throw new Error('This financial change could not be prepared safely.')
+      if (!result?.proposal?.id) throw new Error('Unable to prepare this financial change.')
       setStorageError('')
       requestActionReview(result.proposal)
-      showToast('Review this financial change in Action Mode')
+      showToast('Review this financial change')
       return true
     } catch (error) {
-      if (!surfaceError) setStorageError(error.message || 'This financial change could not be prepared safely.')
+      if (!surfaceError) setStorageError(error.message || 'Unable to prepare this financial change.')
       showToast('⚠ Financial change not prepared')
       if (surfaceError) throw error
       return false
@@ -2001,7 +2001,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         expectedVersion:getAcknowledgedSharedStateVersion(localStorage,'lslj_tx_overrides_v1'),
       })
       requestActionReview(result.proposal)
-      showToast('Review this transaction change in Action Mode')
+      showToast('Review this transaction change')
       return true
     }catch(error){
       setStorageError(error.message||'This transaction change could not be prepared safely.')

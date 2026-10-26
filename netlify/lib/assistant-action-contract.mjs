@@ -71,6 +71,7 @@ export const ACTION_TYPES = {
   'calendar.update': 'calendar',
   'calendar.delete': 'calendar',
   'transaction.categorize': 'finance',
+  'transaction.allocate': 'finance',
   'transaction.update': 'finance',
   'transaction.rule.create': 'finance',
   'transaction.rule.delete': 'finance',
@@ -150,6 +151,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'calendar.update': ['title', 'notes', 'owner', 'participants', 'date', 'time', 'endDate', 'endTime', 'allDay', 'priority', 'location', 'url', 'recurrenceFrequency', 'recurrenceInterval', 'recurrenceDays', 'recurrenceEndDate', 'alert1Minutes', 'alert2Minutes'],
   'calendar.delete': [],
   'transaction.categorize': ['category'],
+  'transaction.allocate': ['budgetLineId','category'],
   'transaction.update': ['name', 'category'],
   'transaction.rule.create': ['title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
   'transaction.rule.delete': [],
@@ -187,7 +189,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'nutrition.meal.remove': ['entryId', 'reason'],
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
-const STRING_FIELDS = new Set(['verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
+const STRING_FIELDS = new Set(['budgetLineId', 'verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
 const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
 const BOOLEAN_FIELDS = new Set(['cashAllowance', 'allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'recurrenceEndDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
@@ -254,7 +256,7 @@ const resourceGroupForOperation = operation => {
   if (operation.type.startsWith('meeting.')) return 'shared:brevity_finance_meetings_v1'
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return 'shared:homehq_items_v1'
-  if (operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return 'shared:brevity_transaction_overrides_v1'
+  if (operation.type === 'transaction.allocate' || operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return 'shared:brevity_transaction_overrides_v1'
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:lslj_tx_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
@@ -638,6 +640,7 @@ export function normalizeActionOperation(input = {}) {
   if (type.startsWith('calendar.') && payload.recurrenceFrequency && !['none','daily','weekdays','weekly','monthly','yearly'].includes(payload.recurrenceFrequency)) throw new Error('The calendar recurrence frequency is not supported.')
   if (type.startsWith('calendar.') && payload.recurrenceFrequency === 'weekly' && payload.recurrenceDays && !payload.recurrenceDays.length) throw new Error('A weekly calendar recurrence requires at least one weekday.')
   if (type.startsWith('calendar.') && [payload.alert1Minutes,payload.alert2Minutes].some(value=>value!==undefined&&(value < -1 || value > 525600))) throw new Error('Calendar notifications must be disabled or between the event time and one year before it.')
+  if (type === 'transaction.allocate' && (!operation.targetId || !payload.budgetLineId || !payload.category)) throw new Error('Choose an exact bank transaction and budget category or line.')
   if (type === 'transaction.categorize' && !payload.category) throw new Error('A transaction category is required.')
   if (type === 'transaction.update' && !operation.targetId) throw new Error('A transaction update requires the exact bank transaction id.')
   if (type === 'transaction.update' && !Object.keys(payload).some(field=>['name','category'].includes(field))) throw new Error('A transaction update requires a reviewed name or category change.')

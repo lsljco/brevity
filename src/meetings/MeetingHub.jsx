@@ -3,7 +3,7 @@ import {createPortal} from 'react-dom'
 import {useMeetingSession,restoreMeeting,detachMeeting,stopMeeting,openMeetingHistory,closeMeetingHistory,retryMeetingBackup,downloadMeeting} from './meetingSession.js'
 import {listMeetings,meetingAudio,pinMeeting} from './meetingArchive.js'
 import './MeetingHub.css'
-export default function MeetingHub({member}){
+export default function MeetingHub({member,compact=false}){
  const dialog=useRef(null)
  const session=useMeetingSession(),[rows,setRows]=useState([]),[selected,setSelected]=useState(null),[url,setUrl]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(false)
  useEffect(()=>{restoreMeeting(member);return()=>detachMeeting()},[member])
@@ -16,10 +16,10 @@ export default function MeetingHub({member}){
  const record=session.record?.member===member?session.record:null
  const safe=action=>Promise.resolve().then(action).catch(cause=>setError(cause.message))
  return <>
-  <section className={`meeting-hub${session.recording?' is-recording':''}`} aria-label="Meeting recorder">
-   <div>{session.recording?<><strong>● Recording · {record?.title}</strong><span>Continues as you move between screens.</span></>:<span>{session.saving?'Saving captured audio…':session.transcribing?'Finishing meeting transcription…':'Meeting recordings & transcripts'}</span>}</div>
+  <section className={`meeting-hub${session.recording?' is-recording':''}${compact?' is-compact':''}`} aria-label="Meeting recorder">
+   {Boolean(!compact||session.recording||session.saving||session.transcribing)&&<div>{session.recording?<><strong>● Recording · {record?.title}</strong><span>Continues as you move between screens.</span></>:<span>{session.saving?'Saving captured audio…':session.transcribing?'Finishing meeting transcription…':'Meeting recordings & transcripts'}</span>}</div>}
    <div>{session.recording&&<button onClick={()=>stopMeeting()}>Stop Meeting</button>}<button onClick={openMeetingHistory}>Meeting History</button></div>
-   {record&&(session.error||session.backup)&&<small role="status">{session.error||session.backup}{session.error&&<button onClick={()=>safe(()=>retryMeetingBackup())}>Retry backup</button>}</small>}
+   {record&&(session.error||(!compact&&session.backup))&&<small role="status">{session.error||session.backup}{session.error&&<button onClick={()=>safe(()=>retryMeetingBackup())}>Retry backup</button>}</small>}
   </section>
   {session.historyOpen&&createPortal(<div className="meeting-history-backdrop"><section ref={dialog} className="meeting-history" role="dialog" aria-modal="true" aria-label="Meeting History"><header><div><h2>Meeting History</h2><p>Your saved recordings and transcripts · {member} · Rolling 12 months; pinned and finance meetings retained</p></div><button autoFocus onClick={()=>{closeMeetingHistory();setSelected(null)}} aria-label="Close Meeting History">Close</button></header>
    <p>Audio saves throughout the meeting. Interrupted meetings retain the portions already captured. Transcription may finish after you stop.</p>
