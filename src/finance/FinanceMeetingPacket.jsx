@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import SpendingAccountabilityPanel from './SpendingAccountabilityPanel.jsx'
 import {useEffect, useMemo, useState} from 'react'
 import {buildMeetingPacket, meetingPacketText} from './meetingPackets.js'
@@ -22,7 +24,7 @@ export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={
     const blob=new Blob([meetingPacketText(packet)],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),anchor=document.createElement('a')
     anchor.href=url;anchor.download=`Jenkins-Seay-${cadence}-${packet.period.from}-${packet.period.to}.txt`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
   }
-  return <section className="fm-packet" aria-label="Prepared FIN-001 meeting packet">
+  return <section className="fm-packet" aria-label="Prepared FIN-001 meeting packet"><FinanceExport report={financeReport(`${packet.label} meeting ${packet.period.from} to ${packet.period.to}`,packet,[`As of ${packet.asOf}`,analysisNotice||'','Draft meeting packet; selected report period and reviewed notes included.'])}/>
     <header><div><p className="fm-eyebrow">FIN-001 · Prepared from Finance</p><h2>{packet.label} meeting packet</h2><p>{packet.duration} · {packet.period.from} through {packet.period.to}</p><small>As of {packet.asOf} · Draft · {packet.scope.length} selected accounts</small></div><div className="fm-packet-controls"><label>Report period<select value={mode} onChange={e=>setMode(e.target.value)} disabled={busy}><option value="previous">Last completed period</option><option value="current">Current period to date</option></select></label><button type="button" onClick={download}>Download packet</button>{!readOnly&&<button type="button" onClick={archive} disabled={busy||recording}>{busy?'Preparing review…':'Review & archive packet'}</button>}</div></header>
     <p className="fm-packet-source">Updates automatically when Finance data changes and while this page is open. Bank refresh uses Brevity’s existing sync. Balance check: {packet.sources.balanceCheckedAt||'time unavailable'} ({packet.sources.balanceDataStatus}). Transaction check: {packet.sources.transactionCheckedAt||'time unavailable'} ({packet.sources.transactionFreshnessStatus}).</p>
     {error&&<p role="alert" className="fm-edit-error">{error}</p>}

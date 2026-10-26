@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport,recordsSection,transactionSection} from './financeExportData.js'
 import { useMemo, useState, useEffect, lazy, Suspense } from 'react'
 import { addDays, fmtMoney, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { groupCashInflows, groupReportTransactions, isRealizedIncomeTransaction, reportStats, summarizeActualCashActivity, transactionDirection } from './reportingData.js'
@@ -67,6 +69,8 @@ export default function MonarchReports({ transactions:sourceTransactions = [], r
   const openIncome = (value, selectedDirection = 'income', ids) => open(value, selectedDirection, ids, true)
 
   return <div className="monarch-reports">
+    <FinanceExport buildReport={()=>({title:`${tab} report ${range.from} to ${range.to}`,notes:[timeframeLabel(range),`Grouped by ${displayBy}`,`Vendor filter: ${vendorFilter||'All'}`,'Posted activity only; transfers excluded from income and expense totals.'],sections:[recordsSection('Summary',[tab==='cashflow'?{income:income.total,expenses:expense.total,...postedCash}:stats]),...(tab!=='spending'?[recordsSection('Income',tab==='cashflow'?cashInflowRows:incomeRows,['name','amount'])]:[]),...(tab!=='income'?[recordsSection('Expenses',expenseRows,['name','amount'])]:[]),transactionSection(transactions.filter(tx=>!tx.pending&&(tab==='cashflow'?['income','expense'].includes(transactionDirection(tx)):tab==='income'?isRealizedIncomeTransaction(tx):transactionDirection(tx)==='expense')))]})}/>
+
     <div style={{ display: 'flex', gap: 8, padding: 5, borderRadius: 13, background: 'rgba(255,255,255,.035)', marginBottom: 16 }}>
       {[['cashflow','Cash Flow'],['spending','Spending'],['income','Income']].map(([id,label]) => <button key={id} style={button(tab === id)} onClick={() => setTab(id)}>{label}</button>)}
     </div>
@@ -127,6 +131,7 @@ export function RecurringFinance({ scheduled = [], actuals = [], range, onOpenSc
   }, { income: 0, expense: 0 }), [occurrences])
 
   return <div className="recurring-finance">
+    {tab!=='discover'&&<FinanceExport report={{title:`Recurring ${tab} ${range.from} to ${range.to}`,notes:[timeframeLabel(range),'Amounts are per occurrence; Occurrences gives the count in the selected period.'],sections:[recordsSection('Totals',[totals]),transactionSection(rows,accounts,{scheduled:true})]}}/>}
     <div style={{ display: 'flex', gap: 8, padding: 5, background: 'rgba(255,255,255,.035)', borderRadius: 13, marginBottom: 18 }}>{[['discover','Discover'],['upcoming','Upcoming'],['all','All Recurring']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} style={button(tab === id)}>{label}</button>)}</div>
     {tab === 'discover' ? <Suspense fallback={<p>Analyzing recurring activity…</p>}><RecurringDiscovery actuals={actuals} scheduled={scheduled} accounts={accounts} accountMap={accountMap} onReview={onReviewDiscovery} readOnly={readOnly}/></Suspense> : <>
     <div className="finance-card" style={{ padding: 20, marginBottom: 16 }}><h2 style={{ margin: '0 0 5px' }}>Recurring cash plan</h2><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{timeframeLabel(range)} · {actuals.length} posted transactions available for matching</p></div>

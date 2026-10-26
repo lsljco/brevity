@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import {Line} from 'react-chartjs-2'
 import {WORK_SCENARIOS,createWorkScenario,summarizeWorkScenario} from './workScenarios.js'
 import {OPPORTUNITY_SCENARIOS} from './opportunityIncome.js'
@@ -9,7 +11,7 @@ export default function WorkScenarioComparison({plans,selected,draft,onSelect}) 
     try{return {...config,...summarizeWorkScenario(assumptions),saved:plans.some(p=>p.id===config.id)}}catch{return {...config,error:true}}
   })
   const months=[...new Set(comparisons.flatMap(s=>s.monthly?[...s.monthly.keys()]:[]))].sort()
-  return <section aria-label="Return-to-work scenario comparison">
+  return <section aria-label="Return-to-work scenario comparison"><FinanceExport report={financeReport('Return to work comparison',{scenarios:comparisons.map(row=>({...row,monthly:row.monthly?[...row.monthly].map(([month,value])=>({month,balance:value})):[]}))},['Hypothetical income scenarios.'])}/>
     <h3>{opportunities?'October 15 opportunity models':'Your return-to-work scenarios'}</h3>
     <div className="recovery-actions"><button aria-pressed={!opportunities} onClick={()=>onSelect(WORK_SCENARIOS[0].id)}>Household scenarios</button><button aria-pressed={opportunities} onClick={()=>onSelect(OPPORTUNITY_SCENARIOS[0].id)}>October 15 opportunities</button></div>
     <p>October 2026–December 2027 · each plan starts with $17,000 of worksheet opening funds. Compare monthly household surplus, taxes and planned debt payoffs. All amounts are hypothetical.</p>

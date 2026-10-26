@@ -12,7 +12,7 @@ import {
   buildLegacyBudgetOwners,
 } from './budgetBreakdown.js'
 
-const financeSource = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
+const financeSource = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8') + readFileSync(new URL('./BudgetView.jsx', import.meta.url), 'utf8')
 
 test('Budget restores the selected month after a drill-down', () => {
   assert.match(financeSource, /initialMonth=\{transactionFilter\?\.budgetMonth\}/)

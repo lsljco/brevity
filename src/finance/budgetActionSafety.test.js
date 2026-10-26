@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
+const planner = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8') + readFileSync(new URL('./BudgetView.jsx', import.meta.url), 'utf8')
 const actionsFunction = readFileSync(new URL('../../netlify/functions/brevity-assistant-actions.mjs', import.meta.url), 'utf8')
 
 test('budget targets require reviewed Action Mode changes', () => {

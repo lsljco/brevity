@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import {useMemo} from 'react'
 import {Line} from 'react-chartjs-2'
 import {projectWorksheet} from './recoveryWorksheet.js'
@@ -6,7 +8,7 @@ const money=value=>value===null?'Awaiting compensation':new Intl.NumberFormat('e
 export default function RecoveryWorksheet({worksheet,onChange,readOnly}) {
   const result=useMemo(()=>{try{return projectWorksheet(worksheet)}catch(error){return {error:error.message}}},[worksheet])
   const edit=(id,key,value)=>onChange({...worksheet,rows:worksheet.rows.map(row=>row.id===id?{...row,[key]:value}:row)})
-  return <section aria-label="Source worksheet plan">
+  return <section aria-label="Source worksheet plan"><FinanceExport report={financeReport('Recovery worksheet',result,['Source worksheet calculations; not bank ledger balances.'])}/>
     <p role="note">Hypothetical worksheet · opening funds replace the live cash anchor for this plan. They are not added to bank balances. Month-level ordering follows the supplied sheet; it does not verify receipts or payment dates. Income, Texas allocations, taxes and payoffs are included only where shown in the rows below.</p>
     <details open><summary>Source interpretation and uncertainties</summary><p>{worksheet.sourceNotes}</p></details>
     {worksheet.opportunity&&<OpportunityAssumptions value={worksheet.opportunity} readOnly={readOnly} onChange={opportunity=>onChange({...worksheet,opportunity})}/>}

@@ -1,3 +1,5 @@
+import FinanceExport from './FinanceExport.jsx'
+import {financeReport} from './financeExportData.js'
 import {useEffect,useMemo,useState} from 'react'
 import {Line} from 'react-chartjs-2'
 import WorkScenarioComparison from './WorkScenarioComparison.jsx'
@@ -63,7 +65,7 @@ export default function RecoveryWorkspace({financeData={accounts:[],transactions
     for(const row of result.daily){if(!groups.length||row.payday)groups.push({date:row.date,payroll:0,texas:0,tax:0,extraDebt:0,balance:null});const group=groups.at(-1);for(const key of ['payroll','texas','tax','extraDebt'])group[key]+=row[key];group.end=row.date;group.balance=row.balance}
     return groups
   },[result])
-  return <section className="recovery-workspace" aria-labelledby="recovery-title">
+  return <section className="recovery-workspace" aria-labelledby="recovery-title"><FinanceExport report={financeReport(`Recovery ${draft.title||id} ${variant}`,{assumptions:draft,result:result||calculation},[`${draft.start} through ${draft.end}`,freshness||'','Hypothetical projections.'])}/>
     <header><p className="scenario-eyebrow">{draft.worksheet?'Source worksheet':'Scenario 001'} · Hypothetical planning</p><h2 id="recovery-title">Household Financial Recovery</h2><p>{draft.start}–{draft.end}. {draft.worksheet?'Source worksheet assumptions are not actual financial activity.':'Vizient employment, start date, and payroll are unconfirmed. No hypothetical income is realized cash.'}</p></header>
     <WorkScenarioComparison plans={plans} selected={id} draft={draft} onSelect={selectPlan}/>
     <h3>{draft.title}</h3>
