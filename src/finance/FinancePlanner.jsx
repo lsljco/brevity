@@ -3490,7 +3490,7 @@ function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], i
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Monthly Budget</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>All scheduled income and expenses for this month, including one-time entries. Plan Grid preserves separately reviewed targets.</p>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Reviewed monthly targets, with scheduled income and expenses as defaults. Use Plan Grid to adjust targets.</p>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Month nav */}
