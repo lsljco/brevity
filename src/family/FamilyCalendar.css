@@ -558,3 +558,9 @@
     height: 24px;
   }
 }
+
+/* The month grows with its events; the app owns vertical scrolling. */
+.app-main .family-calendar{flex:0 0 auto;min-height:0!important;height:auto;max-height:none;overflow:visible;padding-bottom:112px!important}
+.family-calendar-scroll{height:auto;max-height:none}
+.family-calendar-grid{align-items:stretch;grid-auto-rows:auto}
+@media(min-width:721px){.family-calendar-grid{min-width:0;grid-template-columns:repeat(7,minmax(0,1fr))!important}.family-calendar-day{min-width:0}.family-calendar-event-title{overflow-wrap:anywhere}}

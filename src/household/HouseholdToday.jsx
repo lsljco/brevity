@@ -1,3 +1,4 @@
+import {createPortal} from 'react-dom'
 import {useProjectCalendar} from '../homehq/useProjectCalendar.js'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { calendarAppointmentsForPlan } from '../family/calendarOverlay.js'
@@ -63,7 +64,8 @@ export default function HouseholdToday(props) {
   const [date, setDate] = useState(() => validPlanDate(props.initialDate) ? props.initialDate : currentDailyPlanDate())
   const onDateChange = props.onDateChange
   useEffect(()=>{onDateChange?.(date)},[date,onDateChange])
-  return <><nav className="life-date-nav" aria-label="Daily plan navigation"><button type="button" aria-label="Previous day" onClick={()=>setDate(value=>shiftPlanDate(value,-1))}>‹</button><label><span>Review a day</span><input aria-label="Daily plan date" type="date" value={date} onChange={event=>{if(validPlanDate(event.target.value))setDate(event.target.value)}}/></label><button type="button" aria-label="Next day" onClick={()=>setDate(value=>shiftPlanDate(value,1))}>›</button><button type="button" onClick={()=>setDate(currentDailyPlanDate())}>Today</button></nav><DatedHouseholdToday key={date} {...props} date={date}/></>
+  const navigation=<nav className="life-date-nav" aria-label="Daily plan navigation"><button type="button" aria-label="Previous day" onClick={()=>setDate(value=>shiftPlanDate(value,-1))}>‹</button><label><span>Review a day</span><input aria-label="Daily plan date" type="date" value={date} onChange={event=>{if(validPlanDate(event.target.value))setDate(event.target.value)}}/></label><button type="button" aria-label="Next day" onClick={()=>setDate(value=>shiftPlanDate(value,1))}>›</button><button type="button" onClick={()=>setDate(currentDailyPlanDate())}>Today</button></nav>
+  return <>{props.navigationTarget?createPortal(navigation,props.navigationTarget):navigation}<DatedHouseholdToday key={date} {...props} date={date}/></>
 }
 
 function DatedHouseholdToday({ date, currentMember = 'Larry', canEditPlanning = true, planningAccessStatus = 'ready', isAdministrator = false, onOpenPillar, onOpenMealPlan, onOpenCalendar, onOpenIntelligence, onOpenPractices, onNavigatePracticeArea }) {
