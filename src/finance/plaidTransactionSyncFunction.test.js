@@ -26,6 +26,16 @@ test('provider pending-to-posted identity survives mapping without similarity ma
  for(const transaction of [{pending:true,pending_transaction_id:'pending'},{pending:false},{pending:false,pending_transaction_id:{id:'invalid'}}])assert.equal(mapPlaidTransaction(transaction).pendingTransactionId,null)
 })
 
+test('completed sync retains final-page balances and status inside the replayable batch',async()=>{
+ let count=0
+ const result=await syncItemTransactions({accessToken:'test',client:{transactionsSync:async()=>({data:{added:[],modified:[],removed:[],next_cursor:`cursor-${++count}`,has_more:count===1,transactions_update_status:'HISTORICAL_UPDATE_COMPLETE',accounts:[{account_id:'bank',type:'depository',balances:{current:count*100,available:150,last_updated_datetime:'2026-10-25T12:00:00Z'}}]}})}})
+ const batch=buildPendingDelta({cursorIdentity:'item',fromCursor:'',result,institution:'Test',itemId:'item',createdAt:'2026-10-25T13:00:00Z'})
+ assert.equal(batch.balanceAccounts[0].current,200)
+ assert.equal(batch.balanceAccounts[0].sourceUpdatedAt,'2026-10-25T12:00:00Z')
+ assert.equal(batch.updateStatus,'HISTORICAL_UPDATE_COMPLETE')
+ assert.notEqual(batch.batchId,buildPendingDelta({cursorIdentity:'item',fromCursor:'',result:{...result,accounts:[]},createdAt:batch.createdAt}).batchId)
+})
+
 test('transaction refresh completion requires a successful Item update at or after the request', () => {
   // Match Plaid's documented /item/get response, not an invented nested shape.
   const response={data:{item:{item_id:'fixture-item',error:null},status:{transactions:{last_successful_update:'2026-09-08T23:00:05.000Z',last_failed_update:null}},request_id:'fixture-request'}}

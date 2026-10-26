@@ -11,7 +11,11 @@ function Table({caption,headers,rows,empty='No records available for this select
 export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={},onEdit,onProposeAction,onArchive,readOnly=false,editReadOnly=readOnly,recording=false}){
   const [mode,setMode]=useState('previous'),[now,setNow]=useState(()=>new Date()),[busy,setBusy]=useState(false),[error,setError]=useState('')
   useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),60000);return()=>clearInterval(timer)},[])
-  const source=useMemo(()=>buildMeetingPacket({...data,cadence,mode,now,actions}),[data,cadence,mode,now,actions])
+  const source=useMemo(()=>{
+    let pairedBalanceHistory=[]
+    try{pairedBalanceHistory=JSON.parse(localStorage.getItem('brevity_shared_state_meta_v1')||'{}').plaid_actuals_cache?.plaidBalanceHistory||[]}catch{/* Missing evidence remains unverified. */}
+    return buildMeetingPacket({...data,pairedBalanceHistory,cadence,mode,now,actions})
+  },[data,cadence,mode,now,actions])
   const {packet,analysisNotice}=usePacketIntelligence(source,edits)
   const archive=async()=>{setBusy(true);setError('');try{await onArchive(packet)}catch(e){setError(e.message||'Could not prepare the packet for review.')}finally{setBusy(false)}}
   const download=()=>{

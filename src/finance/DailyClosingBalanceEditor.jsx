@@ -1,8 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getAcknowledgedSharedStateVersion } from '../household/sharedState.js'
 import { fmtMoney } from './projection.js'
 
-export default function DailyClosingBalanceEditor({ date, accounts, records = {}, onReview }) {
+export function DailyClosingBalanceDialog({onClose,...props}) {
+  const ref = useRef(null)
+  useEffect(()=>{const dialog=ref.current;dialog.showModal();return()=>dialog.close()},[])
+  return <dialog ref={ref} className="finance-ending-balance-dialog" aria-label={`Correct ending balance for ${props.date}`} onCancel={onClose}>
+    <button type="button" onClick={onClose} aria-label="Close balance editor">Close</button>
+    <DailyClosingBalanceEditor {...props} autoOpen/>
+  </dialog>
+}
+
+export default function DailyClosingBalanceEditor({ date, accounts, records = {}, onReview, autoOpen = false }) {
   const [editing, setEditing] = useState(false)
   const [accountId, setAccountId] = useState(accounts[0]?.id || '')
   const [amount, setAmount] = useState('')
@@ -19,6 +28,7 @@ export default function DailyClosingBalanceEditor({ date, accounts, records = {}
       setError(''); setEditing(true)
     } catch { setError('Sync household data before editing this ending balance.') }
   }
+  useEffect(()=>{if(autoOpen)open()},[autoOpen])
   async function review(remove = false) {
     if (!remove && (!amount.trim() || !Number.isFinite(Number(amount)))) { setError('Enter a valid ending balance, including zero or a negative amount.'); return }
     setBusy(true); setError('')

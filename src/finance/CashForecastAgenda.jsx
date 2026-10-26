@@ -31,6 +31,7 @@ export default function CashForecastAgenda({
   todayPlanUnresolved,
   hasCashAccounts = true,
   onSelectDay,
+  onEditBalance,
 }) {
   const [showEarlier, setShowEarlier] = useState(false)
   const agendaRef = useRef(null)
@@ -125,8 +126,9 @@ export default function CashForecastAgenda({
           : ''
         const rowLabel = `${dateLabel}. ${day.planned.length} planned item${day.planned.length === 1 ? '' : 's'}; planned net ${plannedNetLabel}.${bankSummary}${day.balance !== undefined ? ` ${balanceKind}: ${fmtMoney(day.balance)}.` : ''} ${selected ? 'Close' : 'Open'} cash forecast details.`
         return (
-          <button
-            type="button"
+          <div
+            role="button" tabIndex={0}
+            onKeyDown={event=>{if(event.target===event.currentTarget&&(event.key==='Enter'||event.key===' ')){event.preventDefault();onSelectDay(selected?null:day.key)}}}
             key={day.key}
             className={selected ? 'is-selected' : ''}
             onClick={() => {
@@ -145,7 +147,7 @@ export default function CashForecastAgenda({
               <span className="finance-calendar-agenda-values" title={`Balance anchor: ${balanceSource}`}>
                 {day.currentBalance !== undefined && <small>{balanceVerifiedLive ? 'Current bank balance' : 'Last saved bank balance'}: {fmtMoney(day.currentBalance)}</small>}
                 <small>{balanceKind}</small>
-                <strong>{fmtMoney(day.balance)}</strong>
+                {onEditBalance && day.key <= todayKey ? <button type="button" className="finance-ending-balance-edit" aria-label={`Edit ending balance for ${day.key}`} onClick={event=>{event.stopPropagation();onEditBalance(day.key)}}>{fmtMoney(day.balance)}</button> : <strong>{fmtMoney(day.balance)}</strong>}
               </span>
             )}
             <span className="finance-calendar-agenda-activity">
@@ -180,7 +182,7 @@ export default function CashForecastAgenda({
               {day.planned.length === 0 && (!showBankActivity || day.bank.length === 0) && <small className="finance-calendar-agenda-no-activity">No scheduled activity</small>}
               <small className="finance-calendar-day-link">{selected ? 'Close' : 'View'} day details →</small>
             </span>
-          </button>
+          </div>
         )
       }) : (
         <div className="finance-calendar-agenda-empty">No planned or bank activity for this month.</div>

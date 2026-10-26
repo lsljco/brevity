@@ -99,7 +99,7 @@ function budgetReport({scheduled,budget,accounts,period,posted,legacyYear,legacy
   return [...categories.values()].map(r=>{const {missingPlan,...report}=r;return {...report,planningBaseline:missingPlan?null:round(r.planningBaseline),budget:r.missingTargets?null:round(r.budget),posted:round(r.posted||0),remaining:r.missingTargets?null:round(r.budget-(r.posted||0))}}).sort((a,b)=>b.posted-a.posted)
 }
 
-export function buildMeetingPacket({cadence='daily',mode='current',now=new Date(),accounts=[],scheduled=[],actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,actions=[],spendingReviews={},spendingSources,balanceHistory=[],balanceDataStatus='unknown',transactionFreshnessStatus='unknown',balanceCheckedAt='',transactionCheckedAt=''}={}){
+export function buildMeetingPacket({cadence='daily',mode='current',now=new Date(),accounts=[],scheduled=[],actuals=[],budget={},budgetLegacyYear,budgetLegacyAccountId,actions=[],spendingReviews={},spendingSources,balanceHistory=[],pairedBalanceHistory=[],balanceDataStatus='unknown',transactionFreshnessStatus='unknown',balanceCheckedAt='',transactionCheckedAt=''}={}){
   if(!MEETING_POLICIES[cadence])throw Error('Unknown financial meeting cadence.')
   const policy=MEETING_POLICIES[cadence],period=meetingPeriod(cadence,mode,now),asOf=getHouseholdDateKey(now),links=exactAccountLinks(accounts)
   const agedStatus=(status,checkedAt)=>{
@@ -130,7 +130,14 @@ export function buildMeetingPacket({cadence='daily',mode='current',now=new Date(
   if(!linked)warnings.push('Some selected accounts lack unique bank links. Household activity totals are unavailable; review account mapping.')
   if(transactionFreshnessStatus!=='fresh')warnings.push(`Bank activity is ${transactionFreshnessStatus}. Retained records may omit recent activity.`)
   if(balanceDataStatus!=='fresh')warnings.push(`Cash balances are ${balanceDataStatus}; verify balances before relying on coverage.`)
-  warnings.push('Retained transaction history does not certify complete period coverage or account reconciliation. Statement review is required before close approval.')
+  warnings.push('Review bank reconciliation differences and coverage before close approval. Retained transactions alone do not certify a daily bank close.')
+  for (const observation of pairedBalanceHistory) {
+    if (observation.date > asOf) continue
+    for (const account of accounts) {
+      const check=observation.reconciliation?.[account.plaidAccountId]
+      if (check?.status==='difference') warnings.push(`Bank reconciliation review: ${account.name} · ${observation.date} · difference ${Number(check.difference).toFixed(2)} USD. A later matching sync does not explain this earlier difference.`)
+    }
+  }
   if(actuals.some(t=>links.has(t.accountId)&&(!validNumber(t.amount)||!parseISODate(t.date))))warnings.push('Invalid bank amount or date excluded. Resolve source errors before approving a report.')
   if(categoryBudget.some(r=>r.missingTargets))warnings.push('Budget targets are missing for some categories/months. Missing targets are not treated as zero.')
   if(cadence==='daily'||cadence==='weekly')warnings.push('Budget comparison uses full monthly targets for the months touched by this report; targets are not prorated to days or weeks.')

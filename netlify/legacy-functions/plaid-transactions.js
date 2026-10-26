@@ -97,6 +97,8 @@ async function syncItemTransactions({
     const added = []
     const modified = []
     const removed = []
+    let accounts = []
+    let updateStatus = ''
 
     try {
       while (hasMore) {
@@ -122,6 +124,10 @@ async function syncItemTransactions({
         const data = response?.data || {}
         const nextCursor = String(data.next_cursor || '')
         hasMore = Boolean(data.has_more)
+        // Keep the final completed page's balances with this exact delta.
+        // A separate live balance request may reflect a different bank update.
+        accounts = Array.isArray(data.accounts) ? data.accounts : []
+        updateStatus = data.transactions_update_status || ''
 
         if (!nextCursor || (hasMore && nextCursor === requestCursor)) {
           const error = new Error('Plaid transaction sync did not return a safe next cursor.')
@@ -136,7 +142,7 @@ async function syncItemTransactions({
         pages += 1
       }
 
-      return { added, modified, removed, nextCursor:cursor, pages, restarts }
+      return { added, modified, removed, accounts, updateStatus, nextCursor:cursor, pages, restarts }
     } catch (error) {
       if (plaidErrorCode(error) === SYNC_MUTATION_CODE && restarts < maxMutationRestarts) {
         restarts += 1
@@ -169,14 +175,19 @@ function buildPendingDelta({ cursorIdentity, fromCursor, result, institution, it
     error.code = 'PLAID_SYNC_DELTA_LIMIT'
     throw error
   }
-  const material = { cursorIdentity, fromCursor, nextCursor:result.nextCursor, transactions, removed, delta:consolidated.counts }
+  const balanceAccounts = (result.accounts || []).filter(a => a.type === 'depository' && typeof a.account_id === 'string' && Number.isFinite(a.balances?.current)).map(a => ({
+    accountId:a.account_id, current:a.balances.current,
+    available:Number.isFinite(a.balances.available) ? a.balances.available : null,
+    sourceUpdatedAt:typeof a.balances.last_updated_datetime === 'string' ? a.balances.last_updated_datetime : null,
+  }))
+  const material = { cursorIdentity, fromCursor, nextCursor:result.nextCursor, transactions, removed, delta:consolidated.counts, balanceAccounts, updateStatus:result.updateStatus || '' }
   if (Buffer.byteLength(JSON.stringify(material), 'utf8') > MAX_PENDING_BYTES) {
     const error = new Error('Plaid returned a transaction batch larger than Brevity can safely stage.')
     error.code = 'PLAID_SYNC_DELTA_LIMIT'
     throw error
   }
   const batchId = crypto.createHash('sha256').update(JSON.stringify(material)).digest('hex')
-  return { batchId, fromCursor, nextCursor:result.nextCursor, transactions, removed, delta:consolidated.counts, createdAt }
+  return { batchId, fromCursor, nextCursor:result.nextCursor, transactions, removed, delta:consolidated.counts, balanceAccounts, updateStatus:result.updateStatus || '', createdAt }
 }
 
 async function syncAndStageItem({

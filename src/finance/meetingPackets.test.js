@@ -1,4 +1,14 @@
 import test from 'node:test'
+test('all meeting cadences retain paired balance differences for the selected account',()=>{
+ const accounts=[{id:'checking',name:'Test checking',type:'checking',balance:100,plaidAccountId:'bank'}]
+ const pairedBalanceHistory=[{date:'2026-10-01',reconciliation:{bank:{status:'difference',difference:-25},other:{status:'difference',difference:-999}}},{date:'2026-10-02',reconciliation:{bank:{status:'matched',difference:0}}}]
+ for(const cadence of Object.keys(MEETING_POLICIES)){
+  const packet=buildMeetingPacket({cadence,accounts,pairedBalanceHistory,now:new Date('2026-10-25T16:00:00Z')})
+  assert.ok(packet.warnings.some(w=>w.includes('Test checking')&&w.includes('-25.00')))
+  assert.ok(!packet.warnings.some(w=>w.includes('-999')))
+  assert.ok(!packet.warnings.some(w=>w.includes('Statement review is required')))
+ }
+})
 import assert from 'node:assert/strict'
 import {MEETING_POLICIES,buildMeetingPacket,meetingPeriod,meetingPacketText} from './meetingPackets.js'
 

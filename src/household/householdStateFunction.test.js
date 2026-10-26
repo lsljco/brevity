@@ -79,6 +79,26 @@ const verifiedAccounts = (accounts, { issuedAt = new Date('2026-09-07T13:59:00.0
   return { accounts, issuedAt, receiptId, sourceUpdatedAt, balanceMode }
 } })
 
+test('unchanged transactions still persist new paired balances before acknowledging the batch',async()=>{
+ const value=JSON.stringify([actual()]),dataStore=memoryStore({key:'plaid_actuals_cache',value,hash:hashValue(value),version:1})
+ const staged=stagedSource({transactions:[]})
+ const verify=staged.verifySourceReceipts
+ staged.verifySourceReceipts=async receipts=>{
+   const batches=await verify(receipts)
+   batches[0].pendingDelta.balanceAccounts=[{accountId:'plaid-operating',current:2000,available:1900}]
+   batches[0].pendingDelta.updateStatus='HISTORICAL_UPDATE_COMPLETE'
+   return batches
+ }
+ const result=await writePlaidSourceRecord({dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('plaid_actuals_cache',[actual()],1),now,...staged})
+ assert.equal(result.statusCode,200)
+ assert.equal(result.body.record.version,2)
+ assert.equal(result.body.record.plaidBalanceHistory[0].balances['plaid-operating'],2000)
+ assert.equal(result.body.record.plaidBalanceHistory[0].postedTotals['plaid-operating'],-45000)
+ const replay=await writePlaidSourceRecord({dataStore,session:{member:'Larry',role:'admin'},body:sourceBody('plaid_actuals_cache',[actual()],2),now,...staged})
+ assert.equal(replay.body.record.version,2)
+ assert.equal(replay.body.record.plaidBalanceHistory.length,1)
+})
+
 test('generic household-state writes require reviewed Action Mode for members and administrators', async () => {
   for (const session of [{ member:'Nyla', role:'member' }, { member:'Larry', role:'admin' }]) {
     for (const key of ['homehq_items_v1', 'family_calendar_events_v1', 'lslj_finance_v9', 'brevity_household_inventory_v1']) {

@@ -26,7 +26,7 @@ test('approved Cash Forecast layout keeps selected-day details alongside the cal
   await expect(page.getByRole('navigation',{name:'Finance account filters'})).toBeVisible()
   await toolbar.locator('.finance-forecast-accounts > summary').press('Escape')
   await expect(page.getByRole('navigation',{name:'Finance account filters'})).not.toBeVisible()
-  if(testInfo.project.name==='iphone')await page.locator('.finance-calendar-mobile-agenda > button').first().click()
+  if(testInfo.project.name==='iphone')await page.locator('.finance-calendar-mobile-agenda > [role="button"]').first().click()
   else await page.locator('.cal-cell.is-today').press('Enter')
   const detail=page.getByRole('complementary',{name:'Selected day details'})
   await expect(detail).toBeVisible()
@@ -840,10 +840,10 @@ test('iPhone Cash Forecast keeps Finance context visible without covering its mo
   await expect(agenda).toContainText('Pending · Gas station authorization')
   await expect(agenda).toContainText(/Pending authorizations\s*−\$30\.00\s*· excluded from posted movement/)
   await expect(agenda).toContainText(/Posted movement\s*−\$100\.00/)
-  await agenda.locator(':scope > button').filter({hasText:'PAYMENT TO CAPITAL ONE'}).click()
+  await agenda.locator(':scope > [role="button"]').filter({hasText:'PAYMENT TO CAPITAL ONE'}).click()
   await expect(page.getByText(/Transfer · included in bank balance movement, excluded from income and expense totals/)).toBeVisible()
   await page.getByRole('button',{name:'Next financial calendar month'}).click()
-  await expect(agenda.locator(':scope > button.is-selected')).toHaveCount(0)
+  await expect(agenda.locator(':scope > [role="button"].is-selected')).toHaveCount(0)
   await expect(page.locator('.finance-calendar-day-header')).toHaveCount(0)
 
   const main=page.locator('.app-main')
@@ -1350,7 +1350,7 @@ test('Calendar income editor reviews payer changes without applying them',async(
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   if(await agenda.isVisible()){
-    const todayRow=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    const todayRow=agenda.locator(':scope > [role="button"]').filter({hasText:'Today ·'})
     if(await todayRow.getAttribute('aria-expanded')!=='true')await todayRow.click()
   }else{
     const todayCell=page.locator('.cal-cell.is-today')
@@ -1414,7 +1414,7 @@ test('Finance reconciliation refresh rejects changed match evidence before prepa
   await expect(report).toContainText('Difference: $6.00')
   records.plaid_actuals_cache={...records.plaid_actuals_cache,value:JSON.stringify([{...actual,amount:1211}]),version:8,updatedAt:new Date().toISOString()}
   await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
-  await expect(report.getByRole('status')).toContainText('report changed')
+  await expect(report.locator('.reconciliation-message')).toContainText('report changed')
   await expect(report).toContainText('Difference: $7.00')
   expect(prepared).toHaveLength(0)
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toHaveCount(0)
@@ -1432,7 +1432,7 @@ test('Empty payer picker reviews creation and keeps the transaction draft',async
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   if(await agenda.isVisible()){
-    const todayRow=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    const todayRow=agenda.locator(':scope > [role="button"]').filter({hasText:'Today ·'})
     if(await todayRow.getAttribute('aria-expanded')!=='true')await todayRow.click()
   }else{
     const todayCell=page.locator('.cal-cell.is-today')
@@ -1742,7 +1742,7 @@ test('iPhone Cash Forecast separates earlier schedules from current and future m
   await expect(agenda).toContainText('−$40.00')
   await expect(agenda).not.toContainText('Unassigned')
   await agenda.getByRole('button',{name:/Show earlier days/}).click()
-  const past=agenda.locator(':scope > button').filter({hasText:'Earlier paycheck'})
+  const past=agenda.locator(':scope > [role="button"]').filter({hasText:'Earlier paycheck'})
   await expect(past).toContainText('Was scheduled')
   await expect(past).toContainText('+$777.00')
   await expect(past).toContainText('Past bank balance unavailable')
@@ -2166,7 +2166,7 @@ test('Projected expenses can be edited unassigned and vendor review stays above 
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   if(await agenda.isVisible()){
-    const row=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    const row=agenda.locator(':scope > [role="button"]').filter({hasText:'Today ·'})
     if(await row.getAttribute('aria-expanded')!=='true')await row.click()
   }else{
     const cell=page.locator('.cal-cell.is-today')
@@ -2211,7 +2211,7 @@ test('Cash Forecast earlier moves use one occurrence and errors remain readable 
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   const agenda=page.locator('.finance-calendar-mobile-agenda')
   if(await agenda.isVisible()){
-    const row=agenda.locator(':scope > button').filter({hasText:'Today ·'})
+    const row=agenda.locator(':scope > [role="button"]').filter({hasText:'Today ·'})
     if(await row.getAttribute('aria-expanded')!=='true')await row.click()
   }else{
     const cell=page.locator('.cal-cell.is-today')
@@ -3181,10 +3181,11 @@ test('Cash Forecast ending balance correction reviews a zero close for the selec
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
-  if(testInfo.project.name==='iphone')await page.locator('.finance-calendar-mobile-agenda > button').first().click()
-  else await page.locator('.cal-cell.is-today').press('Enter')
-  const editor=page.getByRole('region',{name:'Daily ending balance'})
-  await editor.getByRole('button',{name:'Edit ending balance',exact:true}).click()
+  const surface=testInfo.project.name==='iphone'?page.locator('.finance-calendar-mobile-agenda'):page.locator('.finance-calendar-month-grid')
+  await surface.getByRole('button',{name:`Edit ending balance for ${dateKey()}`,exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:`Correct ending balance for ${dateKey()}`})
+  await expect(dialog).toBeVisible()
+  const editor=dialog.getByRole('region',{name:'Daily ending balance'})
   await editor.getByLabel('Ending balance',{exact:true}).fill('0')
   await editor.getByLabel('Note or statement reference').fill('Statement closing balance')
   const accountId=await editor.getByLabel('Account',{exact:true}).inputValue()
@@ -3209,7 +3210,7 @@ test('Cash Forecast retains dated history without a fresh balance check, includi
  await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
  if(testInfo.project.name==='iphone'){
    await page.getByRole('button',{name:/Show earlier days/}).click()
-   await page.locator('.finance-calendar-mobile-agenda > button').filter({hasText:new Date(`${ago(1)}T12:00:00`).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}).click()
+   await page.locator('.finance-calendar-mobile-agenda > [role="button"]').filter({hasText:new Date(`${ago(1)}T12:00:00`).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}).click()
  }else{
    await expect(page.locator(`.cal-cell[data-date="${ago(1)}"]`)).toContainText('Est. $900')
    await page.locator(`.cal-cell[data-date="${ago(1)}"]`).press('Enter')
