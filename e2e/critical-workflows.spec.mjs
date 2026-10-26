@@ -2931,6 +2931,8 @@ test('Scenario Modeling edits recovery assumptions from worksheet and attaches g
   await expect(review).toBeVisible()
   expect(JSON.parse(prepared.at(-1).operation.payload.recoveryJson).worksheet.rows).toHaveLength(21)
   await review.getByRole('button',{name:'Cancel',exact:true}).click()
+  await expect(page.locator('.brevity-assistant-drawer.is-open')).toHaveCount(0)
+  await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   const assistant=page.locator('.brevity-assistant-drawer')
   await assistant.locator('input[type=file]').setInputFiles({name:'financial-worksheet.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1X8AAAAASUVORK5CYII=','base64')})
   await expect(assistant.getByAltText('Attached image: financial-worksheet.png')).toBeVisible()
