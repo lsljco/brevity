@@ -236,7 +236,7 @@ test('iPad sidebar stays open after content taps, rotation, and reload until exp
   await expect(drawer).toHaveClass(/is-expanded/)
 })
 
-test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByRole('region',{name:'Today’s focus'}).getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
+test('Today surfaces populated Daily Outcomes from the daily plan',async({page})=>{for(const outcome of ['Protect the household rhythm','Complete today’s essential commitments','Prepare tomorrow before closeout'])await expect(page.getByRole('region',{name:'Today’s Outcomes'}).getByText(outcome)).toBeVisible();await expect(page.locator('body')).not.toContainText('Outcome not set')})
 
 test('Household Intelligence dashboard separates metrics and opens an auditable score drilldown',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
@@ -2513,7 +2513,7 @@ test('Chart the Course starts and speaks with one tap while Today stays visible'
  await page.getByRole('button',{name:/Start Chart the Course/}).click()
  const session=page.getByRole('region',{name:'Chart the Course conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
- await expect(page.getByRole('region',{name:'Today’s focus'})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Today’s Outcomes'})).toBeVisible()
  await expect(page.getByRole('heading',{name:'Remember the plan. Start together.'})).toHaveCount(0)
  await expect.poll(()=>spoken.length).toBe(1)
  expect(spoken[0].voiceId).toBe('chosen-meeting-voice');expect(spoken[0].text).toContain('Protect the household rhythm')
@@ -2800,7 +2800,7 @@ test('Evening Recap starts inline and keeps Today items available',async({page},
  await page.getByRole('button',{name:/Start Evening Recap/}).click()
  const session=page.getByRole('region',{name:'Evening Recap conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
- await expect(page.getByRole('region',{name:'Today’s focus'})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Today’s Outcomes'})).toBeVisible()
  await expect(page.getByRole('heading',{name:'Remember the plan. Start together.'})).toHaveCount(0)
  await expect.poll(()=>voice.length).toBe(1);expect(voice[0].mode).toBe('evening')
  await expect(session.getByRole('button',{name:'Stop recording',exact:true})).toBeVisible()
