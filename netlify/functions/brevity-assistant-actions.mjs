@@ -128,7 +128,7 @@ export async function prepareCalendarProposal({input,session,permissions,events,
   }catch(error){throw Object.assign(error,{code:'INVALID_ACTION'})}
   const operations=[]
   for(const operation of proposal.operations){
-    const current=operation.type!=='calendar.create'?calendarRecord(events,operation.targetId):null
+    const current=operation.type==='calendar.move'?events.find(item=>item.id===operation.targetId):operation.type!=='calendar.create'?calendarRecord(events,operation.targetId):null
     if(operation.type!=='calendar.create'){
       if(!current)throw Object.assign(new Error('That Family Calendar event no longer exists. Refresh the calendar before reviewing this change.'),{code:'VERSION_CONFLICT'})
       if(current.recurring&&!current.recurrenceEditable)throw Object.assign(new Error('Brevity could not safely load this recurring Apple Calendar series. Sync again or edit the series in Apple Calendar.'),{code:'INVALID_ACTION'})
@@ -277,7 +277,7 @@ export async function prepareCalendarOperations({event,operations,session,permis
   const prepared=[]
   for(const operation of selected){
     if(operation.projectSource)await assertProjectPublicationSource({source:operation.projectSource,session,resources})
-    const current=(remote.events||[]).find(item=>[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
+    const current=(remote.events||[]).find(item=>operation.type==='calendar.move'?item.id===operation.targetId:[item.id,item.uid,item.sourceId].includes(operation.targetId))||null
     if(current?.sourceId?.startsWith('project-')&&!operation.projectSource)throw Object.assign(new Error('Review Apple project publications from Projects.'),{code:'FORBIDDEN'})
     const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:current})
     if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})

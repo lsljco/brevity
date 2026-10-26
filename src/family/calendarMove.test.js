@@ -53,6 +53,7 @@ test('calendar move review checks source version, destination and admin permissi
  await assert.rejects(()=>prepareCalendarProposal({...args,input:{...input,expectedEventToken:'old'}}),e=>e.code==='VERSION_CONFLICT')
  await assert.rejects(()=>prepareCalendarProposal({...args,session:{member:'Nyla',role:'member'}}),e=>e.code==='FORBIDDEN')
  await assert.rejects(()=>prepareCalendarProposal({...args,destinations:[]}),/writable connected/)
+ await assert.rejects(()=>prepareCalendarProposal({...args,events:[{...item,id:'another-calendar/event'}]}),e=>e.code==='VERSION_CONFLICT')
  await assert.rejects(()=>prepareCalendarProposal({...args,events:[{...item,sourceReadOnly:true,originalSourceId:'project-example'}]}),e=>e.code==='FORBIDDEN')
  assert.equal(canMoveAppleCalendarEvent({...item,sourceReadOnly:true},{allowed:true,role:'admin'}),true)
  assert.equal(canMoveAppleCalendarEvent({...item,originalSourceId:'project-example'},{allowed:true,role:'admin'}),false)
