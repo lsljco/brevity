@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {normalizeActionProposal,defaultActionPermissions} from '../../netlify/lib/assistant-action-contract.mjs'
 import {prepareRecordOperations,applyRecordOperation} from '../../netlify/lib/assistant-action-executor.mjs'
+import {prepareDirectProposal} from '../../netlify/functions/brevity-assistant-actions.mjs'
 import {buildBudgetLines,allocateBudgetActuals} from './budgetBreakdown.js'
 import {buildSpendingAccountability} from './spendingAccountability.js'
 const account={id:'cash',name:'Checking',plaidAccountId:'bank',type:'checking',plaidType:'depository',plaidSubtype:'checking'}
@@ -25,4 +26,15 @@ test('budget assignment rejects pending, transfers, missing sources, wrong accou
  for(const bank of [[],[{...transaction,pending:true}],[{...transaction,category:'TRANSFER_OUT'}]])await assert.rejects(prepare({bank}),/existing posted non-transfer/)
  for(const finance of [{accounts:[account],transactions:[]},{accounts:[account],transactions:[{...plan,acct:'other'}]},{accounts:[account],transactions:[{...plan,cat:'Food'}]}])await assert.rejects(prepare({finance}),/budget line or account changed/)
  await assert.rejects(prepare({session:{member:'Javin',role:'member'}}),/permission|administrator|finance|allowed/i)
+})
+
+test('direct budget and category review reaches server validation and stores a proposal without changing bank records',async()=>{
+ const saved=[]
+ const resources={read:async key=>({version:key==='shared:lslj_tx_overrides_v1'?2:1,value:key==='shared:plaid_actuals_cache'?[transaction]:key==='shared:lslj_finance_v9'?{accounts:[account],transactions:[plan]}:{}})}
+ for(const operation of [{type:'transaction.allocate',targetId:'charge',payload:{budgetLineId:'cash:fuel',category:'Transportation'}},{type:'transaction.categorize',targetId:'charge',payload:{category:'Transportation'}}]){
+  const result=await prepareDirectProposal({input:{summary:'Assign fuel',operation,expectedVersion:2},session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources,repository:{saveProposal:async proposal=>saved.push(proposal)}})
+  assert.equal(result.operations[0].type,operation.type)
+  assert.deepEqual(result.expectedVersions,{'shared:lslj_tx_overrides_v1':2})
+ }
+ assert.equal(saved.length,2)
 })
