@@ -11,6 +11,11 @@ export function dailyPlanFromRefresh(detail, date) {
   return normalizeDailyPlan(detail.plan)
 }
 
+export function actionAffectsDailyPlan(detail, date) {
+  if (detail?.audit?.affectedRecords?.some(change => change.resource === 'sermon:active')) return true
+  return (detail?.audit?.operations || []).some(operation => operation.targetDate <= date && (operation.domain === 'planning' || operation.type?.startsWith('plan.')))
+}
+
 export function useDailyPlan(date = currentDailyPlanDate()) {
   const [plan, setPlan] = useState(() => createEmptyDailyPlan(date))
   const [state, setState] = useState('loading')
@@ -59,8 +64,7 @@ export function useDailyPlan(date = currentDailyPlanDate()) {
 
   useEffect(() => {
     const refreshAfterReviewedAction = event => {
-      const operations = event?.detail?.audit?.operations || []
-      if (!operations.some(operation => operation.targetDate <= date && (operation.domain === 'planning' || operation.type?.startsWith('plan.')))) return
+      if (!actionAffectsDailyPlan(event?.detail, date)) return
       reload()
     }
     window.addEventListener(ACTION_COMPLETED_EVENT, refreshAfterReviewedAction)

@@ -696,3 +696,13 @@
   .finance-root .finance-calendar-month-grid { display:none !important; }
   .finance-calendar-header > button { color:var(--soft-white); }
 }
+
+/* Keep the meaning of every amount visible on tablets and desktop too. */
+.finance-budget-line-actual::before, .finance-budget-line-budget::before,
+.finance-budget-category-total-actual::before, .finance-budget-category-total-budget::before {
+  display: block; font-size: 10px; font-weight: 500; color: var(--muted); margin-bottom: 3px;
+}
+.finance-budget-line-actual::before { content: attr(data-label); }
+.finance-budget-line-budget::before { content: attr(data-label); }
+.finance-budget-category-total-actual::before { content: 'Actual'; }
+.finance-budget-category-total-budget::before { content: 'Budget'; }

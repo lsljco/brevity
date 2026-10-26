@@ -147,3 +147,14 @@ test('budget actual line allocation requires an unchanged reviewed bank identity
   assert.deepEqual(allocateBudgetActuals([{...actual,id:'other-bank-id'}],lines,{'bank-a1':'a1'}).byLine,{})
   assert.deepEqual(allocateBudgetActuals([{...actual,amount:51}],lines,{'bank-a1':'a1'}).unallocatedByCategory,{Food:51})
 })
+
+ test('reviewed category wins over bank category and totals reconcile without duplication',()=>{
+  const actual={id:'bank-1',accountId:'bank-a1',date:'2026-10-01',amount:50,name:'Market',category:'GENERAL_MERCHANDISE'}
+  const plan={id:'planned',acct:'a1',type:'expense',freq:'once',start:actual.date,amount:50,reconciliation:{actualId:actual.id,bankAccountId:actual.accountId,postedDate:actual.date,actualAmount:50,budgetAmount:50,bankName:'Market',originalDate:actual.date}}
+  const lines=[{id:'a1:planned',category:'Household',transactions:[plan]}]
+  const result=allocateBudgetActuals([actual,{...actual,id:'unlinked',amount:10,category:'Discretionary'},{...actual,id:'pending',pending:true}],lines,{'bank-a1':'a1'})
+  assert.deepEqual(result.byLine,{'a1:planned':50})
+  assert.deepEqual(result.byCategory,{Household:50,Discretionary:10})
+  assert.deepEqual(result.unallocatedByCategory,{Discretionary:10})
+  assert.deepEqual(allocateBudgetActuals([{...actual,category:'home improvement'}],[],{}).byCategory,{Household:50})
+ })

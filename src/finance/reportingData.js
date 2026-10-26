@@ -180,6 +180,9 @@ export function budgetCategoryForTransaction(transaction, { includeAllCredits = 
   // and deposits awaiting classification. Income reports keep stricter semantics.
   if (transactionDirection(transaction) === 'income') return includeAllCredits || isRealizedIncomeTransaction(transaction) ? 'Income' : null
   const raw = String(transaction.category || transaction.cat || '').toLowerCase().replaceAll('_', ' ')
+  const canonical = ['Housing','Utilities','Transportation','Insurance','Health','Debt','Food','Household','Family','Subscriptions','Discretionary','Other'].find(category => category.toLowerCase() === raw.trim())
+  if (canonical) return canonical
+  if (/home improvement|household/.test(raw)) return 'Household'
   if (/utilit|electric|water|internet|phone|cable/.test(raw)) return 'Utilities'
   if (/mortgage|rent|home|housing/.test(raw)) return 'Housing'
   if (/auto|transport|fuel|gas station|parking|rideshare/.test(raw)) return 'Transportation'

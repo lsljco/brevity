@@ -10,6 +10,7 @@ export function alignmentDraftSnapshot(planInput) {
   const plan = normalizeDailyPlan(planInput)
   return {
     date:plan.date,
+    sermonIdentity:JSON.stringify([plan.spiritual?.sermonSource?.activeVersion, plan.spiritual?.sermonSource?.sourceHash]),
     morningAlignment:clone(plan.morningAlignment),
     pillars:Object.fromEntries(PILLAR_IDS.map(pillar => [pillar, Object.fromEntries(PILLAR_EDITABLE_FIELDS[pillar]
       .filter(field => field in plan[pillar])
@@ -29,6 +30,7 @@ export function loadLocalAlignmentDraft(storage, planInput, baseVersion) {
   if (saved?.schema !== SCHEMA || saved?.draft?.date !== plan.date || Number(saved.baseVersion) !== Number(baseVersion || 0)) return plan
   const next = { ...plan, morningAlignment:{ ...plan.morningAlignment, ...(saved.draft.morningAlignment || {}) } }
   for (const pillar of PILLAR_IDS) {
+    if (pillar === 'spiritual' && saved.draft.sermonIdentity !== alignmentDraftSnapshot(plan).sermonIdentity) continue
     const patch = saved.draft.pillars?.[pillar]
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) continue
     next[pillar] = pillar === 'education' && patch.isaiah

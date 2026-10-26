@@ -1475,7 +1475,7 @@ test('Empty payer picker reviews creation and keeps the transaction draft',async
 })
 
 
-test('Budget includes every scheduled occurrence and posted cash entry for its own month',async({page},testInfo)=>{
+test('Budget uses reviewed targets with scheduled defaults and posted cash entry for its own month',async({page},testInfo)=>{
   const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
   finance.accounts.push({id:'other',name:'Other account',type:'checking',balance:100,plaidAccountId:'other-bank',plaidType:'depository',plaidSubtype:'checking'})
   const month=dateKey().slice(0,7),date=month+'-01',next=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),1)
@@ -1507,7 +1507,7 @@ test('Budget includes every scheduled occurrence and posted cash entry for its o
   await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   await expect(page.getByRole('combobox',{name:'Select financial timeframe'})).toHaveCount(0)
   await expect(page.getByRole('button',{name:'Income Budgeted $1,500.00',exact:true})).toBeVisible()
-  await expect(page.getByRole('button',{name:'Expenses Budgeted $340.00',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Expenses Budgeted $140.00',exact:true})).toBeVisible()
   await expect(page.getByRole('button',{name:'Income Actual $160.00',exact:true})).toBeVisible()
   await expect(page.getByRole('button',{name:'Expenses Actual $25.00',exact:true})).toBeVisible()
   const accountFilters=page.getByRole('navigation',{name:'Finance account filters'})
@@ -1516,7 +1516,8 @@ test('Budget includes every scheduled occurrence and posted cash entry for its o
   await accountFilters.getByRole('button',{name:'Other account',exact:true}).click()
   await expect(page.getByRole('button',{name:'Income Actual $160.00',exact:true})).toBeVisible()
   await expect(page.locator('.finance-budget-line').filter({hasText:'One-time repair fixture'})).toContainText('$100.00')
-  await page.getByRole('button',{name:'Expenses Budgeted $340.00',exact:true}).click()
+  for (const label of ['actual','budget']) expect(await page.locator(`.finance-budget-line-${label}`).first().evaluate(el=>getComputedStyle(el,'::before').content)).toBe(JSON.stringify(label==='actual'?'Actual':'Budget'))
+  await page.getByRole('button',{name:'Expenses Budgeted $140.00',exact:true}).click()
   await expect(page.getByText('One-time repair fixture',{exact:true})).toBeVisible()
   await expect(page.getByText('Moved occurrence fixture',{exact:true})).toBeVisible()
   await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
@@ -3254,4 +3255,34 @@ test('Cash Forecast spending accountability opens evidence and stages reviewed d
  expect(payload.operation.payload.status).toBe('reviewed')
  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
  await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1)
+})
+
+
+test('sermon activation refreshes an open tomorrow plan and clears stale artifact identity',async({page})=>{
+  let version=2
+  const oldDate=new Date(`${dateKey()}T12:00:00`);oldDate.setDate(oldDate.getDate()-8)
+  const oldKey=oldDate.toISOString().slice(0,10)
+  await page.route('**/.netlify/functions/household-data*',route=>{
+    const date=new URL(route.request().url()).searchParams.get('date')||dateKey()
+    const source={active:true,activeVersion:version,sourceHash:(version===2?'a':'b').repeat(64),sermonDate:version===2?oldKey:dateKey(),title:version===2?'Old sermon':'New reviewed sermon'}
+    if(version===2)source.document={id:'old-document',activeVersion:2}
+    return route.fulfill({json:{plan:{...plan(),date,spiritual:{...plan().spiritual,sermonSource:source,sermonNotes:{...plan().spiritual.sermonNotes,documentTitle:source.title},devotionFocus:version===2?'Old Day 7':'New Day 1'}}}})
+  })
+  await page.reload();await openTodayDetails(page)
+  await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click()
+  await expect(page.locator('.sermon-source-heading')).toContainText('Old sermon')
+  await expect(page.getByLabel('Sermon date',{exact:true})).toHaveValue(dateKey())
+  version=3
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-action-completed',{detail:{audit:{affectedRecords:[{resource:'sermon:active',beforeVersion:2,afterVersion:3}]}}})))
+  await expect(page.locator('.sermon-source-heading')).toContainText('New reviewed sermon')
+  await expect(page.locator('.formation-summary')).toContainText('New Day 1')
+  await expect(page.locator('.sermon-document-actions')).not.toContainText('active version 2')
+  let requested
+  await page.route('**/.netlify/functions/sermon-workflow',route=>{
+    requested=route.request().postDataJSON()
+    return route.fulfill({json:{document:{id:'new-document',activeVersion:3,files:{}}}})
+  })
+  await page.getByRole('button',{name:'Create teaching documents only',exact:true}).click()
+  await expect.poll(()=>requested?.activeVersion).toBe(3)
+  expect(requested.sourceHash).toBe('b'.repeat(64))
 })
