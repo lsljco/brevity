@@ -1414,7 +1414,7 @@ test('Finance reconciliation refresh rejects changed match evidence before prepa
   await expect(report).toContainText('Difference: $6.00')
   records.plaid_actuals_cache={...records.plaid_actuals_cache,value:JSON.stringify([{...actual,amount:1211}]),version:8,updatedAt:new Date().toISOString()}
   await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
-  await expect(report.getByRole('status')).toContainText('report changed')
+  await expect(report.locator('.reconciliation-message')).toContainText('report changed')
   await expect(report).toContainText('Difference: $7.00')
   expect(prepared).toHaveLength(0)
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toHaveCount(0)
