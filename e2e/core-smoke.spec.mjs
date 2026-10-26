@@ -1063,7 +1063,7 @@ test('unfinished work carries forward and completion reviews the original dated 
  await expect(work.getByText('Larry · Carried forward from 2026-09-01',{exact:true})).toBeVisible()
  await work.getByRole('button',{name:'Mark complete',exact:true}).click()
  await expect.poll(()=>request?.operation?.targetId).toBe('saved-task')
- expect(request.operation.targetDate).toBe(original);expect(request.expectedVersion).toBe(7)
+ expect(request.operations[0].targetDate).toBe(original);expect(request.expectedVersion).toBe(7)
  await expect(work.getByText(item.title,{exact:true})).toBeVisible()
  completed=true
  await page.reload();await expect(page.getByRole('region',{name:'Open work',exact:true}).getByText(item.title,{exact:true})).toHaveCount(0)
@@ -1295,7 +1295,7 @@ test('Direct outcomes editing reviews the exact date without opening Ask Brevity
  let request=null
  await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',async r=>{
   request=r.request().postDataJSON()
-  await r.fulfill({json:{proposal:{id:'outcome-review',actor:'Larry',state:'pending',risk:'confirmation',summary:request.summary,operations:[{...request.operation,id:'outcome-op',domain:'planning',allowedScopes:['this-item'],defaultScope:'this-item',risk:'confirmation'}]}}})
+  await r.fulfill({json:{proposal:{id:'outcome-review',actor:'Larry',state:'pending',risk:'confirmation',summary:request.summary,operations:[{...request.operations[0],id:'outcome-op',domain:'planning',allowedScopes:['this-item'],defaultScope:'this-item',risk:'confirmation'}]}}})
  })
  await page.getByRole('button',{name:'Add / Edit Outcomes',exact:true}).click()
  const dialog=page.getByRole('dialog',{name:'Edit Outcomes'})
@@ -1303,7 +1303,7 @@ test('Direct outcomes editing reviews the exact date without opening Ask Brevity
  await dialog.getByLabel('Status',{exact:true}).selectOption('complete')
  await dialog.getByRole('button',{name:'Review outcomes',exact:true}).click()
  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes',exact:true})).toBeVisible()
- expect(request.operation.targetDate).toBe(today())
- expect(request.operation.payload.patch.priorities[0]).toMatchObject({id:'priority-1',title:'Prepare interview notes',status:'complete'})
+ expect(request.operations[0].targetDate).toBe(today())
+ expect(request.operations[0].payload.patch.priorities[0]).toMatchObject({id:'priority-1',title:'Prepare interview notes',status:'complete'})
  await expect(page.getByRole('dialog',{name:'Brevity Assistant',exact:true})).toHaveCount(0)
 })
