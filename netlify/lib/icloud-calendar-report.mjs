@@ -44,7 +44,7 @@ export function calendarQueryReport(start, end, { expand = true } = {}) {
 
 export function calendarListPropfind({ includeComponents = true } = {}) {
   const componentProperty = includeComponents ? '<c:supported-calendar-component-set/>' : ''
-  return `<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/>${componentProperty}</d:prop></d:propfind>`
+  return `<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><d:current-user-privilege-set/>${componentProperty}</d:prop></d:propfind>`
 }
 
 export async function fetchCalendarList({ homeUrl, request }) {

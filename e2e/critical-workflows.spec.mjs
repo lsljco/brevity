@@ -3457,3 +3457,30 @@ test('Personal calendar grows to keep every week reachable after filtering',asyn
  expect(day.y+day.height).toBeLessThanOrEqual(main.y+main.height)
  await page.screenshot({path:testInfo.outputPath('personal-calendar-final-week.png')})
 })
+
+test('Apple event calendar selector reviews a move and refreshes its destination without opening chat',async({page},testInfo)=>{
+ const familyId=`apple-${'a'.repeat(64)}`,personalId=`apple-${'b'.repeat(64)}`
+ let moved=false,prepared=null,writes=0
+ const event={id:'move-fixture',uid:'move-fixture',href:'/family/move.ics',etag:'v1',title:'Calendar move fixture',date:dateKey(),time:'09:00',endTime:'09:30',owner:'Family',appleCalendarOwner:'Family',appleCalendarName:'Family',appleCalendarId:familyId,calendarCanMove:true,source:'icloud'}
+ await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events:[moved?{...event,id:'personal/move-fixture',href:'/personal/move.ics',etag:'v2',owner:'Larry',sourceReadOnly:true,appleCalendarOwner:'Larry',appleCalendarName:'Personal',appleCalendarId:personalId}:event],destinations:[{id:familyId,name:'Family',owner:'Family'},{id:personalId,name:'Personal',owner:'Larry'}],calendar:'Family, Personal',connected:true}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=history',route=>route.fulfill({json:{member:'Larry',role:'admin',permissions:{Larry:{calendar:true}},history:[]}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-calendar',route=>{prepared=route.request().postDataJSON();return route.fulfill({json:{proposal:{id:'move-proposal',summary:prepared.summary,operations:[prepared.operation]}}})})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>{writes++;moved=true;return route.fulfill({json:{audit:{summary:'Moved event to Personal'}}})})
+ await page.reload();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Month',exact:true}).click()
+ await page.getByRole('button',{name:'Edit Calendar move fixture',exact:true}).click()
+ const dialog=page.getByRole('dialog')
+ await dialog.getByRole('combobox',{name:'Calendar',exact:true}).selectOption(personalId)
+ await dialog.getByRole('button',{name:'Review calendar move',exact:true}).click()
+ await expect(dialog).toContainText('Move from Family to Personal')
+ expect(prepared.operation.type).toBe('calendar.move');expect(prepared.operation.payload.calendarId).toBe(personalId);expect(prepared.expectedEventToken).toBe('v1');expect(writes).toBe(0)
+ await dialog.getByRole('button',{name:'Apply reviewed change',exact:true}).click()
+ await expect(dialog).toHaveCount(0)
+ expect(writes).toBe(1)
+ await page.getByRole('group',{name:'Calendars to show'}).getByRole('button',{name:'Larry',exact:true}).click()
+ await expect(page.locator('.family-calendar-grid')).toContainText('Calendar move fixture')
+ await page.getByRole('button',{name:'Edit Calendar move fixture',exact:true}).click()
+ await expect(page.getByRole('dialog').getByRole('combobox',{name:'Calendar',exact:true})).toHaveValue(personalId)
+ await expect(page.getByRole('dialog').getByLabel('Title',{exact:true})).toHaveCount(0)
+ await expect(page.locator('.brevity-assistant-panel')).toHaveCount(0)
+})

@@ -11,6 +11,7 @@ import { useCalendarHealth } from './useCalendarHealth.js'
 import { compareCalendarEventsChronologically, dedupeCalendarEvents } from './calendarOverlay.js'
 import {
   canEditBrevityCalendarEvent,
+  canMoveAppleCalendarEvent,
   calendarEventVersion,
   calendarPermissionForActionMode,
   calendarTimeInputValue,
@@ -86,8 +87,9 @@ const eventForm = event => ({
 const recurrenceNames={none:'Does not repeat',daily:'Every day',weekdays:'Every weekday',weekly:'Every week',monthly:'Every month',yearly:'Every year'}
 const weekdayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
-function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, onApply, busy, error }) {
-  const review = editor.step === 'review'
+function CalendarEditor({ editor, ownerOptions, destinations, canMove, onReviewMove, onChange, onReview, onCancel, onApply, busy, error }) {
+  const [destinationId,setDestinationId]=useState(editor.record?.appleCalendarId||'')
+  const review = editor.step === 'review' || editor.step === 'move-review'
   const form = editor.form
   const toggleParticipant = name => onChange({ ...form, participants:form.participants.includes(name) ? form.participants.filter(item => item !== name) : [...form.participants, name] })
   return <div className="family-calendar-editor-backdrop" role="presentation" onMouseDown={event=>event.target===event.currentTarget&&onCancel()}>
@@ -95,10 +97,13 @@ function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, on
       <header><div><span>{review?'Review required':editor.mode==='create'?'New Brevity event':isBrevityManagedAppleEvent(editor.record)?'Edit Brevity event':'Edit Apple event'}</span><h2 id="family-calendar-editor-title">{review?'Confirm the calendar change':editor.mode==='create'?'Add to Family Calendar':editor.record?.recurring?'Update recurring series':'Update Family Calendar'}</h2></div><button type="button" onClick={onCancel} aria-label="Close calendar editor"><i className="ti ti-x" aria-hidden="true"/></button></header>
       {review ? <div className="family-calendar-review">
         <p>No record changes until you apply this reviewed proposal.</p>
+        {editor.step==='move-review'&&<p><strong>Move from {editor.record.appleCalendarName} to {editor.destinationName}.</strong> The saved event and all its details will be preserved.</p>}
         <dl><div><dt>Event</dt><dd>{form.title}</dd></div><div><dt>Starts</dt><dd>{form.date}{form.allDay?' · All day':` · ${form.time}`}</dd></div><div><dt>Ends</dt><dd>{form.endDate}{!form.allDay&&form.endTime?` · ${form.endTime}`:''}</dd></div><div><dt>Repeats</dt><dd>{recurrenceNames[form.recurrenceFrequency]}{form.recurrenceInterval>1?` · Every ${form.recurrenceInterval} intervals`:''}{form.recurrenceEndDate?` · Through ${form.recurrenceEndDate}`:''}</dd></div><div><dt>Notifications</dt><dd>{form.alert1Minutes<0?'None':`${form.alert1Minutes} minutes before`} · {form.alert2Minutes<0?'None':`${form.alert2Minutes} minutes before`}</dd></div><div><dt>Owner</dt><dd>{form.owner}</dd></div>{form.location.trim()&&<div><dt>Location</dt><dd>{form.location}</dd></div>}{form.url.trim()&&<div><dt>URL</dt><dd>{form.url}</dd></div>}{form.participants.length>0&&<div><dt>Participants</dt><dd>{form.participants.join(', ')}</dd></div>}{form.notes.trim()&&<div><dt>Notes</dt><dd>{form.notes}</dd></div>}</dl>
         <div className="family-calendar-safety"><i className="ti ti-shield-check" aria-hidden="true"/><span>Action Mode will record the actor, timestamp, affected record, and prior values for Undo. The save stops if the Apple record changed after review.</span></div>
       </div> : <form id="family-calendar-record-form" onSubmit={onReview}>
         {editor.record?.recurring&&<div className="family-calendar-series-note" role="note"><i className="ti ti-repeat" aria-hidden="true"/><span>This updates the entire recurring series. Individual occurrence exceptions remain managed in Apple Calendar.</span></div>}
+        {canMove&&<div className="family-calendar-move"><label>Calendar<select value={destinationId} onChange={event=>setDestinationId(event.target.value)}><option value={editor.record.appleCalendarId}>{editor.record.appleCalendarName}</option>{destinations.filter(calendar=>calendar.id!==editor.record.appleCalendarId).map(calendar=><option key={calendar.id} value={calendar.id}>{calendar.name} · {calendar.owner}</option>)}</select></label><p>Moving preserves the saved event. Save any other edits before moving it.</p><button type="button" disabled={busy||destinationId===editor.record.appleCalendarId} onClick={()=>onReviewMove(destinationId)}>Review calendar move</button></div>}
+        {!editor.record?.sourceReadOnly&&<>
         <label>Title<input required value={form.title} onChange={event=>onChange({...form,title:event.target.value})} placeholder="What is happening?"/></label>
         <label className="family-calendar-all-day"><input type="checkbox" checked={form.allDay} onChange={event=>onChange({...form,allDay:event.target.checked,time:event.target.checked?'':form.time||'09:00',endTime:event.target.checked?'':form.endTime||'10:00'})}/><span>All-day event</span></label>
         <div className="family-calendar-editor-grid"><label>Start date<input required type="date" value={form.date} onChange={event=>onChange({...form,date:event.target.value,endDate:form.endDate<event.target.value?event.target.value:form.endDate})}/></label>{!form.allDay&&<label>Start time<input required type="time" value={form.time} onChange={event=>onChange({...form,time:event.target.value})}/></label>}<label>End date<input required type="date" min={form.date} value={form.endDate} onChange={event=>onChange({...form,endDate:event.target.value})}/></label>{!form.allDay&&<label>End time<input required type="time" value={form.endTime} onChange={event=>onChange({...form,endTime:event.target.value})}/></label>}</div>
@@ -110,9 +115,10 @@ function CalendarEditor({ editor, ownerOptions, onChange, onReview, onCancel, on
         <label>Owner<select value={form.owner} onChange={event=>onChange({...form,owner:event.target.value})}>{ownerOptions.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
         <fieldset><legend>Participants, optional</legend><div>{HOUSEHOLD_MEMBERS.map(name=><label key={name}><input type="checkbox" checked={form.participants.includes(name)} onChange={()=>toggleParticipant(name)}/><span>{name}</span></label>)}</div></fieldset>
         <label>Notes, optional<textarea rows="3" value={form.notes} onChange={event=>onChange({...form,notes:event.target.value})}/></label>
+        </>}
       </form>}
       {error&&<div className="family-calendar-editor-error" role="alert">{error}</div>}
-      <footer>{review?<><button type="button" onClick={()=>onChange(form,'edit')} disabled={busy}>Back to edit</button><button type="button" className="primary" onClick={onApply} disabled={busy}>{busy?'Applying…':'Apply reviewed change'}</button></>:<><button type="button" onClick={onCancel}>Cancel</button><button type="submit" form="family-calendar-record-form" className="primary" disabled={busy}>{busy?'Preparing review…':'Review change'}</button></>}</footer>
+      <footer>{review?<><button type="button" onClick={()=>onChange(form,'edit')} disabled={busy}>Back to edit</button><button type="button" className="primary" onClick={onApply} disabled={busy}>{busy?'Applying…':'Apply reviewed change'}</button></>:<><button type="button" onClick={onCancel}>Cancel</button>{!editor.record?.sourceReadOnly&&<button type="submit" form="family-calendar-record-form" className="primary" disabled={busy}>{busy?'Preparing review…':'Review change'}</button>}</>}</footer>
     </section>
   </div>
 }
@@ -155,7 +161,7 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
     setEditor({ mode:'create', step:'edit', form:emptyForm(todayKey,calendarAccess.role==='admin'&&selectedCalendars.length===1&&selectedCalendars[0]==='Church Triumphant'?'Church Triumphant':calendarAccess.member || 'Family'), record:null, expectedEventToken:'', proposal:null })
   }
   const openEdit = event => {
-    if (!canEditBrevityCalendarEvent(event,calendarAccess)) return
+    if (!canEditBrevityCalendarEvent(event,calendarAccess)&&!canMoveAppleCalendarEvent(event,calendarAccess)) return
     setEditorError('')
     setEditor({ mode:'edit', step:'edit', form:eventForm(event), record:event, expectedEventToken:eventToken(event), proposal:null })
   }
@@ -191,6 +197,17 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
     } finally {
       setEditorBusy(false)
     }
+  }
+  const reviewMove = async destinationId => {
+    const destination=calendarSnapshot?.destinations?.find(calendar=>calendar.id===destinationId)
+    if(!destination)return
+    setEditorBusy(true)
+    setEditorError('')
+    try {
+      const result=await prepareCalendarAction({summary:`Move ${editor.record.title} to ${destination.name}`,expectedEventToken:editor.expectedEventToken,operation:{type:'calendar.move',targetId:editor.record.id||editor.record.uid,description:`Move event from ${editor.record.appleCalendarName} to ${destination.name}`,payload:{calendarId:destination.id,calendarName:destination.name},allowedScopes:['this-item'],defaultScope:'this-item'}})
+      setEditor(value=>({...value,form:eventForm(value.record),proposal:result.proposal,destinationName:destination.name,step:'move-review'}))
+    } catch(error){setEditorError(error.message||'This calendar move could not be prepared.')}
+    finally{setEditorBusy(false)}
   }
   const applyEditor = async () => {
     setEditorBusy(true)
@@ -349,7 +366,7 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
         return <div className="family-calendar-day" key={key} style={{minHeight:108,padding:8,borderRadius:9,border:`1px solid ${isToday?'rgba(197,164,109,.48)':border}`,background:isToday?'rgba(197,164,109,.08)':'rgba(255,255,255,.035)'}}>
           <div className="family-calendar-day-number" style={{fontSize:12,fontWeight:700,color:isToday?gold:soft,marginBottom:6}}>{onOpenDay?<button type="button" aria-label={`Review plan for ${key}`} onClick={()=>onOpenDay(key)}>{day}</button>:day}</div>
           {dayEvents.map(event=><div className="family-calendar-event" key={`${event.source}-${event.id}`} style={{borderLeft:`2px solid ${event.source==='icloud'?gold:'rgba(247,243,234,.28)'}`,background:event.source==='icloud'?'rgba(197,164,109,.10)':'rgba(255,255,255,.045)',borderRadius:'0 5px 5px 0',padding:'5px 6px',marginBottom:5}}>
-            <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}><i className="ti ti-external-link" aria-hidden="true"/></button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
+            <div className="family-calendar-event-title-row"><div className="family-calendar-event-title" style={{fontSize:10,fontWeight:700,color:soft,lineHeight:1.3}}>{event.time?`${event.time} · `:''}{event.title}</div>{event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}><i className="ti ti-external-link" aria-hidden="true"/></button>}{(canEditBrevityCalendarEvent(event,calendarAccess)||canMoveAppleCalendarEvent(event,calendarAccess))&&<button type="button" onClick={()=>openEdit(event)} aria-label={`Edit ${event.title}`}><i className="ti ti-edit" aria-hidden="true"/></button>}</div>
             <div className="family-calendar-event-meta" style={{fontSize:8,color:muted,marginTop:2,textTransform:'uppercase',letterSpacing:.6}}>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.sourceReadOnly?`${event.appleCalendarName} · Edit in Apple Calendar`:event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</div>
           </div>)}
         </div>
@@ -361,7 +378,7 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
         {events.map(event=><article key={`${event.source}-${event.id}`}>
           <time>{event.time||'All day'}</time>
           <div><strong>{event.title}</strong><span>{isBrevityManagedAppleEvent(event)?'Brevity · Apple synced':isDirectlyEditableAppleEvent(event)?'Apple Family Calendar · Editable':event.sourceReadOnly?`${event.appleCalendarName} · Edit in Apple Calendar`:event.source==='icloud'?'Apple recurring event · Manage series in Apple':'Brevity · Managed in source workflow'}{event.owner&&event.owner!=='Family'?` · ${event.owner}`:''}</span></div>
-          {event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}>Open project</button>}{canEditBrevityCalendarEvent(event,calendarAccess)&&<button type="button" className="family-calendar-agenda-edit" onClick={()=>openEdit(event)}><i className="ti ti-edit" aria-hidden="true"/> Edit</button>}
+          {event.projectId&&<button type="button" className="family-calendar-project-open" onClick={()=>requestProjectOpen(event.projectId)} aria-label={`Open project ${event.title}`}>Open project</button>}{(canEditBrevityCalendarEvent(event,calendarAccess)||canMoveAppleCalendarEvent(event,calendarAccess))&&<button type="button" className="family-calendar-agenda-edit" onClick={()=>openEdit(event)}><i className="ti ti-edit" aria-hidden="true"/> Edit</button>}
         </article>)}
       </section>)}
     </div>
@@ -369,6 +386,6 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
       <p>{icloudState==='error'||icloudState==='locked'||icloudState==='unconfigured'?'Apple events cannot appear until the Family Calendar connection above is restored. You can still add a Brevity calendar event now.':'No calendar commitments for this view yet.'}</p>
       {calendarAccess.allowed&&<button type="button" className="family-calendar-add" onClick={openCreate}><i className="ti ti-plus" aria-hidden="true"/> Add an event</button>}
     </div>}
-    {editor&&<CalendarEditor editor={editor} ownerOptions={calendarAccess.role==='admin'?['Family','Church Triumphant',...HOUSEHOLD_MEMBERS]:[...new Set(['Family',calendarAccess.member,editor.form.owner].filter(Boolean))]} onChange={updateEditor} onReview={reviewEditor} onCancel={()=>setEditor(null)} onApply={applyEditor} busy={editorBusy} error={editorError}/>}
+    {editor&&<CalendarEditor editor={editor} destinations={calendarSnapshot?.destinations||[]} canMove={canMoveAppleCalendarEvent(editor.record,calendarAccess)} onReviewMove={reviewMove} ownerOptions={calendarAccess.role==='admin'?['Family','Church Triumphant',...HOUSEHOLD_MEMBERS]:[...new Set(['Family',calendarAccess.member,editor.form.owner].filter(Boolean))]} onChange={updateEditor} onReview={reviewEditor} onCancel={()=>setEditor(null)} onApply={applyEditor} busy={editorBusy} error={editorError}/>}
   </div>
 }

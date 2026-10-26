@@ -1,3 +1,4 @@
+import {calendarPrivileges,connectedCalendarChoices,moveCalendarResource} from '../lib/calendar-move.mjs'
 import { APPLE_SOURCES_RESOURCE, normalizeAppleSources, mapAppleSourceEvent } from '../../src/family/appleCalendarSources.js'
 import { createProductionActionResources } from '../lib/assistant-action-executor.mjs'
 import {withLambda} from '@netlify/aws-lambda-compat'
@@ -227,6 +228,7 @@ async function discoverCalendar() {
   const listResult = await fetchCalendarList({ homeUrl, request:caldav });
   const listXml = listResult.text;
   const candidates = blocks(listXml, "response").map(block => ({
+    ...calendarPrivileges(block),
     href: firstTag(block, "href"),
     name: firstTag(block, "displayname"),
     calendar: /<(?:\w+:)?calendar\b/i.test(block),
@@ -248,7 +250,7 @@ async function discoverCalendar() {
     discoveryMode:listResult.discoveryMode,
     sources:candidates.map(item => {
       const url = resolveAppleDavHref(item.href, listResult.response.url || homeUrl);
-      return {id:appleCalendarId(url),url,name:item.name || "iCloud Calendar"};
+      return {id:appleCalendarId(url),url,name:item.name || "iCloud Calendar",canBind:item.canBind,canUnbind:item.canUnbind};
     }),
   };
 }
@@ -564,10 +566,12 @@ export const createICloudCalendarHandler = ({
   if(event.queryStringParameters?.action === "sources" && session.role !== "admin") return json(403,{error:"Only household administrators can configure Apple calendars."});
   try {
     const calendar = await calendarDiscovery();
+    const entry = calendar.sources ? await sourceConfigReader() : {value:[],version:0};
+    const selected = normalizeAppleSources({sources:entry.value}).sources;
+    calendar.id=appleCalendarId(calendar.url);
+    const choices=connectedCalendarChoices(calendar,selected);
     if (event.httpMethod === "GET") {
       // Injected legacy single-calendar adapters need no new storage dependency.
-      const entry = calendar.sources ? await sourceConfigReader() : {value:[],version:0};
-      const selected = normalizeAppleSources({sources:entry.value}).sources;
       if (event.queryStringParameters?.action === "sources") {
         if (session.role !== "admin") return json(403,{error:"Only household administrators can configure Apple calendars."});
         return json(200, {version:entry.version, selected, calendars:(calendar.sources || []).map(({id,name,url})=>({id,name,primary:url===calendar.url})), primaryName:calendar.name});
@@ -581,8 +585,8 @@ export const createICloudCalendarHandler = ({
       // Fail closed on any missing source. Do not publish a fresh but incomplete
       // snapshot that silently removes someone's commitments.
       const results = await Promise.all([eventLister(calendar), ...additional.map(source=>eventLister(source))]);
-      const events = [...results[0].events.map(item=>({...item,appleCalendarId:primaryId,appleCalendarName:calendar.name,appleCalendarOwner:"Family"})), ...additional.flatMap((source,index)=>results[index+1].events.map(item=>mapAppleSourceEvent(item,source)))];
-      return json(200, { calendar:[calendar.name,...additional.map(item=>item.name)].join(", "), syncMode:"action-reviewed", discoveryMode:calendar.discoveryMode, recurrenceMode:results[0].recurrenceMode, events });
+      const events = [...results[0].events.map(item=>({...item,appleCalendarId:primaryId,appleCalendarName:calendar.name,appleCalendarOwner:"Family",calendarCanMove:Boolean(choices[0].canUnbind)})), ...additional.flatMap((source,index)=>results[index+1].events.map(item=>({...mapAppleSourceEvent(item,source),calendarCanMove:Boolean(choices.find(c=>c.id===source.id)?.canUnbind)})))];
+      return json(200, { calendar:[calendar.name,...additional.map(item=>item.name)].join(", "), destinations:choices.filter(c=>c.canBind&&(session.role==='admin'||[session.member,'Family'].includes(c.owner))).map(({id,name,owner})=>({id,name,owner})),syncMode:"action-reviewed", discoveryMode:calendar.discoveryMode, recurrenceMode:results[0].recurrenceMode, events });
     }
     if (!["POST", "PUT", "DELETE"].includes(event.httpMethod)) return json(405, { error:"Method not allowed." });
     let item = {};
@@ -596,6 +600,16 @@ export const createICloudCalendarHandler = ({
     const permissionMatrix = await actionRepository.getPermissions();
     const memberPermissions = permissionMatrix[session.member];
 
+    if(event.httpMethod==='POST'&&item._moveToCalendarId){
+      const source=choices.find(c=>c.id===item.appleCalendarId),destination=choices.find(c=>c.id===item._moveToCalendarId)
+      if(!trustedAction||session.role!=='admin')return json(403,{error:'Moving connected calendar events requires household-administrator review.'})
+      if(!source?.canUnbind||!destination?.canBind)return json(403,{error:'Apple has not granted move access to these connected calendars.'})
+      if(/^(?:daily-|household-|project-|estate-maintenance-|finance-action-)/.test(item.sourceId||item.originalSourceId||''))return json(403,{error:'Move this event through its authoritative Brevity workflow.'})
+      const moved=await moveCalendarResource({item,source,destination,repository:actionRepository,request:calendarTransport})
+      const parsed=parseEvent(moved.text,moved.href,moved.etag)
+      const result=destination.owner==='Family'&&destination.id===calendar.id?{...parsed,appleCalendarId:destination.id,appleCalendarName:destination.name,appleCalendarOwner:'Family'}:mapAppleSourceEvent(parsed,destination)
+      return json(200,{...result,calendarCanMove:Boolean(destination.canUnbind),ok:true})
+    }
     if (event.httpMethod === "POST") {
       if (!trustedAction) {
         const sourceAuthorization = await authorizeUntrustedSourceMutation({ method:"POST", item });
