@@ -217,6 +217,12 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
   return next
 }
 
+export function assignedBudgetLine(transaction, lines, accountMap) {
+  if(!transaction?.budgetLineId || transaction.pending || !Number.isFinite(Number(transaction.amount)))return null
+  const accountId=accountMap[transaction.accountId]
+  return lines.find(line=>line.id===transaction.budgetLineId&&line.accountId===accountId&&line.direction===(Number(transaction.amount)<0?'income':'expense'))||null
+}
+
 export function allocateBudgetActuals(actuals = [], lines = [], accountMap = {}) {
   const byLine = {}, unallocatedByCategory = {}, byCategory = {}
   for (const transaction of actuals) {
@@ -225,7 +231,8 @@ export function allocateBudgetActuals(actuals = [], lines = [], accountMap = {})
     const amount = Math.abs(Number(transaction.amount) || 0)
     // Only reviewed bank-record links may assign actuals to a planned line.
     // Similar names, dates, and amounts are never identity evidence.
-    const matches = lines.filter(line => (line.category === 'Income') === (category === 'Income') && line.transactions?.some(plan =>
+    const assigned = assignedBudgetLine(transaction,lines,accountMap)
+    const matches = assigned ? [assigned] : lines.filter(line => (line.category === 'Income') === (category === 'Income') && line.transactions?.some(plan =>
       approvedReconciliationMatches(plan, transaction, transaction.date, accountMap)))
     const resolvedCategory = matches.length === 1 ? matches[0].category : category
     byCategory[resolvedCategory] = (byCategory[resolvedCategory] || 0) + amount

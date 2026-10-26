@@ -1,6 +1,7 @@
+import {calculateTransactionAmountForMonth} from './monthlyCashFlow.js'
 import {getHouseholdDateKey} from './financeTime.js'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
-import { buildBudgetLines, buildLegacyBudgetOwners, budgetTargetForLine } from './budgetBreakdown.js'
+import { assignedBudgetLine, buildBudgetLines, buildLegacyBudgetOwners, budgetTargetForLine } from './budgetBreakdown.js'
 import { budgetCategoryForTransaction, isTransferTransaction, isRealizedIncomeTransaction } from './reportingData.js'
 import { approvedReconciliationMatches } from './autoReconciliation.js'
 
@@ -24,7 +25,9 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
     const month=date.toISOString().slice(0,7),year=date.getUTCFullYear(),index=date.getUTCMonth()
     for(const line of lines){
       const original=budget.originalTargets?.[line.accountId]?.[String(year)]?.[line.id]
-      const target=original && Object.prototype.hasOwnProperty.call(original,index) ? original[index] : budgetTargetForLine({budget,line,year,month:index,legacyYear:budgetLegacyYear,legacyAccountId:budgetLegacyAccountId,legacyOwners:owners})
+      const hasOriginal=original && Object.prototype.hasOwnProperty.call(original,index)
+      let target=hasOriginal ? original[index] : budgetTargetForLine({budget,line,year,month:index,legacyYear:budgetLegacyYear,legacyAccountId:budgetLegacyAccountId,legacyOwners:owners})
+      if(!hasOriginal&&target===undefined&&line.transactions?.length)target=line.transactions.reduce((sum,tx)=>sum+calculateTransactionAmountForMonth(tx,date),0)
       if(target===null||target===undefined||target===''){missingTargets++;continue}
       const amount=Math.max(0,cents(target))
       if(line.direction==='income'){incomeTarget+=amount;incomeLines++;continue}
@@ -44,7 +47,8 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
     // assign their spending to an unrelated selected account.
     if(accountId&&!accountIds.has(accountId))continue
     if(amount<=0){if(inPeriod&&!t.pending&&accountId){if(isRealizedIncomeTransaction(t))postedIncome-=amount;else otherInflows-=amount}continue}
-    const category=spendingCategory(t),key=`${accountId}|${t.date.slice(0,7)}|${category}`,target=targets.get(key)||0
+    const assigned=assignedBudgetLine(t,lines,links)
+    const category=spendingCategory(assigned?{category:assigned.category,amount:t.amount}:t),key=`${accountId}|${t.date.slice(0,7)}|${category}`,target=targets.get(key)||0
     const before=used.get(key)||0
     const needsReview=!accountId||category==='Other'
     const exception=needsReview?'review':target<=0?'unbudgeted':before+amount>target?'over':scheduled.some(plan=>approvedReconciliationMatches(plan,t,t.date,links))?'planned':'budgeted'

@@ -1,3 +1,5 @@
+import {buildUniquePlaidAccountMap} from '../../src/finance/calendarSemantics.js'
+import {isTransferTransaction} from '../../src/finance/reportingData.js'
 import { validateRecovery } from '../../src/finance/recoveryScenario.js'
 import {applyPacketEdit} from '../../src/finance/meetingPacketIntelligence.js'
 import {submitProjectCompletion,reviewProjectCompletion} from '../../src/homehq/projectSignoff.js'
@@ -28,7 +30,7 @@ import {RECIPE_RESOURCE,resolvedRecipes,applyRecipeUpdate,applyRecipeCreate} fro
 import { randomUUID } from 'node:crypto'
 import { getStore } from './scoped-store.mjs'
 import { deleteRecurringOccurrence, editRecurringOccurrence } from '../../src/finance/recurrenceEditing.js'
-import { applyBudgetTarget } from '../../src/finance/budgetBreakdown.js'
+import { assignedBudgetLine, buildBudgetLines, applyBudgetTarget } from '../../src/finance/budgetBreakdown.js'
 import { calculateDebtPayment } from '../../src/finance/debtModel.js'
 import { createEmptyDailyPlan } from '../../src/household/dailyPlan.js'
 import { applyHouseholdRecordOperation, householdRecordForOperation, householdResourceKeyForAction } from '../../src/household/householdActionModel.js'
@@ -81,7 +83,7 @@ export function resourceForOperation(operation) {
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return `shared:${SHARED_KEYS.projects}`
   if (operation.type.startsWith('calendar.')) return 'calendar:apple-family'
-  if (operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return `shared:${SHARED_KEYS.overrides}`
+  if (operation.type === 'transaction.allocate' || operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return `shared:${SHARED_KEYS.overrides}`
   if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
@@ -306,13 +308,18 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     if (!projects.some(item => item.id === operation.targetId)) throw new Error('That project no longer exists. Refresh Brevity and ask again.')
     return { before, after:projects.filter(item => item.id !== operation.targetId) }
   }
+  if (operation.type === 'transaction.allocate') {
+    const line=context.budgetAssignment
+    if(!line||line.id!==payload.budgetLineId||line.category!==payload.category)throw Error('The budget assignment changed. Review it again.')
+    return {before,after:{...(value||{}),[operation.targetId]:{...(value?.[operation.targetId]||{}),id:operation.targetId,category:line.category,budgetLineId:line.id}}}
+  }
   if (operation.type === 'transaction.categorize') {
     if (!operation.targetId || !payload.category) throw new Error('A transaction and category are required.')
-    return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), id:operation.targetId, category:payload.category } } }
+    return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), id:operation.targetId, ...(value?.[operation.targetId]?.budgetLineId?{budgetLineId:null}:{}), category:payload.category } } }
   }
   if (operation.type === 'transaction.update') {
     if (!operation.targetId) throw new Error('A bank transaction id is required.')
-    const allowed={}
+    const allowed=payload.category!==undefined&&value?.[operation.targetId]?.budgetLineId?{budgetLineId:null}:{}
     for(const field of ['name','category'])if(payload[field]!==undefined)allowed[field]=clone(payload[field])
     return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), ...allowed, id:operation.targetId } } }
   }
@@ -748,6 +755,14 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
         for(const [dependency,version] of Object.entries(operation.mealContext.versions)){if((await resources.read(dependency)).version!==version)throw Object.assign(Error('A recipe or meal changed after review. Refresh and try again.'),{code:'VERSION_CONFLICT'})}
       }
       const governanceContext=GOVERNANCE_TYPES.includes(operation.type)?await validateGovernance({operation,resources,session,proposal,value,now:now(),model:operation.type==='orchestration.coordination.update'?await loadOrchestration({resources,session,date:operation.targetDate}):null}):null
+      let budgetAssignment=null
+      if(operation.type==='transaction.allocate'){
+        const bank=await resources.read('shared:plaid_actuals_cache'),finance=await resources.read('shared:lslj_finance_v9'),budget=await resources.read('shared:lslj_budget_v1')
+        const transaction=bank.value?.find(row=>row.id===operation.targetId)
+        if(!transaction||transaction.pending||isTransferTransaction(transaction))throw Error('Choose an existing posted non-transfer bank transaction.')
+        budgetAssignment=assignedBudgetLine({...transaction,budgetLineId:operation.payload.budgetLineId},buildBudgetLines(finance.value?.transactions||[],budget.value||{}),buildUniquePlaidAccountMap(finance.value?.accounts||[]))
+        if(!budgetAssignment||budgetAssignment.category!==operation.payload.category)throw Error('The selected budget line or account changed. Refresh and select it again.')
+      }
       const record=recordForOperation(value,operation)
       const permission=permissionForOperation({operation,member:session.member,role:session.role,permissions,currentRecord:record})
       if(!permission.allowed)throw Object.assign(new Error(permission.reason),{code:'FORBIDDEN'})
@@ -773,7 +788,7 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
         const match=report.suggestions.find(row=>row.plan.id===operation.targetId&&row.occurrenceDate===operation.targetDate&&row.actual.id===evidence.actualId)
         if(!match||Object.keys(match.evidence).some(key=>match.evidence[key]!==evidence[key])) throw Object.assign(new Error('The planned or posted charge changed, was already reconciled, or no longer has a unique match. Refresh the reconciliation report.'),{code:'VERSION_CONFLICT'})
       }
-      const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version,orchestrationCase,governanceContext}); value=result.after
+      const result=applyRecordOperation(value,operation,createId,{now,actor:session.member,recordVersion:current.version,orchestrationCase,governanceContext,budgetAssignment}); value=result.after
     }
     prepared.push({resource,before:current.value,after:value,beforeVersion:current.version,afterVersion:current.version+1})
   }
