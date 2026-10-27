@@ -261,7 +261,7 @@ export async function prepareDirectProposal({input,session,permissions,repositor
   // Direct plan editors need the same server-captured inherited-outcome
   // dependency as assistant proposals. Keep the editor's exact plan version.
   if(resource.startsWith('plan:'))proposal=await captureExpectedVersions(proposal,resources)
-  proposal={...proposal,expectedVersions:multiResource?input.expectedVersions:{[resource]:expectedVersion}}
+  proposal={...proposal,expectedVersions:multiResource?input.expectedVersions:{...proposal.expectedVersions,[resource]:expectedVersion}}
   // This dry preparation validates the exact target and current permission
   // against the reviewed version without mutating anything.
   await prepareRecordOperations({proposal,session,permissions,resources,now:()=>now})

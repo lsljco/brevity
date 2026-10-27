@@ -46,3 +46,16 @@ test('Today and Tomorrow alignment screens expose meeting capture while preservi
   assert.match(endpoint,/readSession\(event\)/)
   assert.match(endpoint,/proposed local draft and does not change the shared plan/)
 })
+
+test('meeting task proposals preserve identities, owners, completed work and deduplicate repeated analysis',()=>{
+ const plan=createEmptyDailyPlan('2026-10-26')
+ plan.topPriorities=[{id:'original',title:'Prepare questions',owner:'Larry',status:'complete',date:'2026-10-26',notes:'Already done'}]
+ const result={changes:{household:{priorities:[' prepare   questions ','Plant the trees']}}}
+ const next=applyAlignmentMeetingResult(plan,result),again=applyAlignmentMeetingResult(next,result)
+ assert.equal(next.household.priorities.length,2)
+ for(const [key,value] of Object.entries(plan.topPriorities[0]))assert.deepEqual(next.household.priorities[0][key],value)
+ assert.equal(next.household.priorities[1].requiresDecision,true)
+ assert.equal(next.household.priorities[1].status,'pending')
+ assert.deepEqual(again.household.priorities,next.household.priorities)
+ assert.deepEqual(next.topPriorities,next.household.priorities)
+})

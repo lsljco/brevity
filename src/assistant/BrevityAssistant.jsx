@@ -106,7 +106,9 @@ export default function BrevityAssistant({ currentMember, role='member', activeV
     const next=[...previous,{role:'user',content}];messagesRef.current=next;setMessages(next);setDraft('');draftRef.current='';busyRef.current=true;setBusy(true);setError('')
     if(voiceModeRef.current)setVoiceStatus('Thinking…')
     try{
-      const result=await askBrevityAssistant({messages:next,conversationVersion,image:attachment,member:currentMember,activeView,activePillar,pageLabel,selectedDate})
+      const direct=!attachment&&activeView==='today'?await import('../household/directDayCommand.js').then(module=>module.directDayCommand(content,{date:selectedDate,member:currentMember})):null
+      const result=direct||await askBrevityAssistant({messages:next,conversationVersion,image:attachment,member:currentMember,activeView,activePillar,pageLabel,selectedDate})
+      if(direct)void Promise.resolve().then(()=>onActionCompleted?.()).catch(()=>{})
       if(requestGeneration!==memberGeneration.current)return
       setAttachment(null);if(result.conversation){useConversation(result.conversation);localStorage.removeItem(historyKey)}else{messagesRef.current=[...next,{role:'assistant',content:result.message,proposal:result.proposal||null}];setMessages(messagesRef.current)}
       if(result.proposal&&!['executed','undone'].includes(result.proposal.state))setReview(result.proposal)

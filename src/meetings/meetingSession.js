@@ -4,7 +4,7 @@ import {transcribeAlignmentAudio} from '../household/alignmentMeetingApi.js'
 
 // One recorder belongs to the signed-in app session, never to a routed screen.
 const listeners=new Set()
-let state={record:null,recording:false,starting:false,transcribing:0,error:'',saving:false,backup:'',historyOpen:false}
+let state={record:null,recording:false,paused:false,starting:false,cloudPending:false,transcribing:0,error:'',saving:false,backup:'',historyOpen:false}
 let stream,master,segment,timer,sequence=0,chunkIndex=0,segments=[],manualTranscript='',queue=Promise.resolve(),localQueue=Promise.resolve(),stopPromise=null,resolveStop=null,epoch=0
 const publish=patch=>{state={...state,...patch};listeners.forEach(listener=>listener())}
 export const meetingSnapshot=()=>state
@@ -12,11 +12,13 @@ export const subscribeMeeting=listener=>{listeners.add(listener);return()=>liste
 export const useMeetingSession=()=>useSyncExternalStore(subscribeMeeting,meetingSnapshot,meetingSnapshot)
 export const openMeetingHistory=()=>publish({historyOpen:true})
 export const closeMeetingHistory=()=>publish({historyOpen:false})
+export function meetingElapsed(record,now=Date.now()){if(!record)return 0;return Math.max(0,Math.floor(((record.endedAt?Date.parse(record.endedAt):record.pausedAt?Date.parse(record.pausedAt):now)-Date.parse(record.startedAt)-(record.pausedMs||0))/1000))}
 function persist(){
  const record=state.record
  if(!record)return Promise.resolve()
+ publish({cloudPending:true,backup:'Saving to meeting history…'})
  localQueue=localQueue.catch(()=>{}).then(()=>saveMeetingLocal(record)).catch(cause=>publish({error:`Device recovery save failed: ${cause.message}. Keep this page open and download the recording.`}))
- queue=queue.catch(()=>{}).then(async()=>{await localQueue;await syncMeeting(record);publish({backup:'Saved to your meeting history'})}).catch(cause=>publish({backup:'Saved on this device · cloud backup pending',error:cause.message}))
+ queue=queue.catch(()=>{}).then(async()=>{await localQueue;await syncMeeting(record);if(state.record?.id===record.id&&state.record.updatedAt===record.updatedAt)publish({cloudPending:false,backup:state.recording?'Saved so far':state.transcribing?'Audio saved · transcript finishing':'Saved to meeting history'})}).catch(cause=>state.record?.id===record.id&&publish({cloudPending:false,backup:'Cloud backup pending',error:cause.message}))
  return localQueue
 }
 function updateRecord(patch){publish({record:{...state.record,...patch,updatedAt:new Date().toISOString()}});persist()}
@@ -26,7 +28,7 @@ export async function restoreMeeting(member){
  if(state.recording||state.starting)await stopMeeting('interrupted')
  publish({record:null,error:'',backup:'',historyOpen:false})
  try{const records=await listLocalMeetings(member);const record=records.sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0];if(!record||generation!==epoch||state.recording||state.starting)return
-  publish({record:{...record,status:record.status==='recording'?'interrupted':record.status}})
+  publish({record:{...record,status:['recording','paused'].includes(record.status)?'interrupted':record.status}})
   manualTranscript=record.transcript||'';segments=[]
   persist()
  }catch(cause){publish({error:`Meeting recovery could not load: ${cause.message}`})}
@@ -36,14 +38,14 @@ function recorderFor(source){
  return new MediaRecorder(source,mime?{mimeType:mime}:undefined)
 }
 function runSegment(source,id){
- if(!state.recording||state.record?.id!==id)return
+ if(!state.recording||state.paused||state.record?.id!==id)return
  let recorder;try{recorder=recorderFor(source)}catch(cause){publish({error:`Live transcription unavailable: ${cause.message}. Audio recording continues.`});return}
  const parts=[],index=sequence++;segment=recorder
  recorder.ondataavailable=event=>{if(event.data?.size)parts.push(event.data)}
  recorder.onstop=()=>{
-  clearTimeout(timer)
+  clearTimeout(timer);if(segment===recorder)segment=null
   // Restart capture immediately; transcription latency must not create gaps.
-  if(state.recording&&state.record?.id===id)runSegment(source,id)
+  if(state.recording&&!state.paused&&state.record?.id===id)runSegment(source,id)
   if(!parts.length)return
   publish({transcribing:state.transcribing+1})
   transcribeAlignmentAudio(new Blob(parts,{type:recorder.mimeType||parts[0].type})).then(result=>{
@@ -64,11 +66,11 @@ export async function startMeeting({member,date,timing='today',kind='alignment',
   if(generation!==epoch){source.getTracks().forEach(track=>track.stop());return}
   stream=source;master=recorderFor(source);const id=crypto.randomUUID(),now=new Date().toISOString()
   segments=[];manualTranscript='';sequence=0;chunkIndex=0
-  const record={id,member,date,timing,kind,title:title||`${timing==='today'?'Today’s':'Tomorrow’s'} Alignment`,startedAt:now,endedAt:null,status:'recording',transcript:'',notes:'',chunkCount:0,mime:master.mimeType||'audio/webm',transcriptionErrors:[],updatedAt:now}
+  const record={id,member,date,timing,kind,title:title||`${timing==='today'?'Today’s':'Tomorrow’s'} Alignment`,startedAt:now,endedAt:null,status:'recording',transcript:'',notes:'',chunkCount:0,mime:master.mimeType||'audio/webm',transcriptionErrors:[],externalTranscription,pausedMs:0,pausedAt:null,updatedAt:now}
   // Refuse to start without a writable recovery store.
   await saveMeetingLocal(record)
   if(generation!==epoch){source.getTracks().forEach(track=>track.stop());return}
-  publish({record,recording:true,starting:false,backup:'Recording · saving audio every five seconds'})
+  publish({record,recording:true,paused:false,starting:false,backup:'Recording · saving audio every five seconds'})
   master.ondataavailable=event=>{
    if(!event.data?.size)return
    const index=chunkIndex++,snapshot=state.record
@@ -89,14 +91,34 @@ export async function startMeeting({member,date,timing='today',kind='alignment',
 export async function stopMeeting(reason='stopped'){
  if(!state.recording)return stopPromise
  stopPromise=new Promise(resolve=>{resolveStop=resolve})
- publish({recording:false,saving:true})
+ const pausedMs=(state.record?.pausedMs||0)+(state.record?.pausedAt?Date.now()-Date.parse(state.record.pausedAt):0)
+ publish({recording:false,paused:false,saving:true})
  clearTimeout(timer)
- updateRecord({status:reason,endedAt:new Date().toISOString()})
+ updateRecord({status:reason,endedAt:new Date().toISOString(),pausedAt:null,pausedMs})
  if(segment?.state==='recording')segment.stop()
- if(master?.state==='recording')master.stop()
+ if(master&&master.state!=='inactive')master.stop()
  else {stream?.getTracks().forEach(track=>track.stop());localQueue.finally(()=>{publish({saving:false});resolveStop?.();resolveStop=null})}
  return stopPromise
 }
+export function pauseMeeting(){
+ if(!state.recording||state.paused)return
+ publish({paused:true})
+ clearTimeout(timer)
+ if(master?.state==='recording'){master.requestData();master.pause()}
+ if(segment?.state==='recording')segment.stop()
+ updateRecord({status:'paused',pausedAt:new Date().toISOString()})
+ if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('brevity-meeting-paused',{detail:true}))
+}
+export function resumeMeeting(){
+ if(!state.recording||!state.paused)return
+ const pausedMs=(state.record.pausedMs||0)+Math.max(0,Date.now()-Date.parse(state.record.pausedAt))
+ if(master?.state==='paused')master.resume()
+ publish({paused:false})
+ updateRecord({status:'recording',pausedAt:null,pausedMs})
+ if(!state.record.externalTranscription&&!segment)runSegment(stream,state.record.id)
+ if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('brevity-meeting-paused',{detail:false}))
+}
+export function retainMeetingAnalysis(id,analysis){if(state.record?.id!==id)throw Error('The active meeting changed. Analyze its current transcript again.');updateRecord({analysis})}
 export function editMeetingText({member,date,timing,kind='alignment'},field,value){
  if(field==='transcript'&&(state.recording||state.transcribing)){publish({error:'Wait until recording and transcription finish before replacing the transcript.'});return}
  if((state.recording||state.saving||state.transcribing)&&(state.record?.member!==member||state.record?.kind!==kind||state.record?.date!==date)){publish({error:'Finish the active meeting before editing a different meeting transcript.'});return}
@@ -105,7 +127,7 @@ export function editMeetingText({member,date,timing,kind='alignment'},field,valu
   publish({record:{id:crypto.randomUUID(),member,date,timing,kind,title:kind==='finance'?'Finance Meeting':`${timing==='today'?'Today’s':'Tomorrow’s'} Alignment`,startedAt:now,endedAt:now,status:'draft',transcript:'',notes:'',chunkCount:0,updatedAt:now}})
  }
  if(field==='transcript'){manualTranscript=value;segments=[]}
- updateRecord({[field]:value})
+ updateRecord({[field]:value,...(['transcript','notes'].includes(field)?{analysis:null}:{})})
 }
 export async function retryMeetingBackup(record=state.record){if(!record)return;await localQueue;await syncMeeting(record);publish({error:'',backup:'Saved to your meeting history'})}
 export async function downloadMeeting(record=state.record){if(!record)return;await localQueue;const blob=await meetingAudio(record),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=`brevity-meeting-${record.date}.${/mp4/.test(blob.type)?'m4a':'webm'}`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
@@ -117,7 +139,7 @@ if(typeof window!=='undefined'){
 }
 
 export function appendMeetingTurn(role,text){
- if(!state.record||!state.recording||!String(text||'').trim())return
+ if(!state.record||!state.recording||state.paused||!String(text||'').trim())return
  manualTranscript=[manualTranscript,`${role}: ${String(text).trim()}`].filter(Boolean).join('\n')
  updateRecord({transcript:manualTranscript})
 }

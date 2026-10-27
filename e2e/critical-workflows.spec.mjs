@@ -2326,6 +2326,16 @@ test.describe('persistent meeting recording',()=>{
     await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
     await expect.poll(()=>audio.size,{timeout:20000}).toBeGreaterThan(0)
+    await hub.getByRole('button',{name:'Pause recording',exact:true}).click()
+    await expect(hub).toContainText('Paused')
+    await expect.poll(()=>[...archive.values()].some(row=>row.status==='paused')).toBe(true)
+    await page.waitForTimeout(400)
+    const pausedChunks=audio.size
+    await page.waitForTimeout(1200)
+    expect(audio.size).toBe(pausedChunks)
+    await hub.getByRole('button',{name:'Resume recording',exact:true}).click()
+    await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
+    await hub.getByRole('button',{name:'Pause recording',exact:true}).click()
     await hub.getByRole('button',{name:'Stop Meeting',exact:true}).click()
     await expect.poll(()=>[...archive.values()].some(row=>row.status==='stopped'&&row.transcript.includes('Recorded household')),{timeout:15000}).toBe(true)
     await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
@@ -3537,4 +3547,73 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   }
   await expect(page.getByRole('dialog',{name:'Ask Brevity',exact:true})).toHaveCount(0)
  }
+})
+
+test('Today completion retries the exact direct save and Undo without opening Hey Brevity',async({page},testInfo)=>{
+ const today=plan(),requests=[];let prepares=0,executes=0,complete=false
+ await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:{...today,topPriorities:today.topPriorities.map(x=>x.id==='p2'?{...x,status:complete?'complete':'pending'}:x)}}}))
+ page.on('request',r=>{if(new URL(r.url()).pathname==='/.netlify/functions/brevity-assistant')requests.push(r.url())})
+ await page.route('**/.netlify/functions/brevity-assistant-actions*',async route=>{
+  const action=new URL(route.request().url()).searchParams.get('action'),body=route.request().postDataJSON()
+  if(action==='prepare-direct'){prepares++;return route.fulfill({json:{proposal:{id:'quick-proposal',risk:'confirmation',operations:[{...body.operation,id:'quick-operation',domain:'planning'}]}}})}
+  if(action==='execute'){executes++;expect(body.proposalId).toBe('quick-proposal');if(executes===1)return route.fulfill({status:503,json:{error:'Temporary connection problem'}});complete=true;return route.fulfill({json:{audit:{id:'quick-audit',summary:'Outcome complete',operations:[{type:'plan.pillar.update',domain:'planning',targetDate:dateKey()}]}}})}
+  if(action==='undo'){complete=false;return route.fulfill({json:{audit:{id:'undo-audit',operations:[{type:'plan.pillar.update',domain:'planning',targetDate:dateKey()}]}}})}
+  return route.fulfill({json:{history:[],permissions:{Larry:{planning:true}},role:'admin'}})
+ })
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Mark complete: Complete today’s essential commitments',exact:true}).first().click()
+ const notice=page.locator('.day-save-status');await expect(notice).toContainText('Save not confirmed')
+ await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
+ await notice.getByRole('button',{name:'Retry save',exact:true}).click();await expect(notice).toContainText('Saved · Complete')
+ expect(prepares).toBe(1);expect(executes).toBe(2);expect(requests).toHaveLength(0)
+ await notice.getByRole('button',{name:'Undo',exact:true}).click();await expect(notice).toContainText('Undone')
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+ await notice.screenshot({path:testInfo.outputPath('direct-task-save.png')})
+})
+
+test('Alignment rejects analysis that finishes after its transcript changes',async({page},testInfo)=>{
+ await openTodayDetails(page);await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click();await closeMenuIfMobile(page,testInfo)
+ const capture=page.getByLabel(/Alignment meeting capture$/)
+ await capture.getByLabel(/transcript$/).fill('We agreed to prepare questions.')
+ let release;const hold=new Promise(resolve=>release=resolve)
+ await page.route('**/.netlify/functions/alignment-meeting-analyze',async route=>{await hold;await route.fulfill({json:{summary:'Old result',changes:{household:{priorities:['Old suggestion']}}}})})
+ await capture.getByRole('button',{name:'Analyze with Brevity',exact:true}).click()
+ await capture.getByLabel(/transcript$/).fill('Correction: we have not agreed yet.')
+ release()
+ await expect(capture).toContainText('changed during analysis')
+ await expect(capture.getByRole('button',{name:'Apply Suggestions to Draft',exact:true})).toHaveCount(0)
+ await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
+})
+
+test('Exact Today completion command avoids AI and preserves the saved conversation receipt',async({page},testInfo)=>{
+ let modelCalls=0,executions=0
+ page.on('request',request=>{if(new URL(request.url()).pathname==='/.netlify/functions/brevity-assistant')modelCalls++})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>{const body=route.request().postDataJSON();expect(body.operation.payload.patch.priorities.find(x=>x.id==='p2').status).toBe('complete');return route.fulfill({json:{proposal:{id:'voice-direct',risk:'confirmation',operations:[{...body.operation,id:'op',domain:'planning'}]}}})})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>{executions++;return route.fulfill({json:{audit:{id:'voice-audit',operations:[{type:'plan.pillar.update',domain:'planning',targetDate:dateKey()}]},conversation:{version:2,messages:[{role:'user',content:'Mark Complete today’s essential commitments complete'},{role:'assistant',content:'Saved: Complete today’s essential commitments is complete.'}]}}})})
+ await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ await page.locator('.brevity-assistant-composer textarea').fill('Mark Complete today’s essential commitments complete')
+ await page.getByRole('button',{name:'Send message',exact:true}).click()
+ await expect(page.locator('.brevity-assistant-transcript')).toContainText('Saved: Complete today’s essential commitments is complete.')
+ expect(executions).toBe(1);expect(modelCalls).toBe(0)
+})
+
+test('Today direct editor reschedules the original outcome and preserves its notes',async({page},testInfo)=>{
+ const today=plan(),prepared=[];today.topPriorities[1].notes='Keep the preparation checklist.'
+ await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:today}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>{const body=route.request().postDataJSON();prepared.push(body);return route.fulfill({json:{proposal:{id:'reschedule',risk:'confirmation',operations:[{...body.operation,id:'op'}]}}})})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>route.fulfill({json:{audit:{id:'rescheduled',operations:[]}}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Update Complete today’s essential commitments',exact:true}).first().click()
+ const editor=page.getByRole('region',{name:'Update Complete today’s essential commitments',exact:true})
+ await expect(editor).toBeVisible();await expect(editor.getByLabel('Notes',{exact:true})).toHaveValue('Keep the preparation checklist.')
+ const tomorrow=new Date(`${dateKey()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1)
+ await editor.getByLabel('Scheduled date',{exact:true}).fill(tomorrow.toISOString().slice(0,10))
+ await editor.getByRole('button',{name:'Save changes',exact:true}).click()
+ await expect(editor.getByRole('status')).toHaveText('Saved')
+ const row=prepared[0].operation.payload.patch.priorities.find(x=>x.id==='p2')
+ expect(row.date).toBe(tomorrow.toISOString().slice(0,10));expect(row.notes).toBe('Keep the preparation checklist.');expect(prepared[0].operation.targetDate).toBe(dateKey())
+ await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+ await editor.screenshot({path:testInfo.outputPath('direct-day-editor.png')})
 })
