@@ -12,6 +12,7 @@ export function matchesCalendarScopes(event, selected) {
   }
   const church = event?.owner === CHURCH_CALENDAR || event?.calendarScope === 'church-triumphant' || event?.pillar === 'ministry'
   if (church) return selected.includes(CHURCH_CALENDAR)
+  if (event?.source === 'project' && event.calendarScope === 'family') return selected.includes('Family')
   if (event?.owner === 'Family') return selected.includes('Family') && event?.ownershipKnown !== false
   const participants = [...(event?.participants || []),...(event?.members || [])]
   return selected.some(member => HOUSEHOLD_MEMBERS.includes(member) && (event?.owner === member || participants.includes(member)))

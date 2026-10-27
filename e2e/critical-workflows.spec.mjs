@@ -1113,6 +1113,29 @@ test('Family Calendar opens the exact authoritative project and preserves unrela
   expect(prepared[0].operation).toMatchObject({type:'project.update',targetId:'kitchen-1',payload:{pushToFamilyCalendar:false}})
 })
 
+test('Project scheduling validates times and reviews the exact existing item without model generation',async({page},testInfo)=>{
+  await mockBackend(page,{projectFixture:true})
+  const prepared=[]
+  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Add to calendar: Kitchen refresh',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Add to calendar',exact:true})
+  await dialog.getByLabel('Start date',{exact:true}).fill(dateKey())
+  await dialog.getByLabel('End date',{exact:true}).fill(dateKey())
+  await dialog.getByLabel('All day',{exact:true}).uncheck()
+  await dialog.getByLabel('Start time',{exact:true}).fill('09:00')
+  await dialog.getByLabel('End time',{exact:true}).fill('08:00')
+  await dialog.getByRole('button',{name:'Review schedule',exact:true}).click()
+  await expect(dialog.getByRole('alert')).toContainText('end after the start')
+  expect(prepared).toHaveLength(0)
+  await dialog.getByLabel('End time',{exact:true}).fill('10:00')
+  await dialog.getByRole('button',{name:'Review schedule',exact:true}).click()
+  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+  expect(prepared).toHaveLength(1)
+  expect(prepared[0].operation).toMatchObject({type:'project.update',targetId:'kitchen-1',payload:{date:dateKey(),endDate:dateKey(),allDay:false,startTime:'09:00',endTime:'10:00',pushToFamilyCalendar:true}})
+})
+
 test('Project Apple publication prepares an exact source review without writing the calendar',async({page},testInfo)=>{
   await mockBackend(page,{projectFixture:true})
   const records=projectRecords(),projects=JSON.parse(records.homehq_items_v1.value)

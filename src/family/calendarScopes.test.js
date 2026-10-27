@@ -50,3 +50,9 @@ test('Apple calendar filters follow mapped source rather than organizer or atten
  assert.equal(matchesCalendarScopes({source:'icloud',owner:'Larry'},['Larry']),false)
  assert.equal(matchesCalendarScopes({source:'icloud',appleCalendarId:'old-cache',owner:'Terica'},['Terica']),true)
 })
+
+test('a project explicitly scheduled on Family stays there when one member does the work',()=>{
+ const event={source:'project',calendarScope:'family',owner:'Javin',participants:['Javin']}
+ assert.equal(matchesCalendarScopes(event,['Family']),true)
+ assert.equal(matchesCalendarScopes(event,['Larry']),false)
+})

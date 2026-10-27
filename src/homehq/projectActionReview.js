@@ -5,7 +5,7 @@ import { normalizeProjectItem, PROJECT_STORAGE_KEY } from './projectData.js'
 
 const PROJECT_TEXT_FIELDS = [
   'title', 'type', 'room', 'roomCustom', 'status', 'priority',
-  'vendorId', 'cname', 'cphone', 'cemail', 'caddress', 'notes',
+  'startTime', 'endTime', 'vendorId', 'cname', 'cphone', 'cemail', 'caddress', 'notes',
 ]
 const PROJECT_BOOLEAN_FIELDS = ['bizLicense', 'coi', 'workersComp', 'pushToFamilyCalendar']
 
@@ -27,6 +27,7 @@ export function reviewedProjectPayload(item = {}) {
   const payload={}
   PROJECT_TEXT_FIELDS.forEach(field => { payload[field]=String(project[field] || '').trim() })
   PROJECT_BOOLEAN_FIELDS.forEach(field => { payload[field]=Boolean(project[field]) })
+  payload.allDay=project.allDay!==false
   payload.date=String(project.startDate || '')
   payload.endDate=String(project.due || '')
   payload.estcost=projectCost(project.estcost)

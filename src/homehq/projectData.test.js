@@ -53,3 +53,14 @@ test('project projection follows exact IDs, removes stale published copies, and 
 test('project projections reject missing IDs, impossible dates and reversed date windows',()=>{
   for(const project of [{due:'2026-09-30'},{id:'p',due:'2026-02-30'},{id:'p',due:'2026-13-01'},{id:'p',startDate:'2026-10-01',due:'2026-09-30'}])assert.equal(projectCalendarEvent(project),null)
 })
+
+test('timed project schedules preserve hours and reject incomplete or reversed time windows',()=>{
+ const item={id:'timed',title:'Fixture maintenance',startDate:'2026-10-28',due:'2026-10-28',allDay:false,startTime:'09:00',endTime:'10:30',raci:{responsible:['Javin']}}
+ const event=projectCalendarEvent(item)
+ assert.equal(event.allDay,false);assert.equal(event.time,'09:00');assert.equal(event.endTime,'10:30');assert.equal(event.calendarScope,'family')
+ assert.equal(projectCalendarEvent({...item,endTime:'08:00'}),null)
+ assert.equal(projectCalendarEvent({...item,startTime:''}),null)
+ assert.equal(projectCalendarEvent({...item,startTime:'25:00'}),null)
+ assert.ok(projectCalendarEvent({...item,due:'2026-10-29',endTime:'08:00'}))
+ assert.equal(projectCalendarEvent({...item,allDay:true}).time,'')
+})
