@@ -3,7 +3,7 @@ async function openTodayDetails(page) {
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
   if(restore)await collapse.click()
-  for (const title of ['Weather','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+  for (const title of ['Weather','Pillar details & resources','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }
@@ -3619,4 +3619,29 @@ test('Today direct editor reschedules the original outcome and preserves its not
  await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
  await editor.screenshot({path:testInfo.outputPath('direct-day-editor.png')})
+})
+
+test('Family day redesign keeps the calendar connected and evening preparation reviewable',async({page},testInfo)=>{
+ await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events:[{id:'redesign-school',appleCalendarOwner:'Family',title:'School planning meeting',date:dateKey(),time:'12:30',endTime:'13:30',owner:'Family',source:'icloud',notes:'Bring questions and agree the support needed.'},{id:'redesign-interview',appleCalendarOwner:'Larry',title:'Interview preparation',date:dateKey(),time:'09:00',endTime:'09:30',owner:'Larry',source:'icloud'}],connected:true,syncedAt:new Date().toISOString()}}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const overview=page.getByRole('region',{name:'Your day at a glance',exact:true})
+ await expect(overview.getByRole('region',{name:'Day schedule',exact:true})).toBeVisible()
+ await expect(overview.getByRole('region',{name:'Day schedule',exact:true})).toContainText('12:30 PM')
+ await expect(overview.getByRole('region',{name:'Day schedule',exact:true})).toContainText('School planning meeting')
+ await expect(overview.getByRole('region',{name:'Family pillar briefing',exact:true})).toBeVisible()
+ await expect(overview.getByRole('region',{name:'Today’s Outcomes',exact:true})).toBeVisible()
+ await expect(page.locator('.family-detail-library')).not.toHaveAttribute('open','')
+ await overview.scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('family-today-redesign.png'),fullPage:true})
+ expect(await page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
+ await page.getByRole('button',{name:'Edit tomorrow’s plan',exact:true}).click()
+ await expect(page.getByRole('region',{name:'Evening planning flow',exact:true})).toBeVisible()
+ await expect(page.getByText('Draft saved on this device',{exact:true})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Day schedule',exact:true})).toBeVisible()
+ await page.locator('.morning-alignment-header').scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('family-evening-redesign.png'),fullPage:true})
+ expect(await page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
+ await page.getByRole('button',{name:'Add / Edit Outcomes',exact:true}).click()
+ const editor=page.getByRole('dialog',{name:'Edit Outcomes',exact:true})
+ await editor.getByLabel('Why it matters / help needed',{exact:true}).first().fill('Protect preparation time so the family can help.')
+ await editor.getByRole('button',{name:'Use in plan draft',exact:true}).click()
+ await expect(page.getByRole('region',{name:'Tomorrow’s Outcomes',exact:true})).toContainText('Protect preparation time so the family can help.')
 })

@@ -1,3 +1,4 @@
+import './FamilyDay.css'
 import { useEffect, useRef, useState } from 'react'
 import { normalizeDailyPlan } from './dailyPlan.js'
 import { loadLocalRecapDraft, saveLocalRecapDraft } from './dailyPlanLocalDraft.js'
@@ -49,6 +50,7 @@ export default function EveningRecap({ plan, readOnly = false, readOnlyMessage =
 
   return <div className="evening-recap">
     <header className="morning-alignment-header"><div><span>Close the Loop</span><h1>Evening Recap</h1><p>Measure the day, carry forward only what matters, and prepare tomorrow before bed.</p></div><button type="button" onClick={onCancel}>Return to Today</button></header>
+    <section className="evening-plan-steps" aria-label="Evening reflection"><div><span>01 · Celebrate</span><strong>What moved us forward?</strong><p>Recognize completed outcomes and the people who helped.</p></div><div><span>02 · Learn</span><strong>What needs to change?</strong><p>Capture friction and carry forward only what still matters.</p></div><div><span>03 · Prepare</span><strong>Give tomorrow a head start</strong><p>Agree what needs to be ready before the next day begins.</p></div></section>
     {readOnly && <div className="alignment-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>This recap is view-only</strong><span>{readOnlyMessage || 'Plans & decisions permission is required to close or change the shared daily plan.'}</span></div></div>}
     <section className="alignment-workspace">
       <div className="alignment-form-grid alignment-form-grid--two">

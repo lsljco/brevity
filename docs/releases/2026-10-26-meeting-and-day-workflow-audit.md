@@ -12,10 +12,12 @@
 
 Guided Finish stops recording before preparing its review. The recording remains available if analysis fails. Analysis is still asynchronous AI work; task taps no longer depend on it. Production network latency has not been benchmarked against private household data.
 
-This release addresses workflow mechanics. The previously rendered Today/evening visual redesign is not claimed as implemented by this change. Calendar/provider changes still use their dedicated source workflows. Calendar Details opens the calendar; it does not invent missing event details. Chores and projects retain their source review and sign-off.
+This release includes the family Today and evening planning redesign. Today brings timed calendar and scheduled commitments into one agenda beside outcomes, owners and family-impact notes. A compact pillar briefing precedes expandable detailed resources. Tomorrow planning uses an Agree / Prepare / Review flow, preserving local draft and shared-review boundaries. Calendar/provider changes still use their dedicated source workflows. Calendar Details opens the calendar; it does not invent missing event details. Chores and projects retain their source review and sign-off.
 
 ## Validation
 
 Unit coverage includes exact source updates, original-date rescheduling, protected source exclusions, uncertain-response retries, strict voice intent matching, preserved completed task IDs, repeat-analysis deduplication, addressed-only replies, and retained paused recording metadata.
 
 Browser coverage uses synthetic household records on desktop, iPhone, iPad portrait and landscape. Checks include retry/Undo without assistant activation, zero general-model calls for an exact completion command, stale-analysis rejection, recording across navigation, pause/resume, stop while paused, and playback after reload. No private family recordings or ledger records were used.
+
+Visual validation covers desktop, iPhone, iPad portrait and landscape, including populated calendar times and owners, outcome context editing in a local draft, collapsed pillar resources, and horizontal overflow. The direct-save, recording and stale-analysis checks continue to exercise the redesigned screens.
