@@ -33,3 +33,11 @@ Use case: photorealistic-natural. Asset: wide 3:2 editorial architectural photog
 ## Layout correction
 
 The project scheduling dialog explicitly centers itself and sizes its checkbox independently of the global form input styles.
+
+## Automatic imagery for new projects
+
+New projects opt into automatic imagery when their reviewed creation is saved. The save receipt starts generation without awaiting it; opening Projects also resumes unfinished jobs. Existing projects retain their curated imagery. The title, project type, room and notes guide a finished-result concept in the shared aesthetic. Costs, contact details and responsibility assignments are excluded from the prompt.
+
+The image uses the same OpenAI image model and credentials as meals (`BREVITY_IMAGE_MODEL`, `OPENAI_API_KEY`). Authenticated queue and background endpoints keep rendering out of the project save request. Conditional job claims prevent duplicate generation, while source hashes reject stale results after edits, uploaded photos, deletion or Undo. Images and jobs are separate from canonical project records, preserving action versions and Undo. Images require a signed-in household session.
+
+Cards show generation progress and a Retry image button on failure. Scheduling remains available throughout. Uploaded project photos take precedence. Generated images illustrate the intended result; they do not establish that work is complete.

@@ -1,5 +1,7 @@
 import ProjectSchedule from './ProjectSchedule.jsx'
 import {projectConceptImage} from './projectImagery.js'
+import {needsProjectImage,projectImageSourceKey} from './projectImageModel.js'
+import {useProjectImages} from './useProjectImages.js'
 import {requestProjectCalendarReview} from './projectActionReview.js'
 import VendorSelector from '../finance/VendorSelector.jsx'
 import {useVendorDirectory,requestVendorOpen} from '../finance/vendorApi.js'
@@ -626,6 +628,7 @@ function CalendarView({items, onEdit, readOnly=false}){
 function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='',canPublishCalendar=false}){
   const {directory:vendorDirectory}=useVendorDirectory();
   const [items,setItems]         = useState(loadItems);
+  const projectImages=useProjectImages(items,!readOnly);
   const [tab,setTab]             = useState("all");
   const [search,setSearch]       = useState("");
   const [fStatus,setFStatus]     = useState("");
@@ -811,15 +814,18 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
                 const dueDate=item.due?parseProjectDate(item.due):null;
                 const todayStart=new Date();todayStart.setHours(0,0,0,0);
                 const isOverdue=dueDate&&dueDate<todayStart&&item.status!=="Done";
-                const heroImg=getRoomImg(item);
+                const imageStatus=projectImages.states[item.id];
+                const generatedImage=needsProjectImage(item)&&imageStatus?.state==='ready'&&imageStatus.sourceKey===projectImageSourceKey(item)?imageStatus.image:'';
+                const heroImg=generatedImage||getRoomImg(item);
                 return(
                   <div key={item.id} className={`hq-card${isExp?' hq-card--expanded':''}`}>
 
                     {/* Card hero image */}
                     <div role="button" tabIndex={0} aria-label={`${isExp?'Hide':'Show'} ${item.title} details`} aria-expanded={isExp} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setExpanded(isExp?null:item.id)}}} style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
                       <img
+                        key={heroImg}
                         src={heroImg}
-                        alt={!item.photos?.length&&projectConceptImage(item)?`${item.title} — finished-result concept`:roomLabel(item)}
+                        alt={!item.photos?.length&&(generatedImage||projectConceptImage(item))?`${item.title} — finished-result concept`:roomLabel(item)}
                         loading="lazy"
                         decoding="async"
                         style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
@@ -840,6 +846,10 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
                       )}
                     </div>
 
+                    {needsProjectImage(item)&&!generatedImage&&<div className="hq-project-image-progress" role="status">
+                      <span>{imageStatus?.state==='error'||imageStatus?.state==='obsolete'?'Project saved · image needs a retry':imageStatus?.state==='generating'?'Generating project image…':'Project saved · image queued'}</span>
+                      {(imageStatus?.state==='error'||imageStatus?.state==='obsolete')&&!readOnly&&<button type="button" onClick={()=>projectImages.retry(item.id)} aria-label={`Retry image for ${item.title}`}>Retry image</button>}
+                    </div>}
                     {/* Card body */}
                     <div style={{padding:"14px 16px"}}>
                       <p style={{color:G,fontSize:12,marginBottom:8}}>Sign-off: Larry{item.completionReview?.state==='pending'?' · Awaiting approval':item.completionReview?.state==='returned'?` · Returned: ${item.completionReview.returnReason}`:''}</p>
@@ -967,6 +977,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
 
               <FField label="Title *" full>
                 <input style={FI} value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="e.g. Replace kitchen faucet"/>
+                {!editId&&<p style={{fontSize:12,color:W3,marginTop:8}}>After saving, Brevity automatically creates a matching photorealistic project image. You can schedule the project while it renders.</p>}
               </FField>
 
               <FField label="Type">

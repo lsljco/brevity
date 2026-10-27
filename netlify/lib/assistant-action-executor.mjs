@@ -285,7 +285,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       due:payload.endDate || payload.date || operation.targetDate || '',estcost:'',actcost:'',
       raci:payload.raci || { responsible:payload.owner ? [payload.owner] : [], accountable:[], consulted:[], informed:[] },
       pushToFamilyCalendar:false,cname:'',cphone:'',cemail:'',caddress:'',bizLicense:false,coi:false,workersComp:false,
-      photos:[],files:[],...projectFields,createdAt:changedAt,updatedAt:changedAt,updatedBy:context.actor||'Household member',
+      photos:[],files:[],...projectFields,autoImageEnabled:true,createdBy:context.actor||'Household member',createdAt:changedAt,updatedAt:changedAt,updatedBy:context.actor||'Household member',
     }
     if(item.pushToFamilyCalendar && !projectCalendarEvent(item))throw new Error('A calendar-visible project requires a valid start or due date and an end on or after its start.')
     return { before, after:[...(Array.isArray(value) ? value : []), submitProjectCompletion(item,{actor:context.actor,now:changedAt})], createdId:item.id }
