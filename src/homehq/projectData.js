@@ -33,11 +33,14 @@ export function projectCalendarEvent(item) {
   const start = project.startDate || project.due
   const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'')&&!Number.isNaN(new Date(`${value}T12:00:00Z`).getTime())&&new Date(`${value}T12:00:00Z`).toISOString().slice(0,10)===value
   if (!project.id || !validDate(start) || (project.due && (!validDate(project.due)||project.due < start))) return null
+  const allDay=project.allDay!==false
+  const validTime=value=>/^([01]\d|2[0-3]):[0-5]\d$/.test(value||'')
+  if(!allDay&&(!validTime(project.startTime)||!validTime(project.endTime)||((project.due||start)===start&&project.endTime<=project.startTime)))return null
   const members = uniqueMembers(RACI_KEYS.flatMap(key => project.raci[key]))
   return {
     id:`project-${project.id}`, sourceId:`project-${project.id}`, projectId:project.id, source:'project', title:project.title,
-    date:start, start, end:project.due || start, endDate:project.due || start, allDay:true, members:members.length ? members : ['Family'], participants:members,
-    owner:members.length === 1 ? members[0] : 'Family', calendarName:'Family', calendarSyncEnabled:false, readOnly:true,
+    date:start, start, end:project.due || start, endDate:project.due || start, allDay,time:allDay?'':project.startTime,endTime:allDay?'':project.endTime, members:members.length ? members : ['Family'], participants:members,
+    owner:members.length === 1 ? members[0] : 'Family', calendarScope:'family', calendarName:'Family', calendarSyncEnabled:false, readOnly:true,
     status:project.status, priority:project.priority, notes:project.notes || '', updatedAt:project.updatedAt || '',
   }
 }

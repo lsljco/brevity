@@ -1,3 +1,4 @@
+import ProjectSchedule from './ProjectSchedule.jsx'
 import {requestProjectCalendarReview} from './projectActionReview.js'
 import VendorSelector from '../finance/VendorSelector.jsx'
 import {useVendorDirectory,requestVendorOpen} from '../finance/vendorApi.js'
@@ -632,6 +633,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
   const [fAssignee,setFAssignee] = useState("");
   const [expanded,setExpanded]   = useState(null);
   const [modal,setModal]         = useState(false);
+  const [scheduleItem,setScheduleItem]=useState(null);
   const [editId,setEditId]       = useState(null);
   const [form,setForm]           = useState(EMPTY_FORM);
   const [lightbox,setLightbox]   = useState(null);
@@ -854,6 +856,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
                         </div>}
                       </div>
 
+                      {!readOnly&&<button className="hq-add-calendar" disabled={!canPublishCalendar||stagingAction} aria-label={`${item.pushToFamilyCalendar?'Reschedule':'Add to calendar'}: ${item.title}`} onClick={()=>setScheduleItem(item)}>{item.pushToFamilyCalendar?'Reschedule':'Add to calendar'}</button>}
                       {canDelete&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
                         <button disabled={stagingAction||!item.pushToFamilyCalendar} onClick={e=>{e.stopPropagation();reviewApple(item,'publish')}} aria-label={`Publish project ${item.title} to Apple Calendar`}>Review Apple publication</button>
                         <button disabled={stagingAction} onClick={e=>{e.stopPropagation();reviewApple(item,'remove')}} aria-label={`Remove project ${item.title} from Apple Calendar`}>Review Apple removal</button>
@@ -950,6 +953,7 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
       </div>
 
       {/* MODAL */}
+      {scheduleItem&&!readOnly&&<ProjectSchedule key={scheduleItem.id} project={items.find(item=>item.id===scheduleItem.id)||scheduleItem} onClose={()=>setScheduleItem(null)}/>}
       {modal&&!readOnly&&(
         <div className="hq-modal-backdrop" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.80)",backdropFilter:"blur(12px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget)setModal(false);}}>
           <div className="hq-modal-card" style={{background:"rgba(12,12,12,0.97)",border:`1px solid ${BORDER}`,borderRadius:20,padding:28,width:"100%",maxWidth:700,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.7)",position:"relative"}}>

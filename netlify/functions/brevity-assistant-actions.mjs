@@ -108,7 +108,7 @@ export async function prepareProjectCalendarProposal({input,session,events,repos
   const projected=project?.pushToFamilyCalendar&&projectCalendarEvent(project)
   if(input.intent==='publish'&&!projected)throw Object.assign(new Error('Save valid project dates and enable Family Calendar visibility before publishing to Apple.'),{code:'INVALID_ACTION'})
   const type=input.intent==='remove'?'calendar.delete':current?'calendar.update':'calendar.create'
-  const payload=input.intent==='remove'?{}:{title:projected.title,date:projected.date,endDate:projected.endDate,time:'',endTime:'',allDay:true,owner:projected.owner,participants:projected.participants,notes:projected.notes,priority:projected.priority==='High'?'high':'normal'}
+  const payload=input.intent==='remove'?{}:{title:projected.title,date:projected.date,endDate:projected.endDate,time:projected.time||'',endTime:projected.endTime||'',allDay:projected.allDay,owner:projected.owner,participants:projected.participants,notes:projected.notes,priority:projected.priority==='High'?'high':'normal'}
   const title=project?.title||current?.title||source.id
   const description=input.intent==='remove'?`Remove the Apple Calendar publication of “${title}”. The Brevity project is unchanged.`:`Publish the saved project “${title}” to Apple Calendar (${projected.date} through ${projected.endDate}). Later project changes require republishing; Undo affects this Apple snapshot only.`
   let proposal=normalizeActionProposal({summary:description,operations:[{type,targetId:current?.id||`project-${source.id}`,description,payload}]},{member:session.member,role:session.role,now,id})
