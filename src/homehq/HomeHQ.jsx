@@ -1,4 +1,5 @@
 import ProjectSchedule from './ProjectSchedule.jsx'
+import {projectConceptImage} from './projectImagery.js'
 import {requestProjectCalendarReview} from './projectActionReview.js'
 import VendorSelector from '../finance/VendorSelector.jsx'
 import {useVendorDirectory,requestVendorOpen} from '../finance/vendorApi.js'
@@ -207,7 +208,7 @@ const ROOM_IMG = {
 function getRoomImg(item) {
   return (item.photos && item.photos.length > 0)
     ? item.photos[0]
-    : (ROOM_IMG[item.room] || ROOM_IMG['default']);
+    : (projectConceptImage(item) || ROOM_IMG[item.room] || ROOM_IMG['default']);
 }
 
 // ── Shared UI atoms ──────────────────────────────────────────────────────────
@@ -818,7 +819,9 @@ function App({readOnly=false,canDelete=false,currentMember='',initialProjectId='
                     <div role="button" tabIndex={0} aria-label={`${isExp?'Hide':'Show'} ${item.title} details`} aria-expanded={isExp} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setExpanded(isExp?null:item.id)}}} style={{position:"relative",height:160,overflow:"hidden",cursor:"pointer"}} onClick={()=>setExpanded(isExp?null:item.id)}>
                       <img
                         src={heroImg}
-                        alt={roomLabel(item)}
+                        alt={!item.photos?.length&&projectConceptImage(item)?`${item.title} — finished-result concept`:roomLabel(item)}
+                        loading="lazy"
+                        decoding="async"
                         style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
                         onError={e=>{e.target.style.display="none";}}
                       />
