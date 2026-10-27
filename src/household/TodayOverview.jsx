@@ -14,7 +14,7 @@ import {canUpdateDayItem,dayItemChange,createDaySave,undoDaySave} from './direct
 import './TodayOverview.css'
 import './FamilyDay.css'
 const recordKey=item=>`${item.sourceKind}:${item.id}`
-const describeTime=item=>item.startTime||item.time||(item.sourceKind==='appointment'?'All day':'Flexible')
+const describeTime=item=>item.allDay?'All day':item.startTime||item.time||(item.sourceKind==='appointment'?'Time to confirm':'Flexible')
 export default function TodayOverview({plan,currentMember,householdChores,householdSignals=[],calendarAppointments,calendarHealth,onStartRecap,onChartCourse,courseRunning=false,onOpenCalendar,onViewSchedule,onOpenRoutines,onOpenPillar,planning=false,onChangeOutcomes,canViewFinance,readOnly,scope='mine',onScopeChange}){
  const agenda=useDailyAgenda({plan,member:currentMember,scope,chores:householdChores,appointments:calendarAppointments})
  const work=useOpenWork(plan.date)

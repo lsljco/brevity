@@ -3,7 +3,7 @@ async function openTodayDetails(page) {
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
   if(restore)await collapse.click()
-  for (const title of ['Weather','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+  for (const title of ['Weather','Pillar details & resources','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }

@@ -297,9 +297,9 @@ test('Today and Tomorrow alignment include Finance-style meeting capture and rev
     await expect(capture).toContainText('The household aligned meals and fitness.')
     await capture.getByRole('button',{name:'Apply Suggestions to Draft'}).click()
     const steps=page.getByRole('navigation',{name:'Alignment progress'})
-    await steps.getByRole('button',{name:'Health & Nutrition'}).click()
+    await steps.getByRole('button',{name:'Health & Nutrition',exact:true}).click()
     await expect(page.getByLabel('Lunch',{exact:true})).toHaveValue('Alignment meeting lunch')
-    await steps.getByRole('button',{name:'Ministry & Fellowship'}).click()
+    await steps.getByRole('button',{name:'Ministry & Fellowship',exact:true}).click()
     await expect(page.getByRole('button',{name:'Review & Complete Alignment'})).toBeVisible()
     await page.getByRole('button',{name:'Save Local Draft & Exit'}).click()
   }
@@ -501,11 +501,11 @@ test('Next-Day Alignment retains the active weekly sermon instead of asking for 
   await expect(page.getByRole('heading',{name:'Upload the Word that will govern the formation cycle'})).toHaveCount(0)
 })
 
-test('Household Operations exposes Schedule, Routines, Operations and Inventory without crashing',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();for(const label of ['Schedule','Routines','Operations','Supplies & Inventory'])await expect(page.getByRole('button',{name:label,exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Something went wrong')})
+test('Household Operations exposes Schedule, Routines, Operations and Inventory without crashing',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();for(const label of ['Schedule','Routines','Operations','Supplies & Inventory'])await expect(page.getByRole('button',{name:label,exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
 test('authorized user starts an assigned household task through Action Mode',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -520,7 +520,7 @@ test('authorized user starts an assigned household task through Action Mode',asy
 
 test('assigned chore owner completes every checklist item before confirmation',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -541,7 +541,7 @@ test('assigned chore owner completes every checklist item before confirmation',a
 })
 
 test('Household Operations can add and edit chore dates, times, owners, and details through Action Mode',async({page},testInfo)=>{
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();await closeMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Operations',exact:true}).click()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();await closeMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Operations',exact:true}).click()
   await page.getByRole('button',{name:'Add chore'}).click()
   const editor=page.getByRole('dialog',{name:'Add chore'})
   await editor.getByRole('textbox',{name:'Chore',exact:true}).fill('Clean pantry')
@@ -561,7 +561,7 @@ test('Household Operations can add and edit chore dates, times, owners, and deta
 
 test('Project review repairs stale local synchronization metadata before opening Action Mode',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Projects'}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -917,11 +917,11 @@ test('iPad already-linked accounts ignore additional institution accounts withou
   await expect(page.getByRole('button',{name:'Review link'})).toHaveCount(0)
 })
 
-test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
+test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
 test('iPad landscape Family Calendar keeps all seven columns inside its content lane',async({page},testInfo)=>{
   test.skip(testInfo.project.name!=='tablet-landscape','iPad landscape layout contract')
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await page.getByRole('button',{name:'Family Calendar'}).click()
   const scroll=page.locator('.family-calendar-scroll')
   await expect(scroll).toBeVisible()
@@ -1076,7 +1076,7 @@ test('Vendor link from a project opens the canonical finance record',async({page
   await mockBackend(page,{projectFixture:true})
   await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,isAdmin:true,vendors:[{id:'project-vendor',name:'Current Contractor Name',phone:'555-0123',accessMembers:[],documents:[]}],links:{}})}))
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Show Kitchen refresh details',exact:true}).click()
   await page.getByRole('button',{name:'Vendor: Current Contractor Name',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Vendors',exact:true})).toBeVisible()
@@ -2285,13 +2285,13 @@ test('alignment presents the selected date meals, workout and calendar using Tod
   for(const [timing,date] of [['Today',dateKey()],['Tomorrow',next]]){
     await openTodayDetails(page);await page.getByRole('button',{name:`Edit ${timing.toLowerCase()}’s plan`}).click()
     const steps=page.getByRole('navigation',{name:'Alignment progress'})
-    await steps.getByRole('button',{name:'Health & Nutrition'}).click()
+    await steps.getByRole('button',{name:'Health & Nutrition',exact:true}).click()
     const preview=page.locator('.alignment-day-preview')
     await expect(preview.locator('.today-meal-card img')).toHaveCount(3)
     await expect(preview).toContainText(`${timing} breakfast fixture`)
     await expect(preview).not.toContainText(`${timing==='Today'?'Tomorrow':'Today'} breakfast fixture`)
     await expect(preview.getByLabel('Breakfast nutrition')).toContainText('protein')
-    await steps.getByRole('button',{name:'Physical Fitness'}).click()
+    await steps.getByRole('button',{name:'Physical Fitness',exact:true}).click()
     await expect(preview.locator('.today-fitness-exercise')).not.toHaveCount(0)
     await expect(preview.locator('.today-fitness-exercise').first().locator('img')).toBeVisible()
     if(timing==='Tomorrow'){
@@ -2320,7 +2320,7 @@ test.describe('persistent meeting recording',()=>{
     await page.getByLabel(/Alignment meeting capture$/).getByRole('button',{name:'Start Meeting',exact:true}).click()
     const hub=page.getByRole('region',{name:'Meeting recorder'})
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
-    await page.getByRole('navigation',{name:'Alignment progress'}).getByRole('button',{name:'Health & Nutrition'}).click()
+    await page.getByRole('navigation',{name:'Alignment progress'}).getByRole('button',{name:'Health & Nutrition',exact:true}).click()
     await page.locator('.alignment-day-preview').getByRole('button',{name:'Open Meal Plan',exact:true}).click()
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
     await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
