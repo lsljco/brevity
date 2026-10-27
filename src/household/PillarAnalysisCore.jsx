@@ -1,3 +1,4 @@
+import PageActions from '../PageActions.jsx'
 import ReadAloud from '../assistant/ReadAloud.jsx'
 import { readableText } from '../assistant/readingText.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -161,7 +162,7 @@ export default function PillarAnalysis({ pillar, currentMember = 'Larry', onNavi
   const unplanned=financeSummary?.unplannedSpending
   const dollars=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)
   return <div className="pillar-analysis-page" ref={readingRef}>
-    {pillar.id==='spiritual'&&<ReadAloud getText={()=>readableText(readingRef.current)} label="Read Spiritual Maturity aloud" contentKey={plan?.date+pillar.id}/>}
+    {pillar.id==='spiritual'&&<PageActions><ReadAloud getText={()=>readableText(readingRef.current)} label="Read Spiritual Maturity aloud" contentKey={plan?.date+pillar.id}/></PageActions>}
     <header className="pillar-analysis-hero">
       <div className="pillar-analysis-icon"><i className={`ti ${pillar.icon}`} /></div>
       <div className="pillar-analysis-title"><span>Seven Pillars</span><h1>{pillar.label}</h1><p>{pillar.description}</p></div>

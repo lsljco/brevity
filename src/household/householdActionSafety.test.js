@@ -19,7 +19,7 @@ import { householdScheduleCalendarEvents, publishHouseholdScheduleEvents } from 
 const scheduleSource=readFileSync(new URL('./HouseholdSchedule.jsx',import.meta.url),'utf8')
 const maintenanceSource=readFileSync(new URL('./HouseholdMaintenance.jsx',import.meta.url),'utf8')
 const inventorySource=readFileSync(new URL('./HouseholdInventory.jsx',import.meta.url),'utf8')
-const calendarSource=readFileSync(new URL('../family/FamilyCalendar.jsx',import.meta.url),'utf8')
+const calendarSource=readFileSync(new URL('../family/FamilyCalendar.jsx',import.meta.url),'utf8')+readFileSync(new URL('../family/calendarReadModel.js',import.meta.url),'utf8')
 const financeSource=readFileSync(new URL('../finance/HouseholdFinanceIntelligence.jsx',import.meta.url),'utf8')
 const clone=value=>JSON.parse(JSON.stringify(value))
 
@@ -59,7 +59,7 @@ test('household editors stage reviewed proposals and never write their source or
     assert.doesNotMatch(source,/localStorage\.setItem|writeSharedJson|publishHouseholdScheduleEvents|publishHouseholdOperationEvents|publishHouseholdFinanceBridge/)
   }
   assert.match(calendarSource,/householdScheduleCalendarEvents/)
-  assert.match(calendarSource,/householdOperationCalendarEvents/)
+  assert.doesNotMatch(calendarSource,/householdOperationCalendarEvents/, 'Daily chores stay outside the appointment calendar')
   assert.match(calendarSource,/isHouseholdScheduleCalendarCopy/)
   assert.match(calendarSource,/isHouseholdOperationCalendarCopy/)
   assert.match(financeSource,/readHouseholdFinanceProjection/)

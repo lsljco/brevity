@@ -1,14 +1,15 @@
+import {normalizeLegacy,normalizeIcloud,readLegacyEvents,readMeetingEvents,readScheduleState,readMaintenanceState,combineCalendarRecords} from './calendarReadModel.js'
 import AppleCalendarSourcesDialog from './AppleCalendarSourcesDialog.jsx'
 import CalendarScopeFilter from './CalendarScopeFilter.jsx'
 import { matchesCalendarScopes } from './calendarScopes.js'
 import {useProjectCalendar} from '../homehq/useProjectCalendar.js'
 import {requestProjectOpen} from '../homehq/projectNavigation.js'
 import { useEffect, useMemo, useState } from 'react'
-import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS, readJson } from '../homehq/projectData.js'
+import { FAMILY_CALENDAR_KEY, HOUSEHOLD_MEMBERS } from '../homehq/projectData.js'
 import { fetchICloudCalendarEvents } from './icloudCalendarApi.js'
 import { readCurrentCalendarSnapshot, stampCalendarFailure, stampCalendarSuccess } from './calendarSnapshot.js'
 import { useCalendarHealth } from './useCalendarHealth.js'
-import { compareCalendarEventsChronologically, dedupeCalendarEvents } from './calendarOverlay.js'
+import { compareCalendarEventsChronologically } from './calendarOverlay.js'
 import {
   canEditBrevityCalendarEvent,
   canMoveAppleCalendarEvent,
@@ -25,14 +26,12 @@ import { executeAssistantProposal, getActionMode, prepareCalendarAction } from '
 import FinanceTimeframe from '../finance/FinanceTimeframe.jsx'
 import { getHouseholdCalendarDate, getHouseholdDateKey } from '../finance/financeTime.js'
 import { resolveTimeframe } from '../finance/financeTimeframe.js'
-import { FINANCE_MEETINGS_KEY, isLegacyMeetingCalendarCopy, meetingActionsCalendarEvents } from '../finance/meetingCalendar.js'
+import { FINANCE_MEETINGS_KEY } from '../finance/meetingCalendar.js'
 import {
   HOUSEHOLD_SCHEDULE_STORAGE_KEY, householdScheduleCalendarEvents,
-  isHouseholdScheduleCalendarCopy, normalizeHouseholdScheduleState,
 } from '../household/householdScheduleData.js'
 import {
-  HOUSEHOLD_MAINTENANCE_STORAGE_KEY, householdOperationCalendarEvents,
-  isHouseholdOperationCalendarCopy, normalizeHouseholdMaintenanceState,
+  HOUSEHOLD_MAINTENANCE_STORAGE_KEY,
 } from '../household/householdMaintenanceData.js'
 import './FamilyCalendar.css'
 import './FamilyCalendarViews.css'
@@ -48,19 +47,6 @@ const calendarRange = range => {
   return { ...range, to: iso(new Date(start.getFullYear(), start.getMonth() + 1, 0)) }
 }
 
-const normalizeLegacy = event => {
-  const normalized=canonicalizeBrevityCalendarEvent(event)
-  return { ...normalized,date:normalized.date||normalized.start,source:normalized.source||'brevity-legacy',owner:normalized.owner||'Family' }
-}
-const readLegacyEvents=()=>readJson(localStorage,FAMILY_CALENDAR_KEY,[]).filter(event=>!isLegacyMeetingCalendarCopy(event)&&!isHouseholdScheduleCalendarCopy(event)&&!isHouseholdOperationCalendarCopy(event)).map(normalizeLegacy)
-const readMeetingEvents=()=>meetingActionsCalendarEvents(localStorage).map(normalizeLegacy)
-const readScheduleState=()=>normalizeHouseholdScheduleState(readJson(localStorage,HOUSEHOLD_SCHEDULE_STORAGE_KEY,{}))
-const readMaintenanceState=()=>normalizeHouseholdMaintenanceState(readJson(localStorage,HOUSEHOLD_MAINTENANCE_STORAGE_KEY,{}))
-const normalizeIcloud = event => {
-  const owned=isBrevityManagedAppleEvent({ ...event,source:'icloud' })
-  const normalized=owned?canonicalizeBrevityCalendarEvent({ ...event,source:'brevity-owned',calendarSource:'brevity' }):event
-  return { ...normalized,source:'icloud',owner:normalized.owner||'Family' }
-}
 const eventToken = calendarEventVersion
 
 const emptyForm = (date = getHouseholdDateKey(), owner = 'Family') => ({ title:'',date,time:'',endDate:date,endTime:'',allDay:true,owner,participants:[],notes:'',location:'',url:'',recurrenceFrequency:'none',recurrenceInterval:1,recurrenceDays:[],recurrenceEndDate:'',alert1Minutes:15,alert2Minutes:60 })
@@ -129,8 +115,8 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
   const [member,setMember]=useState(currentMember || 'Family')
   const [selectedCalendars,setSelectedCalendars]=useState([currentMember || 'Family'])
   useEffect(()=>{setSelectedCalendars([currentMember || 'Family']);setMember(currentMember || 'Family')},[currentMember])
-  const [range,setRange]=useState(()=>calendarRange(resolveTimeframe('this-month')))
-  const [viewMode,setViewMode]=useState(()=>window.matchMedia('(max-width: 720px)').matches?'agenda':'month')
+  const [range,setRange]=useState(()=>calendarRange(resolveTimeframe('today')))
+  const [viewMode,setViewMode]=useState('agenda')
   // The visible month and event projection share one date scope.
   const requestedFocus = new Date(`${range.from}T12:00:00`)
   const focusDate = Number.isNaN(requestedFocus.getTime()) ? today : requestedFocus
@@ -292,8 +278,7 @@ export default function FamilyCalendar({ onOpenDay, currentMember = 'Family', in
     ].map(normalizeLegacy)
   },[scheduleState,maintenanceState,range])
   const allEvents=useMemo(()=>{
-    const cloudSources=new Set(icloudEvents.map(event=>event.sourceId).filter(Boolean))
-    return dedupeCalendarEvents([...legacyEvents.filter(event=>event.source!=='project'&&!String(event.sourceId||'').startsWith('project-')&&!cloudSources.has(event.id)),...meetingEvents,...householdDerivedEvents,...icloudEvents.filter(event=>!String(event.sourceId||'').startsWith('project-')),...projectEvents])
+    return combineCalendarRecords({legacyEvents,meetingEvents,householdDerivedEvents,icloudEvents,projectEvents})
   },[legacyEvents,meetingEvents,householdDerivedEvents,icloudEvents,projectEvents])
   const filtered=useMemo(()=>allEvents.filter(event=>{
     const eventDate=event.date||event.start
