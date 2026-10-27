@@ -38,7 +38,13 @@ const createdRecipeIds=audit=>audit.action==='execute'&&audit.operations?.some(o
     const previous=new Set((change.before?.meals||[]).map(meal=>meal.id))
     return (change.after?.meals||[]).filter(meal=>!previous.has(meal.id)).map(meal=>meal.id)
   }):[]
+export const createdProjectIds=audit=>audit.action==='execute'&&audit.operations?.some(operation=>operation.type==='project.create')
+  ? (audit.changes||[]).filter(change=>change.resource==='shared:homehq_items_v1').flatMap(change=>{
+    const previous=new Set((change.before||[]).map(project=>project.id))
+    return (change.after||[]).filter(project=>!previous.has(project.id)).map(project=>project.id)
+  }):[]
 export const publicAssistantAudit=audit=>({
+  ...(createdProjectIds(audit).length?{createdProjectIds:createdProjectIds(audit)}:{}),
   ...(createdRecipeIds(audit).length?{createdRecipeIds:createdRecipeIds(audit)}:{}),
   id:audit.id,proposalId:audit.proposalId,summary:audit.summary,actor:audit.actor,taskLinks:savedTaskLinks(audit),
   action:audit.action,status:audit.status,occurredAt:audit.occurredAt,confirmationMode:audit.confirmationMode||'confirmation',

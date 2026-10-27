@@ -8,6 +8,9 @@ export function prepareCalendarAction({summary,operation,expectedEventToken}){re
 export function prepareDirectAction({summary,operation,operations,expectedVersion,expectedVersions}){return actionRequest('POST','prepare-direct',{summary,operation,operations,expectedVersion,...(expectedVersions?{expectedVersions}:{})})}
 export async function executeAssistantProposal({proposalId,selections,confirmed,confirmation,voiceApproval}){
   const result=await actionRequest('POST','execute',{proposalId,selections,confirmed,confirmation,...(voiceApproval?{voiceApproval}:{})})
+  if(result.audit?.createdProjectIds?.length)import('../homehq/projectImageApi.js').then(({ensureProjectImage})=>{
+    result.audit.createdProjectIds.forEach(id=>ensureProjectImage(id).catch(()=>undefined))
+  }).catch(()=>undefined)
   if(result.audit?.createdRecipeIds?.length)import('../meals/mealPlanApi.js').then(({ensureMealImage})=>{
     result.audit.createdRecipeIds.forEach(id=>ensureMealImage({id}).catch(()=>undefined))
   }).catch(()=>undefined)

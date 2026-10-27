@@ -10,6 +10,7 @@ async function openTodayDetails(page) {
   if(restore)await page.getByRole('button',{name:'Menu',exact:true}).click()
 }
 import { test, expect } from '@playwright/test'
+import {projectImageSourceKey} from '../src/homehq/projectImageModel.js'
 test.use({launchOptions:{args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']},permissions:['microphone']})
 
 test('approved Cash Forecast layout keeps selected-day details alongside the calendar',async({page},testInfo)=>{
@@ -1111,6 +1112,34 @@ test('Family Calendar opens the exact authoritative project and preserves unrela
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
   expect(prepared).toHaveLength(1)
   expect(prepared[0].operation).toMatchObject({type:'project.update',targetId:'kitchen-1',payload:{pushToFamilyCalendar:false}})
+})
+
+test('Automatic project imagery queues once, permits scheduling, and replaces the placeholder after retry',async({page},testInfo)=>{
+  await mockBackend(page,{projectFixture:true})
+  const records=projectRecords(),projects=JSON.parse(records.homehq_items_v1.value)
+  projects[0]={...projects[0],autoImageEnabled:true,createdBy:'Larry'}
+  records.homehq_items_v1.value=JSON.stringify(projects)
+  await page.route('**/.netlify/functions/household-state**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records})}))
+  let state='pending',queued=0
+  await page.route('**/.netlify/functions/project-images**',route=>{
+    if(route.request().method()==='POST'){
+      const body=route.request().postDataJSON()
+      expect(body.projectId).toBe('kitchen-1')
+      queued++
+      state=body.retry?'ready':'generating'
+    }
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({state,sourceKey:projectImageSourceKey(projects[0]),image:'/project-images/painted-doors.webp'})})
+  })
+  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await expect(page.getByText('Generating project image…',{exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Add to calendar: Kitchen refresh',exact:true})).toBeEnabled()
+  expect(queued).toBe(1)
+  state='error'
+  await page.getByRole('button',{name:'Retry image for Kitchen refresh',exact:true}).click()
+  await expect(page.locator('img[src="/project-images/painted-doors.webp"]')).toBeVisible()
+  await expect(page.locator('.hq-project-image-progress')).toHaveCount(0)
+  expect(queued).toBe(2)
 })
 
 test('Project scheduling validates times and reviews the exact existing item without model generation',async({page},testInfo)=>{
