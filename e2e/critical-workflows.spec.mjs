@@ -923,6 +923,7 @@ test('iPad landscape Family Calendar keeps all seven columns inside its content 
   test.skip(testInfo.project.name!=='tablet-landscape','iPad landscape layout contract')
   await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await page.getByRole('button',{name:'Family Calendar'}).click()
+  await page.getByRole('button',{name:'Month',exact:true}).click()
   const scroll=page.locator('.family-calendar-scroll')
   await expect(scroll).toBeVisible()
   const dimensions=await scroll.evaluate(element=>({clientWidth:element.clientWidth,scrollWidth:element.scrollWidth}))
