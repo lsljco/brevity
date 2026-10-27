@@ -3574,6 +3574,9 @@ test('Today completion retries the exact direct save and Undo without opening He
 test('Alignment rejects analysis that finishes after its transcript changes',async({page},testInfo)=>{
  await openTodayDetails(page);await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click();await closeMenuIfMobile(page,testInfo)
  const capture=page.getByLabel(/Alignment meeting capture$/)
+ await capture.getByRole('button',{name:'Meeting History',exact:true}).click()
+ await expect(page.getByRole('dialog',{name:'Meeting History',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Close Meeting History',exact:true}).click()
  await capture.getByLabel(/transcript$/).fill('We agreed to prepare questions.')
  let release;const hold=new Promise(resolve=>release=resolve)
  await page.route('**/.netlify/functions/alignment-meeting-analyze',async route=>{await hold;await route.fulfill({json:{summary:'Old result',changes:{household:{priorities:['Old suggestion']}}}})})
