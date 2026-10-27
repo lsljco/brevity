@@ -1,5 +1,5 @@
 export default function WorkspaceNavigation({ pillar, activeView, onNavigate }) {
-  if (!pillar) return null
+  if (!pillar || !pillar.items?.length) return null
   if (pillar.id==='finance') return null
   if (pillar.id==='household') {
     if (['pillar-analysis','household-manage','household-maintain'].includes(activeView)) return null

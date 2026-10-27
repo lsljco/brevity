@@ -25,7 +25,7 @@ test('stale duplicated Finance Meeting calendar copies are identifiable and malf
 })
 
 test('Family Calendar ignores old copied entries and listens to authoritative Finance Meeting updates',()=>{
-  const source=readFileSync(new URL('../family/FamilyCalendar.jsx',import.meta.url),'utf8')
+  const source=readFileSync(new URL('../family/FamilyCalendar.jsx',import.meta.url),'utf8')+readFileSync(new URL('../family/calendarReadModel.js',import.meta.url),'utf8')
   assert.match(source,/readJson\(localStorage,FAMILY_CALENDAR_KEY,\[\]\)\.filter\(event=>/)
   assert.match(source,/!isLegacyMeetingCalendarCopy\(event\)/)
   assert.match(source,/!isHouseholdScheduleCalendarCopy\(event\)/)

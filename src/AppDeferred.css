@@ -23,21 +23,28 @@
 
 .app-archive-entry{display:flex;justify-content:flex-end;padding:12px 24px 0}.app-archive-entry button{min-height:44px;padding:10px 18px;border:1px solid var(--glass-border);border-radius:12px;background:var(--glass);color:var(--gold);cursor:pointer}
 
-.app-toolbar{display:contents}
-.app-toolbar.is-today{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 20px;border-bottom:1px solid var(--glass-border);position:relative}
-.app-toolbar.is-today .today-date-slot{margin-right:auto}
-.app-toolbar.is-today .life-date-nav{margin:0;padding:0;border:0;gap:6px;flex-wrap:nowrap}
-.app-toolbar.is-today .life-date-nav label span{display:none}
-.app-toolbar.is-today .life-date-nav input{width:145px;min-width:0}
-.app-toolbar.is-today .life-date-nav button,.app-toolbar.is-today .life-date-nav input,.app-toolbar.is-today .app-archive-entry button,.app-toolbar.is-today .completion-signoffs>button,.app-toolbar.is-today .meeting-hub button{min-height:44px;padding:8px 10px;font-size:13px;white-space:nowrap}
-.app-toolbar.is-today>.app-support-tools{display:flex;align-items:center;gap:8px;margin:0;padding:0}
-.app-toolbar.is-today>.app-support-tools>summary{display:none}
-.app-toolbar.is-today .meeting-hub{margin:0;padding:0;border:0;background:none;position:static}
-.app-toolbar.is-today .completion-signoffs{margin:0}
-.app-toolbar.is-today .completion-signoffs>div{position:absolute;z-index:1300;right:12px;top:100%;width:min(560px,calc(100% - 24px));box-sizing:border-box;max-height:70dvh;overflow:auto;background:var(--bg)}
-.app-toolbar.is-today .app-archive-entry{padding:0}
-@media(max-width:640px){.app-toolbar.is-today{padding:8px 12px;gap:6px}.app-toolbar.is-today .today-date-slot{flex-basis:100%;margin:0}.app-toolbar.is-today .life-date-nav input{width:145px}.app-toolbar.is-today .app-archive-entry{margin-left:auto}.app-toolbar.is-today>.app-support-tools{gap:6px}}
-
-.app-support-content{display:contents}
-.app-toolbar.is-today .app-support-content{display:flex;align-items:center;gap:8px}
-.app-toolbar.is-today>.app-support-tools{width:auto;flex:0 1 auto}
+/* One persistent utility row across every screen. Narrow screens scroll the row. */
+.app-main .app-toolbar{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;padding:8px 20px;border-bottom:1px solid var(--glass-border);position:relative;flex:0 0 auto;min-height:60px;box-sizing:border-box;overflow-x:auto}
+.app-toolbar>*{flex-shrink:0}
+.app-toolbar .today-date-slot{margin-right:auto}
+.app-toolbar .today-date-slot[hidden]{display:none}
+.app-toolbar .life-date-nav{margin:0;padding:0;border:0;gap:6px;flex-wrap:nowrap}
+.app-toolbar .life-date-nav label span{display:none}
+.app-toolbar .life-date-nav input{width:145px;min-width:0}
+.app-toolbar button,.app-toolbar .life-date-nav input{min-height:44px;padding:8px 10px;font-size:13px;white-space:nowrap}
+.app-main .app-toolbar>.app-support-tools{display:flex;align-items:center;gap:8px;margin:0;padding:0;border:0;width:auto;flex:0 0 auto}
+.app-main .app-toolbar>.app-support-tools>summary{display:none}
+.app-toolbar .meeting-hub{margin:0;padding:0;border:0;background:none;position:static;flex-wrap:nowrap}
+.app-toolbar .meeting-hub>div{flex-wrap:nowrap}
+.app-toolbar .meeting-hub>div>span{display:none}
+.app-toolbar .meeting-hub small{flex-basis:auto;max-width:240px}
+.app-toolbar .completion-signoffs{margin:0}
+.app-toolbar .completion-signoffs>div{position:fixed;z-index:1300;right:12px;top:76px;width:min(560px,calc(100% - 24px));box-sizing:border-box;max-height:70dvh;overflow:auto;background:var(--bg)}
+.app-toolbar .app-archive-entry{padding:0}
+.app-toolbar .app-context-navigation{position:static;padding:0;margin:0;pointer-events:auto}
+.app-support-content{display:flex;align-items:center;gap:8px}
+.app-page-actions:empty{display:none}
+.app-page-actions .brevity-read-aloud{margin:0;flex-wrap:nowrap}
+.app-page-actions .brevity-read-aloud small{display:none}
+.app-page-actions .brevity-read-aloud p{position:fixed;top:76px;right:12px;max-width:340px;background:var(--bg);padding:12px;z-index:1300}
+@media(max-width:640px){.app-main .app-toolbar{padding:8px 12px;gap:6px}}
