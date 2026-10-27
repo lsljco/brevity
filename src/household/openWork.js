@@ -9,7 +9,7 @@ export function openWorkForDate({plans=[],projects=[],projectVersion=0,date}){
  const add=(item,source,operation,expectedVersion)=>{
   if(!clean(item.title)||routine(item))return
   const key=source.kind==='project'?`project:${item.id}`:source.kind==='focus'?`focus:${clean(item.owner||'Family')}:${clean(item.title).toLowerCase()}`:`${source.kind}:${item.id}`
-  records.set(key,{id:key,title:item.title,owner:item.owner||'Family',participants:list(item.participants),status:item.status||'pending',priority:item.priority||'normal',originalDate:item.date||source.date,source,operation,expectedVersion,closed:closed(item)})
+  records.set(key,{id:key,title:item.title,notes:item.notes||'',owner:item.owner||'Family',participants:list(item.participants),status:item.status||'pending',priority:item.priority||'normal',originalDate:item.date||source.date,source,operation,expectedVersion,closed:closed(item)})
  }
  for(const plan of [...plans].filter(p=>p?.date&&p.date<=date).sort((a,b)=>a.date.localeCompare(b.date))){
   const op=(type,targetId,payload)=>({type,targetId,targetDate:plan.date,payload,description:'Mark the original saved work complete; stop its daily carry-forward.'})

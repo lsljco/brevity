@@ -36,3 +36,11 @@ test('an older retry cannot overwrite a newer saved transcript',async()=>{
  await call('Larry','PUT',{id},JSON.stringify({...base,updatedAt:'2026-10-07T08:30:00Z',transcript:'Earlier partial'}))
  assert.equal(JSON.parse((await call('Larry','GET',{id})).body).record.transcript,'The complete transcript')
 })
+
+test('paused recordings retain elapsed time and proposed meeting summary without applying a plan',async()=>{
+ records.clear()
+ const meta={date:'2026-10-26',startedAt:'2026-10-26T08:00:00Z',updatedAt:'2026-10-26T08:02:00Z',status:'paused',pausedAt:'2026-10-26T08:02:00Z',pausedMs:10000,analysis:{summary:'Review tomorrow together.',unresolved:['Who owns the planting?'],planDate:'2026-10-27',analyzedAt:'2026-10-26T08:02:00Z'}}
+ assert.equal((await call('Larry','PUT',{id},JSON.stringify(meta))).statusCode,200)
+ const saved=JSON.parse((await call('Larry','GET',{id})).body).record
+ assert.equal(saved.status,'paused');assert.equal(saved.pausedMs,10000);assert.equal(saved.analysis.summary,meta.analysis.summary);assert.deepEqual(saved.analysis.unresolved,meta.analysis.unresolved)
+})

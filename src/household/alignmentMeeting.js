@@ -3,7 +3,15 @@ import { HOUSEHOLD_MEMBERS, normalizeDailyPlan } from './dailyPlan.js'
 const text = (value, limit = 500) => String(value || '').trim().slice(0, limit)
 const textList = (value, limit = 40) => Array.isArray(value) ? value.map(item => text(item)).filter(Boolean).slice(0, limit) : []
 const memberList = value => Array.isArray(value) ? value.filter(member => HOUSEHOLD_MEMBERS.includes(member)) : []
-const titled = (value, prefix, status = 'pending') => textList(value).map((title, index) => ({ id:`${prefix}-${index}`, title, status }))
+// Transcript proposals add work without rewriting existing identity, ownership or completion.
+export function mergeMeetingItems(existing=[],titles=[],prefix='meeting'){
+ const rows=existing.map(row=>({...row})),key=value=>String(value||'').trim().replace(/\s+/g,' ').toLowerCase()
+ const seen=new Set(rows.map(row=>key(row.title)))
+ for(const title of textList(titles)){if(seen.has(key(title)))continue;seen.add(key(title));let hash=2166136261;for(const ch of key(title))hash=Math.imul(hash^ch.charCodeAt(0),16777619);let id=`${prefix}-${(hash>>>0).toString(36)}`;while(rows.some(row=>row.id===id))id+='-new';rows.push({id,title,status:'pending',owner:'Family',requiresDecision:true})}
+ return rows
+}
+export const alignmentAnalysisKey=({plan,transcript,notes,meetingId})=>JSON.stringify({plan,transcript,notes,meetingId})
+
 
 export function normalizeAlignmentMeetingResult(input = {}) {
   const changes = input?.changes && typeof input.changes === 'object' && !Array.isArray(input.changes) ? input.changes : {}
@@ -37,7 +45,7 @@ export function applyAlignmentMeetingResult(planInput, resultInput, { financeRea
     health:merge(plan.health, changes.health),
     fitness:merge(plan.fitness, changes.fitness),
     household:merge(plan.household, {
-      priorities:hasList(changes.household.priorities) ? titled(changes.household.priorities, 'household-priority') : [],
+      priorities:hasList(changes.household.priorities) ? mergeMeetingItems(plan.topPriorities.length?plan.topPriorities:plan.household.priorities, changes.household.priorities, 'household-priority') : [],
       errands:changes.household.errands,
       openItems:changes.household.openItems,
     }),
@@ -48,17 +56,18 @@ export function applyAlignmentMeetingResult(planInput, resultInput, { financeRea
     }),
     ministry:merge(plan.ministry, {
       contentFocus:changes.ministry.contentFocus,
-      fellowshipFollowUps:hasList(changes.ministry.fellowshipFollowUps) ? titled(changes.ministry.fellowshipFollowUps, 'fellowship') : [],
+      fellowshipFollowUps:hasList(changes.ministry.fellowshipFollowUps) ? mergeMeetingItems(plan.ministry.fellowshipFollowUps, changes.ministry.fellowshipFollowUps, 'fellowship') : [],
       prayerNeeds:changes.ministry.prayerNeeds,
     }),
     updatedAt:new Date().toISOString(),
   }
   if (!financeReadOnly) next.finance = merge(plan.finance, {
-    bills:hasList(changes.finance.bills) ? titled(changes.finance.bills, 'bill') : [],
-    purchases:hasList(changes.finance.purchases) ? titled(changes.finance.purchases, 'purchase', 'needs-decision') : [],
-    transfers:hasList(changes.finance.transfers) ? titled(changes.finance.transfers, 'transfer') : [],
-    accountsToFund:hasList(changes.finance.accountsToFund) ? titled(changes.finance.accountsToFund, 'fund', 'needs-decision') : [],
+    bills:hasList(changes.finance.bills) ? mergeMeetingItems(plan.finance.bills, changes.finance.bills, 'bill') : [],
+    purchases:hasList(changes.finance.purchases) ? mergeMeetingItems(plan.finance.purchases, changes.finance.purchases, 'purchase') : [],
+    transfers:hasList(changes.finance.transfers) ? mergeMeetingItems(plan.finance.transfers, changes.finance.transfers, 'transfer') : [],
+    accountsToFund:hasList(changes.finance.accountsToFund) ? mergeMeetingItems(plan.finance.accountsToFund, changes.finance.accountsToFund, 'fund') : [],
     decisionRule:changes.finance.decisionRule,
   })
+  if(hasList(changes.household.priorities))next.topPriorities=next.household.priorities
   return normalizeDailyPlan(next)
 }

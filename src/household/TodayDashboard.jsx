@@ -272,6 +272,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
     <TodayOverview householdSignals={householdSignals} onOpenPillar={onOpenPillar} scope={scope} onScopeChange={setScope} plan={dailyPlan} currentMember={currentMember} householdChores={householdChores} calendarAppointments={calendarAppointments} calendarHealth={calendarHealth} onStartRecap={onStartRecap} onChartCourse={onChartCourse} courseRunning={courseRunning} onOpenCalendar={onOpenCalendar} onViewSchedule={onViewSchedule} onOpenRoutines={()=>onOpenPillar?.('schedule')} readOnly={readOnly} canViewFinance={canViewFinance} planning={browsingDate} />
     <TodayBills date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
     {!browsingDate&&<HouseholdCheckin key={currentMember} currentMember={currentMember}/>}
+    <details className="today-supporting family-detail-library"><summary>Pillar details &amp; resources</summary><p>Open the full devotion, meals, workout, household, education, finance, and fellowship details when you need them.</p>
     <TodayDevotionHero plan={dailyPlan} onOpenPillar={onOpenPillar} browsingDate={browsingDate} />
 
     <HealthCare currentMember={currentMember} scope={scope} isAdmin={canViewFinance} date={dailyPlan.date} appointments={visibleAppointments} onOpenCalendar={onOpenCalendar} readOnly={readOnly} compact />
@@ -287,6 +288,7 @@ export default function TodayDashboard({ plan, meals = {}, mealDay = null, mealL
     <TodayPillarDetails pillar="education" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
     <TodayFinanceBrief date={dailyPlan.date} finance={finance} canViewFinance={canViewFinance} onOpenFinance={onOpenPillar}/>
     <TodayPillarDetails pillar="ministry" plan={dailyPlan} currentMember={currentMember} scope={scope} appointments={visibleAppointments} onOpenPillar={onOpenPillar}/>
+    </details>
     <details className="today-supporting" open={new URLSearchParams(window.location.search).has('briefing')||undefined}><summary>Earlier work &amp; daily briefing</summary><p>Historical records are retained for review. They are not automatically assigned to today.</p><OpenWork date={dailyPlan.date} currentMember={currentMember} scope={scope} readOnly={readOnly}/><DailyBriefing key={currentMember} currentMember={currentMember}/></details>
     <details className="today-supporting"><summary>Household details &amp; responsibility updates</summary>
       <details><summary>Assistant settings &amp; administration</summary><OrchestrationPanel date={dailyPlan.date} currentMember={currentMember} readOnly={readOnly} onOpenSource={()=>onOpenPillar?.('household')}/></details>

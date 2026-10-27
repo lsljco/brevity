@@ -260,11 +260,12 @@ export default function MorningAlignment({ plan, timing = 'tomorrow', readOnly =
     setDraftSaveState('pending')
   }
 
-  return <div className="morning-alignment">
+  return <div className={`morning-alignment${timing==='tomorrow'?' is-evening-plan':''}`}>
     <header className="morning-alignment-header">
       <div><span>Seven Pillars · {formatDailyPlanDate(draft.date)}</span><h1>{timing === 'selected' ? 'Adjust this day' : isToday ? 'Today’s Alignment' : 'Next-Day Alignment'}</h1><p>{timing === 'selected' ? `Review and adjust the plan for ${draft.date}. Changes apply to this date.` : isToday ? 'Adjust today’s direction as circumstances change. These updates apply only to today.' : 'Set tomorrow’s direction the day before—before food, fitness, errands, or outside activity begins.'}</p></div>
       <div className="alignment-header-actions"><span className={`alignment-save-state alignment-save-state--${readOnly ? 'readonly' : draftSaveState}`}>{readOnly?'View only':draftSaveState==='pending'?'Saving on this device…':draftSaveState==='reviewing'?'Review opened · draft retained':draftSaveState==='error'?'Local draft needs attention':'Draft saved on this device'}</span><button type="button" disabled={saving} onClick={readOnly ? onCancel : saveAndExit}>{readOnly ? 'Return to Today' : 'Save Local Draft & Exit'}</button></div>
     </header>
+    {timing==='tomorrow'&&<section className="evening-plan-steps" aria-label="Evening planning flow"><div><span>01 · Agree</span><strong>Choose what matters</strong><p>Set tomorrow’s outcomes, owners, and why they matter to the family.</p></div><div><span>02 · Prepare</span><strong>Make room for the day</strong><p>Review calendar times, meals, transport, and the help each person needs.</p></div><div><span>03 · Review</span><strong>Leave with one plan</strong><p>Resolve open questions, then review and apply the shared plan. Local drafts stay private to this device.</p></div></section>}
     <WeatherHeader date={draft.date} compact />
     {timing !== 'selected' && <AlignmentMeetingCapture plan={draft} timing={timing} currentMember={currentMember} readOnly={readOnly} financeReadOnly={financeReadOnly} onApply={applyMeetingResult} />}
     {readOnly && <div className="alignment-read-only-notice" role="status"><i className="ti ti-lock" aria-hidden="true"/><div><strong>This alignment is view-only</strong><span>{readOnlyMessage || 'Plans & decisions permission is required to change the shared household plan.'}</span></div></div>}

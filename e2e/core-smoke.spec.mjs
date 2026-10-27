@@ -3,7 +3,7 @@ async function openTodayDetails(page) {
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
   if(restore)await collapse.click()
-  for (const title of ['Weather','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+  for (const title of ['Weather','Pillar details & resources','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }
@@ -165,8 +165,9 @@ test('Today can browse tomorrow and the next seven days without changing a plan'
   await expect(picker.locator('option')).toHaveCount(8)
   await expect(page.locator('.upcoming-schedule .today-dashboard')).toBeVisible()
   await expect(page.locator('.upcoming-schedule .weather-header')).toBeVisible()
+  await page.locator('.upcoming-schedule .family-detail-library > summary').click()
   for (const pillar of ['spiritual','health','fitness','household','education','finance','ministry']) {
-    const sections=page.locator(`.upcoming-schedule .today-dashboard > [data-pillar="${pillar}"]`)
+    const sections=page.locator(`.upcoming-schedule .family-detail-library > [data-pillar="${pillar}"]`)
     expect(await sections.count()).toBeGreaterThan(0)
     for(const section of await sections.all())await expect(section).toBeVisible()
   }
@@ -202,14 +203,14 @@ test('Top Outcomes retains spaces in the shared Alignment editor', async ({ page
   await expect(second).toHaveValue('Review household schedule')
 })
 
-test('Tomorrow planning uses the same four cards and keeps outcome edits on tomorrow',async({page})=>{
+test('Tomorrow planning uses the shared schedule and four guidance cards and keeps outcome edits on tomorrow',async({page})=>{
  const next=new Date(`${today()}T12:00:00Z`);next.setUTCDate(next.getUTCDate()+1)
  const date=next.toISOString().slice(0,10)
  let writes=0
  page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('assistant-action'))writes++})
  await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click()
  const overview=page.getByRole('region',{name:'Your day at a glance'})
- await expect(overview.locator('.today-four-questions > section')).toHaveCount(4)
+ await expect(overview.locator('.today-four-questions > section')).toHaveCount(5)
  await expect(overview.getByRole('heading',{name:'Tomorrow’s Outcomes'})).toBeVisible()
  await expect(overview.getByRole('heading',{name:'How will this day unfold?'})).toBeVisible()
  await expect(overview).not.toContainText('Review today with Evening Recap.')
@@ -229,7 +230,7 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
     await page.getByRole('button', { name:'Menu' }).click()
     await expect(page.locator('#primary-navigation-drawer')).toHaveClass(/is-expanded/)
   }
-  await page.getByRole('button', { name:'Household Management' }).click()
+  await page.getByRole('button', { name:'Household Management',exact:true}).click()
   await expect(page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations' })).toBeVisible()
   await expect(page.getByRole('button', { name:'Family Calendar' })).toBeVisible()
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
@@ -237,8 +238,8 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
 
 test('top-level pillar navigation returns to Today instead of the previously viewed pillar', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
-  await page.getByRole('button', { name:'Household Management' }).click()
-  await page.getByRole('button', { name:'Spiritual Maturity' }).click()
+  await page.getByRole('button', { name:'Household Management',exact:true}).click()
+  await page.getByRole('button', { name:'Spiritual Maturity',exact:true}).click()
   await expect(page.getByRole('button', { name:'Back to Today' })).toBeVisible()
 })
 
@@ -329,7 +330,7 @@ test('Today Pillar 3 shows the dated workout exercise photography and opens the 
 
 test('Physical Fitness builds and refines a goal-driven workout before Action Mode review', async ({ page }, testInfo) => {
   if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Menu'}).click()
-  await page.getByRole('button', { name:'Physical Fitness' }).click()
+  await page.getByRole('button', { name:'Physical Fitness',exact:true}).click()
   if(testInfo.project.name==='iphone')await page.getByRole('button',{name:'Close navigation'}).evaluate(button=>button.click())
   await expect(page.getByRole('heading', { name:'Tell Brevity what you want to target' })).toBeVisible()
   await page.getByLabel('Today’s goal').fill('Build wider shoulders and lats with upper chest emphasis')
@@ -725,6 +726,7 @@ test('Next 7 Days sends the selected meal date to Brevity',async({page})=>{
   await page.getByRole('button',{name:'Next 7 days'}).click()
   const date=await page.getByRole('combobox',{name:'Choose a day'}).inputValue()
   await expect(page.locator('.today-snack-card')).toHaveCount(2)
+  await page.locator('.family-detail-library > summary').click()
   await page.getByText('Nutrition goals & food logged',{exact:true}).click()
   await page.getByRole('button',{name:'Balance my meals with Brevity'}).click()
   await expect.poll(()=>requests.length).toBe(1)
@@ -1069,14 +1071,17 @@ test('unfinished work carries forward and completion reviews the original dated 
  await page.reload();await expect(page.getByRole('region',{name:'Open work',exact:true}).getByText(item.title,{exact:true})).toHaveCount(0)
 })
 
-test('Today opens with four questions and seven visible daily pillars while history stays closed',async({page},testInfo)=>{
+test('Today opens with schedule and compact pillar briefing while detailed resources stay closed',async({page},testInfo)=>{
  await page.route('**/.netlify/functions/open-work?*',route=>route.fulfill({json:{items:Array.from({length:38},(_,i)=>({id:`assignment:old-${i}`,title:`Old August responsibility ${i}`,owner:'Larry',participants:[],originalDate:'2026-08-19',source:{kind:'assignment',id:`old-${i}`,date:'2026-08-19'}}))}}))
  await page.route('**/.netlify/functions/health-care',route=>route.fulfill({json:{version:1,items:[{id:'today',title:'Scheduled dental visit',member:'Larry',type:'Dental',status:'Scheduled',date:today()},{id:'old',title:'Unscheduled old need',member:'Larry',status:'Needs scheduling',date:'2026-08-19'},{id:'other',title:'Other member appointment',member:'Nyla',status:'Scheduled',date:today()}]}}))
  await page.reload();await expect(page.locator('.today-overview')).toBeVisible()
  for(const question of ['Today’s Outcomes','What should I do now?','What needs my attention?','What remains today?'])await expect(page.getByRole('heading',{name:question,exact:true})).toBeVisible()
- const ordered=await page.locator('.today-dashboard > [data-pillar]').evaluateAll(nodes=>[...new Set(nodes.map(node=>node.dataset.pillar))])
+ await expect(page.locator('.family-pillar-grid > article')).toHaveCount(7)
+ await expect(page.locator('.family-detail-library')).not.toHaveAttribute('open','')
+ await page.locator('.family-detail-library > summary').click()
+ const ordered=await page.locator('.family-detail-library > [data-pillar]').evaluateAll(nodes=>[...new Set(nodes.map(node=>node.dataset.pillar))])
  expect(ordered).toEqual(['spiritual','health','fitness','household','education','finance','ministry'])
- for(const pillar of ordered)await expect(page.locator(`.today-dashboard > [data-pillar="${pillar}"]`).first()).toBeVisible()
+ for(const pillar of ordered)await expect(page.locator(`.family-detail-library > [data-pillar="${pillar}"]`).first()).toBeVisible()
  await expect(page.getByText('Old August responsibility 0',{exact:true}).filter({visible:true})).toHaveCount(0)
  const care=page.getByRole('region',{name:'Scheduled health appointments',exact:true})
  await expect(care).toContainText('Scheduled dental visit');await expect(care).not.toContainText('Unscheduled old need');await expect(care).not.toContainText('Other member appointment')
@@ -1105,7 +1110,7 @@ test('Education opens a household learning hub and preserves the tutor workspace
 test('page requests use compact conversation without a backdrop and only changes open confirmation',async({page})=>{
  await page.route('**/.netlify/functions/brevity-conversation',r=>r.fulfill({json:{version:1,messages:[]}}))
  await page.route('**/.netlify/functions/brevity-assistant',r=>r.fulfill({json:{message:'What would you like to learn?',proposal:null}}))
- await page.reload()
+ await page.reload();await openTodayDetails(page)
  await page.getByRole('button',{name:'Open Education',exact:true}).click()
  await page.getByRole('button',{name:'Plan with Brevity',exact:true}).click()
  const compact=page.getByRole('region',{name:'Brevity Assistant',exact:true})
@@ -1143,7 +1148,7 @@ test('Education saves only an approved item and shows the saved record after ref
  await expect(hub.getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()
  expect(executions).toBe(1)
  await expect(page.locator('.brevity-assistant-drawer.is-open')).toHaveCount(0)
- await page.reload()
+ await page.reload();await openTodayDetails(page)
  await page.getByRole('button',{name:'Open Education',exact:true}).click()
  await expect(page.locator('.learning-hub').getByRole('heading',{name:'Discuss responsible AI',exact:true})).toBeVisible()
 })
@@ -1244,6 +1249,7 @@ test('Today personal guidance groups household work and highlights major appoint
  const overview=page.getByRole('region',{name:'Your day at a glance',exact:true})
  await expect(overview.locator('.today-focus-bubbles li')).toHaveCount(1)
  await expect(overview.locator('.today-focus-bubbles li')).toContainText('Financial Review / Daily Schedule Alignment / LinkedIn & Résumé Optimization')
+ await overview.locator('.family-heads-up > summary').click()
  const major=overview.getByRole('region',{name:'Major household calendar items'})
  await expect(major).toContainText('TS- Dr. Appointment');await expect(major).toContainText('3:00 PM');await expect(major).toContainText('Owner unconfirmed');await expect(major).not.toContainText('Isaiah Daily Tutor')
  const remaining=overview.getByRole('region',{name:'Remaining today'})

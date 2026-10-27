@@ -3,7 +3,7 @@ async function openTodayDetails(page) {
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
   if(restore)await collapse.click()
-  for (const title of ['Weather','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
+  for (const title of ['Weather','Pillar details & resources','Nutrition goals & food logged','Earlier work & daily briefing','Household details & responsibility updates','Health care coordination','Education, finance & ministry','Household readiness & settings','Assistant settings & administration']) {
     const summary=page.locator('details:not([open]) > summary').filter({hasText:new RegExp('^'+title+'$')})
     if(await summary.count())await summary.click()
   }
@@ -501,11 +501,11 @@ test('Next-Day Alignment retains the active weekly sermon instead of asking for 
   await expect(page.getByRole('heading',{name:'Upload the Word that will govern the formation cycle'})).toHaveCount(0)
 })
 
-test('Household Operations exposes Schedule, Routines, Operations and Inventory without crashing',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();for(const label of ['Schedule','Routines','Operations','Supplies & Inventory'])await expect(page.getByRole('button',{name:label,exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Something went wrong')})
+test('Household Operations exposes Schedule, Routines, Operations and Inventory without crashing',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();for(const label of ['Schedule','Routines','Operations','Supplies & Inventory'])await expect(page.getByRole('button',{name:label,exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
 test('authorized user starts an assigned household task through Action Mode',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -520,7 +520,7 @@ test('authorized user starts an assigned household task through Action Mode',asy
 
 test('assigned chore owner completes every checklist item before confirmation',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -541,7 +541,7 @@ test('assigned chore owner completes every checklist item before confirmation',a
 })
 
 test('Household Operations can add and edit chore dates, times, owners, and details through Action Mode',async({page},testInfo)=>{
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();await closeMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Operations',exact:true}).click()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Household Operations'}).click();await closeMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Operations',exact:true}).click()
   await page.getByRole('button',{name:'Add chore'}).click()
   const editor=page.getByRole('dialog',{name:'Add chore'})
   await editor.getByRole('textbox',{name:'Chore',exact:true}).fill('Clean pantry')
@@ -561,7 +561,7 @@ test('Household Operations can add and edit chore dates, times, owners, and deta
 
 test('Project review repairs stale local synchronization metadata before opening Action Mode',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Projects'}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -917,11 +917,11 @@ test('iPad already-linked accounts ignore additional institution accounts withou
   await expect(page.getByRole('button',{name:'Review link'})).toHaveCount(0)
 })
 
-test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
+test('Family Calendar opens as the single shared calendar surface',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Family Calendar'}).click();await expect(page.locator('body')).not.toContainText('My Planner');await expect(page.locator('body')).not.toContainText('Something went wrong')})
 
 test('iPad landscape Family Calendar keeps all seven columns inside its content lane',async({page},testInfo)=>{
   test.skip(testInfo.project.name!=='tablet-landscape','iPad landscape layout contract')
-  await page.getByRole('button',{name:'Household Management'}).click()
+  await page.getByRole('button',{name:'Household Management',exact:true}).click()
   await page.getByRole('button',{name:'Family Calendar'}).click()
   const scroll=page.locator('.family-calendar-scroll')
   await expect(scroll).toBeVisible()
@@ -1076,7 +1076,7 @@ test('Vendor link from a project opens the canonical finance record',async({page
   await mockBackend(page,{projectFixture:true})
   await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,isAdmin:true,vendors:[{id:'project-vendor',name:'Current Contractor Name',phone:'555-0123',accessMembers:[],documents:[]}],links:{}})}))
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management'}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household Management',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Projects',exact:true}).click();await closeMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Show Kitchen refresh details',exact:true}).click()
   await page.getByRole('button',{name:'Vendor: Current Contractor Name',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Vendors',exact:true})).toBeVisible()
@@ -1249,7 +1249,7 @@ test('missing meal photos generate automatically and replace placeholders withou
     const id=new URL(route.request().url()).searchParams.get('jobId').replace(/^auto-/,'')
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({state:'ready',meal:{...meals.find(meal=>meal.id===id),image:'/meal-images/breakfast-01.webp'}})})
   })
-  await page.goto('/')
+  await page.goto('/');await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await expect.poll(()=>jobs.length).toBeGreaterThan(0)
   expect(jobs[0].onlyIfMissing).toBe(true)
@@ -2326,6 +2326,16 @@ test.describe('persistent meeting recording',()=>{
     await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
     await expect.poll(()=>audio.size,{timeout:20000}).toBeGreaterThan(0)
+    await hub.getByRole('button',{name:'Pause recording',exact:true}).click()
+    await expect(hub).toContainText('Paused')
+    await expect.poll(()=>[...archive.values()].some(row=>row.status==='paused')).toBe(true)
+    await page.waitForTimeout(400)
+    const pausedChunks=audio.size
+    await page.waitForTimeout(1200)
+    expect(audio.size).toBe(pausedChunks)
+    await hub.getByRole('button',{name:'Resume recording',exact:true}).click()
+    await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
+    await hub.getByRole('button',{name:'Pause recording',exact:true}).click()
     await hub.getByRole('button',{name:'Stop Meeting',exact:true}).click()
     await expect.poll(()=>[...archive.values()].some(row=>row.status==='stopped'&&row.transcript.includes('Recorded household')),{timeout:15000}).toBe(true)
     await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
@@ -2431,6 +2441,7 @@ test('Meal Plan member skip is personal and household push controls are absent',
  await page.route('**/.netlify/functions/household-auth?action=session',route=>route.fulfill({json:{authenticated:true,member:'Nyla',role:'member',bootstrapRequired:false}}))
  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
  const captured=[];page.on('request',r=>{if(r.url().includes('action=prepare-direct'))captured.push(r.postDataJSON())})
+ await openTodayDetails(page)
  await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
  const calendar=page.getByRole('region',{name:'Meal calendar'})
  await expect(calendar.getByRole('button',{name:/^Push/})).toHaveCount(0)
@@ -3537,4 +3548,101 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   }
   await expect(page.getByRole('dialog',{name:'Ask Brevity',exact:true})).toHaveCount(0)
  }
+})
+
+test('Today completion retries the exact direct save and Undo without opening Hey Brevity',async({page},testInfo)=>{
+ const today=plan(),requests=[];let prepares=0,executes=0,complete=false
+ await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:{...today,topPriorities:today.topPriorities.map(x=>x.id==='p2'?{...x,status:complete?'complete':'pending'}:x)}}}))
+ page.on('request',r=>{if(new URL(r.url()).pathname==='/.netlify/functions/brevity-assistant')requests.push(r.url())})
+ await page.route('**/.netlify/functions/brevity-assistant-actions*',async route=>{
+  const action=new URL(route.request().url()).searchParams.get('action'),body=route.request().postDataJSON()
+  if(action==='prepare-direct'){prepares++;return route.fulfill({json:{proposal:{id:'quick-proposal',risk:'confirmation',operations:[{...body.operation,id:'quick-operation',domain:'planning'}]}}})}
+  if(action==='execute'){executes++;expect(body.proposalId).toBe('quick-proposal');if(executes===1)return route.fulfill({status:503,json:{error:'Temporary connection problem'}});complete=true;return route.fulfill({json:{audit:{id:'quick-audit',summary:'Outcome complete',operations:[{type:'plan.pillar.update',domain:'planning',targetDate:dateKey()}]}}})}
+  if(action==='undo'){complete=false;return route.fulfill({json:{audit:{id:'undo-audit',operations:[{type:'plan.pillar.update',domain:'planning',targetDate:dateKey()}]}}})}
+  return route.fulfill({json:{history:[],permissions:{Larry:{planning:true}},role:'admin'}})
+ })
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Mark complete: Complete today’s essential commitments',exact:true}).first().click()
+ const notice=page.locator('.day-save-status');await expect(notice).toContainText('Save not confirmed')
+ await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
+ await notice.getByRole('button',{name:'Retry save',exact:true}).click();await expect(notice).toContainText('Saved · Complete')
+ expect(prepares).toBe(1);expect(executes).toBe(2);expect(requests).toHaveLength(0)
+ await notice.getByRole('button',{name:'Undo',exact:true}).click();await expect(notice).toContainText('Undone')
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+ await notice.screenshot({path:testInfo.outputPath('direct-task-save.png')})
+})
+
+test('Alignment rejects analysis that finishes after its transcript changes',async({page},testInfo)=>{
+ await openTodayDetails(page);await page.getByRole('button',{name:'Edit tomorrow’s plan'}).click();await closeMenuIfMobile(page,testInfo)
+ const capture=page.getByLabel(/Alignment meeting capture$/)
+ await capture.getByRole('button',{name:'Meeting History',exact:true}).click()
+ await expect(page.getByRole('dialog',{name:'Meeting History',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Close Meeting History',exact:true}).click()
+ await capture.getByLabel(/transcript$/).fill('We agreed to prepare questions.')
+ let release;const hold=new Promise(resolve=>release=resolve)
+ await page.route('**/.netlify/functions/alignment-meeting-analyze',async route=>{await hold;await route.fulfill({json:{summary:'Old result',changes:{household:{priorities:['Old suggestion']}}}})})
+ await capture.getByRole('button',{name:'Analyze with Brevity',exact:true}).click()
+ await capture.getByLabel(/transcript$/).fill('Correction: we have not agreed yet.')
+ release()
+ await expect(capture).toContainText('changed during analysis')
+ await expect(capture.getByRole('button',{name:'Apply Suggestions to Draft',exact:true})).toHaveCount(0)
+ await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
+})
+
+test('Exact Today completion command avoids AI and preserves the saved conversation receipt',async({page},testInfo)=>{
+ let modelCalls=0,executions=0
+ page.on('request',request=>{if(new URL(request.url()).pathname==='/.netlify/functions/brevity-assistant')modelCalls++})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>{const body=route.request().postDataJSON();expect(body.operation.payload.patch.priorities.find(x=>x.id==='p2').status).toBe('complete');return route.fulfill({json:{proposal:{id:'voice-direct',risk:'confirmation',operations:[{...body.operation,id:'op',domain:'planning'}]}}})})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>{executions++;return route.fulfill({json:{audit:{id:'voice-audit',operations:[{type:'plan.pillar.update',domain:'planning',targetDate:dateKey()}]},conversation:{version:2,messages:[{role:'user',content:'Mark Complete today’s essential commitments complete'},{role:'assistant',content:'Saved: Complete today’s essential commitments is complete.'}]}}})})
+ await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
+ await page.locator('.brevity-assistant-composer textarea').fill('Mark Complete today’s essential commitments complete')
+ await page.getByRole('button',{name:'Send message',exact:true}).click()
+ await expect(page.locator('.brevity-assistant-transcript')).toContainText('Saved: Complete today’s essential commitments is complete.')
+ expect(executions).toBe(1);expect(modelCalls).toBe(0)
+})
+
+test('Today direct editor reschedules the original outcome and preserves its notes',async({page},testInfo)=>{
+ const today=plan(),prepared=[];today.topPriorities[1].notes='Keep the preparation checklist.'
+ await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:today}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>{const body=route.request().postDataJSON();prepared.push(body);return route.fulfill({json:{proposal:{id:'reschedule',risk:'confirmation',operations:[{...body.operation,id:'op'}]}}})})
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>route.fulfill({json:{audit:{id:'rescheduled',operations:[]}}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Update Complete today’s essential commitments',exact:true}).first().click()
+ const editor=page.getByRole('region',{name:'Update Complete today’s essential commitments',exact:true})
+ await expect(editor).toBeVisible();await expect(editor.getByLabel('Notes',{exact:true})).toHaveValue('Keep the preparation checklist.')
+ const tomorrow=new Date(`${dateKey()}T12:00:00Z`);tomorrow.setUTCDate(tomorrow.getUTCDate()+1)
+ await editor.getByLabel('Scheduled date',{exact:true}).fill(tomorrow.toISOString().slice(0,10))
+ await editor.getByRole('button',{name:'Save changes',exact:true}).click()
+ await expect(editor.getByRole('status')).toHaveText('Saved')
+ const row=prepared[0].operation.payload.patch.priorities.find(x=>x.id==='p2')
+ expect(row.date).toBe(tomorrow.toISOString().slice(0,10));expect(row.notes).toBe('Keep the preparation checklist.');expect(prepared[0].operation.targetDate).toBe(dateKey())
+ await expect(page.locator('.brevity-assistant-drawer')).not.toHaveClass(/is-open/)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+ await editor.screenshot({path:testInfo.outputPath('direct-day-editor.png')})
+})
+
+test('Family day redesign keeps the calendar connected and evening preparation reviewable',async({page},testInfo)=>{
+ await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events:[{id:'redesign-school',appleCalendarOwner:'Family',title:'School planning meeting',date:dateKey(),time:'12:30',endTime:'13:30',owner:'Family',source:'icloud',notes:'Bring questions and agree the support needed.'},{id:'redesign-interview',appleCalendarOwner:'Larry',title:'Interview preparation',date:dateKey(),time:'09:00',endTime:'09:30',owner:'Larry',source:'icloud'}],connected:true,syncedAt:new Date().toISOString()}}))
+ await page.reload();await closeMenuIfMobile(page,testInfo)
+ const overview=page.getByRole('region',{name:'Your day at a glance',exact:true})
+ await expect(overview.getByRole('region',{name:'Day schedule',exact:true})).toBeVisible()
+ await expect(overview.getByRole('region',{name:'Day schedule',exact:true})).toContainText('12:30 PM')
+ await expect(overview.getByRole('region',{name:'Day schedule',exact:true})).toContainText('School planning meeting')
+ await expect(overview.getByRole('region',{name:'Family pillar briefing',exact:true})).toBeVisible()
+ await expect(overview.getByRole('region',{name:'Today’s Outcomes',exact:true})).toBeVisible()
+ await expect(page.locator('.family-detail-library')).not.toHaveAttribute('open','')
+ await overview.scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('family-today-redesign.png'),fullPage:true})
+ expect(await page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
+ await page.getByRole('button',{name:'Edit tomorrow’s plan',exact:true}).click()
+ await expect(page.getByRole('region',{name:'Evening planning flow',exact:true})).toBeVisible()
+ await expect(page.getByText('Draft saved on this device',{exact:true})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Day schedule',exact:true})).toBeVisible()
+ await page.locator('.morning-alignment-header').scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('family-evening-redesign.png'),fullPage:true})
+ expect(await page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
+ await page.getByRole('button',{name:'Add / Edit Outcomes',exact:true}).click()
+ const editor=page.getByRole('dialog',{name:'Edit Outcomes',exact:true})
+ await editor.getByLabel('Why it matters / help needed',{exact:true}).first().fill('Protect preparation time so the family can help.')
+ await editor.getByRole('button',{name:'Use in plan draft',exact:true}).click()
+ await expect(page.getByRole('region',{name:'Tomorrow’s Outcomes',exact:true})).toContainText('Protect preparation time so the family can help.')
 })

@@ -31,7 +31,9 @@ Rules:
 4. Times must use 24-hour HH:MM. participants may contain only Larry, Lorenzo, Terica, Nyla, Javin, or Isaiah.
 5. Keep current valid plan values unless the conversation clearly replaces them. The client applies only non-empty proposed values.
 6. Finance speech is proposed planning information only; never claim bank data changed.
-7. Put ambiguity into unresolved rather than guessing.
+7. Put ambiguity into unresolved rather than guessing. Examples, hypothetical scenarios, unrelated conversation, withdrawn suggestions, and questions are not commitments. Never turn them into tasks.
+8. New task titles are proposals needing owner/date review, not completed actions. Do not repeat existing tasks in the current plan. Never infer completion from elapsed time or a discussion of doing the work. Only explicit final agreements belong in proposed changes; capture other topics in the summary or unresolved.
+9. Summarize decisions, help needed, and topics deferred to another meeting. Avoid judgments about family members.
 
 Return exactly:
 {"summary":"concise paragraph","unresolved":["..."],"changes":{"spiritual":{"scripture":[],"devotionFocus":"","prayerFocus":[],"obedienceAction":""},"health":{"breakfast":"","lunch":"","dinner":"","snacks":"","hydration":"","groceries":[],"nextDayPrep":""},"fitness":{"location":"","participants":[],"workout":"","objective":"","departureTime":"","returnTime":"","stepGoal":0,"recovery":""},"household":{"priorities":[],"errands":[],"openItems":[]},"education":{"thinkTankTopic":"","thinkTankDeliverable":"","isaiahNotes":""},"finance":{"bills":[],"purchases":[],"transfers":[],"accountsToFund":[],"decisionRule":""},"ministry":{"contentFocus":"","fellowshipFollowUps":[],"prayerNeeds":[]}}}

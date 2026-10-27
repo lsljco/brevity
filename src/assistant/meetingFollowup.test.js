@@ -12,3 +12,10 @@ test('expired and paused meeting windows require an explicit address',()=>{
  assert.equal(followup.accepts('Hey Brevity, help'),true)
  followup.invite();followup.reset();assert.equal(followup.accepts('Another conversation'),false)
 })
+
+test('addressed-only meetings ignore room conversation even after an invited reply',()=>{
+ const followup=createMeetingFollowup({now:()=>1000,addressedOnly:true})
+ followup.invite()
+ assert.equal(followup.accepts('We could do that tomorrow.'),false)
+ assert.equal(followup.accepts('Hey Brevity, what is next?'),true)
+})

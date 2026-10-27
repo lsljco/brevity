@@ -12,3 +12,5 @@
 .today-focus-dialog.day-outcomes-dialog { max-height: calc(100dvh - 48px); display: flex; flex-direction: column; box-sizing: border-box; min-height: 0; }
 .day-outcomes-dialog > header,.day-outcomes-dialog > footer { flex-shrink: 0; }
 .day-outcomes-dialog > footer p { margin: 0; font-size: 13px; }
+
+.day-outcomes-fields textarea{width:100%;min-height:90px;box-sizing:border-box;padding:12px;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:#191917;color:#f7f3ea;font:inherit;resize:vertical}
