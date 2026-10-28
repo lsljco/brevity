@@ -1,3 +1,4 @@
+import {validateScenarioImport} from '../../src/finance/scenarioWorkbookImport.js'
 import {buildUniquePlaidAccountMap} from '../../src/finance/calendarSemantics.js'
 import {isTransferTransaction} from '../../src/finance/reportingData.js'
 import { validateRecovery } from '../../src/finance/recoveryScenario.js'
@@ -338,6 +339,10 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:applyBudgetTarget(value, payload, {changedAt:nowIso(context.now||(()=>new Date())),actor:context.actor}) }
   }
   if (operation.type === 'forecast.update') {
+    if (payload.scenarioImportJson !== undefined) {
+      const imported=validateScenarioImport(JSON.parse(payload.scenarioImportJson))
+      return {before,after:{...(value||{}),expenseMode:'scenario',planningExpense:imported.scenarios.find(s=>s.title==='Current State')?.planningExpense||imported.scenarios[0].planningExpense,scenarios:imported.scenarios,workbookImport:{filename:imported.filename,sheet:imported.sheet,importedAt:nowIso(context.now||(()=>new Date())),importedBy:context.actor}}}
+    }
     if (payload.recoveryJson !== undefined) {
       const assumptions=validateRecovery(JSON.parse(payload.recoveryJson))
       const plans=value?.recoveryPlans||[]

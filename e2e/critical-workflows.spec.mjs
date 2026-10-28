@@ -3807,3 +3807,31 @@ test('Cash Forecast counts a named payroll contribution once and retains the nex
  await expect(cell).toContainText('$744.01')
  await page.screenshot({path:testInfo.outputPath('payroll-once.png')})
 })
+
+test('Scenario Modeling edits import a Scenarios workbook with reviewable payoff evidence',async({page},testInfo)=>{
+ const {default:JSZip}=await import('jszip'),z=new JSZip()
+ const values={A2:'Workbook test case',A3:'Description',A4:'Salary',B4:6000,C4:80000,D4:1,E4:'Unconfirmed',B16:6000,C18:1500,F18:18000,C20:46753,C21:9000,C22:1000,C23:0,C24:10500,A29:46327,B29:'November Cashflow',C29:1500,D29:10500}
+ const esc=s=>s.replaceAll('&','&amp;').replaceAll('<','&lt;')
+ z.file('xl/workbook.xml','<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Scenarios" r:id="rId1"/></sheets></workbook>')
+ z.file('xl/_rels/workbook.xml.rels','<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')
+ z.file('xl/worksheets/sheet1.xml',`<worksheet><sheetData>${Object.entries(values).map(([r,v])=>typeof v==='string'?`<c r="${r}" t="inlineStr"><is><t>${esc(v)}</t></is></c>`:`<c r="${r}"><v>${v}</v></c>`).join('')}</sheetData></worksheet>`)
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Scenario Modeling',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByText('Import scenarios from Excel',{exact:true}).click()
+ await page.getByLabel('Import scenario workbook').setInputFiles({name:'scenario-test.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:await z.generateAsync({type:'nodebuffer'})})
+ await expect(page.getByText('1 scenarios ready from scenario-test.xlsx.')).toBeVisible()
+ const request=page.waitForRequest(r=>r.url().includes('action=prepare-direct'));await page.getByRole('button',{name:'Review scenario import',exact:true}).click()
+ const payload=(await request).postDataJSON(),imported=JSON.parse(payload.operation.payload.scenarioImportJson)
+ expect(imported.scenarios[0].planningExpense).toBe(4500);expect(imported.scenarios[0].source.schedule).toHaveLength(1)
+ const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'});await expect(review).toContainText('Workbook test case');await expect(review).toContainText('Preserve recovery plans')
+ await review.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByRole('tab',{name:/Current/})).toBeVisible()
+})
+
+test('Today Household excludes personal calendars from all guidance sections',async({page},testInfo)=>{
+ const date=dateKey(),events=[{id:'family-test',title:'Family focus fixture',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',owner:'Terica',date,time:'23:50',endTime:'23:59'}, {id:'personal-test',title:'Terica personal work fixture',source:'icloud',appleCalendarId:'terica',appleCalendarOwner:'Terica',owner:'Family',participants:['Everyone'],date,time:'00:01',endTime:'23:59'}]
+ await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{events,connected:true,syncedAt:new Date().toISOString()}}))
+ await page.reload();await closeMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Household',exact:true}).click()
+ const overview=page.getByRole('region',{name:'Your day at a glance'})
+ await expect(overview).toContainText('Family focus fixture');await expect(overview).not.toContainText('Terica personal work fixture')
+ await expect(page.getByRole('region',{name:'Now and next'})).not.toContainText('Terica personal work fixture')
+ await expect(page.getByRole('region',{name:'Remaining today'})).not.toContainText('Terica personal work fixture')
+})

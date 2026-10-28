@@ -31,3 +31,5 @@
 .scenario-page{container-type:inline-size}
 @container(max-width:850px){.scenario-header,.scenario-expense-panel{align-items:flex-start;flex-direction:column}.scenario-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.scenario-expense-controls{width:100%}.scenario-projection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container(max-width:480px){.scenario-summary,.scenario-projection-grid{grid-template-columns:minmax(0,1fr)}}
+
+.scenario-import{display:block;margin-top:20px}.scenario-import summary{cursor:pointer;color:var(--brevity-gold);font-weight:600}.scenario-import li{margin:8px 0}.scenario-tabs{max-height:330px;overflow:auto}.scenario-expense-controls[hidden]{display:none}
