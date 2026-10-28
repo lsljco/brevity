@@ -3870,7 +3870,9 @@ test('Scenario Modeling edits retain saved favorites after reload and filter the
 
 test('Cash Forecast mixes planned and bank entries in descending amount order',async({page},testInfo)=>{
  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:/Show bank activity for/}).click()
  const cell=page.locator(`.cal-cell[data-date="${dateKey()}"]`)
+ await expect.poll(()=>cell.locator('.finance-calendar-amount').count()).toBeGreaterThan(2)
  const amounts=await cell.locator('.finance-calendar-amount').allTextContents()
  const numbers=amounts.map(x=>Math.abs(Number(x.replace(/[^0-9.]/g,''))))
  expect(numbers.length).toBeGreaterThan(2)
