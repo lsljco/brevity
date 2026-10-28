@@ -166,7 +166,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount', 'cashAllowance'],
-  'forecast.update': ['scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
+  'forecast.update': ['favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'finance.reserve.set': ['amount'],
   'finance.statement.import': ['configJson'],
@@ -361,7 +361,9 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='meeting.packet.edit'&&field==='commandJson'){
+    if(type==='forecast.update'&&field==='favorite'){
+      if(typeof value!=='boolean')throw Error('Favorite must be true or false.');normalized.favorite=value
+    }else if(type==='meeting.packet.edit'&&field==='commandJson'){
       if(typeof value!=='string'||value.length>20000)throw Error('The report adjustment is too large.')
       normalized.commandJson=JSON.stringify(normalizePacketEdit(JSON.parse(value)))
     }else if(type==='forecast.update'&&field==='scenarioImportJson'){
@@ -722,7 +724,7 @@ export function normalizeActionOperation(input = {}) {
   if(type==='nutrition.targets.update' && !HOUSEHOLD_MEMBERS.includes(operation.targetId)) throw new Error('Choose a household member for nutrition targets.')
   if (type === 'forecast.update') {
     const modelFields = ['planningExpense', 'expenseMode']
-    const scenarioFields = ['title', 'description']
+    const scenarioFields = ['title', 'description', 'favorite']
     const incomeFields = ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']
     const fields = Object.keys(payload)
     if (payload.scenarioImportJson !== undefined) {

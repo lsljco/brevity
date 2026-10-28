@@ -341,7 +341,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if (operation.type === 'forecast.update') {
     if (payload.scenarioImportJson !== undefined) {
       const imported=validateScenarioImport(JSON.parse(payload.scenarioImportJson))
-      return {before,after:{...(value||{}),expenseMode:'scenario',planningExpense:imported.scenarios.find(s=>s.title==='Current State')?.planningExpense||imported.scenarios[0].planningExpense,scenarios:imported.scenarios,workbookImport:{filename:imported.filename,sheet:imported.sheet,importedAt:nowIso(context.now||(()=>new Date())),importedBy:context.actor}}}
+      return {before,after:{...(value||{}),expenseMode:'scenario',planningExpense:imported.scenarios.find(s=>s.title==='Current State')?.planningExpense||imported.scenarios[0].planningExpense,scenarios:imported.scenarios.map(s=>({...s,favorite:value?.scenarios?.some(old=>old.id===s.id&&old.title===s.title&&old.favorite===true)||false})),workbookImport:{filename:imported.filename,sheet:imported.sheet,importedAt:nowIso(context.now||(()=>new Date())),importedBy:context.actor}}}
     }
     if (payload.recoveryJson !== undefined) {
       const assumptions=validateRecovery(JSON.parse(payload.recoveryJson))
@@ -367,7 +367,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       if (scenario.id !== operation.targetId) return scenario
       found = true
       const next = { ...scenario }
-      for (const field of ['title', 'description']) if (payload[field] !== undefined) next[field] = payload[field]
+      for (const field of ['title', 'description', 'favorite']) if (payload[field] !== undefined) next[field] = payload[field]
       if (payload.incomeAction === 'create') {
         if ((scenario.incomes || []).some(income => income.id === payload.incomeId)) throw new Error('That forecast income id already exists. Refresh Brevity and try again.')
         const income = { id:payload.incomeId }

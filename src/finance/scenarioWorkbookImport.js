@@ -36,7 +36,10 @@ export function scenariosFromCells(cells,filename){
   for(let r=29;r<214;r++)if(typeof v(0,r)==='number'&&typeof v(1,r)==='string'&&typeof v(2,r)==='number'&&typeof v(3,r)==='number')schedule.push([date(v(0,r)),v(1,r),v(2,r),v(3,r),String(v(4,r)||'')])
   const notes=[...new Set([v(3,20),v(4,21),v(3,22)].filter(x=>typeof x==='string'))]
   if(incomes.some(r=>r.monthlyNet==null||r.annualGross==null))notes.push('Some income assumptions are blank in the workbook. Blank amounts are excluded from totals, not confirmed as zero.')
-  for(const r of [215,216,217,220,221,222,223,224,225,226,227])if(typeof cells[`C${r}`]==='number')notes.push(`${cells[`B${r}`]}: $${cells[`C${r}`].toFixed(2)}${r>=220?`; monthly cashflow released after payoff: $${Number(cells[`D${r}`]||0).toFixed(2)}`:''}`)
+  for(const r of [215,216,217,220,221,222,223,224,225,226,227]){
+   const amount=r===215&&typeof v(2,19)==='number'?v(2,19):cells[`C${r}`]
+   if(typeof amount==='number')notes.push(`${r===215?'Minimum cash reserve':cells[`B${r}`]}: $${amount.toFixed(2)}${r>=220?`; monthly cashflow released after payoff: $${Number(cells[`D${r}`]||0).toFixed(2)}`:''}`)
+  }
   notes.push('Expense baseline derived from the saved total monthly net income minus the saved November cashflow. Contribution percentages are retained as supplied.')
   scenarios.push({id:`workbook-${c[0]}`,block:c[0],title:v(0,2).trim(),description:`Imported from Scenarios!${c[0]}2:${c[6]}213. November 2026 income and expense assumptions.`,planningExpense:round(net-v(2,18)),incomes,schedule,notes,summary:{monthlyCashFlow:v(2,18),annualCashFlow:v(5,18),payoff:date(v(2,20)),minimumCash:v(2,21),totalPaid:v(2,22),unpaid:v(2,23),endingCash:v(2,24)}})
  }

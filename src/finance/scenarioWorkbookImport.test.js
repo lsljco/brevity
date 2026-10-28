@@ -18,6 +18,13 @@ test('import fails closed for missing sheet data, inconsistent totals, duplicate
  const x=scenariosFromCells(cells,'example.xlsx');x.scenarios.push(structuredClone(x.scenarios[0]));assert.throws(()=>validateScenarioImport(x),/Duplicate/)
  const y=scenariosFromCells(cells,'example.xlsx');y.scenarios[0].source.schedule[0][2]=Infinity;assert.throws(()=>validateScenarioImport(y),/amount/)
 })
+test('scenario-specific cash reserve takes precedence over the shared workbook reserve',()=>{
+ const shared={...cells,B215:'Minimum reserve',C215:8500}
+ assert.ok(scenariosFromCells(shared,'example.xlsx').scenarios[0].source.notes.includes('Minimum cash reserve: $8500.00'))
+ const ideal=scenariosFromCells({...shared,C19:9000},'example.xlsx').scenarios[0]
+ assert.ok(ideal.source.notes.includes('Minimum cash reserve: $9000.00'))
+ assert.ok(!ideal.source.notes.some(note=>note.includes('$8500.00')))
+})
 test('reviewed workbook replacement targets only forecasts, preserves recovery plans and keeps prior state',()=>{
  const x=scenariosFromCells(cells,'example.xlsx'),before={scenarios:[{id:'old'}],recoveryPlans:[{id:'recovery-test',assumptions:{reserve:10}}]}
  const operation={type:'forecast.update',targetId:'model',description:'Import workbook',payload:{scenarioImportJson:JSON.stringify(x)}}
@@ -27,4 +34,21 @@ test('reviewed workbook replacement targets only forecasts, preserves recovery p
  assert.deepEqual(result.before,before);assert.deepEqual(result.after.recoveryPlans,before.recoveryPlans);assert.equal(result.after.scenarios.length,1);assert.equal(result.after.workbookImport.filename,'example.xlsx')
  assert.deepEqual(before.scenarios,[{id:'old'}])
  assert.throws(()=>normalizeActionProposal({operations:[{...operation,targetId:'wrong'}]},{member:'Larry',role:'admin'}),/target only/)
+})
+test('favorites survive reimport of the same case but do not move to a replaced case',()=>{
+ const imported=scenariosFromCells(cells,'example.xlsx'),scenario=imported.scenarios[0]
+ const apply=(state,payload,targetId=scenario.id)=>applyRecordOperation(state,normalizeActionProposal({operations:[{type:'forecast.update',targetId,payload}]},{member:'Larry',role:'admin'}).operations[0]).after
+ const initial={scenarios:[scenario],recoveryPlans:[{id:'preserved'}]}
+ const starred=apply(initial,{favorite:true})
+ assert.equal(starred.scenarios[0].favorite,true)
+ assert.deepEqual(starred.scenarios[0].incomes,scenario.incomes)
+ assert.equal(initial.scenarios[0].favorite,undefined)
+ const refreshed=apply(starred,{scenarioImportJson:JSON.stringify(imported)},'model')
+ assert.equal(refreshed.scenarios[0].favorite,true)
+ assert.deepEqual(refreshed.recoveryPlans,initial.recoveryPlans)
+ assert.equal(apply(refreshed,{favorite:false}).scenarios[0].favorite,false)
+ imported.scenarios[0].title='Different case in same column'
+ assert.equal(apply(starred,{scenarioImportJson:JSON.stringify(imported)},'model').scenarios[0].favorite,false)
+ assert.throws(()=>apply(initial,{favorite:'false'}),/Favorite must/)
+ assert.throws(()=>apply(initial,{favorite:true},'model'),/model update/)
 })

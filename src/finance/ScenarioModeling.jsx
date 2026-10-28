@@ -56,12 +56,16 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
   const [model, setModel] = useState(initialModel)
   const [draftModel, setDraftModel] = useState(() => clone(initialModel))
   const [activeId, setActiveId] = useState(() => initialModel.scenarios[0]?.id || 'current')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [importDraft,setImportDraft]=useState(null)
   const [importBusy,setImportBusy]=useState(false)
   const [reviewError, setReviewError] = useState('')
   const [reviewNotice, setReviewNotice] = useState('')
-  const activeIndex = Math.max(0, model.scenarios.findIndex(scenario => scenario.id === activeId))
+  const favorites = model.scenarios.filter(scenario => scenario.favorite === true)
+  const visibleScenarios = favoritesOnly ? favorites : model.scenarios
+  const selectedId = visibleScenarios.some(scenario => scenario.id === activeId) ? activeId : visibleScenarios[0]?.id
+  const activeIndex = Math.max(0, model.scenarios.findIndex(scenario => scenario.id === selectedId))
   const active = model.scenarios[activeIndex]
   const activeDraft = draftModel.scenarios.find(scenario => scenario.id === active?.id) || active
   const expense = model.expenseMode === 'operating' && liveOperatingExpense > 0
@@ -247,31 +251,36 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     <header className="scenario-header">
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>
-        <h1 id="scenario-title">Scenario Modeling</h1>
+        <h1 id="scenario-title">Cashflow Scenarios</h1>
         <p>Compare household income paths against recurring operating expenses. Draft assumptions never alter household forecasts until Action Mode review and approval.</p>
       </div>
       {!readOnly && <span className="scenario-eyebrow"><i className="ti ti-shield-check"/> Review · Audit · Safe Undo</span>}
     </header>
 
     {!readOnly&&<details className="scenario-expense-panel scenario-import"><summary>Import scenarios from Excel</summary><p>Read the Scenarios tab, then review all income assumptions and saved payoff schedules before replacing the existing income scenarios. Recovery plans are preserved.</p><input type="file" accept=".xlsx" aria-label="Import scenario workbook" disabled={importBusy||reviewBusy} onChange={async event=>{const file=event.target.files?.[0];if(!file)return;setImportBusy(true);setReviewError('');try{setImportDraft(await readScenarioWorkbook(file))}catch(error){setReviewError(error.message)}finally{setImportBusy(false);event.target.value=''}}}/>{importBusy&&<p role="status">Reading Scenarios tab…</p>}{importDraft&&<div><p>{importDraft.scenarios.length} scenarios ready from {importDraft.filename}.</p><ul>{importDraft.scenarios.map(s=><li key={s.id}>{s.title} · {s.incomes.length} income sources · {money.format(s.source.summary.monthlyCashFlow)} monthly cashflow</li>)}</ul><button className="scenario-add" disabled={reviewBusy} onClick={()=>openReview({summary:`Import ${importDraft.scenarios.length} scenarios from ${importDraft.filename}`,operation:{type:'forecast.update',targetId:'model',payload:{scenarioImportJson:JSON.stringify(importDraft)},description:'Replace the income scenarios with the reviewed workbook cases, including their individual expense baselines and saved payoff schedules. Preserve recovery plans and retain the previous model for Undo.'}})}>Review scenario import</button></div>}</details>}
-    <Suspense fallback={<p>Loading recovery scenarios…</p>}><RecoveryWorkspace financeData={financeData} actuals={actuals} debts={debts} freshness={freshness} readOnly={readOnly} /></Suspense>
     <h2>Existing income scenarios</h2>
     <p className="scenario-account-scope" role="note"><i className="ti ti-building-bank" aria-hidden="true"/><span><strong>Account scope: Operating Account</strong> Scenario Modeling uses the household operating-expense baseline. Renovation / Projects and Savings are intentionally excluded from these calculations.</span></p>
 
     {reviewError && <div className="scenario-expense-panel" role="alert">{reviewError}</div>}
     {reviewNotice && <div className="scenario-expense-panel" role="status">{reviewNotice}</div>}
 
+    <div className="scenario-segmented scenario-filters" aria-label="Scenario filter">
+      <button aria-pressed={!favoritesOnly} className={!favoritesOnly?'is-active':''} onClick={()=>setFavoritesOnly(false)}>All scenarios ({model.scenarios.length})</button>
+      <button aria-pressed={favoritesOnly} className={favoritesOnly?'is-active':''} onClick={()=>setFavoritesOnly(true)}>★ Favorites ({favorites.length})</button>
+    </div>
+    {favoritesOnly&&!favorites.length&&<p role="status">No favorite scenarios yet. Choose All scenarios and star a scenario to save it here.</p>}
     <div className="scenario-tabs" role="tablist" aria-label="Financial scenarios">
-      {model.scenarios.map(scenario => {
+      {visibleScenarios.map(scenario => {
         const summary = calculateScenario(scenario, model.expenseMode==='operating'?expense:(scenario.planningExpense??expense))
         const selected = scenario.id === active.id
-        return <button key={scenario.id} type="button" role="tab" aria-selected={selected} className={selected ? 'is-active' : ''} onClick={() => setActiveId(scenario.id)}>
+        return <div className="scenario-choice" key={scenario.id} role="presentation"><button type="button" role="tab" aria-selected={selected} className={selected ? 'is-active' : ''} onClick={() => setActiveId(scenario.id)}>
           <span>{scenario.title}</span>
           <strong className={summary.monthlyCashFlow >= 0 ? 'positive' : 'negative'}>{money.format(summary.monthlyCashFlow)} / month</strong>
-        </button>
+        </button><button type="button" className="scenario-star" aria-label={`${scenario.favorite?'Remove':'Add'} ${scenario.title} ${scenario.favorite?'from':'to'} favorites`} aria-pressed={scenario.favorite===true} disabled={readOnly||reviewBusy} onClick={()=>openReview({summary:`${scenario.favorite?'Remove':'Add'} ${quote(scenario.title)} ${scenario.favorite?'from':'to'} favorites`,operation:{type:'forecast.update',targetId:scenario.id,payload:{favorite:!scenario.favorite},description:'Update the shared scenario favorite. Financial assumptions and payoff schedules stay unchanged.'}})}>{scenario.favorite?'★':'☆'}</button></div>
       })}
     </div>
 
+    {visibleScenarios.length>0&&<>
     <div className="scenario-expense-panel">
       <div>
         <span className="scenario-field-label">Monthly recurring expenses</span>
@@ -341,5 +350,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
         {[2, 3, 4, 5].map(year => <div key={year}><span>{year} years</span><strong>{wholeMoney.format(result.projections[year])}</strong></div>)}
       </div>
     </section>
+    </>}
+    <Suspense fallback={<p>Loading recovery scenarios…</p>}><RecoveryWorkspace financeData={financeData} actuals={actuals} debts={debts} freshness={freshness} readOnly={readOnly} /></Suspense>
   </section>
 }
