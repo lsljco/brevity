@@ -1,3 +1,5 @@
+import BankUpdateStatus from './BankUpdateStatus.jsx'
+import './BankUpdateStatus.css'
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 const BankReconnect = lazy(() => import('./BankReconnect.jsx'))
 import { FINANCE_REFRESH_EVENT } from './financeRefresh.js'
@@ -351,29 +353,20 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
   const isConnected = connections.length > 0
 
   return (
-    <div className="plaid-connect" onKeyDown={event => {if(event.key === 'Escape' && expanded){setExpanded(false);event.currentTarget.querySelector('[aria-controls="bank-information-panel"]')?.focus()}}} style={{ marginBottom: 20 }}>
+    <div className="plaid-connect" onKeyDown={event => {if(event.key === 'Escape'){const menu=event.currentTarget.querySelector('.bank-update-menu[open]');if(menu){menu.open=false;menu.querySelector('summary')?.focus()}}if(event.key === 'Escape' && expanded){setExpanded(false);event.currentTarget.querySelector('[aria-controls="bank-information-panel"]')?.focus()}}} style={{ marginBottom: 20 }}>
       {requiresUpdate.length > 0 && <Suspense fallback={<p role="status">Loading secure reconnection…</p>}><BankReconnect items={requiresUpdate} connections={connections} checkedLabel={syncedAt ? formatTime(syncedAt) : 'Not yet verified'} canReconnect={canReconnect} request={apiFetch} onViewAccounts={onReviewAccountLinks} onReconnected={() => {
         setError(null)
         setSyncNotice('Secure sign-in completed. Saved balances remain unchanged until a successful balance refresh.')
         checkConnectionStatus()
       }}/></Suspense>}
       <div className="plaid-connect-status" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-        {!requiresUpdate.length && <div style={{flex:'1 1 190px',minWidth:0}}>
-          <div style={{fontSize:13,color:'#F7F6F2'}}>Balance checked: {syncedAt ? formatTime(syncedAt) : 'Not yet verified'}</div>
-          <div role="status" style={{fontSize:12,color:needsRefresh ? '#C5A46D' : '#aaa99f',marginTop:4}}>
-            {needsRefresh ? 'Needs refresh' : 'Last successful live check'}
-          </div>
-        </div>}
-        <button type="button" onClick={() => syncAccounts({ refreshTransactions:true })} disabled={syncBusy}
-          title="Requests a paid update from existing bank connections. Estimated $0.22 per connection; available whenever you choose. Open Bank information for details."
-          style={{minHeight:44,padding:'10px 16px',borderRadius:10,border:'1px solid #C5A46D',background:'#C5A46D',color:'#17150f',fontFamily:'inherit',fontWeight:600,cursor:syncBusy?'wait':'pointer',opacity:syncBusy ? 0.65 : 1}}>
-          {syncBusy ? 'Updating…' : 'Refresh balance'}
-        </button>
-        {typeof onSyncAvailableTransactions === 'function' && <button type="button" onClick={syncAvailableTransactions} disabled={syncBusy}
-          title="Sync transactions already available from Plaid without requesting a paid update or a live balance check."
-          style={{minHeight:44,padding:'10px 16px',borderRadius:10,border:'1px solid rgba(197,164,109,.4)',background:'transparent',color:'#C5A46D',fontFamily:'inherit',cursor:syncBusy?'wait':'pointer'}}>Sync transactions</button>}
+        {!requiresUpdate.length&&<BankUpdateStatus sourceUpdatedAt={sourceUpdatedAt} liveCheckedAt={syncedAt} formatTime={formatTime} onDetails={()=>setExpanded(true)}/>}
+        <details className="bank-update-menu"><summary>{syncBusy?'Updating…':'Update ▾'}</summary><div>
+        {typeof onSyncAvailableTransactions==='function'&&<button type="button" disabled={syncBusy} onClick={event=>{event.currentTarget.closest('details').open=false;syncAvailableTransactions()}}>Sync available transactions<small>Import data Plaid already has</small></button>}
+        <button type="button" aria-label="Request live bank update" disabled={syncBusy} onClick={event=>{event.currentTarget.closest('details').open=false;syncAccounts({refreshTransactions:true})}}>Request live bank update<small>Balances + transactions · estimated $0.22 / connection</small></button>
+        </div></details>
         <button type="button" aria-label="Bank information" aria-expanded={expanded} aria-controls="bank-information-panel"
-          title="Automatic sync checks saved Plaid data. Balance checked shows the last successful live check. Tap for refresh costs and connection details."
+          title="View automatic sync, bank update times and live update costs."
           onClick={() => setExpanded(value => !value)}
           style={{minWidth:44,minHeight:44,borderRadius:22,border:'1px solid rgba(197,164,109,.4)',background:'transparent',color:'#C5A46D',fontSize:requiresUpdate.length ? 13 : 20,cursor:'pointer',marginTop:requiresUpdate.length ? 12 : 0,padding:requiresUpdate.length ? '8px 14px' : undefined}}>{requiresUpdate.length ? 'Connection details' : 'ⓘ'}</button>
       </div>
@@ -389,8 +382,8 @@ export default function PlaidConnect({ onAccountsSync, onTransactionsSync, onSyn
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
           {error && requiresUpdate.length > 0 && <p role="note" style={{fontSize:12,lineHeight:1.5}}>Connection diagnostic: {readableBankMessage(error)}</p>}
-          <p role="note" style={{margin:0,fontSize:13,lineHeight:1.5}}>Refresh balance requests paid balance and transaction updates: estimated $0.22 per connection, with no Brevity waiting period or monthly cutoff for manual refreshes. Bank availability and Plaid rate limits still apply. Subscription fees are separate.</p>
-          <p style={{margin:0,fontSize:13,lineHeight:1.5}}>Automatic sync checks the data Plaid already has when Brevity opens, every 15 minutes while visible, and when you return after five minutes. It does not verify a live balance. “Needs refresh” means the last successful live check is missing or at least 24 hours old.</p>
+          <p role="note" style={{margin:0,fontSize:13,lineHeight:1.5}}>Request live bank update requests paid balance and transaction updates: estimated $0.22 per connection, with no Brevity waiting period or monthly cutoff for manual refreshes. Bank availability and Plaid rate limits still apply. Subscription fees are separate.</p>
+          <p style={{margin:0,fontSize:13,lineHeight:1.5}}>Automatic background sync imports data Plaid already has when bank updates arrive, with a check every 30 minutes even while Brevity is closed. The app also checks when opened and while visible. These imports do not request a paid live bank update. Bank data updated shows the latest verified source time, not the time you opened this screen.</p>
           <div style={{fontSize:12,color:'#aaa99f',lineHeight:1.7}}>
             <div>Last synced: {lastSyncedAt ? formatTime(lastSyncedAt) : 'Not recorded'}</div>
             <div>Plaid last updated: {sourceUpdatedAt ? formatTime(sourceUpdatedAt) : 'Not recorded'}</div>

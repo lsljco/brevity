@@ -32,7 +32,8 @@
     "react-dom": "^18.2.0",
     "react-plaid-link": "^3.5.1",
     "web-push": "^3.6.7",
-    "zod": "^4.6.6"
+    "zod": "^4.6.6",
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

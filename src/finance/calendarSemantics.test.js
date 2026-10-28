@@ -130,7 +130,7 @@ test('Cash Forecast names its scope and owns one explicit bank-activity toggle',
   assert.match(planner, /aria-pressed=\{showActuals\}/)
   assert.match(planner + readFileSync(new URL('./CashForecastToolbar.jsx', import.meta.url), 'utf8'), /bank activity for/)
   assert.doesNotMatch(planner, /`Actuals \(\$\{plaidActuals\.length\}\)`/)
-  assert.match(planner, /!\['calendar','overview'\]\.includes\(view\) && \(/, 'global account bar toggle should be absent from Cash Forecast')
+  assert.match(planner, /!\['calendar','overview','daily-alignment'\]\.includes\(view\) && \(/, 'global account bar toggle should be absent from Cash Forecast')
   assert.match(planner, /view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div[^>]*><FinanceTimeframe/, 'disconnected global timeframe should be hidden on Cash Forecast')
 })
 

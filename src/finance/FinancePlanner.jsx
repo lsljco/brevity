@@ -2373,7 +2373,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts · select multiple</span>
-      {!['budget','calendar','overview'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
+      {!['budget','calendar','overview','daily-alignment'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
 
       {/* All pill */}
       <button
@@ -2409,7 +2409,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         )
       })}
 
-      {!['calendar','overview'].includes(view) && (
+      {!['calendar','overview','daily-alignment'].includes(view) && (
         <>
           {/* Cash Forecast owns its month-scoped bank-activity toggle. */}
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 6px', flexShrink: 0 }} />
@@ -2453,7 +2453,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       <LuxuryStyles />
       {!isForm&&['dashboard','accounts','transactions'].includes(view)&&<div style={{padding:'0 24px'}}><FinanceExport buildReport={()=>({title:`${view} ${financeRange.from} to ${financeRange.to}`,notes:[financeAccountScopeLabel,actualsFreshnessMessage,balanceDataMessage,transactionFilter?.label||'','Bank amounts: positive = outflow; negative = inflow. Scheduled amounts use the Direction column.'],sections:view==='transactions'?[transactionSection(showActuals?transactionViewActuals:scheduledViewTransactions,fd.accounts,{scheduled:!showActuals})]:[recordsSection('Account balances',fd.accounts,['name','type','balance','plaidCurrentBalance','plaidAvailableBalance']),transactionSection(timeframeActuals,fd.accounts),recordsSection('Cash forecast',[...proj].filter(([date])=>date>=financeRange.from&&date<=financeRange.to).map(([date,p])=>({date,endingBalance:p.bal,netChange:p.delta}))) ]})}/></div>}
 
-      {!['scenario-modeling','calendar'].includes(view) && AccountFilterBar}
+      {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar'].includes(view) && AccountFilterBar}
       {!isForm&&['transactions','vendors','recurring','reporting'].includes(view)&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
       {!formView && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
