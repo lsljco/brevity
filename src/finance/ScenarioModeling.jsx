@@ -1,3 +1,4 @@
+import {readScenarioWorkbook} from './scenarioWorkbookImport.js'
 import FinanceExport from './FinanceExport.jsx'
 import {financeReport} from './financeExportData.js'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
@@ -36,8 +37,8 @@ function changedFields(before, draft, fields) {
   return Object.fromEntries(fields.flatMap(field => {
     let next = draft?.[field]
     if (numericIncomeFields.has(field)) {
-      next = Number(next)
-      if (!Number.isFinite(next)) throw new Error(`${field.replace(/([A-Z])/g, ' $1').toLowerCase()} must be a valid number.`)
+      next = next==null ? null : Number(next)
+      if (next!=null && !Number.isFinite(next)) throw new Error(`${field.replace(/([A-Z])/g, ' $1').toLowerCase()} must be a valid number.`)
     }
     return same(before?.[field], next) ? [] : [[field, next]]
   }))
@@ -56,6 +57,8 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
   const [draftModel, setDraftModel] = useState(() => clone(initialModel))
   const [activeId, setActiveId] = useState(() => initialModel.scenarios[0]?.id || 'current')
   const [reviewBusy, setReviewBusy] = useState(false)
+  const [importDraft,setImportDraft]=useState(null)
+  const [importBusy,setImportBusy]=useState(false)
   const [reviewError, setReviewError] = useState('')
   const [reviewNotice, setReviewNotice] = useState('')
   const activeIndex = Math.max(0, model.scenarios.findIndex(scenario => scenario.id === activeId))
@@ -63,7 +66,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
   const activeDraft = draftModel.scenarios.find(scenario => scenario.id === active?.id) || active
   const expense = model.expenseMode === 'operating' && liveOperatingExpense > 0
     ? liveOperatingExpense
-    : Number(model.planningExpense) || 0
+    : Number(active?.planningExpense ?? model.planningExpense) || 0
   const result = useMemo(() => calculateScenario(active, expense), [active, expense])
 
   useEffect(() => {
@@ -72,6 +75,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       if (event?.type === SHARED_STATE_EVENT && event.detail?.keys?.length && !event.detail.keys.includes(SCENARIO_STORAGE_KEY)) return
       const next = loadModel()
       setModel(next)
+      setImportDraft(null)
       setDraftModel(clone(next))
       setActiveId(current => next.scenarios.some(scenario => scenario.id === current) ? current : next.scenarios[0]?.id || 'current')
       setReviewError('')
@@ -249,6 +253,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       {!readOnly && <span className="scenario-eyebrow"><i className="ti ti-shield-check"/> Review · Audit · Safe Undo</span>}
     </header>
 
+    {!readOnly&&<details className="scenario-expense-panel scenario-import"><summary>Import scenarios from Excel</summary><p>Read the Scenarios tab, then review all income assumptions and saved payoff schedules before replacing the existing income scenarios. Recovery plans are preserved.</p><input type="file" accept=".xlsx" aria-label="Import scenario workbook" disabled={importBusy||reviewBusy} onChange={async event=>{const file=event.target.files?.[0];if(!file)return;setImportBusy(true);setReviewError('');try{setImportDraft(await readScenarioWorkbook(file))}catch(error){setReviewError(error.message)}finally{setImportBusy(false);event.target.value=''}}}/>{importBusy&&<p role="status">Reading Scenarios tab…</p>}{importDraft&&<div><p>{importDraft.scenarios.length} scenarios ready from {importDraft.filename}.</p><ul>{importDraft.scenarios.map(s=><li key={s.id}>{s.title} · {s.incomes.length} income sources · {money.format(s.source.summary.monthlyCashFlow)} monthly cashflow</li>)}</ul><button className="scenario-add" disabled={reviewBusy} onClick={()=>openReview({summary:`Import ${importDraft.scenarios.length} scenarios from ${importDraft.filename}`,operation:{type:'forecast.update',targetId:'model',payload:{scenarioImportJson:JSON.stringify(importDraft)},description:'Replace the income scenarios with the reviewed workbook cases, including their individual expense baselines and saved payoff schedules. Preserve recovery plans and retain the previous model for Undo.'}})}>Review scenario import</button></div>}</details>}
     <Suspense fallback={<p>Loading recovery scenarios…</p>}><RecoveryWorkspace financeData={financeData} actuals={actuals} debts={debts} freshness={freshness} readOnly={readOnly} /></Suspense>
     <h2>Existing income scenarios</h2>
     <p className="scenario-account-scope" role="note"><i className="ti ti-building-bank" aria-hidden="true"/><span><strong>Account scope: Operating Account</strong> Scenario Modeling uses the household operating-expense baseline. Renovation / Projects and Savings are intentionally excluded from these calculations.</span></p>
@@ -258,7 +263,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
 
     <div className="scenario-tabs" role="tablist" aria-label="Financial scenarios">
       {model.scenarios.map(scenario => {
-        const summary = calculateScenario(scenario, expense)
+        const summary = calculateScenario(scenario, model.expenseMode==='operating'?expense:(scenario.planningExpense??expense))
         const selected = scenario.id === active.id
         return <button key={scenario.id} type="button" role="tab" aria-selected={selected} className={selected ? 'is-active' : ''} onClick={() => setActiveId(scenario.id)}>
           <span>{scenario.title}</span>
@@ -271,14 +276,14 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       <div>
         <span className="scenario-field-label">Monthly recurring expenses</span>
         <strong>{money.format(expense)} monthly</strong>
-        <small>{model.expenseMode === 'operating' && liveOperatingExpense > 0 ? 'Live recurring expenses from the Operating Account' : 'Supplied scenario planning baseline'}</small>
+        <small>{model.expenseMode === 'operating' && liveOperatingExpense > 0 ? 'Live recurring expenses from the Operating Account' : active.source ? 'Workbook baseline for this scenario' : 'Supplied scenario planning baseline'}</small>
       </div>
       <div className="scenario-expense-controls">
         <div className="scenario-segmented" aria-label="Expense source">
           <button type="button" disabled={readOnly || reviewBusy} className={model.expenseMode === 'scenario' ? 'is-active' : ''} onClick={() => reviewExpenseMode('scenario')}>Planning baseline</button>
           <button type="button" disabled={readOnly || reviewBusy || liveOperatingExpense <= 0} className={model.expenseMode === 'operating' ? 'is-active' : ''} onClick={() => reviewExpenseMode('operating')}>Live operating</button>
         </div>
-        <div className="scenario-expense-controls"><label className="scenario-money-input"><span>$</span><input aria-label="Monthly recurring expense total draft" readOnly={readOnly} type="number" min="0" step="0.01" value={draftModel.planningExpense} onChange={event => updateModelDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || (Number(draftModel.planningExpense) === Number(model.planningExpense) && model.expenseMode === 'scenario')} onClick={reviewPlanningExpense}>Review expense total</button>}</div>
+        <div className="scenario-expense-controls" hidden={Boolean(active.source)}><label className="scenario-money-input"><span>$</span><input aria-label="Monthly recurring expense total draft" readOnly={readOnly} type="number" min="0" step="0.01" value={draftModel.planningExpense} onChange={event => updateModelDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || (Number(draftModel.planningExpense) === Number(model.planningExpense) && model.expenseMode === 'scenario')} onClick={reviewPlanningExpense}>Review expense total</button>}</div>
       </div>
     </div>
 
@@ -312,10 +317,10 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
             const rowChanged=!row||!same(changedFields(row,draftRow,incomeFields),{})
             return <tr key={draftRow.id}>
             <td><input className="scenario-income-description" aria-label={`Income ${rowIndex + 1} description draft`} readOnly={readOnly} value={draftRow.description || ''} placeholder="Income source name" onChange={event => updateIncomeDraft(draftRow.id, 'description', event.target.value)}/></td>
-            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${label} monthly net draft`} readOnly={readOnly} type="number" min="0" step="0.01" value={draftRow.monthlyNet} onChange={event => updateIncomeDraft(draftRow.id, 'monthlyNet', event.target.value)}/></label></td>
-            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${label} annual gross draft`} readOnly={readOnly} type="number" min="0" step="0.01" value={draftRow.annualGross} onChange={event => updateIncomeDraft(draftRow.id, 'annualGross', event.target.value)}/></label></td>
-            <td><label className="scenario-cell-percent"><input aria-label={`${label} contribution draft`} readOnly={readOnly} type="number" min="0" step="1" value={draftRow.contribution} onChange={event => updateIncomeDraft(draftRow.id, 'contribution', event.target.value)}/><span>%</span></label></td>
-            <td><button type="button" disabled={readOnly} className={`scenario-remote${draftRow.remote ? ' is-active' : ''}`} aria-pressed={draftRow.remote} onClick={() => updateIncomeDraft(draftRow.id, 'remote', !draftRow.remote)}>{draftRow.remote ? 'Remote' : 'On-site'}</button></td>
+            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${label} monthly net draft`} readOnly={readOnly} type="number" min="0" step="0.01" value={draftRow.monthlyNet??''} onChange={event => updateIncomeDraft(draftRow.id, 'monthlyNet', event.target.value)}/></label></td>
+            <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${label} annual gross draft`} readOnly={readOnly} type="number" min="0" step="0.01" value={draftRow.annualGross??''} onChange={event => updateIncomeDraft(draftRow.id, 'annualGross', event.target.value)}/></label></td>
+            <td><label className="scenario-cell-percent"><input aria-label={`${label} contribution draft`} readOnly={readOnly} type="number" min="0" step="1" value={draftRow.contribution??''} onChange={event => updateIncomeDraft(draftRow.id, 'contribution', event.target.value)}/><span>%</span></label></td>
+            <td><button type="button" disabled={readOnly} className={`scenario-remote${draftRow.remote ? ' is-active' : ''}`} aria-pressed={draftRow.remote} onClick={() => updateIncomeDraft(draftRow.id, 'remote', !draftRow.remote)}>{draftRow.remote==null ? (draftRow.workArrangement||'Unconfirmed') : draftRow.remote ? 'Remote' : 'On-site'}</button></td>
             <td><input aria-label={`${label} employment type draft`} readOnly={readOnly} value={draftRow.employment || ''} placeholder="Perm / Contract" onChange={event => updateIncomeDraft(draftRow.id, 'employment', event.target.value)}/></td>
             <td><input aria-label={`${label} notes draft`} readOnly={readOnly} value={draftRow.notes || ''} placeholder="Add note" onChange={event => updateIncomeDraft(draftRow.id, 'notes', event.target.value)}/></td>
             <td>{!readOnly && <div className="scenario-row-actions"><button type="button" className="scenario-add" disabled={reviewBusy||!rowChanged} aria-label={`${row ? 'Review changes to' : 'Review addition of'} ${label}`} onClick={() => reviewIncome(draftRow.id)}><i className="ti ti-shield-check"/><span>Review</span></button><button type="button" className="scenario-delete" disabled={reviewBusy} aria-label={`${row ? 'Review removal of' : 'Discard'} ${label}`} onClick={() => reviewRemoveIncome(draftRow.id)}><i className="ti ti-trash"/></button></div>}</td>
@@ -325,6 +330,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       </div>
     </section>
 
+    {active.source&&<section className="scenario-projections" aria-label="Imported workbook payoff schedule"><div className="scenario-section-heading"><div><p className="scenario-eyebrow">Scenarios tab · {active.source.block}</p><h2>Workbook payoff plan</h2></div></div><p>Saved workbook results imported {model.workbookImport?.importedAt?.slice(0,10)}. These projections are not bank activity and do not recalculate when income assumptions above are edited. Reimport the workbook to update this saved schedule.</p><div className="scenario-summary"><SummaryMetric label="Listed debts paid by" value={active.source.summary.payoff}/><SummaryMetric label="Lowest modeled cash" value={money.format(active.source.summary.minimumCash)}/><SummaryMetric label="Unpaid listed liabilities" value={money.format(active.source.summary.unpaid)}/><SummaryMetric label="December 2036 cash" value={money.format(active.source.summary.endingCash)}/></div><details><summary>Assumptions and source notes</summary><ul>{active.source.notes.map((n,i)=><li key={i}>{n}</li>)}</ul><p>Total modeled payments: {money.format(active.source.summary.totalPaid)}. This includes recurring taxes as well as listed debt payoffs.</p></details><details><summary>Cashflow and payoff schedule · {active.source.schedule.length} entries</summary><div className="scenario-table-wrap"><table className="scenario-table"><thead><tr><th>Month</th><th>Cashflow / payoff item</th><th>Amount</th><th>Balance</th><th>Strategy</th></tr></thead><tbody>{active.source.schedule.map((r,i)=><tr key={i}><td>{r[0].slice(0,7)}</td><td>{r[1]}</td><td>{money.format(r[2])}</td><td>{money.format(r[3])}</td><td>{r[4]}</td></tr>)}</tbody></table></div></details></section>}
     <section className="scenario-projections">
       <div className="scenario-section-heading">
         <div><p className="scenario-eyebrow">Cumulative projection</p><h2>Cash flow over time</h2></div>
