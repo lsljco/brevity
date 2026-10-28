@@ -18,6 +18,13 @@ test('import fails closed for missing sheet data, inconsistent totals, duplicate
  const x=scenariosFromCells(cells,'example.xlsx');x.scenarios.push(structuredClone(x.scenarios[0]));assert.throws(()=>validateScenarioImport(x),/Duplicate/)
  const y=scenariosFromCells(cells,'example.xlsx');y.scenarios[0].source.schedule[0][2]=Infinity;assert.throws(()=>validateScenarioImport(y),/amount/)
 })
+test('scenario-specific cash reserve takes precedence over the shared workbook reserve',()=>{
+ const shared={...cells,B215:'Minimum reserve',C215:8500}
+ assert.ok(scenariosFromCells(shared,'example.xlsx').scenarios[0].source.notes.includes('Minimum cash reserve: $8500.00'))
+ const ideal=scenariosFromCells({...shared,C19:9000},'example.xlsx').scenarios[0]
+ assert.ok(ideal.source.notes.includes('Minimum cash reserve: $9000.00'))
+ assert.ok(!ideal.source.notes.some(note=>note.includes('$8500.00')))
+})
 test('reviewed workbook replacement targets only forecasts, preserves recovery plans and keeps prior state',()=>{
  const x=scenariosFromCells(cells,'example.xlsx'),before={scenarios:[{id:'old'}],recoveryPlans:[{id:'recovery-test',assumptions:{reserve:10}}]}
  const operation={type:'forecast.update',targetId:'model',description:'Import workbook',payload:{scenarioImportJson:JSON.stringify(x)}}
