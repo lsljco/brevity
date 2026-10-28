@@ -31,7 +31,7 @@ import { allocateBudgetActuals, budgetTargetForLine, budgetTargetRow, buildBudge
 import { filterTransactionsByTimeframe, resolveTimeframe, restoreTimeframe, TIMEFRAME_PRESETS, timeframeLabel } from './financeTimeframe.js'
 import DailyAlignment from './DailyAlignment.jsx'
 import DashboardFooter from './DashboardFooter.jsx'
-import ScenarioModeling from './ScenarioModeling.jsx'
+const ScenarioModeling = lazy(() => import('./ScenarioModeling.jsx'))
 import { buildDailyAlignmentSnapshot } from './dailyAlignmentData.js'
 import {
   calculateMonthlyCashFlow,
@@ -3062,7 +3062,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       /></Suspense>}
 
       {view === 'scenario-modeling' && (
-        <ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} financeData={recoveryFinanceSources.data} actuals={recoveryFinanceSources.actuals} debts={debts} freshness={`${balanceDataMessage} ${actualsFreshnessMessage}`} />
+        <Suspense fallback={<p>Loading cashflow scenarios…</p>}><ScenarioModeling liveOperatingExpense={operatingMonthlyExpense} readOnly={readOnly} financeData={recoveryFinanceSources.data} actuals={recoveryFinanceSources.actuals} debts={debts} freshness={`${balanceDataMessage} ${actualsFreshnessMessage}`} /></Suspense>
       )}
 
       {/* ══════════ CALENDAR ══════════ */}
@@ -4368,10 +4368,10 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
               {/* Day number — muted for overflow days */}
               <span className="finance-calendar-day-number" style={{ fontSize: 11, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--gold)' : cur ? 'var(--muted)' : 'rgba(136,136,132,0.55)', marginBottom: 3, display: 'block' }}>{day}</span>
               {/* Budgeted transaction pills (gold/red) — slightly muted when actuals are layered */}
-              {hasTxns && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: showActualPills ? 0 : 1 }}>
-                  {sortAndFilterTransactions(visiblePlans).map((tx, j) => (
-                    <div className="finance-calendar-event" key={j}
+              <div style={{display:'flex',flexDirection:'column',gap:2,flex:1}}>
+                {sortAndFilterTransactions([...visiblePlans.map(tx=>({...tx,forecastSource:'plan'})),...(showActualPills?dayActuals.map(tx=>({...tx,forecastSource:'actual'})):[])]).map(tx=>{
+                  if(tx.forecastSource==='plan')return (
+                    <div className="finance-calendar-event" key={`plan-${tx.id}`}
                       draggable={!readOnly}
                       onDragStart={e => { if (readOnly) return; e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tx.id); setDragTx({ tx:{ ...tx, _reviewVersion:captureFinanceReviewVersion() }, fromDate: key }) }}
                       onDragEnd={() => setDragTx(null)}
@@ -4389,18 +4389,11 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                         {realized.has(tx.id) ? '$0 remaining' : tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
                       </span>
                     </div>
-                  ))}
-
-                </div>
-              )}
-              {/* Actual (Plaid) transaction pills (teal/blue) */}
-              {showActualPills && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginTop: hasTxns ? 2 : 0 }}>
-                  {sortAndFilterTransactions(dayActuals).map((tx, j) => {
-                    const isIncome = tx.amount < 0 // Plaid: negative = credit
-                    const isTransfer = isTransferTransaction(tx)
-                    return (
-                      <div className="finance-calendar-event finance-calendar-event--actual" key={`a${j}`} style={{
+                  )
+                  const isIncome=tx.amount<0
+                  const isTransfer=isTransferTransaction(tx)
+                  return (
+                      <div className="finance-calendar-event finance-calendar-event--actual" key={`actual-${tx.id}`} style={{
                         fontSize: 9, lineHeight: '14px', padding: '1px 4px', borderRadius: 3,
                         background: isIncome ? 'rgba(100,180,140,0.22)' : 'rgba(100,140,220,0.22)',
                         color: isIncome ? '#7DCBA4' : '#90AADE',
@@ -4411,11 +4404,9 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                           {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
                         </span>
                       </div>
-                    )
-                  })}
-
-                </div>
-              )}
+                  )
+                })}
+              </div>
               {/* Reconstructed history takes priority for past dates. Future
                   dates remain read-only projections from the latest balance. */}
               {(pt || reconstructedBal !== undefined) && (

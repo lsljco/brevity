@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { fmtMoney } from './projection.js'
 import { bankBalanceMovement, cashForecastSourceSeverity } from './calendarSemantics.js'
 import { isTransferTransaction } from './reportingData.js'
-import { transactionDescription } from './transactionList.js'
+import { sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 
 export function CashForecastIntro({ monthName, showBankActivity, error, freshnessMessage, freshnessStatus, balanceMessage, balanceStatus, excludedAccountCount = 0, unmappedTransactionCount = 0, balanceSource = 'stored account balances', balanceVerifiedLive = false, todayPlanUnresolved = false }) {
   const sourceSeverity = cashForecastSourceSeverity({ error, freshnessStatus, balanceStatus, unmappedTransactionCount })
@@ -37,7 +37,7 @@ export default function CashForecastAgenda({
   const agendaRef = useRef(null)
   const pendingDetailFocusRef = useRef(false)
   const detailId = `cash-forecast-day-detail-${useId().replace(/:/g, '')}`
-  const orderRows=rows=>vendorOrder?[...rows].sort((a,b)=>String(a.vendorName||'Unassigned').localeCompare(String(b.vendorName||'Unassigned'))*(vendorOrder==='desc'?-1:1)):rows
+  const orderRows=rows=>vendorOrder?[...rows].sort((a,b)=>String(a.vendorName||'Unassigned').localeCompare(String(b.vendorName||'Unassigned'))*(vendorOrder==='desc'?-1:1)):sortAndFilterTransactions(rows)
   const days = cells
     .filter(cell => cell.cur)
     .map(cell => {

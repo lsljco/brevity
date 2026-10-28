@@ -33,3 +33,9 @@
 @container(max-width:480px){.scenario-summary,.scenario-projection-grid{grid-template-columns:minmax(0,1fr)}}
 
 .scenario-import{display:block;margin-top:20px}.scenario-import summary{cursor:pointer;color:var(--brevity-gold);font-weight:600}.scenario-import li{margin:8px 0}.scenario-tabs{max-height:330px;overflow:auto}.scenario-expense-controls[hidden]{display:none}
+
+.scenario-filters{margin-top:24px;max-width:640px}.scenario-filters button{flex:1;min-height:44px;font-size:13px}
+.scenario-tabs{grid-template-columns:minmax(0,1fr);margin-top:14px;max-height:420px}
+.scenario-choice{position:relative;min-width:0}.scenario-choice>[role=tab]{width:100%;padding-right:68px}
+.scenario-choice .scenario-star{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;min-height:44px;padding:0;text-align:center;font-size:27px;background:transparent;border:0;color:var(--brevity-gold)}
+.scenario-star:disabled{opacity:.45;cursor:not-allowed}.scenario-star:focus-visible{outline:2px solid var(--brevity-gold);outline-offset:2px}.scenario-filters button.is-active{background:var(--brevity-gold);color:#101513}
