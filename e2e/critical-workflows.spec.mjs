@@ -3592,6 +3592,7 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
    await openMenuIfMobile(page,testInfo)
    await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:screen,exact:true}).click();await closeMenuIfMobile(page,testInfo)
   }
+  if(screen==='Meetings')await page.locator('.fm-export-menu > summary').click()
   const toolbar=page.locator('.finance-export:visible').first();await expect(toolbar,screen).toBeVisible()
   await toolbar.getByLabel('Export format').selectOption('csv')
   const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
