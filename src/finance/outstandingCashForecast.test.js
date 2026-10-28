@@ -222,3 +222,24 @@ test('generic payroll match rejects ambiguity, transfers, variance, wrong accoun
   assert.equal(forecast([plan,{...plan,id:'second'}],[bank]).get(today).remainingDelta,16976)
   assert.equal(forecast([plan],[bank,{...bank,id:'second'}]).get(today).remainingDelta,8488)
 })
+
+test('named payroll contribution replaces the estimate once even with bank transfer wording and a variance',()=>{
+ const cash={...account,balance:744.01,plaidCurrentBalance:28.53,plaidAvailableBalance:744.01}
+ const plan={...hoa,id:'pay',name:"NS - United Women's Health Income",type:'income',amount:719.48,freq:'weekly'}
+ const credit={...actual,id:'pay-bank',name:'Pending: Telephone/OLB Transfer Credit from *111 to *222Nyla payroll',merchant_name:'Online Transfer',amount:-715.48,pending:true}
+ for(const row of [credit,{...credit,pending:false}]){
+  const result=forecast([plan],[row],[cash]);const point=result.get(today)
+  assert.equal(point.bal,744.01);assert.equal(point.remainingDelta,0)
+  assert.equal(point.realization[0].statuses[0].variance,-4)
+  assert.equal(result.get(date(7)).bal,1463.49,'next paycheck remains projected')
+ }
+ const superseded={...credit,id:'pay-posted',pending:false,pendingTransactionId:credit.id}
+ assert.equal(forecast([plan],[credit,superseded,superseded],[cash]).get(today).bal,744.01)
+})
+test('named payroll recognizes early arrival but rejects wrong contributor, account, large variance and ambiguous plans',()=>{
+ const plan={...hoa,id:'pay',name:"NS - United Women's Health Income",type:'income',amount:719.48,start:date(2)}
+ const bank={...actual,name:'Transfer from *111 to *222 Nylas Payroll',amount:-715.48}
+ assert.equal(forecast([plan],[bank]).get(date(2)).remainingDelta,0)
+ for(const row of [{...bank,name:'Transfer Terica payroll'},{...bank,accountId:'other'},{...bank,amount:-300},{...bank,name:'Nyla payroll reversal'}])assert.equal(forecast([plan],[row]).get(date(2)).remainingDelta,719.48)
+ assert.equal(forecast([plan,{...plan,id:'ambiguous'}],[bank]).get(date(2)).remainingDelta,1438.96)
+})

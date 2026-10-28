@@ -1859,7 +1859,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     const fresh = buildAutoReconciliationReport({scheduled:current.transactions,actuals:savedActuals,accounts:current.accounts})
     const rows = selected.map(row=>fresh.suggestions.find(candidate=>candidate.id===row.id && JSON.stringify(candidate.evidence)===JSON.stringify(row.evidence)))
     if (!rows.length || rows.length > RECONCILIATION_BATCH_LIMIT || rows.some(row=>!row)) throw new Error('The reconciliation report changed. Review the refreshed recommendations.')
-    return stageDirectFinanceReview({summary:`Reconcile ${rows.length} projected expenses with posted bank charges`,operations:rows.map(reconciliationOperation),storageKey:LS_KEY,expectedVersion:captureFinanceReviewVersion(),surfaceError:true})
+    return stageDirectFinanceReview({summary:`Reconcile ${rows.length} projected income and expenses with posted bank transactions`,operations:rows.map(reconciliationOperation),storageKey:LS_KEY,expectedVersion:captureFinanceReviewVersion(),surfaceError:true})
   }
 
   const reviewBudgetChange = ({ line, year, month, value }) => stageDirectFinanceReview({
@@ -4339,8 +4339,9 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
           const dayReconciliation = reconciliationByDate.get(key)
           const matchedRows = showActualPills ? (dayReconciliation?.rows || []).filter(row => row.state === 'matched') : []
-          const matchedPlanIds = new Set(matchedRows.map(row => row.expected.id))
-          const matchedActualIds = new Set(matchedRows.map(row => row.actual.id))
+          const realized = new Map((pt?.realization || []).filter(row=>row.delta===0&&row.statuses.length&&row.statuses.every(s=>s.status!=='expected')).map(row=>[row.id,row]))
+          const matchedPlanIds = new Set([...matchedRows.map(row => row.expected.id),...Array.from(realized).filter(([,row])=>showActualPills&&row.statuses.every(s=>dayActuals.some(a=>a.id===s.actualId))).map(([id])=>id)])
+          const matchedActualIds = new Set([...matchedRows.map(row => row.actual.id),...Array.from(realized.values()).flatMap(row=>row.statuses.map(s=>s.actualId))])
           const approvedActualIds = new Set(matchedRows.filter(row=>row.approved).map(row=>row.actual.id))
           const visiblePlans = (pt?.txns || []).filter(tx => !matchedPlanIds.has(tx.id))
           return (
@@ -4383,9 +4384,9 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                         overflow: 'hidden', cursor: readOnly ? 'default' : 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
-                      <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{transactionDescription(tx)}</span>
+                      <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{realized.has(tx.id) ? 'Matched · ' : ''}{transactionDescription(tx)}</span>
                       <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                        {tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
+                        {realized.has(tx.id) ? '$0 remaining' : tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
                       </span>
                     </div>
                   ))}
@@ -4405,7 +4406,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                         color: isIncome ? '#7DCBA4' : '#90AADE',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, overflow: 'hidden',
                       }}>
-                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{approvedActualIds.has(tx.id) ? '✓ Reconciled · ' : matchedActualIds.has(tx.id) ? '✓ Budget matched · ' : isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
+                        <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{approvedActualIds.has(tx.id) ? '✓ Reconciled · ' : matchedActualIds.has(tx.id) ? (tx.pending ? 'Pending · matched · ' : '✓ Included in balance · ') : isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
                         <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600 }}>
                           {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
                         </span>

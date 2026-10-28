@@ -1,6 +1,7 @@
+import {incomeSourceMatches} from './cashSourceIdentity.js'
 import { addDays, parseISODate, toISO, txOccursOnDate } from './projection.js'
 import { normalizeMerchantName } from './financialTruth.js'
-import { isTransferTransaction, transactionDirection } from './reportingData.js'
+import { isTransferTransaction } from './reportingData.js'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
 import { getHouseholdDateKey } from './financeTime.js'
 
@@ -10,6 +11,7 @@ const bankName = actual => String(actual?.originalStatement || actual?.name || a
 const ignored = new Set(['bank','draft','electric','utility','utilities','bill','debit','credit','card','ach','the','emc'])
 function vendorMatches(plan, actual) {
   if (plan.vendorId && actual.vendorId) return plan.vendorId === actual.vendorId
+  if (plan.type === 'income') return incomeSourceMatches(plan,actual)
   const left = normalizeMerchantName(plan), right = normalizeMerchantName(actual)
   if (!left || !right) return false
   if (left === right) return true
@@ -26,7 +28,7 @@ export function normalizeReconciliationEvidence(value) {
   if (Object.keys(value).some(key => !keys.includes(key))) throw new Error('Unsupported reconciliation evidence.')
   for (const key of ['actualId','bankAccountId','bankName']) if (typeof value[key] !== 'string' || !value[key].trim() || value[key].length > 1000) throw new Error('Invalid reconciliation bank identity.')
   for (const key of ['postedDate','originalDate']) if (!parseISODate(value[key])) throw new Error('Invalid reconciliation date.')
-  for (const key of ['actualAmount','budgetAmount']) if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] <= 0) throw new Error('Invalid reconciliation amount.')
+  for (const key of ['actualAmount','budgetAmount']) if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || (key === 'actualAmount' ? value[key] === 0 : value[key] <= 0)) throw new Error('Invalid reconciliation amount.')
   return Object.fromEntries(keys.map(key => [key,value[key]]))
 }
 export function approvedReconciliationMatches(plan, actual, date, accountMap) {
@@ -44,14 +46,13 @@ export function buildAutoReconciliationReport({ scheduled = [], actuals = [], ac
   const from = toISO(addDays(end,-lookbackDays)), accountMap = buildUniquePlaidAccountMap(accounts)
   const approvedIds = new Set(scheduled.flatMap(plan => actuals.filter(actual => approvedReconciliationMatches(plan,actual,actual.date,accountMap)).map(actual => actual.id)))
   const bank = actuals.filter(actual => actual.id && actual.date >= from && actual.date <= today && parseISODate(actual.date)
-    && !actual.pending && !isTransferTransaction(actual) && transactionDirection(actual) === 'expense'
-    && Number(actual.amount) > 0 && accountMap[actual.accountId] && !approvedIds.has(actual.id))
+    && !actual.pending && Number.isFinite(Number(actual.amount)) && Number(actual.amount) !== 0 && accountMap[actual.accountId] && !approvedIds.has(actual.id))
   const candidates = []
   for (const actual of bank) {
     const posting = parseISODate(actual.date)
     for (const plan of scheduled) {
-      if (plan.type !== 'expense' || plan.acct !== accountMap[actual.accountId] || plan.reconciliation || !vendorMatches(plan,actual)) continue
-      const variance = cents(actual.amount) - cents(plan.amount)
+      if (!['expense','income'].includes(plan.type) || (plan.type === 'income' ? Number(actual.amount)>=0 : Number(actual.amount)<=0 || isTransferTransaction(actual)) || plan.acct !== accountMap[actual.accountId] || plan.reconciliation || !vendorMatches(plan,actual)) continue
+      const variance = Math.abs(cents(actual.amount)) - cents(plan.amount)
       // Roughly equal: within 2%, capped at $25, with a $2 minimum tolerance.
       const tolerance = Math.max(200, Math.min(2500, Math.round(cents(plan.amount) * .02)))
       if (!Number.isFinite(variance) || Number(plan.amount) <= 0 || Math.abs(variance) > tolerance) continue
@@ -76,6 +77,6 @@ export function buildAutoReconciliationReport({ scheduled = [], actuals = [], ac
 export function reconciliationOperation(row) {
   return { type:'recurring.update', targetId:row.plan.id, targetDate:row.occurrenceDate,
     allowedScopes:['this-item'], defaultScope:'this-item',
-    description:`Reconcile ${row.plan.name}: budget $${Number(row.plan.amount).toFixed(2)} on ${row.occurrenceDate}; posted $${Number(row.actual.amount).toFixed(2)} on ${row.actual.date}; difference $${row.amountVariance.toFixed(2)}. Move only this occurrence to ${row.actual.date}, retain its budget amount, and link the posted charge. Future payments stay unchanged.`,
+    description:`Reconcile ${row.plan.name}: budget $${Number(row.plan.amount).toFixed(2)} on ${row.occurrenceDate}; posted $${Math.abs(Number(row.actual.amount)).toFixed(2)} on ${row.actual.date}; difference $${row.amountVariance.toFixed(2)}. Move only this occurrence to ${row.actual.date}, retain its budget amount, and link the bank transaction. Future occurrences stay unchanged.`,
     payload:{date:row.actual.date,reconciliation:row.evidence} }
 }

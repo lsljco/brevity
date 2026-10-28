@@ -1349,7 +1349,7 @@ test('Finance reconciliation recommends matches and opens approval without mutat
   await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
   const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Sawnee')
-  await expect(review).toContainText('Future payments stay unchanged')
+  await expect(review).toContainText('Future occurrences stay unchanged')
   await expect(review).toContainText('$1,204.00'.replace(',',''))
   expect(prepared.expectedVersion).toBe(7)
   expect(prepared.operations).toHaveLength(1)
@@ -3787,4 +3787,23 @@ test('Cash Forecast redesigned meetings audit all cadence layouts exports and co
  }
  await packet.getByText('+ Add commitment',{exact:true}).click();await packet.getByPlaceholder('What did we decide?').fill('Review utility payment timing');await packet.getByLabel('New commitment owner').selectOption('Larry');await packet.getByLabel('Assignment due date').fill('2026-11-01')
  await packet.locator('.fm-form-grid').getByRole('button',{name:'Review commitment',exact:true}).click();await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toContainText('Review utility payment timing')
+})
+
+test('Cash Forecast counts a named payroll contribution once and retains the next paycheck',async({page},testInfo)=>{
+ const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+ finance.accounts[0].balance=744.01;finance.accounts[0].plaidCurrentBalance=28.53;finance.accounts[0].plaidAvailableBalance=744.01
+ finance.transactions=[{id:'payroll-test',name:"NS - United Women's Health Income",type:'income',amount:719.48,acct:'a1',freq:'weekly',start:dateKey()}]
+ records.lslj_finance_v9.value=JSON.stringify(finance)
+ records.plaid_actuals_cache.value=JSON.stringify([{id:'payroll-bank',accountId:'plaid-operating',name:'Pending: Telephone/OLB Transfer Credit from *111 to *222Nyla payroll',merchant_name:'Online Transfer',amount:-715.48,date:dateKey(),pending:true}])
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByText('Projection details & forecast help',{exact:true}).click()
+ const summary=page.getByRole('region',{name:'Current and projected cash'})
+ await expect(summary).toContainText('$744.01');await expect(summary).not.toContainText('$1,463.49')
+ await summary.getByText('What is included in today’s projection?',{exact:true}).click()
+ await expect(summary).toContainText('pending — counted once');await expect(summary).toContainText('−$4.00')
+ const cell=page.locator(`[data-date="${dateKey()}"]`)
+ await expect(cell).toContainText('$744.01')
+ await page.screenshot({path:testInfo.outputPath('payroll-once.png')})
 })
