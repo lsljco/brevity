@@ -1,3 +1,4 @@
+import {incomeSourceMatches,withinCashMatchTolerance} from './cashSourceIdentity.js'
 import {applyBudgetAllowances} from './budgetAllowances.js'
 import { buildProjection, today0, toISO, parseISODate, addDays } from './projection.js'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
@@ -7,16 +8,6 @@ import { approvedReconciliationMatches } from './autoReconciliation.js'
 const cents = value => Math.round(Number(value || 0) * 100)
 const dayNumber = date => Date.parse(`${date}T12:00:00Z`) / 86400000
 const genericIncomeWords = new Set(['income','payroll','severance','salary','deposit','transfer','payment','credit','debit','funds','direct','bank','checking','savings','account','pending','telephone','online','monthly','weekly','family','household','larry','lorenzo','terica','nyla','javin','isaiah'])
-function sameIncomeSource(plan, actual) {
-  const words = normalizeMerchantName(plan).split(' ').filter(word => word.length >= 4 && !genericIncomeWords.has(word) && !/\d/.test(word))
-  if (!words.length) return false
-  return [actual.name,actual.merchant_name,actual.originalStatement,actual.original_description].filter(Boolean).some(name => {
-    const tokens = normalizeMerchantName({name}).split(' ')
-    const phrases = new Set(tokens.flatMap((word,index) => [word,tokens.slice(index,index+2).join(''),tokens.slice(index,index+3).join('')]))
-    return words.every(word => phrases.has(word))
-  })
-}
-
 // Generic household labels can lack an employer name. Only an exact same-day
 // payroll credit is eligible; the one-to-one edge check below rejects ambiguity.
 function genericPayrollMatch(plan, actual) {
@@ -66,11 +57,12 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     if (exactDate ? candidate.date !== actual.date : Math.abs(dayNumber(candidate.date) - dayNumber(actual.date)) > 7) return false
     if (Math.sign(candidate.leg.amount) !== Math.sign(cents(actual.amount))) return false
     // A unique same-day source identity can reconcile a different posted amount.
-    if (!exactDate && candidate.leg.amount !== cents(actual.amount)) return false
+    const payrollIdentity=incomeSourceMatches(candidate.plan,actual)&&withinCashMatchTolerance(candidate.plan,actual)
+    if (!exactDate && candidate.leg.amount !== cents(actual.amount) && !payrollIdentity) return false
     if (candidate.plan.vendorId && actual.vendorId) return candidate.plan.vendorId === actual.vendorId
     if (exactDate && candidate.leg.amount === cents(actual.amount) && genericPayrollMatch(candidate.plan, actual)) return true
     const name = normalizeMerchantName(candidate.plan)
-    return Boolean(name && (name === normalizeMerchantName(actual) || (exactDate && candidate.plan.type === 'income' && sameIncomeSource(candidate.plan,actual))))
+    return Boolean(name && (name === normalizeMerchantName(actual) || payrollIdentity || (exactDate&&incomeSourceMatches(candidate.plan,actual,{allowContributor:false}))))
   }
   for (const exactDate of [true, false]) {
     const edges = candidates.filter(candidate => !assigned.has(candidate.key)).flatMap(candidate => bank.filter(actual => !used.has(actual.id) && matches(candidate, actual, exactDate)).map(actual => ({ candidate, actual })))
@@ -119,7 +111,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
         // Pending rows are already applied above if a posted-ledger anchor exists.
         // Otherwise available/stored balance may already include the hold.
         if (!reconcile || !actual) delta -= leg.amount
-        return actual ? { status:actual.pending ? 'pending' : 'posted', actualId:actual.id, actualAmount:Number(actual.amount), plannedAmount:leg.amount / 100 } : { status:'expected' }
+        return actual ? { status:actual.pending ? 'pending' : 'posted', actualId:actual.id, actualAmount:Number(actual.amount), plannedAmount:leg.amount / 100, variance:(Math.abs(cents(actual.amount))-Math.abs(leg.amount))/100 } : { status:'expected' }
       })
       remaining += delta
       return { id:plan.id, name:plan.name, delta:delta / 100, statuses }

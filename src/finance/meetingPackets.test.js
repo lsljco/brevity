@@ -79,3 +79,15 @@ test('approved schedule reconciliation marks paid evidence without inferring pay
   const p=buildMeetingPacket({...options,actuals:[actual],scheduled})
   assert.equal(p.payables[0].status,'Reconciled to posted charge')
 })
+
+test('meeting packet and brief exclude matched cash arrivals and payments from remaining forecasts',async()=>{
+ const {meetingBrief}=await import('./meetingBrief.js')
+ const date='2026-10-28'
+ const cash={...accounts[0],balance:744.01,plaidCurrentBalance:28.53,plaidAvailableBalance:744.01,plaidType:'depository',plaidSubtype:'checking'}
+ const scheduled=[{id:'pay',name:"NS - United Women's Health Income",type:'income',amount:719.48,acct:'cash',freq:'once',start:date},{id:'bill',name:'Utility bill',type:'expense',amount:50,acct:'cash',freq:'once',start:date}]
+ const actuals=[bank('pay',date,-715.48,{name:'Nyla payroll',pending:true}),bank('bill',date,50,{name:'Utility bill'})]
+ const p=buildMeetingPacket({...options,now:new Date(date+'T14:00:00Z'),accounts:[cash],scheduled,actuals,cadence:'daily'})
+ assert.equal(p.projectedInflows[0].amount,0);assert.equal(p.projectedInflows[0].plannedAmount,719.48)
+ assert.equal(p.payables[0].amount,0);assert.equal(p.payables[0].plannedAmount,50)
+ assert.equal(meetingBrief(p).metrics[2][1],744.01)
+})

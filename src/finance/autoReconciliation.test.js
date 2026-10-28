@@ -76,3 +76,19 @@ test('reconciliation cannot change the series or silently replace the budget',()
  const operation=reconciliationOperation(report().suggestions[0])
  for(const change of [{allowedScopes:['this-and-future']},{payload:{...operation.payload,amount:1210}},{payload:{...operation.payload,date:'2026-10-02'}}])assert.throws(()=>normalizeActionProposal({operations:[{...operation,...change}]},session),/Reconciliation must/)
 })
+
+test('income reconciliation retains signed bank evidence and settles only the reviewed occurrence',async()=>{
+ const pay={...plan,id:'pay',name:"NS - United Women's Health Income",type:'income',amount:719.48}
+ const credit={...bank,id:'credit',name:'OLB Transfer Nyla payroll',amount:-715.48}
+ const suggestions=report({scheduled:[pay],actuals:[credit]}).suggestions
+ assert.equal(suggestions.length,1);assert.equal(suggestions[0].amountVariance,-4)
+ let saved={transactions:[pay],accounts:[account]}
+ const resources={async read(key){return{value:key==='shared:plaid_actuals_cache'?[credit]:structuredClone(saved),version:3}},async write(key,value){saved=value;return{value,version:4}}}
+ const proposal=await prepareDirectProposal({input:{summary:'Link payroll receipt',expectedVersion:3,operations:suggestions.map(reconciliationOperation)},session,permissions,repository:{saveProposal:async()=>{}},resources,now:now(),id:'income-reconciliation'})
+ await executeRecordOperations({proposal,session,permissions,resources,now})
+ const linked=saved.transactions.find(t=>t.reconciliation)
+ assert.equal(linked.reconciliation.actualAmount,-715.48)
+ assert.equal(linked.amount,719.48)
+ assert.equal(report({scheduled:saved.transactions,actuals:[credit]}).suggestions.length,0)
+ assert.equal(saved.transactions.filter(t=>txOccursOnDate(t,new Date('2026-11-02T12:00:00'))).length,1)
+})

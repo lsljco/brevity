@@ -1,3 +1,4 @@
+import {buildOutstandingCashForecast} from './outstandingCashForecast.js'
 import {buildSpendingAccountability} from './spendingAccountability.js'
 import {getHouseholdCalendarDate, getHouseholdDateKey} from './financeTime.js'
 import {toISO, addDays, parseISODate} from './projection.js'
@@ -122,8 +123,11 @@ export function buildMeetingPacket({cadence='daily',mode='current',now=new Date(
   const horizonDays=cadence==='daily'?1:cadence==='weekly'?6:cadence==='monthly'?29:89
   const horizon=range(parseISODate(asOf),addDays(parseISODate(asOf),horizonDays))
   const accountMap=Object.fromEntries(links)
-  const projectedInflows=scheduled.filter(t=>t.type==='income'&&!isTransferTransaction(t)&&validNumber(t.amount)).flatMap(t=>transactionOccurrencesForRange(t,horizon).map(o=>({id:`${t.id}:${o.date}`,title:labelOf(t),date:o.date,amount:o.amount,owner:t.owner||'Larry Jenkins',status:'Projected · receipt unconfirmed'}))).sort((a,b)=>a.date.localeCompare(b.date))
-  const payables=scheduled.filter(t=>t.type==='expense'&&!isTransferTransaction(t)&&validNumber(t.amount)).flatMap(t=>transactionOccurrencesForRange(t,horizon).map(o=>({id:`${t.id}:${o.date}`,title:labelOf(t),account:t.acct,date:o.date,amount:o.amount,owner:t.owner||'Larry Jenkins',status:actuals.some(a=>approvedReconciliationMatches(t,a,o.date,accountMap))?'Reconciled to posted charge':'Projected · payment unconfirmed'}))).sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title))
+  const cashForecast=buildOutstandingCashForecast(cash,scheduled,actuals,{today:asOf,days:horizonDays,pastDays:7,reconcile:true})
+  const remaining=(t,date)=>cashForecast.get(date)?.realization?.find(row=>row.id===t.id)
+  const remainingAmount=(t,o)=>{const row=remaining(t,o.date);return row?Math.abs(row.delta):o.amount}
+  const projectedInflows=scheduled.filter(t=>t.type==='income'&&!isTransferTransaction(t)&&validNumber(t.amount)).flatMap(t=>transactionOccurrencesForRange(t,horizon).map(o=>({id:`${t.id}:${o.date}`,title:labelOf(t),date:o.date,amount:remainingAmount(t,o),plannedAmount:o.amount,owner:t.owner||'Larry Jenkins',status:remaining(t,o.date)?.statuses.some(s=>s.status!=='expected')?'Matched bank activity · no additional forecast impact':'Projected · receipt unconfirmed'}))).sort((a,b)=>a.date.localeCompare(b.date))
+  const payables=scheduled.filter(t=>t.type==='expense'&&!isTransferTransaction(t)&&validNumber(t.amount)).flatMap(t=>transactionOccurrencesForRange(t,horizon).map(o=>({id:`${t.id}:${o.date}`,title:labelOf(t),account:t.acct,date:o.date,amount:remainingAmount(t,o),plannedAmount:o.amount,owner:t.owner||'Larry Jenkins',status:remaining(t,o.date)?.statuses.some(s=>s.status!=='expected')?'Matched bank activity · no additional forecast impact':actuals.some(a=>approvedReconciliationMatches(t,a,o.date,accountMap))?'Reconciled to posted charge':'Projected · payment unconfirmed'}))).sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title))
   const openActions=actions.filter(a=>!['done','complete','cancelled','dismissed'].includes(a.status)).map(a=>({...a,overdue:Boolean(a.due&&a.due<asOf),missingOwner:!a.owner,missingDeadline:!a.due}))
   const categoryBudget=budgetReport({scheduled,budget,accounts,period,posted,legacyYear:budgetLegacyYear,legacyAccountId:budgetLegacyAccountId})
   const warnings=[]
