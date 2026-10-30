@@ -1377,3 +1377,12 @@ test('categorize with a merchant rule reviews both versions, executes together, 
  await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),/transaction changed/)
  assert.throws(()=>normalizeActionProposal({...input,operations:[input.operations[0],{...input.operations[1],payload:{...input.operations[1].payload,category:'Other'}}]},session),/one Brevity record group/)
 })
+test('a full year of category budgets retains every reviewed month',()=>{
+ const operations=Array.from({length:12},(_,month)=>{const lineId=`a|2026-${String(month+1).padStart(2,'0')}|dining out`;return {type:'budget.update',targetId:lineId,payload:{lineId,accountId:'a',category:'Dining Out',categoryLimit:true,direction:'expense',year:2026,month,value:500,forecastAllocation:100}}})
+ const proposal=normalizeActionProposal({operations},{member:'Larry',role:'admin'})
+ assert.equal(proposal.operations.length,12)
+ let budget={};for(const op of proposal.operations)budget=applyRecordOperation(budget,op).after
+ assert.equal(Object.keys(budget.categoryLimits).length,12)
+ assert.equal(budget.categoryLimits['a|2026-12|dining out'].amount,500)
+ assert.throws(()=>normalizeActionProposal({operations:[...operations,operations[0]]},{member:'Larry',role:'admin'}),/twelve category/)
+})
