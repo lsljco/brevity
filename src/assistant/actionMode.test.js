@@ -1,3 +1,4 @@
+import {categoryBudgetOperation} from '../finance/categoryBudgets.js'
 import {voiceReviewText,assertVoiceApproval} from './voiceActionReview.js'
 import {resolvedRecipes,searchMealRecords,bindRecipeOperation} from '../../netlify/lib/recipe-library-actions.mjs'
 import assert from 'node:assert/strict'
@@ -1378,7 +1379,7 @@ test('categorize with a merchant rule reviews both versions, executes together, 
  assert.throws(()=>normalizeActionProposal({...input,operations:[input.operations[0],{...input.operations[1],payload:{...input.operations[1].payload,category:'Other'}}]},session),/one Brevity record group/)
 })
 test('a full year of category budgets retains every reviewed month',()=>{
- const operations=Array.from({length:12},(_,month)=>{const lineId=`a|2026-${String(month+1).padStart(2,'0')}|dining out`;return {type:'budget.update',targetId:lineId,payload:{lineId,accountId:'a',category:'Dining Out',categoryLimit:true,direction:'expense',year:2026,month,value:500,forecastAllocation:100}}})
+ const operations=Array.from({length:12},(_,month)=>categoryBudgetOperation({accountId:'a',month:`2026-${String(month+1).padStart(2,'0')}`,category:'Dining Out',amount:500,forecastAllocation:100}))
  const proposal=normalizeActionProposal({operations},{member:'Larry',role:'admin'})
  assert.equal(proposal.operations.length,12)
  let budget={};for(const op of proposal.operations)budget=applyRecordOperation(budget,op).after

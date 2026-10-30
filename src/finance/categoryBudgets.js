@@ -5,7 +5,8 @@ import {buildUniquePlaidAccountMap} from './calendarSemantics.js'
 import {buildAutoReconciliationReport,approvedReconciliationMatches} from './autoReconciliation.js'
 export const categoryBudgetKey=(accountId,month,category)=>`${accountId}|${month}|${category.trim().toLowerCase()}`
 export function categoryBudgetOperation({accountId,month,category,amount,forecastAllocation=0}) {
- const lineId=categoryBudgetKey(accountId,month,category)
+ let hash=2166136261;for(const character of categoryBudgetKey(accountId,month,category)){hash^=character.codePointAt(0);hash=Math.imul(hash,16777619)}
+ const lineId=`category-budget:${(hash>>>0).toString(36)}`
  return {type:'budget.update',targetId:lineId,description:`Set ${category} budget to $${amount} and total forecast allocation to $${forecastAllocation} for ${month}.`,payload:{lineId,accountId,category,categoryLimit:true,direction:'expense',lineName:category,year:Number(month.slice(0,4)),month:Number(month.slice(5,7))-1,value:Number(amount),forecastAllocation:Number(forecastAllocation)}}
 }
 export function buildCategoryBudgetSummary({accounts=[],scheduled=[],actuals=[],budget={},month,legacyYear,legacyAccountId}) {
