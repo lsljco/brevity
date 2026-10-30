@@ -3378,6 +3378,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             setTimeout(() => setView('tx-form'), 50)
           } : undefined}
           onApplyDebtPayment={reviewDebtPayment}
+          onCreateDebt={reviewDebtChange}
           onClose={() => setSelActualTx(null)}
         /></Suspense>
       )}

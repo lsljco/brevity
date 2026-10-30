@@ -56,3 +56,33 @@ test('a complete monthly net-cash-flow bridge reconciles favorable and unfavorab
  assert.equal(m.bridge.target,900);assert.equal(m.bridge.actual,800);assert.equal(m.bridge.gap,100)
  assert.equal(m.bridge.income+m.bridge.unbudgeted+m.bridge.budgetedVariance+m.bridge.otherInflows+m.bridge.unexplained,m.bridge.gap)
 })
+
+test('Prosper projection keeps its allocation when unrelated debt spending occurs earlier',()=>{
+ const prosper={id:'prosper',acct:'a',name:'LJ Prosper Loan Payment',cat:'Debt',type:'expense',amount:904.03,freq:'once',start:'2026-10-05'}
+ const other={...prosper,id:'other',name:'Other obligation',amount:282,start:'2026-10-20'}
+ const result=build({budget:{},scheduled:[prosper,other],actuals:[tx('early','2026-10-01',593,'Debt'),tx('prosper-bank','2026-10-05',904.03,'Debt',{name:'Prosper Marketplace'})]})
+ assert.equal(result.rows[1].classification,'planned')
+ assert.equal(result.rows[1].matchedPlanId,'prosper')
+ assert.equal(result.rows[1].exceptionAmount,0)
+ assert.equal(result.rows[0].exceptionAmount,311)
+ assert.equal(result.totals.over,311)
+ assert.equal(result.postedSpending,1497.03)
+})
+test('changed merchant amount remains matched and only the uncovered variance is over budget',()=>{
+ const prosper={id:'prosper',acct:'a',name:'LJ Prosper Loan Payment',cat:'Debt',type:'expense',amount:904.03,freq:'once',start:'2026-10-05'}
+ for(const amount of [850,1000]) {
+  const result=build({budget:{},scheduled:[prosper],actuals:[tx('posted','2026-10-07',amount,'Other',{name:'Prosper Marketplace'})]})
+  assert.equal(result.rows[0].matchedPlanId,'prosper')
+  assert.equal(result.rows[0].category,'Debt')
+  assert.equal(result.rows[0].classification,amount<904.03?'planned':'over')
+  assert.equal(result.rows[0].exceptionAmount,amount<904.03?0:95.97)
+ }
+})
+test('duplicate payments and unrelated vendors cannot silently settle one projection',()=>{
+ const prosper={id:'prosper',acct:'a',name:'LJ Prosper Loan Payment',cat:'Debt',type:'expense',amount:904.03,freq:'once',start:'2026-10-05'}
+ const posted=tx('posted','2026-10-05',904.03,'Debt',{name:'Prosper Marketplace'})
+ for(const actuals of [[posted,{...posted,id:'duplicate'}],[{...posted,accountId:'different'}],[{...posted,name:'Other Loan Payment'}],[{...posted,pending:true}]]) {
+  const result=build({budget:{},scheduled:[prosper],actuals})
+  assert.ok([...result.rows,...result.pending].every(row=>!row.matchedPlanId))
+ }
+})

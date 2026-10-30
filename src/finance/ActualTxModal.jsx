@@ -1,5 +1,5 @@
 import VendorSelector from './VendorSelector.jsx'
-import { useEffect, useId, useState, useRef } from 'react'
+import { useEffect, useId, useState, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_TRANSACTION_CATEGORIES, loadStoredCategoryOptions, mergeCategoryOptions, saveStoredCategoryOptions, transactionCategories } from './categoryData.js'
 import { filterTypeaheadOptions } from './typeahead.js'
@@ -354,8 +354,10 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
   )
 }
 
+const DebtWorkspace = lazy(()=>import('./DebtWorkspace.jsx'))
+
 // ── Main ActualTxModal ────────────────────────────────────────────────────────
-export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onClose }) {
+export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onCreateDebt, onClose }) {
   const [form, setForm] = useState({
     name:              tx.name || '',
     amount:            String(Math.abs(tx.amount || 0)),
@@ -370,6 +372,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
   const [attachments, setAttachments]         = useState(tx.attachments || [])
   const [storedCategories, setStoredCategories] = useState(() => loadStoredCategoryOptions(localStorage))
   const [ruleQuestion, setRuleQuestion] = useState('')
+  const [addingDebt, setAddingDebt] = useState(false)
   const [debtId, setDebtId] = useState('')
   const [nonPrincipalAmount, setNonPrincipalAmount] = useState('0')
   const [saveDebtRule, setSaveDebtRule] = useState(false)
@@ -567,6 +570,9 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
                 <option value="">Choose a debt…</option>
                 {activeDebts.map(debt=><option key={debt.id} value={debt.id}>{debt.creditor} · ${Number(debt.currentBalance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>)}
               </select>
+              {onCreateDebt&&<button type="button" onClick={()=>setAddingDebt(true)} style={{...inputStyle,cursor:'pointer'}}>Add debt</button>}
+              {addingDebt&&<Suspense fallback={<p>Loading debt form…</p>}><DebtWorkspace formOnly initialDebt={{creditor:tx.merchant_name||tx.name||'',minimumPayment:String(Math.abs(Number(tx.amount)||0)),paymentMatchText:tx.merchant_name||tx.name||''}} onCancel={()=>setAddingDebt(false)} onReview={async change=>{const prepared=await onCreateDebt(change);if(prepared===false)throw new Error('Debt review could not be prepared.');setAddingDebt(false);onClose()}}/></Suspense>}
+              {onCreateDebt&&<span style={{fontSize:11,color:'#B8B7B1'}}>Missing a debt? Add its confirmed balance and interest details, approve the review, then reopen this transaction and select the debt to apply this payment.</span>}
               {selectedDebt&&<><label style={{...labelStyle,marginTop:8}}>Escrow, fees, or other non-principal amount</label><input aria-label="Escrow fees or other non-principal amount" type="number" min="0" max={Math.abs(Number(tx.amount)||0)} step="0.01" value={nonPrincipalAmount} onChange={event=>setNonPrincipalAmount(event.target.value)} style={inputStyle}/></>}
               {selectedDebt&&<label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:11,lineHeight:1.45,color:'#B8B7B1'}}><input aria-label="Save as a debt payment rule" type="checkbox" checked={saveDebtRule} onChange={event=>setSaveDebtRule(event.target.checked)} style={{marginTop:2}}/><span><b style={{display:'block',color:'#F7F6F2'}}>Save as a debt payment rule</b>Future matching posted payments will preselect {selectedDebt.creditor} and use this non-principal amount.</span></label>}
               {selectedDebt&&saveDebtRule&&<div style={{display:'grid',gap:8,padding:10,borderRadius:10,background:'rgba(255,255,255,.035)'}}><label style={labelStyle}>Match text</label><input aria-label="Debt rule match text" value={debtRuleMatchText} onChange={event=>setDebtRuleMatchText(event.target.value)} style={inputStyle}/><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><select aria-label="Debt rule match field" value={debtRuleMatchField} onChange={event=>setDebtRuleMatchField(event.target.value)} style={inputStyle}><option value="originalStatement">Original statement</option><option value="merchantName">Merchant name</option></select><select aria-label="Debt rule match mode" value={debtRuleMatchMode} onChange={event=>setDebtRuleMatchMode(event.target.value)} style={inputStyle}><option value="contains">Contains</option><option value="starts">Starts with</option><option value="exactly">Exactly matches</option></select></div><span style={{fontSize:10,color:'#888884'}}>Limited to {localAcct?.name||'this linked account'}. A matched payment still requires Action Mode review before its balance is changed.</span></div>}
