@@ -53,6 +53,8 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
   for(const actual of raw.filter(t=>!t.pending)) {
     const match=matches.get(actual.id)
     if(!match||match.plan.type!=='expense'||match.occurrenceDate.slice(0,7)!==actual.date.slice(0,7))continue
+    const assigned=assignedBudgetLine(actual,lines,links)
+    if(assigned&&!assigned.transactions?.some(plan=>plan.id===match.plan.id))continue
     const month=actual.date.slice(0,7),lineKey=`${match.plan.id}|${month}`
     const category=spendingCategory(match.plan),key=`${links[actual.accountId]}|${month}|${category}`
     const available=Math.max(0,(lineTargets.get(lineKey)||0)-(lineUsed.get(lineKey)||0))

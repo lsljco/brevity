@@ -86,3 +86,13 @@ test('duplicate payments and unrelated vendors cannot silently settle one projec
   assert.ok([...result.rows,...result.pending].every(row=>!row.matchedPlanId))
  }
 })
+
+
+test('a reviewed budget-line assignment takes precedence over an inferred merchant match',()=>{
+ const merchant={...plan,name:'Prosper',amount:100,cat:'Debt'}
+ const assigned={...plan,id:'assigned',name:'Reviewed household allowance',cat:'Household',amount:100}
+ const result=build({budget:{},scheduled:[merchant,assigned],actuals:[tx('posted','2026-10-01',90,'Debt',{name:'Prosper',budgetLineId:'a:assigned'})]})
+ assert.equal(result.rows[0].category,'Household')
+ assert.equal(result.rows[0].matchedPlanId,null)
+ assert.equal(result.rows[0].exceptionAmount,0)
+})
