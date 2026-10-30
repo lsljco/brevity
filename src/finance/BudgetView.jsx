@@ -186,7 +186,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
             const budgeted = catBudgeted(cat)
             const actual   = catActual(cat)
             const pct      = budgeted > 0 ? Math.min((actual / budgeted) * 100, 100) : actual > 0 ? 100 : 0
-            const over     = actual > budgeted
+            const over     = cat!=='Uncategorized' && actual > budgeted
             const unallocated = actualAllocation.unallocatedByCategory[cat] || 0
             const isOpen   = expanded[cat] !== false
             return (
@@ -200,7 +200,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
                     <div style={{ width: 120, height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: over ? 'var(--expense-color)' : pct > 80 ? '#fbbf24' : 'var(--gold)', borderRadius: 99, transition: 'width 0.4s' }} />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: over ? 'var(--expense-color)' : 'var(--muted)', minWidth: 60, textAlign: 'right' }}>{budgeted > 0 ? `${Math.round(pct)}%` : actual > 0 ? 'Unbudgeted' : '—'}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: over ? 'var(--expense-color)' : 'var(--muted)', minWidth: 60, textAlign: 'right' }}>{cat==='Uncategorized'?'Needs category':budgeted > 0 ? `${Math.round(pct)}%` : actual > 0 ? 'Unbudgeted' : '—'}</span>
                     <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 80, textAlign: 'right' }}>Actual {fmtMoney(actual)} / Budget {fmtMoney(budgeted)}</span>
                   </div>
                 </div>
