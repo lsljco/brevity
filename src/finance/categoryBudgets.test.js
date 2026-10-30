@@ -10,7 +10,7 @@ const accounts=[{id:'a',name:'Operating',plaidAccountId:'bank',type:'checking',p
 const month='2026-10'
 const scheduled=[{id:'dining',acct:'a',name:'Dinner Club',cat:'Dining Out',type:'expense',amount:100,freq:'once',start:'2026-10-20'}]
 const make=(amount=500,allocation=0,old={})=>applyBudgetTarget(old,categoryBudgetOperation({accountId:'a',month,category:'Dining Out',amount,forecastAllocation:allocation}).payload,{changedAt:'2026-09-20T00:00:00Z'})
-const summarize=(budget,actuals=[],plans=scheduled)=>buildCategoryBudgetSummary({accounts,scheduled:plans,actuals,budget,month})
+const summarize=(budget,actuals=[],plans=scheduled)=>buildCategoryBudgetSummary({accounts,scheduled:plans,actuals,budget,month,today:'2026-10-21'})
 test('500 category budget with 100 planned leaves 400 to allocate, independent of spending',()=>{const row=summarize(make()).rows[0];assert.equal(row.budget,500);assert.equal(row.allocated,100);assert.equal(row.remainingToAllocate,400);assert.equal(row.remainingToSpend,500)})
 test('overallocated category reports negative capacity and expected overrun',()=>{const row=summarize(make(500,600)).rows[0];assert.equal(row.remainingToAllocate,-100);assert.equal(row.expectedOverrun,100)})
 test('settled scheduled payment retains its allocation and is not counted twice',()=>{const row=summarize(make(),[{id:'paid',name:'Dinner Club',accountId:'bank',date:'2026-10-20',amount:110,category:'Dining Out',_categoryResolved:true}]).rows[0];assert.equal(row.allocated,100);assert.equal(row.actual,110);assert.equal(row.remainingForecast,0);assert.equal(row.remainingToSpend,390);assert.equal(row.remainingToAllocate,400)})
