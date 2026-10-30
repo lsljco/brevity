@@ -3408,7 +3408,7 @@ test('assigning an unbudgeted charge nets against its budget without opening Ask
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
  await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>{
-  records.lslj_tx_overrides_v1={...records.lslj_tx_overrides_v1,version:2,value:JSON.stringify({'fuel-charge':{id:'fuel-charge',category:'Transportation',budgetLineId:'a1:fuel'}})}
+  records.lslj_tx_overrides_v1={...records.lslj_tx_overrides_v1,version:2,value:JSON.stringify({'fuel-charge':{id:'fuel-charge',category:'Transportation'}})}
   return route.fulfill({json:{audit:{summary:'Assigned fuel purchase to fuel budget',operations:[],taskLinks:[]}}})
  })
  await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
@@ -3416,12 +3416,12 @@ test('assigning an unbudgeted charge nets against its budget without opening Ask
  await page.getByRole('button',{name:/Fuel purchase fixture/}).click()
  const editor=page.getByRole('region',{name:'Review spending exception'})
  await editor.getByText('Correct this charge',{exact:true}).click()
- await editor.getByRole('button',{name:'Change category or budget line',exact:true}).click()
- await editor.getByRole('combobox',{name:'Category or budget line',exact:true}).selectOption('line:a1:fuel')
+ await editor.getByRole('button',{name:'Change category',exact:true}).click()
+ await editor.getByRole('combobox',{name:'Category',exact:true}).selectOption('Transportation')
  await editor.getByRole('button',{name:'Review category assignment',exact:true}).click()
  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
- await expect(review).toContainText('Gas / Fuel fixture')
- expect(prepared.at(-1).operation).toMatchObject({type:'transaction.allocate',targetId:'fuel-charge',payload:{budgetLineId:'a1:fuel',category:'Transportation'}})
+ await expect(review).toContainText('Transportation')
+ expect(prepared.at(-1).operation).toMatchObject({type:'transaction.categorize',targetId:'fuel-charge',payload:{category:'Transportation'}})
  await expect(page.locator('.brevity-assistant-drawer.is-open')).toHaveCount(0)
  await review.getByRole('button',{name:'Apply approved changes',exact:true}).click()
  await expect(review).toHaveCount(0)
@@ -3879,4 +3879,26 @@ test('Cash Forecast mixes planned and bank entries in descending amount order',a
  const numbers=amounts.map(x=>Math.abs(Number(x.replace(/[^0-9.]/g,''))))
  expect(numbers.length).toBeGreaterThan(2)
  expect(numbers).toEqual([...numbers].sort((a,b)=>b-a))
+})
+
+test('category budget separates forecast capacity from spending and offers category creation',async({page},testInfo)=>{
+ const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value),month=dateKey().slice(0,7)
+ finance.transactions=[{id:'dining',acct:'a1',name:'Dinner fixture',cat:'Dining Out',type:'expense',amount:100,freq:'once',start:`${month}-20`}]
+ records.lslj_finance_v9.value=JSON.stringify(finance)
+ records.plaid_actuals_cache.value='[]'
+ records.lslj_budget_v1={key:'lslj_budget_v1',value:JSON.stringify({categoryLimits:{[`a1|${month}|dining out`]:{accountId:'a1',category:'Dining Out',month,amount:500,forecastAllocation:0,originalAmount:500}}}),version:1,updatedAt:new Date().toISOString()}
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ const summary=page.getByRole('region',{name:'Category budget allocation'})
+ const row=summary.locator('article').filter({hasText:'Dining Out'})
+ await expect(row).toContainText('Remaining to allocate $400.00')
+ await expect(row).toContainText('Remaining to spend $500.00')
+ await summary.getByRole('button',{name:'Add category',exact:true}).click()
+ const form=summary.getByRole('form',{name:'Category budget settings'})
+ await expect(form.getByLabel('Budget treatment')).toHaveValue('non-budgeted')
+ await form.getByLabel('Category name').fill('Hobbies')
+ await form.getByLabel('Budget treatment').selectOption('budgeted')
+ await expect(form.getByLabel('Category budget ($)',{exact:true})).toBeVisible()
+ await expect(form.getByLabel('Total allocation to Cash Forecast ($)',{exact:true})).toBeVisible()
 })

@@ -24,6 +24,7 @@ test('saved transaction rules match Plaid accounts and apply their actions', () 
   assert.deepEqual(applyTransactionRules(tx, [rule], accounts), {
     ...tx,
     name: 'Neighborhood Market',
+    _categoryResolved: true,
     category: 'Groceries',
     tags: ['food', 'household'],
   })

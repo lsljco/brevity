@@ -167,6 +167,15 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
     throw new Error('A stable budget line, account, year, direction, and month from 0 through 11 are required.')
   }
 
+  if (payload.categoryLimit) {
+    const amount=Number(payload.value ?? payload.amount),forecastAllocation=Number(payload.forecastAllocation||0)
+    if(direction!=='expense'||!String(payload.category||'').trim()||!Number.isFinite(amount)||amount<0||!Number.isFinite(forecastAllocation)||forecastAllocation<0)throw new Error('Category budgets require non-negative amounts and an expense category.')
+    const period=`${year}-${String(month+1).padStart(2,'0')}`,key=`${accountId}|${period}|${payload.category.trim().toLowerCase()}`
+    const previous=value.categoryLimits?.[key]
+    const entry={accountId,month:period,category:payload.category.trim(),amount,forecastAllocation,originalAmount:previous ? previous.originalAmount : (period+'-01'>=changedAt.slice(0,10)?amount:null),changedAt}
+    return {...value,categoryLimits:{...(value.categoryLimits||{}),[key]:entry},revisions:[...(value.revisions||[]),{categoryKey:key,before:previous||null,after:entry,changedAt,actor}]}
+  }
+
   const isV2 = Number(value?.schemaVersion) === BUDGET_SCHEMA_VERSION
   const next = isV2
     ? {
@@ -176,6 +185,7 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
         legacy:value.legacy ? { ...value.legacy, rows:{ ...(value.legacy.rows || {}) } } : undefined,
       }
     : {
+        ...value,
         schemaVersion:BUDGET_SCHEMA_VERSION,
         targets:{},
         lines:{},

@@ -60,6 +60,7 @@ export function loadStoredCategoryOptions(storage) {
 
   return mergeCategoryOptions(
     readJson(storage, CUSTOM_CATEGORY_STORAGE_KEY, []),
+    Object.values(readJson(storage, 'lslj_budget_v1', {}).categoryLimits || {}).map(entry=>entry.category),
     categoriesFromTransactions(financeData.transactions || []),
     categoriesFromTransactions(Object.values(actualOverrides)),
   )

@@ -257,8 +257,9 @@ export async function prepareDirectProposal({input,session,permissions,repositor
   }catch(error){throw Object.assign(error,{code:'INVALID_ACTION'})}
   const resource=resourceForOperation(proposal.operations[0]),expectedVersion=Number(input.expectedVersion)
   const multiResource=proposal.operations.some(operation=>resourceForOperation(operation)!==resource)
-  if(multiResource&&!proposal.operations.some(op=>op.type==='orchestration.recovery.update'&&['activate','end'].includes(op.payload.intent)))throw Object.assign(new Error('Each direct Action Mode review must change one versioned record group.'),{code:'INVALID_ACTION'})
-  if(multiResource&&proposal.operations.some(op=>!['orchestration.recovery.update','household.schedule.occurrence.update'].includes(op.type)))throw Error('Recovery can change only its plan and dated Schedule occurrences.')
+  const categorizeWithRule=proposal.operations.length===2&&proposal.operations[0].type==='transaction.categorize'&&proposal.operations[1].type==='transaction.rule.create'&&proposal.operations[0].payload.category===proposal.operations[1].payload.category
+  if(multiResource&&!categorizeWithRule&&!proposal.operations.some(op=>op.type==='orchestration.recovery.update'&&['activate','end'].includes(op.payload.intent)))throw Object.assign(new Error('Each direct Action Mode review must change one versioned record group.'),{code:'INVALID_ACTION'})
+  if(multiResource&&!categorizeWithRule&&proposal.operations.some(op=>!['orchestration.recovery.update','household.schedule.occurrence.update'].includes(op.type)))throw Error('Recovery can change only its plan and dated Schedule occurrences.')
   if(!Number.isInteger(expectedVersion)||expectedVersion<0)throw Object.assign(new Error('Refresh this record before reviewing the change.'),{code:'VERSION_CONFLICT'})
   if(proposal.operations.some(operation=>operation.type==='meal.schedule.update')){
     proposal=await captureExpectedVersions(proposal,resources)
@@ -267,7 +268,8 @@ export async function prepareDirectProposal({input,session,permissions,repositor
   // Direct plan editors need the same server-captured inherited-outcome
   // dependency as assistant proposals. Keep the editor's exact plan version.
   if(resource.startsWith('plan:'))proposal=await captureExpectedVersions(proposal,resources)
-  proposal={...proposal,expectedVersions:multiResource?input.expectedVersions:{...proposal.expectedVersions,[resource]:expectedVersion}}
+  if(categorizeWithRule){proposal=await captureExpectedVersions(proposal,resources);if(proposal.expectedVersions[resource]!==expectedVersion)throw Object.assign(Error('The transaction changed. Refresh before categorizing it.'),{code:'VERSION_CONFLICT'})}
+  proposal={...proposal,expectedVersions:categorizeWithRule?proposal.expectedVersions:multiResource?input.expectedVersions:{...proposal.expectedVersions,[resource]:expectedVersion}}
   // This dry preparation validates the exact target and current permission
   // against the reviewed version without mutating anything.
   await prepareRecordOperations({proposal,session,permissions,resources,now:()=>now})
