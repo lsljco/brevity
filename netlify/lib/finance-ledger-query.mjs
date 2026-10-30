@@ -41,7 +41,7 @@ export function queryFinanceLedger(source,input={},today){
   if(input.category&&String(category).toLowerCase()!==input.category.toLowerCase())continue
   if(input.direction&&input.direction!=='all'&&direction!==input.direction)continue
   if(terms&&![t.name,t.merchant_name,t.originalStatement,t.notes,...(t.tags||[])].some(v=>String(v||'').toLowerCase().includes(terms)))continue
-  rows.push({id:t.id,date:t.date,accountId:map[t.accountId],name:t.name||'',merchant:t.merchant_name||t.merchantName||null,originalStatement:t.originalStatement||t.original_description||t.name||'',amount:Number(t.amount),direction,category,pending:Boolean(t.pending),notes:t.notes||'',tags:t.tags||[],goal:t.goal||'',categorySource:t._categorySource||'bank-or-reviewed'})
+  rows.push({id:t.id,date:t.date,accountId:map[t.accountId],name:t.name||'',merchant:t.merchant_name||t.merchantName||null,originalStatement:t.originalStatement||t.original_description||t.name||'',amount:Number(t.amount),direction,category,pending:Boolean(t.pending),notes:t.notes||'',tags:t.tags||[],goal:t.goal||'',categorySource:t._categorySource||(t.categoryReason?'automatic inference':'bank'),categoryReason:t.categoryReason||null})
  }
  rows.sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id))
  const version=digest(rows)
