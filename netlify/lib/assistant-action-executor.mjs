@@ -321,7 +321,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if (operation.type === 'transaction.update') {
     if (!operation.targetId) throw new Error('A bank transaction id is required.')
     const allowed=payload.category!==undefined&&value?.[operation.targetId]?.budgetLineId?{budgetLineId:null}:{}
-    for(const field of ['name','category'])if(payload[field]!==undefined)allowed[field]=clone(payload[field])
+    for(const field of ['name','category','notes','tags','goal','managementCategory'])if(payload[field]!==undefined)allowed[field]=clone(payload[field])
     return { before, after:{ ...(value || {}), [operation.targetId]:{ ...(value?.[operation.targetId] || {}), ...allowed, id:operation.targetId } } }
   }
   if (operation.type === 'transaction.rule.create') {

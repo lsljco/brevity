@@ -155,7 +155,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'calendar.move': ['calendarId','calendarName'],
   'transaction.categorize': ['category'],
   'transaction.allocate': ['budgetLineId','category'],
-  'transaction.update': ['name', 'category'],
+  'transaction.update': ['name', 'category', 'notes', 'tags', 'goal', 'managementCategory'],
   'transaction.rule.create': ['title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
   'transaction.rule.delete': [],
   'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence', 'transactionId'],
@@ -435,9 +435,15 @@ function normalizeActionPayload(type, input) {
         ? cleanMultiline(value, field === 'transcript' ? 50_000 : 6000)
         : clean(value, field === 'time' ? 20 : 300)
       normalized[field] = type.startsWith('meeting.') && ['text','label','reason','summary','transcript','financialEffect','origin','expenseFocus','note'].includes(field) ? canonicalMeetingNameText(cleaned) : cleaned
+    } else if (type === 'transaction.update' && field === 'managementCategory') {
+      if(!['','Dividend Expense'].includes(value))throw new Error('Choose the bank classification or Dividend Expense.')
+      normalized.managementCategory=value
+    } else if (type === 'transaction.update' && field === 'tags') {
+      if (!Array.isArray(value) || value.length > 20 || value.some(tag => typeof tag !== 'string' || tag.length > 80)) throw new Error('Transaction tags require at most 20 labels, each up to 80 characters.')
+      normalized.tags = [...new Set(value.map(tag => clean(tag,80)).filter(Boolean))]
     } else if (field === 'notes') {
       assertString(type, field, value)
-      const cleaned=clean(value, 6000)
+      const cleaned=type==='transaction.update'?cleanMultiline(value,6000):clean(value, 6000)
       normalized[field] = type.startsWith('meeting.') ? canonicalMeetingNameText(cleaned) : cleaned
     } else if (field === 'estcost' || field === 'actcost') {
       if (value === '') normalized[field] = ''
@@ -652,7 +658,7 @@ export function normalizeActionOperation(input = {}) {
   if (type === 'transaction.allocate' && (!operation.targetId || !payload.budgetLineId || !payload.category)) throw new Error('Choose an exact bank transaction and budget category or line.')
   if (type === 'transaction.categorize' && !payload.category) throw new Error('A transaction category is required.')
   if (type === 'transaction.update' && !operation.targetId) throw new Error('A transaction update requires the exact bank transaction id.')
-  if (type === 'transaction.update' && !Object.keys(payload).some(field=>['name','category'].includes(field))) throw new Error('A transaction update requires a reviewed name or category change.')
+  if (type === 'transaction.update' && !Object.keys(payload).some(field=>['name','category','notes','tags','goal','managementCategory'].includes(field))) throw new Error('A transaction update requires at least one reviewed metadata change.')
   if (type === 'project.create' && !payload.title) throw new Error('A new project requires a title.')
   if ((type === 'meeting.action.create'||type === 'meeting.action.update') && ('text' in payload||type.endsWith('.create')) && !payload.text) throw new Error('A Finance Meeting commitment requires text.')
   if ((type === 'meeting.correction.create'||type === 'meeting.correction.update') && ('label' in payload||type.endsWith('.create')) && !payload.label) throw new Error('A Finance Meeting correction requires a name.')

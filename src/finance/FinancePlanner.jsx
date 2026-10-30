@@ -1,3 +1,4 @@
+import {operatingSpendingSources} from './householdCashControls.js'
 import './BudgetCoverage.css'
 import FinanceExport from './FinanceExport.jsx'
 import {financeReport,recordsSection,transactionSection} from './financeExportData.js'
@@ -2005,11 +2006,11 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
   const handleSaveActualTx = async (updated) => {
     if(readOnly)return false
-    const payload={name:String(updated.name||'').trim(),category:String(updated.category||'').trim()}
+    const payload={name:String(updated.name||'').trim(),category:String(updated.category||'').trim(),notes:String(updated.notes||''),goal:String(updated.goal||'').trim(),tags:updated.tags||[],managementCategory:updated.managementCategory||''}
     try{
       const result=await prepareDirectAction({
         summary:`Update ${payload.name||updated.originalStatement||'bank transaction'} metadata`,
-        operation:{type:'transaction.update',targetId:updated.id,description:`Review the name and category for ${payload.name||'this transaction'}`,payload},
+        operation:{type:'transaction.update',targetId:updated.id,description:`Review transaction details for ${payload.name||'this transaction'}`,payload},
         expectedVersion:getAcknowledgedSharedStateVersion(localStorage,'lslj_tx_overrides_v1'),
       })
       requestActionReview(result.proposal)
@@ -2142,7 +2143,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     return () => {window.removeEventListener(SHARED_STATE_EVENT,refresh);window.removeEventListener('storage',refresh)}
   },[view])
   const allSpendingActuals = useMemo(() => retainedActuals.map(tx => applyTransactionRules(tx,txRules,data.accounts)).map(tx => txOverrides[tx.id]?{...tx,...txOverrides[tx.id]}:tx).filter(tx=>!tx._deleted).map(tx=>categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})),[retainedActuals,txRules,txOverrides,reviewedCategoryOverrides,data.accounts,data.transactions,dailyBudget])
-  const spendingSources = useMemo(() => ({accounts:data.accounts,scheduled:data.transactions,actuals:allSpendingActuals,budget:dailyBudget,reviews:data.spendingReviews,period:{from:todayKey.slice(0,7)+'-01',to:todayKey},budgetLegacyYear:t.getFullYear(),budgetLegacyAccountId:data.accounts.find(a=>a.id==='a1')?.id}),[data,allSpendingActuals,dailyBudget,todayKey])
+  const spendingSources = useMemo(() => operatingSpendingSources({accounts:data.accounts,scheduled:data.transactions,actuals:allSpendingActuals,budget:dailyBudget,reviews:data.spendingReviews,period:{from:todayKey.slice(0,7)+'-01',to:todayKey},budgetLegacyYear:t.getFullYear(),budgetLegacyAccountId:data.accounts.find(a=>a.id==='a1')?.id}),[data,allSpendingActuals,dailyBudget,todayKey])
   const todayAlignment = useMemo(() => buildDailyAlignmentSnapshot({
     date: todayKey,
     accounts: fd.accounts,
@@ -3374,7 +3375,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {/* ══════════ ACTUAL TRANSACTION EDIT MODAL ══════════ */}
       {!readOnly && selActualTx && (
-        <Suspense fallback={null}><ActualTxModal
+        <Suspense fallback={null}><ActualTxModal key={selActualTx.id}
+          onOpenHistoryTransaction={setSelActualTx}
           tx={selActualTx}
           historyTransactions={filteredActuals}
           historyScopeLabel={financeAccountScopeLabel}

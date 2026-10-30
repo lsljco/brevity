@@ -1,3 +1,4 @@
+import HouseholdCashControls from './HouseholdCashControls.jsx'
 import FinanceExport from './FinanceExport.jsx'
 import {meetingBrief,meetingBriefReport,briefMoney} from './meetingBrief.js'
 import SpendingAccountabilityPanel from './SpendingAccountabilityPanel.jsx'
@@ -36,6 +37,7 @@ export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={
     <details><summary>Bank checks & report notes</summary><p className="fm-packet-source">Balance check: {packet.sources.balanceCheckedAt||'time unavailable'} ({packet.sources.balanceDataStatus}). Transaction check: {packet.sources.transactionCheckedAt||'time unavailable'} ({packet.sources.transactionFreshnessStatus}).</p><ul>{packet.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>
     {error&&<p role="alert" className="fm-edit-error">{error}</p>}
     {packet.adjustments.length>0&&<p className="fm-packet-source" role="status"><strong>Household-adjusted report.</strong> {packet.adjustments.length} saved adjustments affect this view. Review original and reported values in the adjustment history below.</p>}
+    <HouseholdCashControls model={packet.cashControls} onProposeAction={readOnly?undefined:onProposeAction}/>
     {packet.spending && <details><summary>All spending exceptions & transactions</summary><SpendingAccountabilityPanel model={packet.spending} onProposeAction={readOnly?undefined:onProposeAction}/></details>}
     <details><summary>Brevity analysis & report adjustments</summary><FinancePacketIntelligence packet={packet} onEdit={onEdit} onProposeAction={onProposeAction} readOnly={editReadOnly} notice={analysisNotice}/></details>
     <details><summary>Agenda, required inputs and deliverables</summary><ol>{packet.agenda.map(a=><li key={a.title}>{a.title} <strong>({a.minutes}m)</strong></li>)}</ol><h3>Required inputs</h3><ul>{packet.inputs.map(i=><li key={i}>{i}</li>)}</ul><h3>Deliverables</h3><ul>{packet.deliverables.map(i=><li key={i}>{i}</li>)}</ul><p>Led by CFO Larry Jenkins. COO Terica Seay co-leads weekly governance. CEO Lorenzo Seay, COO and CFO attend. Schedule Weekly, Monthly, Quarterly and Annual reviews on the joint calendar.</p></details>
