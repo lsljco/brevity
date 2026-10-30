@@ -8,7 +8,7 @@ import { getHouseholdDateKey } from './financeTime.js'
 export const RECONCILIATION_BATCH_LIMIT = 8
 export const cents = value => Math.round(Number(value) * 100)
 const bankName = actual => String(actual?.originalStatement || actual?.name || actual?.merchant_name || '')
-const ignored = new Set(['bank','draft','electric','utility','utilities','bill','debit','credit','card','ach','the','emc'])
+const ignored = new Set(['bank','draft','electric','utility','utilities','bill','debit','credit','card','ach','the','emc','loan','personal','marketplace'])
 function vendorMatches(plan, actual) {
   if (plan.vendorId && actual.vendorId) return plan.vendorId === actual.vendorId
   if (plan.type === 'income') return incomeSourceMatches(plan,actual)
@@ -40,7 +40,7 @@ export function approvedReconciliationMatches(plan, actual, date, accountMap) {
 }
 
 // Assessment only. No writes, date changes, or inferred approvals happen here.
-export function buildAutoReconciliationReport({ scheduled = [], actuals = [], accounts = [], today = getHouseholdDateKey(), lookbackDays = 30 } = {}) {
+export function buildAutoReconciliationReport({ scheduled = [], actuals = [], accounts = [], today = getHouseholdDateKey(), lookbackDays = 30, allowAmountVariance = false } = {}) {
   const end = parseISODate(today)
   if (!end) return { suggestions:[], ambiguous:[], unresolved:[] }
   const from = toISO(addDays(end,-lookbackDays)), accountMap = buildUniquePlaidAccountMap(accounts)
@@ -55,14 +55,14 @@ export function buildAutoReconciliationReport({ scheduled = [], actuals = [], ac
       const variance = Math.abs(cents(actual.amount)) - cents(plan.amount)
       // Roughly equal: within 2%, capped at $25, with a $2 minimum tolerance.
       const tolerance = Math.max(200, Math.min(2500, Math.round(cents(plan.amount) * .02)))
-      if (!Number.isFinite(variance) || Number(plan.amount) <= 0 || Math.abs(variance) > tolerance) continue
+      if (!Number.isFinite(variance) || Number(plan.amount) <= 0 || (!allowAmountVariance && Math.abs(variance) > tolerance)) continue
       for (let offset=-7;offset<=7;offset++) {
         const date=addDays(posting,offset)
         if (!txOccursOnDate(plan,date)) continue
         const occurrenceDate=toISO(date)
         candidates.push({ id:`${plan.id}:${occurrenceDate}:${actual.id}`, plan, actual, occurrenceDate,
           amountVariance:variance/100, timingDays:-offset, evidence:reconciliationEvidence(plan,actual,occurrenceDate),
-          reason:`Same linked account and matching vendor; ${variance === 0 ? 'exact amount' : 'amount within tolerance'}; ${Math.abs(offset)} day date difference.` })
+          reason:`Same linked account and matching vendor; ${variance === 0 ? 'exact amount' : Math.abs(variance) <= tolerance ? 'amount within tolerance' : 'different amount; review variance'}; ${Math.abs(offset)} day date difference.` })
       }
     }
   }
