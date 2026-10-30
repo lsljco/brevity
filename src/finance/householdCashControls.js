@@ -13,7 +13,7 @@ export function operatingSpendingSources(source={}){
 // permission to cancel a draft, pay a bill, or move money.
 export function householdCashControls(source={},period={}){
  const scoped=operatingSpendingSources(source),from=period.from||source.period?.from,to=period.to||source.period?.to
- const available=Boolean(scoped.accounts.length)&&Boolean(from&&to)&&(source.transactionFreshnessStatus==='fresh'||(source.actuals||[]).length>0)
+ const available=Boolean(scoped.accounts.length)&&Object.keys(buildUniquePlaidAccountMap(scoped.accounts)).length===scoped.accounts.length&&Boolean(from&&to)&&(source.transactionFreshnessStatus==='fresh'||scoped.actuals.length>0)
  const unique=[...new Map(scoped.actuals.filter(t=>t.id&&!t._deleted).map(t=>[t.id,t])).values()]
  const replaced=new Set(unique.filter(t=>!t.pending).map(t=>t.pendingTransactionId).filter(Boolean))
  const posted=unique.filter(t=>!t.pending&&!replaced.has(t.id)&&t.date>=from&&t.date<=to&&Number.isFinite(Number(t.amount)))

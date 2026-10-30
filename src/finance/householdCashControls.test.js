@@ -28,3 +28,9 @@ test('billing cycle fields validate dates and amounts while leaving unknown dist
  const updated=applyVendorOperation({vendors:[{id:'v',name:'Vendor'}]}, {type:'vendor.update',targetId:'v',payload},()=> 'new')
  assert.equal(updated.vendors[0].paymentDueDate,'2026-10-25')
 })
+test('unlinked Operating and personal-only history do not report zero control exceptions',()=>{
+ const actuals=[{id:'personal',accountId:'food',date:'2026-10-09',amount:8,name:'Coffee'}],period={from:'2026-10-01',to:'2026-10-30'}
+ assert.equal(householdCashControls({accounts,actuals},period).exceptionCount,null)
+ const unlinked=accounts.map(a=>({...a,plaidSubtype:undefined}))
+ assert.equal(householdCashControls({accounts:unlinked,actuals,transactionFreshnessStatus:'fresh'},period).exceptionCount,null)
+})

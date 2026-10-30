@@ -34,3 +34,9 @@ test('billing tool limits records to authorized vendor members and never returns
  const admin=await read({mode:'billing'},{signedInMember:'Larry',access:{finance:true,vendorAdmin:true}})
  assert.equal(admin.records.length,2)
 })
+test('other accounts cannot establish zero activity for an unverified selected account',()=>{
+ const s=source();s.actuals=s.actuals.map(t=>({...t,accountId:'other'}))
+ assert.equal(queryFinanceLedger(s,{},'2026-10-30').totals,null)
+ s.transactionFreshnessStatus='fresh';delete s.accounts[0].plaidSubtype
+ assert.equal(queryFinanceLedger(s,{},'2026-10-30').totals,null)
+})

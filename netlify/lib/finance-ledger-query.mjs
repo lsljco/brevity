@@ -25,7 +25,8 @@ export function queryFinanceLedger(source,input={},today){
  if(!['all','posted','pending'].includes(status)||!Number.isInteger(offset)||offset<0)throw Error('Invalid transaction view or page offset.')
  const terms=String(input.search||'').trim().toLowerCase()
  const rows=[],unmapped=[],invalid=[]
- const available=source.transactionFreshnessStatus==='fresh'||(source.actuals||[]).length>0
+ const linkedIds=new Set(Object.values(map))
+ const available=ids.every(id=>linkedIds.has(id))&&(source.transactionFreshnessStatus==='fresh'||ids.every(id=>(source.actuals||[]).some(t=>map[t.accountId]===id)))
  const replaced=new Set((source.actuals||[]).filter(t=>!t.pending&&t.pendingTransactionId).map(t=>t.pendingTransactionId)),seen=new Set()
  for(const original of source.actuals||[]){
   if(!original.id||seen.has(original.id)||original._deleted||replaced.has(original.id))continue
