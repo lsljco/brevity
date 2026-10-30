@@ -691,6 +691,7 @@ test('Transactions keep account and timeframe scope visible with filtered totals
   await page.getByLabel('Select financial timeframe').selectOption('this-month')
   await expect(page.getByLabel('Current Finance scope: This Month · Operating Account')).toBeVisible()
   await expect(page.getByRole('button',{name:'All bank transactions',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(page.getByRole('button',{name:'Show posted bank activity'})).toHaveAttribute('aria-pressed','false')
   await page.getByLabel('Filter by category').selectOption('Uncategorized')
   await expect(page.getByLabel('Filter by category')).toHaveValue('Uncategorized')
   for(const sort of ['amount','vendor','description','date']){
@@ -699,6 +700,7 @@ test('Transactions keep account and timeframe scope visible with filtered totals
   }
   await page.getByRole('button',{name:'Bank Activity · Posted',exact:true}).click()
   await expect(page.getByRole('button',{name:'Bank Activity · Posted',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(page.getByRole('button',{name:'Show posted bank activity'})).toHaveAttribute('aria-pressed','true')
   await page.getByRole('button',{name:'Scheduled transactions',exact:true}).click()
   await expect(page.getByText(/scheduled transactions · This Month · Operating Account$/)).toBeVisible()
 })

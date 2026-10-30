@@ -1483,6 +1483,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   // updates this screen through FINANCE_REFRESH_EVENT. Do not start a second
   // full-history transaction request every time Finance mounts.
 
+  const bankActivitySelected = showActuals && (view !== 'transactions' || Boolean(transactionFilter?.postedOnly))
   const toggleActuals = () => { if(view==='transactions'){setTransactionFilter({postedOnly:true,label:'Bank Activity · Posted'});setTransactionListOptions({...DEFAULT_TRANSACTION_LIST_OPTIONS});setShowActuals(true)}else{setTransactionFilter(null);setShowActuals(v => !v)} }
   const actualsFreshnessMessage = (() => {
     const checkedAt = actualsFreshness?.checkedAt ? getHouseholdDateTimeLabel(new Date(actualsFreshness.checkedAt)) : ''
@@ -2421,15 +2422,15 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           <button
             onClick={toggleActuals}
             disabled={actualsLoading}
-            aria-pressed={showActuals}
+            aria-pressed={bankActivitySelected}
             aria-label={view==='transactions'?'Show posted bank activity':`${showActuals ? 'Hide' : 'Show'} bank activity`}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
               cursor: actualsLoading ? 'default' : 'pointer',
-              border: showActuals ? '1px solid rgba(197,164,109,0.55)' : '1px solid rgba(255,255,255,0.10)',
-              background: showActuals ? 'rgba(197,164,109,0.18)' : 'rgba(255,255,255,0.04)',
-              color: showActuals ? 'var(--brevity-gold)' : 'var(--brevity-muted)',
+              border: bankActivitySelected ? '1px solid rgba(197,164,109,0.55)' : '1px solid rgba(255,255,255,0.10)',
+              background: bankActivitySelected ? 'rgba(197,164,109,0.18)' : 'rgba(255,255,255,0.04)',
+              color: bankActivitySelected ? 'var(--brevity-gold)' : 'var(--brevity-muted)',
               transition: 'all 0.15s',
             }}>
             <i className={`ti ${actualsLoading ? 'ti-loader-2' : 'ti-building-bank'}`}
