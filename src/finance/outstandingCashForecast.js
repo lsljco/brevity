@@ -127,7 +127,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
         pendingExcluded:bank.filter(actual => actual.pending && !ledgerIds.has(accountMap[actual.accountId])).length,
         unmatchedCount:realization.filter(row => row.statuses.some(status => status.status === 'expected')).length } : {}) })
   }
-  const result = applyBudgetAllowances(projection,{accounts,scheduled:transactions,actuals,budget:options.budget,today})
+  const result = applyBudgetAllowances(projection,{accounts,scheduled:transactions,actuals,budget:options.budget,today,reconcile})
   const adjustments = new Map()
   for (const account of accounts) {
     const overrides = options.projectedClosingBalances?.[account.id] || {}
