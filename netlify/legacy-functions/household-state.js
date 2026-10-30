@@ -50,7 +50,7 @@ const PLAID_ACCOUNT_FIELDS = new Set([
   'institution', 'mask', 'plaidCurrentBalance', 'plaidAvailableBalance',
 ])
 const PLAID_TRANSACTION_FIELDS = new Set([
-  'id', 'accountId', 'itemId', 'name', 'originalStatement', 'amount', 'date', 'category', 'type', 'institution', 'pending', 'pendingTransactionId',
+  'id', 'accountId', 'itemId', 'name', 'merchant_name', 'originalStatement', 'amount', 'date', 'category', 'type', 'institution', 'pending', 'pendingTransactionId',
 ])
 const headers = {
   'content-type':'application/json; charset=utf-8',
@@ -99,7 +99,7 @@ function validatePlaidTransactions(candidate, existing) {
     ids.add(transaction.id)
     if (!boundedString(transaction.accountId, 512, { required:true })) return `Plaid transaction ${transaction.id} is missing its source account id.`
     if (!boundedString(transaction.itemId, 512) || !boundedString(transaction.name, 1000) || !boundedString(transaction.originalStatement, 2000) ||
-        !boundedString(transaction.category, 512) || !boundedString(transaction.institution, 512)) {
+        !boundedString(transaction.merchant_name, 1000) || !boundedString(transaction.category, 512) || !boundedString(transaction.institution, 512)) {
       return `Plaid transaction ${transaction.id} contains source text that is too long.`
     }
     if (!Number.isFinite(transaction.amount) || Math.abs(transaction.amount) > 1_000_000_000_000) return `Plaid transaction ${transaction.id} has an invalid amount.`

@@ -401,3 +401,16 @@ test('sync keeps account evidence from earlier pages when the final page omits t
  const batch=buildPendingDelta({cursorIdentity:'item',fromCursor:'',result,createdAt:'2026-10-25T13:00:00Z'})
  assert.deepEqual(batch.balanceAccounts.map(row=>[row.accountId,row.current]),[['checking',100],['savings',200]])
 })
+
+
+test('Plaid merchant metadata survives household snapshot validation', () => {
+  const { validatePlaidTransactions } = require('../../netlify/legacy-functions/household-state.js')
+  const source = { transaction_id:'merchant-row', account_id:'bank', name:'POS Merchant', merchant_name:'Merchant', amount:42, date:'2026-10-30', pending:false }
+  const row = mapPlaidTransaction(source, {itemId:'item', institution:'Bank'})
+  assert.equal(validatePlaidTransactions([row], []), '')
+  assert.equal(validatePlaidTransactions([{...row, merchant_name:null}], []), '')
+  assert.equal(validatePlaidTransactions([{...row, merchant_name:undefined}], []), '')
+  assert.match(validatePlaidTransactions([{...row, merchant_name:'x'.repeat(1001)}], []), /source text/)
+  assert.match(validatePlaidTransactions([{...row, merchant_name:{unexpected:true}}], []), /source text/)
+  assert.match(validatePlaidTransactions([{...row, unexpected:'value'}], []), /unsupported field/)
+})
