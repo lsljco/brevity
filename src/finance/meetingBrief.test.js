@@ -31,3 +31,11 @@ test('yearly view groups actual months and preserves unknown totals',()=>{
  const p=make('yearly');p.monthly=[{month:'2026-01',income:100,net:80},{month:'2026-02',income:null,net:null}]
  assert.deepEqual(meetingBrief(p).table.rows,[['2026 Q1','Unavailable','Unavailable']])
 })
+test('daily priorities exclude zero amounts, sort by due date and disclose overflow',()=>{
+ const p=make('daily')
+ p.payables=[{title:'Zero',amount:0,date:'2026-10-28'},...['Small','Large','Medium','Later'].map((title,i)=>({title,amount:[10,1000,100,50][i],date:i===3?'2026-10-29':'2026-10-28'}))]
+ const before=JSON.stringify(p.payables),b=meetingBrief(p)
+ assert.deepEqual(b.table.rows.map(r=>r[0]),['Large','Medium','Small'])
+ assert.equal(b.obligations,1160);assert.match(b.focus,/1 additional obligations \(\$50\)/)
+ assert.equal(JSON.stringify(p.payables),before)
+})

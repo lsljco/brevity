@@ -319,7 +319,8 @@ test('mapped deltas identify their Plaid item and institution', () => {
   assert.equal(transaction.id, 'tx-1')
   assert.equal(transaction.itemId, 'item-1')
   assert.equal(transaction.institution, 'Bank')
-  assert.deepEqual(Object.keys(transaction).sort(), ['accountId','amount','category','date','id','institution','itemId','name','originalStatement','pending','pendingTransactionId','type'].sort())
+  assert.equal(transaction.merchant_name,'Merchant')
+  assert.deepEqual(Object.keys(transaction).sort(), ['accountId','amount','category','date','id','institution','itemId','merchant_name','name','originalStatement','pending','pendingTransactionId','type'].sort())
 })
 
 test('incremental responses never imply that an empty delta replaces cached history', () => {

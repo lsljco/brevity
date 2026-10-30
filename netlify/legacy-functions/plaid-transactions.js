@@ -44,6 +44,7 @@ function mapPlaidTransaction(transaction, { institution = '', itemId = '' } = {}
     id:transaction.transaction_id,
     accountId:transaction.account_id,
     name:transaction.merchant_name || transaction.name,
+    merchant_name:transaction.merchant_name || null,
     originalStatement:transaction.original_description || transaction.name,
     amount:transaction.amount,
     date:transaction.date || transaction.authorized_date,

@@ -1,3 +1,4 @@
+import TransactionVendorHistory from './TransactionVendorHistory.jsx'
 import VendorSelector from './VendorSelector.jsx'
 import { useEffect, useId, useState, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
@@ -357,7 +358,7 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
 const DebtWorkspace = lazy(()=>import('./DebtWorkspace.jsx'))
 
 // ── Main ActualTxModal ────────────────────────────────────────────────────────
-export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onCreateDebt, onClose }) {
+export default function ActualTxModal({ tx, accounts, allTxNames, historyTransactions = [], historyScopeLabel = '', goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onCreateDebt, onClose }) {
   const [form, setForm] = useState({
     name:              tx.name || '',
     amount:            String(Math.abs(tx.amount || 0)),
@@ -594,6 +595,7 @@ export default function ActualTxModal({ tx, accounts, allTxNames, goals = [], de
               <span style={{ fontSize: 10, color: '#888884' }}>Goal changes are unavailable in this reviewed metadata editor.</span>
             </div>
 
+            <TransactionVendorHistory transaction={tx} transactions={historyTransactions} scopeLabel={historyScopeLabel}/>
             <VendorSelector expense={tx} kind="posted" onReviewed={onClose}/>
             {/* Split Transaction */}
             <div style={sectionStyle}>

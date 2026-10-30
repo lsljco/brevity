@@ -5,6 +5,7 @@ export const DEFAULT_TRANSACTION_LIST_OPTIONS = Object.freeze({
   sortDirection: 'desc',
   description: '',
   vendor: '',
+  category: '',
   minAmount: '',
   maxAmount: '',
   dateFrom: '',
@@ -83,6 +84,9 @@ export function sortAndFilterTransactions(transactions = [], options = {}) {
     })
     .filter(transaction => {
       if (!transaction) return false
+      const category = String(transaction.category || transaction.cat || '').trim()
+      if (settings.category === 'Uncategorized' && category && !/^(uncategorized|unknown|unassigned)$/i.test(category)) return false
+      if (settings.category && settings.category !== 'Uncategorized' && category.toLowerCase() !== settings.category.toLowerCase()) return false
       const amount = transactionAmount(transaction)
       const date = transactionDate(transaction)
       if(settings.vendor&&!String(transaction.vendorName||'Unassigned').toLocaleLowerCase().includes(String(settings.vendor).toLocaleLowerCase()))return false

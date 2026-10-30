@@ -9,7 +9,7 @@ export const MEETING_DESIGNS={
 export const briefMoney=v=>v==null||v===''||!Number.isFinite(Number(v))?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(v))
 export function meetingBrief(p){
  const design=MEETING_DESIGNS[p.cadence],cashNote=`${p.sources.balanceDataStatus} bank snapshot`,postedNote=`${p.sources.transactionFreshnessStatus} activity · selected report period`
- const due=p.payables.filter(x=>x.status!=='Reconciled to posted charge'),sum=xs=>Math.round(xs.reduce((n,x)=>n+Number(x.amount),0)*100)/100
+ const due=p.payables.filter(x=>x.status!=='Reconciled to posted charge' && Number(x.amount)>0).sort((a,b)=>String(a.date||'9999').localeCompare(String(b.date||'9999')) || Number(b.amount)-Number(a.amount) || String(a.title||'').localeCompare(String(b.title||''))),sum=xs=>Math.round(xs.reduce((n,x)=>n+Number(x.amount),0)*100)/100
  const cashScope=p.scope.some(a=>['checking','savings'].includes(a.type))
  const obligations=cashScope?sum(due):null,inflows=cashScope?sum(p.projectedInflows):null
  // This is a scheduled scenario, not a safe-to-spend balance. Pending holds may overlap.
@@ -27,7 +27,7 @@ export function meetingBrief(p){
   table.headers=['Quarter','Income','Net cash flow'];table.rows=[...quarters].map(([k,v])=>[k,briefMoney(v.valid?v.income:null),briefMoney(v.valid?v.net:null)])
  }
  const decisions=p.analysis?.recommendations?.slice(0,2)||[]
- return {...design,metrics,table,decisions,obligations,inflows,forecast,focus:p.cadence==='weekly'?'Posted spending is compared with full monthly targets. Weekly targets have not been inferred.':p.cadence==='daily'?'Confirm payment timing and pending holds before relying on the scheduled scenario.':'Review differences, agree priorities, and leave with owners and deadlines.'}
+ return {...design,metrics,table,decisions,obligations,inflows,forecast,focus:p.cadence==='weekly'?'Posted spending is compared with full monthly targets. Weekly targets have not been inferred.':p.cadence==='daily'?`${due.length>3?`${due.length-3} additional obligations (${briefMoney(sum(due.slice(3)))}) in details. `:''}Earliest due first; largest amounts first within each date. Confirm pending overlap before relying on this forecast.`:'Review differences, agree priorities, and leave with owners and deadlines.'}
 }
 export function meetingBriefReport(p){
  const b=meetingBrief(p),section=(title,labels,rows)=>({title,columns:labels.map(label=>({label})),rows})
