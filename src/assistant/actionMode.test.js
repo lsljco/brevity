@@ -1361,3 +1361,19 @@ test('direct focus review still rejects inherited source changes after review wi
  const refreshed=await prepareDirectProposal({input,session,permissions,repository,resources})
  assert.notEqual(refreshed.expectedOutcomeSources[`plan:${date}`],proposal.expectedOutcomeSources[`plan:${date}`])
 })
+
+test('categorize with a merchant rule reviews both versions, executes together, and supports undo',async()=>{
+ const sharedStore=versionedBlobStore(),repository=createAssistantActionRepository({store:sharedStore})
+ const resources=createProductionActionResources({sharedStore,planStore:sharedStore})
+ const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin')
+ const input={summary:'Categorize merchant and save rule',expectedVersion:0,operations:[{type:'transaction.categorize',targetId:'posted',payload:{category:'Dining Out'}},{type:'transaction.rule.create',payload:{matchText:'Dinner Club',matchField:'merchantName',matchMode:'exactly',category:'Dining Out',createdDate:'2026-10-01',applyToExisting:true}}]}
+ const proposal=await prepareDirectProposal({input,session,permissions,repository,resources})
+ assert.deepEqual(proposal.expectedVersions,{'shared:lslj_tx_overrides_v1':0,'shared:lslj_tx_rules_v1':0})
+ const completed=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},leaseMs:0})
+ assert.equal((await resources.read('shared:lslj_tx_overrides_v1')).value.posted.category,'Dining Out')
+ assert.equal((await resources.read('shared:lslj_tx_rules_v1')).value[0].actions.updateCategory.value,'Dining Out')
+ await undoActionWithJournal({repository,auditId:completed.audit.id,session,resources,event:{},leaseMs:0})
+ assert.equal((await resources.read('shared:lslj_tx_overrides_v1')).value?.posted,undefined)
+ await assert.rejects(()=>prepareDirectProposal({input,session,permissions,repository,resources}),/transaction changed/)
+ assert.throws(()=>normalizeActionProposal({...input,operations:[input.operations[0],{...input.operations[1],payload:{...input.operations[1].payload,category:'Other'}}]},session),/one Brevity record group/)
+})

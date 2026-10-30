@@ -1,3 +1,5 @@
+import CategoryBudgetSummary from './CategoryBudgetSummary.jsx'
+import './SpendingReview.css'
 import {Fragment,useState,useEffect,useMemo} from 'react'
 import FinanceExport from './FinanceExport.jsx'
 import {recordsSection} from './financeExportData.js'
@@ -14,7 +16,7 @@ function loadBudget() {
   try { return JSON.parse(localStorage.getItem(BUDGET_LS_KEY)) || {} } catch { return {} }
 }
 
-export default function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], includesUnmapped=false, data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, readOnly = false }) {
+export default function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], includesUnmapped=false, data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, onReview, readOnly = false }) {
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
@@ -64,11 +66,12 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
   const syncedActualsByCategory = actualAllocation.byCategory
   const DISPLAY_BUDGET_CATS = useMemo(() => {
     const result = { ...BUDGET_CATS }
+    for(const entry of Object.values(budget.categoryLimits||{})){if(entry.month===monthKey&&budgetAccountIds.has(entry.accountId)&&!result[entry.category])result[entry.category]=[]}
     Object.keys(syncedActualsByCategory).forEach(category => {
       if (!result[category]) result[category] = []
     })
     return result
-  }, [BUDGET_CATS, syncedActualsByCategory])
+  }, [BUDGET_CATS, syncedActualsByCategory,budget,monthKey,budgetAccountIds])
 
   // Reviewed targets take precedence; schedules supply the default.
   const getBudgeted = (line, month = selMonth, year = selYear) => {
@@ -78,11 +81,11 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
     return line.transactions.reduce((total, transaction) => total + calculateTransactionAmountForMonth(transaction, monthDate), 0)
   }
 
-  const catBudgeted = (cat) => (BUDGET_CATS[cat] || []).reduce((sum, line) => sum + getBudgeted(line), 0)
+  const catBudgeted = cat => data.accounts.reduce((sum,account)=>{const explicit=Object.values(budget.categoryLimits||{}).find(e=>e.accountId===account.id&&e.month===monthKey&&e.category===cat);return sum+(explicit?explicit.amount:(BUDGET_CATS[cat]||[]).filter(l=>l.accountId===account.id).reduce((s,l)=>s+getBudgeted(l),0))},0)
   const lineActual = line => actualAllocation.byLine[line.id] || 0
   const catActual = cat => syncedActualsByCategory[cat] || 0
 
-  const totalBudget  = Object.keys(BUDGET_CATS).filter(c => c !== 'Income').reduce((s, c) => s + catBudgeted(c), 0)
+  const totalBudget  = Object.keys(DISPLAY_BUDGET_CATS).filter(c => c !== 'Income').reduce((s, c) => s + catBudgeted(c), 0)
   const totalActual  = Object.entries(syncedActualsByCategory).filter(([category]) => category !== 'Income').reduce((sum, [, amount]) => sum + amount, 0)
   const totalIncomeBudget = catBudgeted('Income')
   const totalIncomeActual = catActual('Income')
@@ -133,6 +136,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
         </div>
 
         <FinanceExport report={{title:`Budget ${monthKey}`,notes:[`${monthFrom} through ${monthTo}`,`Accounts: ${data.accounts.map(a=>a.name).join(', ')}`,freshnessMessage,'Actuals include posted activity only. Variance = Budget minus Actual.'],sections:[recordsSection('Consolidated categories',exportRows,['group','category','direction','budget','actual','variance']),recordsSection('Group totals',Object.keys(DISPLAY_BUDGET_CATS).map(cat=>({group:cat,budget:catBudgeted(cat),actual:catActual(cat)})))]}} />
+        <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly}/>
         {/* Summary cards */}
         <div className="finance-budget-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
           {[
@@ -313,6 +317,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
       </div>
 
       <FinanceExport report={{title:`Budget Plan ${selYear}`,notes:[`Accounts: ${data.accounts.map(a=>a.name).join(', ')}`,'Individual reviewed target records; totals include all scheduled occurrences.'],sections:[recordsSection('Annual plan',budgetLines.map(line=>({group:line.category,category:line.name,account:line.accountId,...Object.fromEntries(MONTHS.map((m,i)=>[m,getBudgeted(line,i,selYear)])),total:annualTotal(line)})))]}}/>
+      <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly}/>
       {/* Table */}
       <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: period === 'monthly' ? 1100 : 500 }}>

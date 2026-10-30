@@ -2,7 +2,7 @@ import {buildBudgetLines,buildLegacyBudgetOwners,budgetTargetForLine} from './bu
 import {budgetCategoryForTransaction,isTransferTransaction} from './reportingData.js'
 import {buildUniquePlaidAccountMap} from './calendarSemantics.js'
 const cents=v=>Math.round(Number(v||0)*100)
-const category=t=>budgetCategoryForTransaction({...t,pending:false})||t.cat||t.category||'Other'
+const category=t=>t.cat||budgetCategoryForTransaction({...t,pending:false})||t.category||'Uncategorized'
 
 // Explicit category allowances reserve only the portion not represented by
 // posted charges, pending holds or remaining scheduled payments. Current-month
@@ -12,7 +12,7 @@ export function applyBudgetAllowances(projection,{accounts,scheduled,actuals,bud
  const allLines=buildBudgetLines(scheduled,budget,{accountIds:new Set(accounts.map(a=>a.id))}).filter(l=>l.direction==='expense')
  const enabled=new Set(allLines.filter(l=>budget.lines?.[l.id]?.cashAllowance).map(l=>`${l.accountId}|${l.category}`))
  const lines=allLines.filter(l=>enabled.has(`${l.accountId}|${l.category}`))
- if(!lines.length)return projection
+ if(!lines.length&&!Object.keys(budget.categoryLimits||{}).length)return projection
  const links=buildUniquePlaidAccountMap(accounts),owners=buildLegacyBudgetOwners(lines)
  const unique=[...new Map(actuals.filter(t=>t.id).map(t=>[t.id,t])).values()]
  const replaced=new Set(unique.filter(t=>!t.pending).map(t=>t.pendingTransactionId).filter(Boolean))
@@ -22,6 +22,7 @@ export function applyBudgetAllowances(projection,{accounts,scheduled,actuals,bud
  for(const month of months){
   const groups=new Map()
   for(const line of lines){const target=budgetTargetForLine({budget,line,year:Number(month.slice(0,4)),month:Number(month.slice(5,7))-1,legacyOwners:owners});if(!Number.isFinite(target)||target<=0)continue;const key=`${line.accountId}|${month}|${line.category}`;const group=groups.get(key)||{accountId:line.accountId,category:line.category,target:0};group.target+=cents(target);groups.set(key,group)}
+  for(const entry of Object.values(budget.categoryLimits||{})){if(entry.month===month&&accounts.some(a=>a.id===entry.accountId)){const key=`${entry.accountId}|${month}|${entry.category}`;groups.set(key,{accountId:entry.accountId,category:entry.category,target:cents(entry.forecastAllocation)})}}
   for(const [key,group] of groups){let planned=0
    for(const [date,point] of projection){if(date<today||!date.startsWith(month))continue;for(const plan of point.txns||[]){if(plan.type!=='expense'||plan.acct!==group.accountId||category({...plan,amount:1})!==group.category)continue;const realized=point.realization?.find(r=>r.id===plan.id);planned+=realized?Math.max(0,-cents(realized.delta)):cents(plan.amount)}}
    const remaining=Math.max(0,group.target-(amounts.get(key)||0)-planned),date=month===today.slice(0,7)?today:`${month}-01`

@@ -179,6 +179,7 @@ export function budgetCategoryForTransaction(transaction, { includeAllCredits = 
   // Cash budgeting includes every posted non-transfer credit, including refunds
   // and deposits awaiting classification. Income reports keep stricter semantics.
   if (transactionDirection(transaction) === 'income') return includeAllCredits || isRealizedIncomeTransaction(transaction) ? 'Income' : null
+  if(transaction._categoryResolved && transaction.category)return transaction.category
   const raw = String(transaction.category || transaction.cat || '').toLowerCase().replaceAll('_', ' ')
   const canonical = ['Housing','Utilities','Transportation','Insurance','Health','Debt','Food','Household','Family','Subscriptions','Discretionary','Other'].find(category => category.toLowerCase() === raw.trim())
   if (canonical) return canonical

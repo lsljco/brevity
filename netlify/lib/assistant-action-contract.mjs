@@ -165,7 +165,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.session.create': ['cadence', 'meetingDate', 'startedAt', 'endedAt', 'summary', 'notes', 'transcript', 'packetText', 'actions', 'corrections'],
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
-  'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount', 'cashAllowance'],
+  'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount', 'cashAllowance', 'categoryLimit', 'forecastAllocation'],
   'forecast.update': ['favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'finance.reserve.set': ['amount'],
@@ -193,8 +193,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
 const STRING_FIELDS = new Set(['calendarId','calendarName','budgetLineId', 'verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
-const NUMBER_FIELDS = new Set(['originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
-const BOOLEAN_FIELDS = new Set(['cashAllowance', 'allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
+const NUMBER_FIELDS = new Set(['forecastAllocation', 'originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
+const BOOLEAN_FIELDS = new Set(['categoryLimit', 'cashAllowance', 'allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'recurrenceEndDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
 const ACTION_ENUMS = {
   'decision.create': { status:['needs-decision', 'determined', 'complete', 'deferred'] },
@@ -680,6 +680,7 @@ export function normalizeActionOperation(input = {}) {
     if (!Number.isInteger(payload.year) || payload.year < 2000 || payload.year > 2100) throw new Error('A budget update requires an exact year from 2000 through 2100.')
     if (!payload.lineId || operation.targetId !== payload.lineId || !payload.accountId) throw new Error('A budget update requires the exact stable line and account ids.')
     if (!['income', 'expense'].includes(payload.direction)) throw new Error('A budget update requires an income or expense direction.')
+    if(payload.categoryLimit&&(payload.direction!=='expense'||!payload.category||Number(payload.value??payload.amount)<0||!Number.isFinite(payload.forecastAllocation)||payload.forecastAllocation<0))throw new Error('Category budgets require an expense category and non-negative budget and forecast amounts.')
   }
   if (type === 'forecast.update' && !operation.targetId) throw new Error('A forecast update requires the exact scenario id, or model for the shared planning expense.')
   if(type === 'finance.reserve.set' && (!Number.isFinite(payload.amount)||payload.amount<0))throw new Error('Enter a non-negative operating reserve minimum.')
@@ -753,7 +754,8 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
   if (operations.filter(operation => operation.domain === 'calendar').length > 1) throw new Error('For safety, each Family Calendar confirmation can change only one event.')
   const resourceGroups = new Set(operations.map(resourceGroupForOperation))
   const recoveryBundle=operations.filter(op=>op.type==='orchestration.recovery.update'&&['activate','end'].includes(op.payload.intent)).length===1&&operations.every(op=>op.type==='orchestration.recovery.update'||op.type==='household.schedule.occurrence.update')
-  if (resourceGroups.size > 1&&!recoveryBundle) throw new Error('For safety, each Action Mode confirmation must change one Brevity record group. Ask Brevity to prepare the remaining changes next.')
+  const categorizationBundle=operations.length===2&&operations[0].type==='transaction.categorize'&&operations[1].type==='transaction.rule.create'&&operations[0].payload.category===operations[1].payload.category
+  if (resourceGroups.size > 1&&!recoveryBundle&&!categorizationBundle) throw new Error('For safety, each Action Mode confirmation must change one Brevity record group. Ask Brevity to prepare the remaining changes next.')
   const risk = operations.some(operation => operation.risk === 'strong-confirmation') || operations.length > 1 ? 'strong-confirmation' : 'confirmation'
   return {
     id,

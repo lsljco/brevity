@@ -21,7 +21,7 @@ export function transactionMatchesRule(transaction, rule, accounts = []) {
     if (mode === 'exactly' && source !== value) return false
   }
   if (active(conditions.merchantName)) {
-    const source = normalized(transaction.name || transaction.merchant_name)
+    const source = normalized(transaction.merchant_name || transaction.name)
     const value = normalized(conditions.merchantName.value)
     const mode = conditions.merchantName.match || 'exactly'
     if (mode === 'contains' && !source.includes(value)) return false
@@ -48,7 +48,7 @@ export function applyTransactionRule(transaction, rule, accounts = []) {
   const actions = rule.actions || {}
   const next = { ...transaction }
   if (active(actions.renameMerchant) && actions.renameMerchant.value) next.name = actions.renameMerchant.value.trim()
-  if (active(actions.updateCategory) && actions.updateCategory.value) next.category = actions.updateCategory.value.trim()
+  if (active(actions.updateCategory) && actions.updateCategory.value) { next.category = actions.updateCategory.value.trim(); next._categoryResolved = true }
   if (active(actions.addTags) && actions.addTags.value) {
     const tags = Array.isArray(next.tags) ? next.tags : String(next.tags || '').split(',')
     next.tags = [...new Set([...tags, ...String(actions.addTags.value).split(',')].map(tag => tag.trim()).filter(Boolean))]

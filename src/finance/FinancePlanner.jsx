@@ -42,6 +42,7 @@ import {
   selectOperatingTransactions,
 } from './monthlyCashFlow.js'
 import { FINANCE_REFRESH_EVENT, LIVE_BALANCE_MODE, LIVE_BALANCE_PROVENANCE, PLAID_ACTUALS_KEY, buildPlaidBalanceSourceResult, classifyPlaidBalanceGaps, compatiblePlaidAccountType, fetchLatestPlaidTransactions, financeInstitutionFailure, invalidateLatestBalanceRefreshStatus, mergePlaidTransactionResponse, readLatestBalanceRefreshStatus, readTransactionFreshness, recordLatestBalanceRefreshStatus, recordTransactionFreshness, scopePlaidTransactionsByAccount, waitForPlaidTransactionRefresh } from './financeRefresh.js'
+import {categorizeExpense} from './expenseCategorization.js'
 import { applyTransactionRules } from './transactionRules.js'
 import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
@@ -1524,21 +1525,22 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   )
   const unmappedActuals = actualAccountScope.unmapped
 
+  const reviewedCategoryOverrides=useMemo(()=>{const sources=new Map(retainedActuals.map(t=>[t.id,t]));return Object.fromEntries(Object.entries(txOverrides).map(([id,o])=>[id,{...sources.get(id),...o}]))},[retainedActuals,txOverrides])
   // Actuals filtered by selected accounts, with user overrides applied
   const filteredActuals = useMemo(() => {
     return decorateVendorTransactions(actualAccountScope.included
       .map(tx => applyTransactionRules(tx, txRules, data.accounts))
       .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
-      .filter(tx => !tx._deleted),vendorDirectory,'posted',vendorOrder)
-  }, [actualAccountScope, data.accounts, txOverrides, txRules,vendorDirectory,vendorOrder])
+      .filter(tx => !tx._deleted).map(tx=>categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})),vendorDirectory,'posted',vendorOrder)
+  }, [actualAccountScope, data.accounts, data.transactions,dailyBudget,reviewedCategoryOverrides, txOverrides, txRules,vendorDirectory,vendorOrder])
   const balanceActuals = useMemo(
     () => mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal).filter(transaction => !transaction.pending),
     [actualAccountScope.included, plaidIdToLocal],
   )
   const cashForecastActuals = useMemo(
     () => decorateVendorTransactions(mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal)
-      .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])),vendorDirectory,'posted',vendorOrder),
-    [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder],
+      .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])).map(tx=>categorizeExpense({...applyTransactionRules(tx,txRules,data.accounts),...(txOverrides[tx.id]||{})},{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})),vendorDirectory,'posted',vendorOrder),
+    [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder,txRules,txOverrides,dailyBudget,reviewedCategoryOverrides,data.accounts,data.transactions],
   )
   const recoveryFinanceSources = useMemo(() => ({
     data:{...data,transactions:decorateVendorTransactions(data.transactions,vendorDirectory,'planned',vendorOrder)},
@@ -2135,7 +2137,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     refresh();window.addEventListener(SHARED_STATE_EVENT,refresh);window.addEventListener('storage',refresh)
     return () => {window.removeEventListener(SHARED_STATE_EVENT,refresh);window.removeEventListener('storage',refresh)}
   },[view])
-  const allSpendingActuals = useMemo(() => retainedActuals.map(tx => applyTransactionRules(tx,txRules,data.accounts)).map(tx => txOverrides[tx.id]?{...tx,...txOverrides[tx.id]}:tx).filter(tx=>!tx._deleted),[retainedActuals,txRules,txOverrides,data.accounts])
+  const allSpendingActuals = useMemo(() => retainedActuals.map(tx => applyTransactionRules(tx,txRules,data.accounts)).map(tx => txOverrides[tx.id]?{...tx,...txOverrides[tx.id]}:tx).filter(tx=>!tx._deleted).map(tx=>categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})),[retainedActuals,txRules,txOverrides,reviewedCategoryOverrides,data.accounts,data.transactions,dailyBudget])
   const spendingSources = useMemo(() => ({accounts:data.accounts,scheduled:data.transactions,actuals:allSpendingActuals,budget:dailyBudget,reviews:data.spendingReviews,period:{from:todayKey.slice(0,7)+'-01',to:todayKey},budgetLegacyYear:t.getFullYear(),budgetLegacyAccountId:data.accounts.find(a=>a.id==='a1')?.id}),[data,allSpendingActuals,dailyBudget,todayKey])
   const todayAlignment = useMemo(() => buildDailyAlignmentSnapshot({
     date: todayKey,
@@ -3053,7 +3055,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {/* ══════════ SCENARIO MODELING ══════════ */}
       {view === 'spending-review' && <Suspense fallback={<p>Loading spending review…</p>}><SpendingReview
-        accounts={data.accounts} scheduled={data.transactions} actuals={allSpendingActuals} budget={dailyBudget}
+        accounts={fd.accounts} scheduled={data.transactions} actuals={allSpendingActuals} budget={dailyBudget}
         reviews={data.spendingReviews || {}} actions={spendingActions} period={financeRange} readOnly={readOnly}
         budgetLegacyYear={t.getFullYear()} budgetLegacyAccountId={data.accounts.find(a=>a.id==='a1')?.id}
         onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})} onBudget={reviewBudgetChange}
@@ -3309,6 +3311,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             onOpenTransactions={openFilteredTransactions}
             onOpenRecurring={openScheduledTransactions}
             onReviewBudgetChange={reviewBudgetChange}
+            onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}
             readOnly={readOnly}
           /></Suspense>
         </div>

@@ -8,7 +8,7 @@ import { approvedReconciliationMatches, buildAutoReconciliationReport } from './
 const cents = value => Math.round(Number(value) * 100)
 const dollars = value => value / 100
 const categories = new Set(['Housing','Utilities','Transportation','Insurance','Health','Debt','Food','Household','Family','Subscriptions','Discretionary','Other'])
-export const spendingCategory = row => categories.has(row.category || row.cat) ? row.category || row.cat : budgetCategoryForTransaction({...row,pending:false}) || 'Other'
+export const spendingCategory = row => row._categoryResolved ? row.category : categories.has(row.category || row.cat) ? row.category || row.cat : budgetCategoryForTransaction({...row,pending:false}) || 'Other'
 export const SPENDING_LABELS = {unbudgeted:'Unbudgeted',over:'Over budget',review:'Needs review',budgeted:'Budgeted',planned:'Planned and budgeted'}
 
 // Same evidence and classifications for the review workspace and all five
@@ -33,10 +33,11 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
       if(line.direction==='income'){incomeTarget+=amount;incomeLines++;continue}
       expenseTarget+=amount
       for(const tx of line.transactions||[])lineTargets.set(`${tx.id}|${month}`,amount)
-      const category=spendingCategory({category:line.category,amount:1}),key=`${line.accountId}|${month}|${category}`
+      const category=line.category,key=`${line.accountId}|${month}|${category}`
       targets.set(key,(targets.get(key)||0)+amount)
     }
   }
+  for(const entry of Object.values(budget.categoryLimits||{})){if(!accountIds.has(entry.accountId)||entry.month<startMonth||entry.month>endMonth)continue;const key=`${entry.accountId}|${entry.month}|${entry.category}`;targets.set(key,cents(entry.amount))}
   const unique=[...new Map(actuals.filter(t=>t?.id&&!t._deleted).map(t=>[t.id,t])).values()]
   const superseded=new Set(unique.filter(t=>!t.pending).map(t=>t.pendingTransactionId).filter(Boolean))
   const raw=unique.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(t.date||'')&&t.date>=`${startMonth}-01`&&t.date<=period.to&&Number.isFinite(Number(t.amount))&&!isTransferTransaction(t)&&t.type!=='transfer'&&(!t.pending||!superseded.has(t.id))).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id))
@@ -53,10 +54,11 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
   for(const actual of raw.filter(t=>!t.pending)) {
     const match=matches.get(actual.id)
     if(!match||match.plan.type!=='expense'||match.occurrenceDate.slice(0,7)!==actual.date.slice(0,7))continue
+    if(['reviewed','rule'].includes(actual._categorySource)&&actual.category!==(match.plan.cat||match.plan.category))continue
     const assigned=assignedBudgetLine(actual,lines,links)
     if(assigned&&!assigned.transactions?.some(plan=>plan.id===match.plan.id))continue
     const month=actual.date.slice(0,7),lineKey=`${match.plan.id}|${month}`
-    const category=spendingCategory(match.plan),key=`${links[actual.accountId]}|${month}|${category}`
+    const category=match.plan.cat||match.plan.category||'Uncategorized',key=`${links[actual.accountId]}|${month}|${category}`
     const available=Math.max(0,(lineTargets.get(lineKey)||0)-(lineUsed.get(lineKey)||0))
     const covered=Math.max(0,Math.min(cents(actual.amount),cents(match.plan.amount),available))
     lineUsed.set(lineKey,(lineUsed.get(lineKey)||0)+covered)
@@ -74,15 +76,15 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
     if(amount<=0){if(inPeriod&&!t.pending&&accountId){if(isRealizedIncomeTransaction(t))postedIncome-=amount;else otherInflows-=amount}continue}
     const assigned=assignedBudgetLine(t,lines,links)
     const matched=coverage.get(t.id)
-    const category=matched?.category||spendingCategory(assigned?{category:assigned.category,amount:t.amount}:t),key=`${accountId}|${t.date.slice(0,7)}|${category}`,target=targets.get(key)||0
+    const category=matched?.category||spendingCategory(assigned?{category:assigned.category,_categoryResolved:true,amount:t.amount}:t),key=`${accountId}|${t.date.slice(0,7)}|${category}`,target=targets.get(key)||0
     const before=used.get(key)||0
-    const needsReview=!accountId||category==='Other'
+    const needsReview=!accountId||category==='Uncategorized'||category==='Other'&&!t._categoryResolved
     const available=Math.max(0,target-(reserved.get(key)||0)),uncovered=Math.max(0,amount-(matched?.covered||0)),prior=unreservedUsed.get(key)||0
     const over=Math.max(0,prior+uncovered-available)-Math.max(0,prior-available)
     const exception=needsReview?'review':target<=0?'unbudgeted':over>0?'over':matched?'planned':'budgeted'
     const excess=exception==='over'?over:['review','unbudgeted'].includes(exception)?amount:0
     const review=reviews[t.id]||null
-    const row={...t,accountId:accountId||'',bankAccountId:t.accountId,accountName:accounts.find(a=>a.id===accountId)?.name||'Unmapped account',category,classification:exception,amount:dollars(amount),exceptionAmount:dollars(excess),budget:dollars(target),monthSpent:dollars(before+amount),review,matchedPlanId:matched?.match.plan.id||null,plannedAmount:matched?Number(matched.match.plan.amount):null,amountVariance:matched?dollars(amount-cents(matched.match.plan.amount)):null,name:t.merchant_name||t.name||'Unidentified merchant',reason:!accountId?'Account link needs review':category==='Other'?'Category needs review':target<=0?'No approved allocation':exception==='over'?(matched?'Matched projected payment; amount exceeds the remaining allocation':'Monthly category allowance exceeded'):matched?`Matches projected ${matched.match.plan.name}${amount!==cents(matched.match.plan.amount)?'; posted amount differs from projection':''}`:'Covered by monthly category allowance'}
+    const row={...t,accountId:accountId||'',bankAccountId:t.accountId,accountName:accounts.find(a=>a.id===accountId)?.name||'Unmapped account',category,classification:exception,amount:dollars(amount),exceptionAmount:dollars(excess),budget:dollars(target),monthSpent:dollars(before+amount),review,matchedPlanId:matched?.match.plan.id||null,plannedAmount:matched?Number(matched.match.plan.amount):null,amountVariance:matched?dollars(amount-cents(matched.match.plan.amount)):null,name:t.merchant_name||t.name||'Unidentified merchant',reason:!accountId?'Account link needs review':needsReview?'Category needs review':target<=0?'No approved allocation':exception==='over'?(matched?'Matched projected payment; amount exceeds the remaining allocation':'Monthly category allowance exceeded'):matched?`Matches projected ${matched.match.plan.name}${amount!==cents(matched.match.plan.amount)?'; posted amount differs from projection':''}`:'Covered by monthly category allowance'}
     if(t.pending){if(inPeriod)pending.push(row);continue}
     used.set(key,before+amount)
     unreservedUsed.set(key,prior+uncovered)
@@ -97,7 +99,7 @@ export function buildSpendingAccountability({accounts=[],scheduled=[],actuals=[]
   const linked=accounts.length>0&&Object.keys(links).length===accounts.length
   // This is a net-cash-flow comparison, not proof of deposits into savings.
   // Favorable variances remain negative and the residual is explicit.
-  const bridge=incomeLines&&missingTargets===0&&linked&&fullMonths&&period.to<today?{
+  const bridge=!Object.keys(budget.categoryLimits||{}).length&&incomeLines&&missingTargets===0&&linked&&fullMonths&&period.to<today?{
     target:dollars(incomeTarget-expenseTarget),actual:dollars(postedIncome+otherInflows-postedSpending),
     gap:dollars(incomeTarget-expenseTarget-postedIncome-otherInflows+postedSpending),
     income:dollars(incomeTarget-postedIncome),unbudgeted:dollars(totals.unbudgeted),
