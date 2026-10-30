@@ -27,3 +27,8 @@ export function budgetCoverage({rawActuals=[],includedActuals=[],accountMap={},a
  }
  return {scopedPostedDebits:scopedPostedDebitCents/100,...Object.fromEntries(Object.entries(groups).map(([key,v])=>[key,{count:v.count,amount:v.cents/100}]))}
 }
+
+// A successfully refreshed empty ledger is zero activity; a missing snapshot is unknown.
+export function hasBudgetActualsSnapshot(rawActuals = [], freshnessStatus = 'unknown') {
+ return rawActuals.length > 0 || freshnessStatus === 'fresh'
+}

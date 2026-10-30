@@ -3314,6 +3314,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             data={fd}
             plaidActuals={filteredActuals}
             freshnessMessage={actualsFreshnessMessage}
+            freshnessStatus={actualsFreshness?.status}
             rawActuals={retainedActuals}
             allAccountMap={plaidIdToLocal}
             onReviewAccounts={()=>setView('accounts')}

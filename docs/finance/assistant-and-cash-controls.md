@@ -58,3 +58,9 @@ Reference: user-provided Monarch transaction list, detail and merchant history s
 - Keep personal-account activity outside household totals by default.
 
 Initial implementation includes sorting, category filters, bank-supplied merchant display and an expandable history table. Existing imported rows without merchant metadata require a subsequent sync or a reviewed vendor link. Editable notes/tags/goals, vendor alias management, a monthly trend chart, and desktop/tablet visual verification remain unfinished. These must not be described as shipped parity with the reference.
+
+## Release audit update
+
+The staging browser audit verified all five meeting cadence selectors, the daily earliest-due priority table, expanded budget coverage, category filtering, vendor sorting, and the posted-only transaction view. Desktop glass cards were visually inspected without overlap. Staging has no connected bank transaction history, so live balances, merchant history populated from real records and household surplus remain unverified.
+
+The audit also found that Budget could present zero actuals when no bank snapshot existed. The release now suppresses actual spending, remaining budget and spending percentages in that case while preserving Plan Grid access. A successfully refreshed empty snapshot still represents zero activity; retained stale records remain visible with their freshness warning.

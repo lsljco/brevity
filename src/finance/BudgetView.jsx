@@ -1,5 +1,6 @@
 import CategoryBudgetSummary from './CategoryBudgetSummary.jsx'
 import BudgetCoverage from './BudgetCoverage.jsx'
+import {hasBudgetActualsSnapshot} from './budgetCoverage.js'
 import './SpendingReview.css'
 import {Fragment,useState,useEffect,useMemo} from 'react'
 import FinanceExport from './FinanceExport.jsx'
@@ -17,7 +18,8 @@ function loadBudget() {
   try { return JSON.parse(localStorage.getItem(BUDGET_LS_KEY)) || {} } catch { return {} }
 }
 
-export default function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], includesUnmapped=false, allAccountMap={}, onReviewAccounts, data, plaidActuals = [], rawActuals=plaidActuals, legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, onReview, readOnly = false }) {
+export default function BudgetView({ vendorOrder='', freshnessMessage='', freshnessStatus='unknown', unmappedActuals=[], includesUnmapped=false, allAccountMap={}, onReviewAccounts, data, plaidActuals = [], rawActuals=plaidActuals, legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, onReview, readOnly = false }) {
+  const hasActualsSnapshot = hasBudgetActualsSnapshot(rawActuals, freshnessStatus)
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
@@ -136,6 +138,12 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
           </div>
         </div>
 
+        {!hasActualsSnapshot ? <section className="budget-coverage" role="status" aria-label="Budget actuals unavailable">
+          <h3>Actual spending is unavailable</h3>
+          <p>{freshnessMessage || 'No verified bank transaction snapshot is available.'}</p>
+          <p>Missing bank history is not zero spending. Actuals, remaining budget and spending percentages will appear when transaction history is available. Your budget targets remain accessible in Plan Grid.</p>
+          {onReviewAccounts && <button type="button" onClick={onReviewAccounts}>Review account links</button>}
+        </section> : <>
         <FinanceExport report={{title:`Budget ${monthKey}`,notes:[`${monthFrom} through ${monthTo}`,`Accounts: ${data.accounts.map(a=>a.name).join(', ')}`,freshnessMessage,'Actuals include posted activity only. Variance = Budget minus Actual.'],sections:[recordsSection('Consolidated categories',exportRows,['group','category','direction','budget','actual','variance']),recordsSection('Group totals',Object.keys(DISPLAY_BUDGET_CATS).map(cat=>({group:cat,budget:catBudgeted(cat),actual:catActual(cat)})))]}} />
         <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly}/>
         <BudgetCoverage rawActuals={rawActuals} includedActuals={plaidActuals} accountMap={allAccountMap} accounts={data.accounts} month={monthKey} includeUnmapped={includesUnmapped} totalActual={totalActual} onReviewAccounts={onReviewAccounts}/>
@@ -255,6 +263,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
           })}
         </div>
         <p style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)' }}>{readOnly ? 'Posted actual and budget amounts are visible here; the household administrator manages corrections and targets.' : 'Actuals are calculated from posted bank activity and cannot be overwritten manually · pending transactions are excluded · budgeted amounts use reviewed targets or scheduled occurrences · use Plan Grid for reviewed target changes'}</p>
+        </>}
       </div>
     )
   }
@@ -319,7 +328,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
       </div>
 
       <FinanceExport report={{title:`Budget Plan ${selYear}`,notes:[`Accounts: ${data.accounts.map(a=>a.name).join(', ')}`,'Individual reviewed target records; totals include all scheduled occurrences.'],sections:[recordsSection('Annual plan',budgetLines.map(line=>({group:line.category,category:line.name,account:line.accountId,...Object.fromEntries(MONTHS.map((m,i)=>[m,getBudgeted(line,i,selYear)])),total:annualTotal(line)})))]}}/>
-      <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly}/>
+      {hasActualsSnapshot && <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly}/>}
       {/* Table */}
       <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: period === 'monthly' ? 1100 : 500 }}>
