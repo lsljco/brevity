@@ -96,3 +96,14 @@ test('a reviewed budget-line assignment takes precedence over an inferred mercha
  assert.equal(result.rows[0].matchedPlanId,null)
  assert.equal(result.rows[0].exceptionAmount,0)
 })
+
+
+test('small fees and generic merchant words do not settle a projected bill',()=>{
+ const bill={...plan,name:'Kennesaw State tuition',cat:'Family',amount:791.25,freq:'once',start:'2026-10-05'}
+ for(const charge of [tx('fee','2026-10-05',25,'Other',{name:'Kennesaw State U RETURN FEE'}),tx('tiny','2026-10-05',2.99,'Other',{name:'Kennesaw State tuition'}),tx('other','2026-10-05',791.25,'Other',{name:'Other University'})]){
+  const result=build({budget:{},scheduled:[bill],actuals:[charge]})
+  assert.equal(result.rows[0].matchedPlanId,null)
+ }
+ const result=build({budget:{},scheduled:[{...bill,name:'HOA Dues',amount:1375}],actuals:[tx('fee','2026-10-05',2.99,'Other',{name:'ACCT INTEGRATORS Assn Dues'})]})
+ assert.equal(result.rows[0].matchedPlanId,null)
+})

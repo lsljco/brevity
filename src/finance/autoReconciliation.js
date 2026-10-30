@@ -8,7 +8,7 @@ import { getHouseholdDateKey } from './financeTime.js'
 export const RECONCILIATION_BATCH_LIMIT = 8
 export const cents = value => Math.round(Number(value) * 100)
 const bankName = actual => String(actual?.originalStatement || actual?.name || actual?.merchant_name || '')
-const ignored = new Set(['bank','draft','electric','utility','utilities','bill','debit','credit','card','ach','the','emc','loan','personal','marketplace'])
+const ignored = new Set(['bank','draft','electric','utility','utilities','bill','debit','credit','card','ach','the','emc','loan','personal','marketplace','insurance','life','fuel','dues'])
 function vendorMatches(plan, actual) {
   if (plan.vendorId && actual.vendorId) return plan.vendorId === actual.vendorId
   if (plan.type === 'income') return incomeSourceMatches(plan,actual)
@@ -55,6 +55,10 @@ export function buildAutoReconciliationReport({ scheduled = [], actuals = [], ac
       const variance = Math.abs(cents(actual.amount)) - cents(plan.amount)
       // Roughly equal: within 2%, capped at $25, with a $2 minimum tolerance.
       const tolerance = Math.max(200, Math.min(2500, Math.round(cents(plan.amount) * .02)))
+      // Different amounts can still identify a bill, but a fee or a tiny
+      // fraction of the expected payment is not evidence of paying that bill.
+      if (allowAmountVariance && (Math.abs(variance) > cents(plan.amount) * .5
+        || /\b(return fee|late fee|service fee|processing fee|nsf|overdraft)\b/i.test(`${actual.name || ''} ${actual.originalStatement || ''}`))) continue
       if (!Number.isFinite(variance) || Number(plan.amount) <= 0 || (!allowAmountVariance && Math.abs(variance) > tolerance)) continue
       for (let offset=-7;offset<=7;offset++) {
         const date=addDays(posting,offset)
