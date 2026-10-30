@@ -127,7 +127,7 @@ test('historical cash reconstruction requires unique compatible ledger-current a
 test('Cash Forecast names its scope and owns one explicit bank-activity toggle', () => {
   assert.match(agenda, /<h1 id="cash-forecast-title">Cash Forecast<\/h1>/)
   assert.match(planner, /transactionsForCalendarMonth\(plaidActuals \|\| \[\], calYear, calMonth\)/)
-  assert.match(planner, /aria-pressed=\{showActuals\}/)
+  assert.match(readFileSync(new URL('./CashForecastToolbar.jsx', import.meta.url), 'utf8'), /aria-pressed=\{showActuals\}/)
   assert.match(planner + readFileSync(new URL('./CashForecastToolbar.jsx', import.meta.url), 'utf8'), /bank activity for/)
   assert.doesNotMatch(planner, /`Actuals \(\$\{plaidActuals\.length\}\)`/)
   assert.match(planner, /!\['calendar','overview','daily-alignment'\]\.includes\(view\) && \(/, 'global account bar toggle should be absent from Cash Forecast')
