@@ -68,7 +68,7 @@ test('each action accepts only its own fields and validates field types and enum
   const debtRule=normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-heloc',transactionDate:'2026-09-05',transactionName:'HELOC payment',amount:2735.02,nonPrincipalAmount:0,paymentRule:{enabled:true,matchText:'TOWER HELOC',matchField:'originalStatement',matchMode:'contains',accountId:'operating',nonPrincipalAmount:0}}}]},{member:'Larry',role:'admin'})
   assert.equal(debtRule.operations[0].payload.paymentRule.matchText,'TOWER HELOC')
   assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'debt.transaction.apply',targetId:'mortgage',payload:{transactionId:'bank-mortgage',transactionDate:'2026-09-05',transactionName:'Mortgage payment',amount:3000,nonPrincipalAmount:3100}}]},{member:'Larry',role:'admin'}),/between zero and the payment total/)
-  for (const field of ['amount','date','originalStatement','notes','goal','splits','needsReview']) {
+  for (const field of ['amount','date','originalStatement','splits','needsReview']) {
     assert.throws(()=>normalizeActionProposal({operations:[{...base,type:'transaction.update',payload:{name:'AT&T',[field]:field==='amount'?450:'changed'}}]},{member:'Larry',role:'admin'}),new RegExp(`unsupported field: ${field}`))
   }
 })
@@ -555,7 +555,7 @@ test('reviewed actual-transaction metadata uses CAS, immutable audit history, an
   const proposal=await prepareDirectProposal({
     input:{
       summary:'Correct AT&T metadata',expectedVersion:3,
-      operation:{type:'transaction.update',targetId:'bank-1',description:'Review the bank transaction name and category',payload:{name:'AT&T Wireless',category:'Phone'}},
+      operation:{type:'transaction.update',targetId:'bank-1',description:'Review the bank transaction name and category',payload:{name:'AT&T Wireless',category:'Phone',notes:'Statement checked',tags:['Household'],goal:'Cash reserve'}},
     },
     session,permissions,repository,resources,now:instant,id:'transaction-proposal',
   })
@@ -564,7 +564,7 @@ test('reviewed actual-transaction metadata uses CAS, immutable audit history, an
   const completed=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},leaseMs:0,now:()=>instant})
   const current=await resources.read('shared:lslj_tx_overrides_v1')
   assert.equal(current.version,4)
-  assert.deepEqual(current.value['bank-1'],{id:'bank-1',name:'AT&T Wireless',category:'Phone'})
+  assert.deepEqual(current.value['bank-1'],{id:'bank-1',name:'AT&T Wireless',category:'Phone',notes:'Statement checked',tags:['Household'],goal:'Cash reserve'})
   assert.deepEqual(current.value['bank-2'],original['bank-2'])
   assert.equal('amount' in current.value['bank-1'],false)
   assert.equal((await repository.history()).filter(item=>item.id===completed.audit.id).length,1)

@@ -47,21 +47,21 @@ test('actual transaction and legacy rule controls describe close, remove, and to
   assert.ok(actualTransaction.includes('aria-label={`Remove rule split ${i + 1}`}'))
 })
 
-test('actual bank facts stay immutable and only Name and Category enter reviewed Action Mode', () => {
+test('actual bank facts stay immutable and metadata enters reviewed Action Mode', () => {
   const saveStart = actualTransaction.lastIndexOf('const handleSave = async () =>')
   const saveEnd = actualTransaction.indexOf('// Find local account', saveStart)
   const saveBlock = actualTransaction.slice(saveStart, saveEnd)
   assert.ok(saveStart >= 0 && saveEnd > saveStart)
   assert.match(saveBlock, /name: form\.name\.trim\(\)/)
   assert.match(saveBlock, /category: form\.category\.trim\(\)/)
-  for (const bankOrUnsupportedField of ['form.amount', 'form.date', 'form.originalStatement', 'form.notes', 'form.goal', 'form.splits', 'attachments']) {
+  for (const bankOrUnsupportedField of ['form.amount', 'form.date', 'form.originalStatement', 'form.splits', 'attachments']) {
     assert.equal(saveBlock.includes(bankOrUnsupportedField), false)
   }
   assert.match(actualTransaction, /value=\{form\.originalStatement\}[\s\S]{0,80}readOnly/)
   assert.match(actualTransaction, /type="date" value=\{form\.date\} readOnly/)
   assert.match(actualTransaction, /value=\{form\.amount\} readOnly/)
-  assert.match(actualTransaction, /value=\{form\.goal\} disabled/)
-  assert.match(actualTransaction, /value=\{form\.notes\} readOnly/)
+  assert.match(actualTransaction, /aria-label="Transaction goal"/)
+  assert.match(actualTransaction, /aria-label="Transaction notes"/)
   assert.match(actualTransaction, /value=\{form\.needsReview\} disabled/)
   assert.match(actualTransaction, /Bank Transaction Cannot Be Deleted/)
   assert.match(actualTransaction, /Save this category change as a rule\?/)

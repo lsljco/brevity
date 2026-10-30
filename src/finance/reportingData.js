@@ -67,6 +67,9 @@ export function actualTransactionKind(transaction) {
 }
 
 export function isTransferTransaction(transaction) {
+  // Reviewed household distributions leave the managed household cash boundary.
+  // Preserve the bank category and signed amount; only management reporting changes.
+  if(transaction?.managementCategory==='Dividend Expense' && Number(transaction.amount)>0)return false
   const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
   const name = String(transaction?.name || transaction?.merchant_name || '').toLowerCase()
   const statement = String(transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
@@ -176,6 +179,7 @@ export function matchesTransactionFilter(transaction, filter = {}) {
 
 export function budgetCategoryForTransaction(transaction, { includeAllCredits = false } = {}) {
   if (transaction?.pending || isTransferTransaction(transaction)) return null
+  if(transaction?.managementCategory==='Dividend Expense' && Number(transaction.amount)>0)return 'Dividend Expense'
   // Cash budgeting includes every posted non-transfer credit, including refunds
   // and deposits awaiting classification. Income reports keep stricter semantics.
   if (transactionDirection(transaction) === 'income') return includeAllCredits || isRealizedIncomeTransaction(transaction) ? 'Income' : null

@@ -9,7 +9,7 @@ const schema={type:'object',additionalProperties:false,required:['message','prop
 
 test('SDK agent reads pillar records without claiming planned meals were consumed',async()=>{
   const agent=createBrevitySdkAgent({model:'test',schema,canonical,browser:{finance:{transactionSummary:{count:3}}}})
-  assert.deepEqual(agent.tools.map(item=>item.name),['read_meal_calendar','get_member_preferences','get_module_configuration','get_learning_hub','enhancement_requests','search_household_archive','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
+  assert.deepEqual(agent.tools.map(item=>item.name),['read_finance_ledger','read_meal_calendar','get_member_preferences','get_module_configuration','get_learning_hub','enhancement_requests','search_household_archive','get_daily_household_briefing','get_weekly_household_briefing','get_household_schedule','get_pillar_records','estimate_meal_nutrition','search_meal_records','read_product_nutrition','find_product_nutrition','find_products_nutrition','search_household_records','web_search'])
   assert.equal(agent.modelSettings.store,false)
   const health=JSON.parse(await agent.tools.find(t=>t.name==='get_pillar_records').invoke({},'{"pillar":"health"}'))
   assert.equal(health.plannedMeals.days[0].meals.breakfast.name,'Eggs')
@@ -423,4 +423,16 @@ test('enhancement tool saves only to the authenticated member and returns saved 
  const result=JSON.parse(await tool.invoke({},JSON.stringify({action:'submit',title:'Recipe read aloud',description:'Read each recipe step aloud.',area:'Meals'})))
  assert.equal(result.row.createdBy,'Nyla');assert.equal(result.row.status,'Received');assert.equal(calls.length,1)
  assert.match(tool.description,/Submission records an idea only/)
+})
+
+test('finance review tools expose supported metadata and billing changes without applying them',async()=>{
+ const validations=[],reviews=[]
+ const agent=createBrevitySdkAgent({model:'test',schema:assistantResponseSchema,canonical:{access:{finance:true},signedInMember:'Larry'},browser:{},preparedReviews:reviews,validateOutput:output=>validations.push(output),financeReader:async(input)=>({state:'available',mode:input.mode,totals:{reportedExpenses:123}})})
+ const ledger=JSON.parse(await agent.tools.find(t=>t.name==='read_finance_ledger').invoke({},JSON.stringify({mode:'transactions'})))
+ assert.equal(ledger.totals.reportedExpenses,123)
+ const output=JSON.parse(await agent.tools.find(t=>t.name==='prepare_action_review').invoke({},JSON.stringify({summary:'Update transaction note',operations:[{type:'transaction.update',description:'Save reviewed note',targetId:'t1',targetDate:'',payloadJson:JSON.stringify({notes:'Statement checked'}),allowedScopes:['this-item'],defaultScope:'this-item'}]})))
+ assert.equal(output.validForReview,true);assert.equal(validations.length,1);assert.equal(reviews.length,1)
+ const types=assistantResponseSchema.properties.proposal.anyOf[1].properties.operations.items.properties.type.enum
+ assert.ok(types.includes('vendor.update'));assert.ok(types.includes('meeting.action.create'))
+ assert.equal(types.includes('vendor.login.attach'),false)
 })

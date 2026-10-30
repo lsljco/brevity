@@ -358,7 +358,7 @@ function CategoryToast({ category, merchant, originalStatement, onCreateRule, on
 const DebtWorkspace = lazy(()=>import('./DebtWorkspace.jsx'))
 
 // ── Main ActualTxModal ────────────────────────────────────────────────────────
-export default function ActualTxModal({ tx, accounts, allTxNames, historyTransactions = [], historyScopeLabel = '', goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onCreateDebt, onClose }) {
+export default function ActualTxModal({ tx, accounts, allTxNames, historyTransactions = [], historyScopeLabel = '', onOpenHistoryTransaction, goals = [], debts = [], onSave, onCreateRule, onMakeRecurring, onApplyDebtPayment, onCreateDebt, onClose }) {
   const [form, setForm] = useState({
     name:              tx.name || '',
     amount:            String(Math.abs(tx.amount || 0)),
@@ -366,8 +366,10 @@ export default function ActualTxModal({ tx, accounts, allTxNames, historyTransac
     category:          tx.category || '',
     originalStatement: tx.originalStatement || tx.original_description || tx.name || '',
     notes:             tx.notes || '',
+    tags:              (tx.tags || []).join(', '),
     needsReview:       tx.needsReview || '',
     goal:              tx.goal || '',
+    managementCategory: tx.managementCategory || '',
     splits:            tx.splits || [],
   })
   const [attachments, setAttachments]         = useState(tx.attachments || [])
@@ -404,6 +406,10 @@ export default function ActualTxModal({ tx, accounts, allTxNames, historyTransac
       ...tx,
       name: form.name.trim(),
       category: form.category.trim(),
+      notes: form.notes,
+      managementCategory: form.managementCategory,
+      goal: form.goal.trim(),
+      tags: [...new Set(form.tags.split(',').map(tag=>tag.trim()).filter(Boolean))],
     }
     const categoryChanged = updated.category.toLocaleLowerCase() !== String(tx.category || '').trim().toLocaleLowerCase()
     if (categoryChanged && onCreateRule && ruleQuestion !== 'declined') {
@@ -564,6 +570,14 @@ export default function ActualTxModal({ tx, accounts, allTxNames, historyTransac
               <span style={{ fontSize: 10, color: '#888884' }}>Amount and date remain tied to the bank record. Use reconciliation to explain a variance.</span>
             </div>
 
+            {Number(tx.amount)>0&&<div style={sectionStyle}>
+              <label style={labelStyle}>Household treatment</label>
+              <select aria-label="Household transaction treatment" value={form.managementCategory} onChange={event=>set('managementCategory',event.target.value)} style={inputStyle}>
+                <option value="">Use bank/category classification</option>
+                <option value="Dividend Expense">Dividend Expense</option>
+              </select>
+              <p style={{fontSize:12,color:'#B8B7B1'}}>Use Dividend Expense only for a confirmed distribution from household funds to a personal account outside the household budget. Later personal spending must stay outside household totals.</p>
+            </div>}
             {/* Goal */}
             {!tx.pending&&Number(tx.amount)>0&&onApplyDebtPayment&&<div style={{...sectionStyle,padding:14,borderRadius:12,border:'1px solid rgba(197,164,109,.28)',background:'rgba(197,164,109,.07)'}}>
               <label style={labelStyle}>Apply to debt</label>
@@ -587,15 +601,12 @@ export default function ActualTxModal({ tx, accounts, allTxNames, historyTransac
             {/* Goal */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Goal</label>
-              <select value={form.goal} disabled aria-disabled="true"
-                style={{ ...inputStyle, cursor: 'not-allowed' }}>
-                <option value="">Select goal...</option>
-                {goals.map(g => <option key={g.id || g} value={g.id || g}>{g.name || g}</option>)}
-              </select>
-              <span style={{ fontSize: 10, color: '#888884' }}>Goal changes are unavailable in this reviewed metadata editor.</span>
+              <input aria-label="Transaction goal" value={form.goal} onChange={event=>set('goal',event.target.value)} maxLength={300} list="transaction-goals" placeholder="Goal name or reference" style={inputStyle}/>
+              <datalist id="transaction-goals">{goals.map(g=><option key={g.id||g} value={g.id||g}>{g.name||g}</option>)}</datalist>
+              <span style={{fontSize:10,color:'#B8B7B1'}}>A goal label organizes this transaction; it does not move funds.</span>
             </div>
 
-            <TransactionVendorHistory transaction={tx} transactions={historyTransactions} scopeLabel={historyScopeLabel}/>
+            <TransactionVendorHistory transaction={tx} transactions={historyTransactions} scopeLabel={historyScopeLabel} onOpenTransaction={onOpenHistoryTransaction}/>
             <VendorSelector expense={tx} kind="posted" onReviewed={onClose}/>
             {/* Split Transaction */}
             <div style={sectionStyle}>
@@ -616,12 +627,17 @@ export default function ActualTxModal({ tx, accounts, allTxNames, historyTransac
             {/* Notes */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Notes</label>
-              <textarea value={form.notes} readOnly aria-readonly="true" rows={3}
+              <textarea aria-label="Transaction notes" value={form.notes} onChange={event=>set('notes',event.target.value)} maxLength={6000} rows={3}
                 placeholder="No notes"
                 style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
-              <span style={{ fontSize: 10, color: '#888884' }}>Note changes are unavailable in this reviewed metadata editor.</span>
+              <span style={{ fontSize: 10, color: '#888884' }}>Notes, tags and goal changes are saved together through Review Changes.</span>
             </div>
 
+            <div style={sectionStyle}>
+              <label style={labelStyle}>Tags</label>
+              <input aria-label="Transaction tags" value={form.tags} onChange={event=>set('tags',event.target.value)} placeholder="Separate tags with commas" style={inputStyle}/>
+              <span style={{fontSize:10,color:'#B8B7B1'}}>Up to 20 tags, 80 characters each.</span>
+            </div>
             {/* Needs Review By */}
             <div style={sectionStyle}>
               <label style={labelStyle}>Needs Review By</label>

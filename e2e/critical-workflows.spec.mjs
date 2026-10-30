@@ -196,7 +196,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 async function closeMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click();await expect(drawer).not.toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort());const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');if(process.env.PREVIEW_BASE_URL)await page.addStyleTag({content:'[data-netlify-deploy-id]{display:none!important}'});await expect(page.locator('.app-shell')).toBeVisible({timeout:process.env.PREVIEW_BASE_URL?20000:7000});await openTodayDetails(page)})
+test.beforeEach(async({page},testInfo)=>{if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort());const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category')||testInfo.title.includes('transaction metadata'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');if(process.env.PREVIEW_BASE_URL)await page.addStyleTag({content:'[data-netlify-deploy-id]{display:none!important}'});await expect(page.locator('.app-shell')).toBeVisible({timeout:process.env.PREVIEW_BASE_URL?20000:7000});await openTodayDetails(page)})
 
 test('expanded side panel remains expanded while navigating until its toggle is used',async({page},testInfo)=>{
   const drawer=page.locator('#primary-navigation-drawer')
@@ -3917,4 +3917,22 @@ test('category budget separates forecast capacity from spending and offers categ
  await form.getByLabel('Budget treatment').selectOption('budgeted')
  await expect(form.getByLabel('Category budget ($)',{exact:true})).toBeVisible()
  await expect(form.getByLabel('Total allocation to Cash Forecast ($)',{exact:true})).toBeVisible()
+})
+
+test('transaction metadata supports reviewed notes tags goals and household treatment on every viewport',async({page},testInfo)=>{
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo)
+  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Transactions',exact:true}).click()
+  await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Show posted bank activity'}).click()
+  await page.getByText('Neighborhood Market',{exact:true}).click()
+  await page.getByLabel('Transaction notes').fill('Statement checked\nKeep supporting evidence.')
+  await page.getByLabel('Transaction tags').fill('Household, Reviewed')
+  await page.getByLabel('Transaction goal').fill('Cash reserve')
+  await expect(page.getByLabel('Transaction notes')).toHaveValue('Statement checked\nKeep supporting evidence.')
+  await expect(page.getByLabel('Transaction goal')).toHaveValue('Cash reserve')
+  await page.getByRole('button',{name:'Review Changes',exact:true}).click()
+  await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
+  await expect(page.locator('body')).not.toContainText('Something went wrong')
 })

@@ -64,3 +64,19 @@ Initial implementation includes sorting, category filters, bank-supplied merchan
 The staging browser audit verified all five meeting cadence selectors, the daily earliest-due priority table, expanded budget coverage, category filtering, vendor sorting, and the posted-only transaction view. Desktop glass cards were visually inspected without overlap. Staging has no connected bank transaction history, so live balances, merchant history populated from real records and household surplus remain unverified.
 
 The audit also found that Budget could present zero actuals when no bank snapshot existed. The release now suppresses actual spending, remaining budget and spending percentages in that case while preserving Plan Grid access. A successfully refreshed empty snapshot still represents zero activity; retained stale records remain visible with their freshness warning.
+
+## Completion release
+
+Implemented in the completion release:
+
+- Server-authorized full-ledger assistant queries with complete totals before pagination, stable snapshot checks, exact account scope, posted/pending separation, missing-source handling and billing/meeting/control modes.
+- Reviewed transaction notes, tags, goal labels and Dividend Expense management classification, with the existing version check, audit and Undo. Original bank facts remain immutable.
+- Merchant monthly chart, expense counts and navigation; reviewed exact aliases apply to historical and subsequent imported records. Ambiguous aliases remain unassigned.
+- Vendor statement date, payment due date, minimum due, statement balance and autopay setting. Missing values remain unknown, and protected credential storage stays separate. Assistant billing access respects vendor membership and never returns secrets.
+- Operating-only household accountability excludes subsequent personal-account spending. Dividend distributions count once in the management view and still retain their original cash movement.
+- Operating controls surface dining indicators, unmatched transfers/settlements and uniquely matched payment amount differences. Credits remain separate evidence rather than assumed refunds. Meetings include these controls and follow-up proposals without requiring line-item discussion.
+- Existing automatic reconciliation, reversible categorization, executive packets across five cadences, reviewed assignments, conversation history and household preference tools remain in place.
+
+External facts and bank configuration remain evidence dependencies: current creditor statements, confirmed personal-account recipients, draft authorizations, bank notification settings and Friday transfer instructions. Software does not assert these are configured or execute bank payments. Source freshness and reconciliation gaps remain visible rather than silently certified. The monthly allowance must use the actual number of Fridays and confirmed eligible adults.
+
+Validation includes permission-denied queries, full-ledger pagination, unknown-versus-zero billing, alias ambiguity, personal-spending exclusion, reviewed metadata with Undo, browser layouts and production deployment checks. No private live financial records are included in test fixtures or this release documentation.

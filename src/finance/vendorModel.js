@@ -3,7 +3,7 @@ import {isTransferTransaction} from './reportingData.js'
 export const VENDOR_RESOURCE='vendors:household'
 export const VENDOR_TYPES=['vendor.create','vendor.update','vendor.archive','vendor.expense.link','vendor.login.attach','vendor.document.attach','vendor.document.remove']
 const members=['Larry','Lorenzo','Terica','Nyla','Javin','Isaiah']
-const fields=['name','address','phone','email','website','paymentUrl','notes','accessMembers']
+const fields=['name','address','phone','email','website','paymentUrl','notes','accessMembers','aliases','statementDate','paymentDueDate','minimumDue','statementBalance','autopay']
 export const emptyVendors=()=>({vendors:[],links:{}})
 const fail=message=>{throw new Error(message)}
 const text=(value,max=500)=>{if(typeof value!=='string'||value.length>max||/[\u0000-\u0008]/.test(value))fail('Invalid vendor text.');return value.trim()}
@@ -14,7 +14,11 @@ export function normalizeVendorPayload(type,payload){
  if(Object.keys(payload).some(key=>!allowed.includes(key)))fail('Unsupported vendor details. Login secrets must use the protected upload form.')
  const result={}
  for(const [key,value] of Object.entries(payload)){
-  if(key==='accessMembers'){if(!Array.isArray(value)||value.some(member=>!members.includes(member)))fail('Choose valid household members.');result[key]=[...new Set(value)]}
+  if(key==='aliases'){if(!Array.isArray(value)||value.length>30)fail('Use at most 30 exact merchant aliases.');result[key]=[...new Set(value.map(v=>text(v,200)).filter(Boolean))]}
+  else if(['statementDate','paymentDueDate'].includes(key)){const date=text(value,10);if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T12:00:00Z'))||new Date(date+'T12:00:00Z').toISOString().slice(0,10)!==date))fail('Use a valid statement or due date.');result[key]=date}
+  else if(['minimumDue','statementBalance'].includes(key)){if(value!==null&&(typeof value!=='number'||!Number.isFinite(value)||value<0||value>100000000))fail('Enter a nonnegative statement amount or leave it unknown.');result[key]=value===null?null:Math.round(value*100)/100}
+  else if(key==='autopay'){if(!['unknown','off','minimum','statement','fixed'].includes(value))fail('Choose a valid automatic payment status.');result[key]=value}
+  else if(key==='accessMembers'){if(!Array.isArray(value)||value.some(member=>!members.includes(member)))fail('Choose valid household members.');result[key]=[...new Set(value)]}
   else if(['vendorId','expenseId','blobId'].includes(key))result[key]=id(value)
   else if(key==='size'){if(!Number.isInteger(value)||value<1||value>3*1024*1024)fail('Documents must be at most 3 MB.');result[key]=value}
   else if(key==='website'||key==='paymentUrl'){const url=text(value,1000);if(url){let parsed;try{parsed=new URL(url)}catch{fail('Use a complete https website address.')};if(parsed.protocol!=='https:'||parsed.username||parsed.password)fail('Use an https website without embedded credentials.')}result[key]=url}
@@ -51,9 +55,12 @@ export function vendorForExpense(workspace,kind,expense){
  // Resolve the original reviewed assignment without copying it. Undo of that
  // assignment therefore affects both lifecycle records; explicit posted edits win.
  if(kind==='posted'&&expense.pending===false&&typeof expense.pendingTransactionId==='string'&&expense.pendingTransactionId&&expense.pendingTransactionId!==expense.id){
-  return links[`posted:${expense.pendingTransactionId}`]||''
+  if(links[`posted:${expense.pendingTransactionId}`])return links[`posted:${expense.pendingTransactionId}`]
  }
- return ''
+ const normalize=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ')
+ const identity=normalize(expense.merchant_name||expense.merchantName),description=normalize(expense.originalStatement||expense.original_description||expense.name)
+ const matches=(workspace?.vendors||[]).filter(v=>!v.archived&&(v.aliases||[]).some(alias=>normalize(alias)===identity||normalize(alias)===description))
+ return matches.length===1?matches[0].id:''
 }
 export function vendorActivity(workspace,posted=[],planned=[],{dateFrom='',dateTo=''}={}){
  const seen=new Set(),rows=[]
