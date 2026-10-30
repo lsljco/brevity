@@ -1,3 +1,4 @@
+import {applyPooledCashAllowances} from './pooledCashAllowances.js'
 import {buildBudgetLines,buildLegacyBudgetOwners,budgetTargetForLine} from './budgetBreakdown.js'
 import {budgetCategoryForTransaction,isTransferTransaction} from './reportingData.js'
 import {buildUniquePlaidAccountMap} from './calendarSemantics.js'
@@ -7,10 +8,12 @@ const category=t=>t.cat||budgetCategoryForTransaction({...t,pending:false})||t.c
 // Explicit category allowances reserve only the portion not represented by
 // posted charges, pending holds or remaining scheduled payments. Current-month
 // capacity is reserved today; future months reserve it on their first day.
-export function applyBudgetAllowances(projection,{accounts,scheduled,actuals,budget,today}={}){
- if(!budget||!projection.size)return projection
+export function applyBudgetAllowances(projection,{accounts,scheduled,actuals,budget,today,reconcile=true}={}){
+ budget=budget||{}
+ if(!projection.size)return projection
  const allLines=buildBudgetLines(scheduled,budget,{accountIds:new Set(accounts.map(a=>a.id))}).filter(l=>l.direction==='expense')
  const enabled=new Set(allLines.filter(l=>budget.lines?.[l.id]?.cashAllowance).map(l=>`${l.accountId}|${l.category}`))
+ if(reconcile)applyPooledCashAllowances(projection,{accounts,scheduled,actuals,budget,today,explicitGroups:enabled})
  const lines=allLines.filter(l=>enabled.has(`${l.accountId}|${l.category}`))
  if(!lines.length&&!Object.keys(budget.categoryLimits||{}).length)return projection
  const links=buildUniquePlaidAccountMap(accounts),owners=buildLegacyBudgetOwners(lines)
@@ -30,6 +33,6 @@ export function applyBudgetAllowances(projection,{accounts,scheduled,actuals,bud
   }
  }
  let reserved=0
- for(const [date,point] of projection){if(date<today)continue;const allowances=reservations.get(date)||[];const delta=allowances.reduce((sum,r)=>sum+cents(r.amount),0);reserved+=delta;projection.set(date,{...point,bal:(cents(point.bal)-reserved)/100,budgetAllowances:allowances,budgetAllowanceDelta:-delta/100})}
+ for(const [date,point] of projection){if(date<today)continue;const allowances=reservations.get(date)||[];const delta=allowances.reduce((sum,r)=>sum+cents(r.amount),0);reserved+=delta;projection.set(date,{...point,bal:(cents(point.bal)-reserved)/100,budgetAllowances:[...(point.budgetAllowances||[]),...allowances],budgetAllowanceDelta:(point.budgetAllowanceDelta||0)-delta/100})}
  return projection
 }
