@@ -96,3 +96,10 @@ test('edited visible names drive description sorting while both edited and origi
   assert.deepEqual(sortAndFilterTransactions([renamed, other], { description:'seattle' }).map(item => item.id), ['renamed'])
   assert.deepEqual(sortAndFilterTransactions([renamed, other], { sortBy:'description', sortDirection:'asc' }).map(item => item.id), ['other','renamed'])
 })
+
+test('Uncategorized includes missing and unresolved categories without swallowing Other or transfers',()=>{
+ const rows=[{id:'missing'},{id:'blank',category:' '},{id:'unknown',category:'Unknown'},{id:'review',category:'Uncategorized'},{id:'other',category:'Other'},{id:'food',category:'Food'},{id:'transfer',category:'Transfer'}]
+ assert.deepEqual(new Set(sortAndFilterTransactions(rows,{category:'Uncategorized'}).map(t=>t.id)),new Set(['missing','blank','unknown','review']))
+ assert.equal(sortAndFilterTransactions(rows,{category:'Food'})[0].id,'food')
+ assert.equal(sortAndFilterTransactions(rows).length,7)
+})

@@ -73,6 +73,6 @@ export function vendorActivity(workspace,posted=[],planned=[],{dateFrom='',dateT
 
 export function decorateVendorTransactions(records=[],workspace,kind='posted',order=''){
  const names=new Map((workspace?.vendors||[]).map(v=>[v.id,v.name]))
- const rows=records.map(tx=>{const vendorId=vendorForExpense(workspace,kind,tx);return {...tx,vendorId,vendorName:vendorId?names.get(vendorId)||'Unavailable vendor':'Unassigned'}})
+ const rows=records.map(tx=>{const vendorId=vendorForExpense(workspace,kind,tx);return {...tx,vendorId,vendorName:vendorId?names.get(vendorId)||'Unavailable vendor':String(tx.merchant_name||tx.merchantName||'').trim()||'Unassigned'}})
  return order?[...rows].sort((a,b)=>(a.vendorName.localeCompare(b.vendorName,undefined,{sensitivity:'base'})||String(a.id).localeCompare(String(b.id)))*(order==='desc'?-1:1)):rows
 }

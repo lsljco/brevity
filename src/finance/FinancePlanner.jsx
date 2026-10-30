@@ -1,3 +1,4 @@
+import './BudgetCoverage.css'
 import FinanceExport from './FinanceExport.jsx'
 import {financeReport,recordsSection,transactionSection} from './financeExportData.js'
 const BudgetView = lazy(() => import('./BudgetView.jsx'))
@@ -1205,7 +1206,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
 
 
 // ── Main Component ──────────────────────────────────────────────────────────────
-function TransactionListControls({ options, onChange, showDateFilters = true, compact = false }) {
+function TransactionListControls({ options, onChange, showDateFilters = true, compact = false, categories = [] }) {
   const set = (key, value) => onChange(current => ({ ...current, [key]: value }))
   const directionLabels = ['description','vendor'].includes(options.sortBy)
     ? [['asc', 'A to Z'], ['desc', 'Z to A']]
@@ -1216,6 +1217,7 @@ function TransactionListControls({ options, onChange, showDateFilters = true, co
   return (
     <section className={`transaction-list-controls${compact ? ' is-compact' : ''}`} aria-label="Sort and filter transactions">
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Description</span><input aria-label="Filter by description" type="search" placeholder="Search description" value={options.description} onChange={event => set('description', event.target.value)} style={inputStyle}/></label>
+      <label style={{display:'grid',gap:4}}><span className="field-label">Category</span><select aria-label="Filter by category" value={options.category||''} onChange={event=>set('category',event.target.value)} style={inputStyle}><option value="">All categories</option><option value="Uncategorized">Uncategorized</option>{[...new Set(categories)].filter(c=>c&&c!=='Uncategorized').sort().map(c=><option key={c} value={c}>{c}</option>)}</select></label>
       <label style={{display:'grid',gap:4}}><span className="field-label">Vendor</span><input aria-label="Filter by vendor" placeholder="Vendor or Unassigned" value={options.vendor||''} onChange={event=>set('vendor',event.target.value)} style={inputStyle}/></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Minimum amount</span><input aria-label="Minimum amount" type="number" min="0" step="0.01" placeholder="$0" value={options.minAmount} onChange={event => set('minAmount', event.target.value)} style={inputStyle}/></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Maximum amount</span><input aria-label="Maximum amount" type="number" min="0" step="0.01" placeholder="Any" value={options.maxAmount} onChange={event => set('maxAmount', event.target.value)} style={inputStyle}/></label>
@@ -1310,6 +1312,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
   // Primary view comes from App sidebar; form overlays are local
   const view    = formView ?? extView ?? 'dashboard'
+  useEffect(()=>{if(view==='transactions'&&!transactionFilter?.scheduled)setShowActuals(true)},[view,transactionFilter?.scheduled])
   const setView = (v) => {
     if (readOnly && v === 'tx-form') {
       setFormView(null)
@@ -1480,7 +1483,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   // updates this screen through FINANCE_REFRESH_EVENT. Do not start a second
   // full-history transaction request every time Finance mounts.
 
-  const toggleActuals = () => { setTransactionFilter(null); setShowActuals(v => !v) }
+  const toggleActuals = () => { if(view==='transactions'){setTransactionFilter({postedOnly:true,label:'Bank Activity · Posted'});setTransactionListOptions({...DEFAULT_TRANSACTION_LIST_OPTIONS});setShowActuals(true)}else{setTransactionFilter(null);setShowActuals(v => !v)} }
   const actualsFreshnessMessage = (() => {
     const checkedAt = actualsFreshness?.checkedAt ? getHouseholdDateTimeLabel(new Date(actualsFreshness.checkedAt)) : ''
     const lastFullSuccess = actualsFreshness?.lastFullSuccessAt ? getHouseholdDateTimeLabel(new Date(actualsFreshness.lastFullSuccessAt)) : ''
@@ -1595,7 +1598,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   }
   const openAllBankActivity = () => {
     setSelectedAccts(null)
-    openFilteredTransactions()
+    openFilteredTransactions({postedOnly:true,label:'Bank Activity · Posted'})
   }
   const openScheduledTransactions = (filter = null) => {
     setTransactionListOptions({ ...DEFAULT_TRANSACTION_LIST_OPTIONS })
@@ -2419,7 +2422,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             onClick={toggleActuals}
             disabled={actualsLoading}
             aria-pressed={showActuals}
-            aria-label={`${showActuals ? 'Hide' : 'Show'} bank activity`}
+            aria-label={view==='transactions'?'Show posted bank activity':`${showActuals ? 'Hide' : 'Show'} bank activity`}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
@@ -3125,7 +3128,13 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             </div>
           )}
 
-          <TransactionListControls options={transactionListOptions} onChange={options=>{setTransactionListOptions(options);setVendorOrder(options.sortBy==='vendor'?options.sortDirection:'')}}/>
+          <div className="finance-transaction-sources" aria-label="Transaction source" style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
+            <button type="button" onClick={()=>openFilteredTransactions()} aria-pressed={showActuals&&!transactionFilter}>All bank transactions</button>
+            <button type="button" onClick={()=>openFilteredTransactions({postedOnly:true,label:'Bank Activity · Posted'})} aria-pressed={showActuals&&Boolean(transactionFilter?.postedOnly)}>Bank Activity · Posted</button>
+            <button type="button" onClick={()=>openScheduledTransactions()} aria-pressed={!showActuals}>Scheduled transactions</button>
+            <span>{financeAccountScopeLabel} · {financeRange.from} through {financeRange.to}</span>
+          </div>
+          <TransactionListControls categories={[...filteredActuals.map(t=>t.category),...fd.transactions.map(t=>t.cat)]} options={transactionListOptions} onChange={options=>{setTransactionListOptions(options);setVendorOrder(options.sortBy==='vendor'?options.sortDirection:'')}}/>
 
           {/* ── Monthly totals summary ── */}
           <div className="finance-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
@@ -3300,10 +3309,13 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ BUDGET ══════════ */}
       {view === 'budget' && (
         <div className="finance-inner">
-          <Suspense fallback={<p>Loading budget…</p>}><BudgetView vendorOrder={vendorOrder}
+          <Suspense fallback={<p>Loading budget…</p>}><BudgetView readOnly={readOnly} vendorOrder={vendorOrder}
             data={fd}
             plaidActuals={filteredActuals}
             freshnessMessage={actualsFreshnessMessage}
+            rawActuals={retainedActuals}
+            allAccountMap={plaidIdToLocal}
+            onReviewAccounts={()=>setView('accounts')}
             unmappedActuals={unmappedActuals}
             includesUnmapped={!selectedAccts || selectedAccts.size === data.accounts.length}
             legacyAccountId={data.accounts.find(account => /\boperating\s+account\b/i.test(String(account?.name || '')))?.id || data.accounts.find(account => account.id === 'a1')?.id || ''}
@@ -3312,7 +3324,6 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             onOpenRecurring={openScheduledTransactions}
             onReviewBudgetChange={reviewBudgetChange}
             onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}
-            readOnly={readOnly}
           /></Suspense>
         </div>
       )}
@@ -3363,6 +3374,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {!readOnly && selActualTx && (
         <Suspense fallback={null}><ActualTxModal
           tx={selActualTx}
+          historyTransactions={filteredActuals}
+          historyScopeLabel={financeAccountScopeLabel}
           accounts={data.accounts}
           allTxNames={allTxNames}
           goals={goals}

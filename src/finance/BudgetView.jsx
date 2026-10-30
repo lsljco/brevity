@@ -1,4 +1,5 @@
 import CategoryBudgetSummary from './CategoryBudgetSummary.jsx'
+import BudgetCoverage from './BudgetCoverage.jsx'
 import './SpendingReview.css'
 import {Fragment,useState,useEffect,useMemo} from 'react'
 import FinanceExport from './FinanceExport.jsx'
@@ -16,7 +17,7 @@ function loadBudget() {
   try { return JSON.parse(localStorage.getItem(BUDGET_LS_KEY)) || {} } catch { return {} }
 }
 
-export default function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], includesUnmapped=false, data, plaidActuals = [], legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, onReview, readOnly = false }) {
+export default function BudgetView({ vendorOrder='', freshnessMessage='', unmappedActuals=[], includesUnmapped=false, allAccountMap={}, onReviewAccounts, data, plaidActuals = [], rawActuals=plaidActuals, legacyAccountId = '', initialMonth, onOpenTransactions, onOpenRecurring, onReviewBudgetChange, onReview, readOnly = false }) {
   const [budget, setBudget] = useState(loadBudget)
   const [period, setPeriod] = useState('monthly') // monthly | annual
   const [expanded, setExpanded] = useState({ Income: true })
@@ -137,6 +138,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
 
         <FinanceExport report={{title:`Budget ${monthKey}`,notes:[`${monthFrom} through ${monthTo}`,`Accounts: ${data.accounts.map(a=>a.name).join(', ')}`,freshnessMessage,'Actuals include posted activity only. Variance = Budget minus Actual.'],sections:[recordsSection('Consolidated categories',exportRows,['group','category','direction','budget','actual','variance']),recordsSection('Group totals',Object.keys(DISPLAY_BUDGET_CATS).map(cat=>({group:cat,budget:catBudgeted(cat),actual:catActual(cat)})))]}} />
         <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly}/>
+        <BudgetCoverage rawActuals={rawActuals} includedActuals={plaidActuals} accountMap={allAccountMap} accounts={data.accounts} month={monthKey} includeUnmapped={includesUnmapped} totalActual={totalActual} onReviewAccounts={onReviewAccounts}/>
         {/* Summary cards */}
         <div className="finance-budget-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
           {[
@@ -150,7 +152,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', unmapp
             const open = actual
               ? () => onOpenTransactions?.({ direction, postedOnly:true, dateFrom: monthFrom, dateTo: monthTo, budgetMonth: monthKey, label: `${label} · ${MONTHS[selMonth]} ${selYear}` })
               : () => openBudgetBreakdown(direction)
-            return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open budget lines'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(197,164,109,0.14)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
+            return <div key={label} role="button" tabIndex={0} title={actual?'Open matching transactions':'Open budget lines'} onClick={open} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') open?.() }} style={{ background: 'rgba(28,34,43,0.35)', border: '1px solid rgba(197,164,109,0.24)', borderRadius: 14, padding: '16px 20px', backdropFilter: 'blur(20px)', cursor: 'pointer' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
               <div style={{ fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-serif)', color }}>{fmtMoney(val)}</div>
             </div>
