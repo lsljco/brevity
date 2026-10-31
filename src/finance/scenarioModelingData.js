@@ -56,7 +56,7 @@ export function calculateScenario(scenario, monthlyExpense) {
   const incomes = Array.isArray(scenario?.incomes) ? scenario.incomes : []
   const monthlyNetIncome = money(incomes.reduce((sum, row) => sum + number(row.monthlyNet), 0))
   const annualGrossIncome = money(incomes.reduce((sum, row) => sum + number(row.annualGross), 0))
-  const contribution = money(incomes.reduce((sum, row) => sum + number(row.contribution), 0))
+  const contribution = monthlyNetIncome > 0 ? 100 : 0
   const expenses = money(Math.max(0, number(monthlyExpense)))
   const monthlyCashFlow = money(monthlyNetIncome - expenses)
   const annualCashFlow = money(monthlyCashFlow * 12)
@@ -73,4 +73,18 @@ export function calculateScenario(scenario, monthlyExpense) {
 
 export function cloneDefaultScenarioModel() {
   return JSON.parse(JSON.stringify(DEFAULT_SCENARIO_MODEL))
+}
+
+// Gross changes retain the explicitly supplied net/gross ratio; no tax rate is invented.
+export function updateIncomeAssumption(row, field, value, approved = row) {
+  const next = { ...row, [field]: value }
+  const basis = Number(row.annualGross) > 0 ? row : approved
+  const ratio = row._takeHomeRatio ?? (Number(basis.annualGross) > 0 && basis.monthlyNet != null && basis.monthlyNet !== '' ? Number(basis.monthlyNet) / Number(basis.annualGross) : null)
+  if (field === 'annualGross' && ratio != null) {
+    next._takeHomeRatio = ratio
+    next.monthlyNet = money(Number(value) * ratio)
+  } else if (field === 'monthlyNet') {
+    next._takeHomeRatio = Number(row.annualGross) > 0 && value !== '' ? Number(value) / Number(row.annualGross) : null
+  }
+  return next
 }

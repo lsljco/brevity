@@ -367,7 +367,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       if (scenario.id !== operation.targetId) return scenario
       found = true
       const next = { ...scenario }
-      for (const field of ['title', 'description', 'favorite']) if (payload[field] !== undefined) next[field] = payload[field]
+      for (const field of ['title', 'description', 'favorite', 'planningExpense']) if (payload[field] !== undefined) next[field] = payload[field]
       if (payload.incomeAction === 'create') {
         if ((scenario.incomes || []).some(income => income.id === payload.incomeId)) throw new Error('That forecast income id already exists. Refresh Brevity and try again.')
         const income = { id:payload.incomeId }

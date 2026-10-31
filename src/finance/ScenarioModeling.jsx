@@ -1,4 +1,5 @@
 import {readScenarioWorkbook} from './scenarioWorkbookImport.js'
+import { calculatePayoffProjection } from './scenarioProjection.js'
 import FinanceExport from './FinanceExport.jsx'
 import {financeReport} from './financeExportData.js'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
@@ -7,6 +8,7 @@ import { requestActionReview } from '../assistant/actionEvents.js'
 import { getAcknowledgedSharedStateVersion, SHARED_STATE_EVENT } from '../household/sharedState.js'
 import {
   calculateScenario,
+  updateIncomeAssumption,
   cloneDefaultScenarioModel,
   SCENARIO_STORAGE_KEY,
 } from './scenarioModelingData.js'
@@ -70,8 +72,10 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
   const activeDraft = draftModel.scenarios.find(scenario => scenario.id === active?.id) || active
   const expense = model.expenseMode === 'operating' && liveOperatingExpense > 0
     ? liveOperatingExpense
-    : Number(active?.planningExpense ?? model.planningExpense) || 0
-  const result = useMemo(() => calculateScenario(active, expense), [active, expense])
+    : Number(activeDraft?.planningExpense ?? draftModel.planningExpense) || 0
+  const result = useMemo(() => calculateScenario(activeDraft, expense), [activeDraft, expense])
+
+  const payoff = useMemo(() => calculatePayoffProjection(activeDraft?.source, result.monthlyCashFlow), [activeDraft?.source, result.monthlyCashFlow])
 
   useEffect(() => {
     const refresh = event => {
@@ -93,12 +97,6 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     }
   }, [])
 
-  const updateModelDraft = changes => {
-    if (readOnly) return
-    setDraftModel(current => ({ ...current, ...changes }))
-    setReviewError('')
-    setReviewNotice('Draft only — review and approve before Brevity changes the forecast.')
-  }
   const updateScenarioDraft = changes => {
     if (readOnly) return
     setDraftModel(current => ({
@@ -114,7 +112,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       ...current,
       scenarios:current.scenarios.map(scenario => scenario.id !== active.id ? scenario : {
         ...scenario,
-        incomes:scenario.incomes.map(row => row.id === incomeId ? { ...row, [field]:value } : row),
+        incomes:scenario.incomes.map(row => row.id === incomeId ? updateIncomeAssumption(row, field, value, active.incomes.find(item => item.id === incomeId) || row) : row),
       }),
     }))
     setReviewError('')
@@ -175,18 +173,18 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     })
   }
   const reviewPlanningExpense = () => {
-    const planningExpense = Number(draftModel.planningExpense)
+    const planningExpense = Number(activeDraft.planningExpense ?? draftModel.planningExpense)
     if (!Number.isFinite(planningExpense) || planningExpense < 0) {
       setReviewError('Monthly planning expense must be a non-negative number.')
       return
     }
-    if (planningExpense === Number(model.planningExpense) && model.expenseMode === 'scenario') return
+    if (planningExpense === Number(active.planningExpense ?? model.planningExpense) && model.expenseMode === 'scenario') return
     const payload = { planningExpense }
-    if (model.expenseMode !== 'scenario') payload.expenseMode = 'scenario'
+    if (model.expenseMode !== 'scenario') { setReviewError('Choose Planning baseline before reviewing this scenario expense.'); return }
     void openReview({
       summary:'Update total monthly recurring expenses in Scenario Modeling',
       operation:{
-        type:'forecast.update', targetId:'model', payload,
+        type:'forecast.update', targetId:active.id, payload,
         description:`Use ${money.format(planningExpense)} as the reviewed monthly recurring-expense total${model.expenseMode === 'operating' ? ' instead of the live Operating Account total' : ''}.`,
       },
     })
@@ -247,7 +245,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     })
   }
 
-  return <section className="scenario-page" aria-labelledby="scenario-title"><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:active,operatingExpense:expense,result},['Hypothetical scenario; does not change bank balances.'])}/>
+  return <section className="scenario-page" aria-labelledby="scenario-title"><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
     <header className="scenario-header">
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>
@@ -271,7 +269,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     {favoritesOnly&&!favorites.length&&<p role="status">No favorite scenarios yet. Choose All scenarios and star a scenario to save it here.</p>}
     <div className="scenario-tabs" role="tablist" aria-label="Financial scenarios">
       {visibleScenarios.map(scenario => {
-        const summary = calculateScenario(scenario, model.expenseMode==='operating'?expense:(scenario.planningExpense??expense))
+        const summary = calculateScenario(draftModel.scenarios.find(item => item.id === scenario.id) || scenario, model.expenseMode==='operating'?expense:(draftModel.scenarios.find(item => item.id === scenario.id)?.planningExpense ?? scenario.planningExpense ?? draftModel.planningExpense))
         const selected = scenario.id === active.id
         return <div className="scenario-choice" key={scenario.id} role="presentation"><button type="button" role="tab" aria-selected={selected} className={selected ? 'is-active' : ''} onClick={() => setActiveId(scenario.id)}>
           <span>{scenario.title}</span>
@@ -292,10 +290,11 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
           <button type="button" disabled={readOnly || reviewBusy} className={model.expenseMode === 'scenario' ? 'is-active' : ''} onClick={() => reviewExpenseMode('scenario')}>Planning baseline</button>
           <button type="button" disabled={readOnly || reviewBusy || liveOperatingExpense <= 0} className={model.expenseMode === 'operating' ? 'is-active' : ''} onClick={() => reviewExpenseMode('operating')}>Live operating</button>
         </div>
-        <div className="scenario-expense-controls" hidden={Boolean(active.source)}><label className="scenario-money-input"><span>$</span><input aria-label="Monthly recurring expense total draft" readOnly={readOnly} type="number" min="0" step="0.01" value={draftModel.planningExpense} onChange={event => updateModelDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || (Number(draftModel.planningExpense) === Number(model.planningExpense) && model.expenseMode === 'scenario')} onClick={reviewPlanningExpense}>Review expense total</button>}</div>
+        <div className="scenario-expense-controls" ><label className="scenario-money-input"><span>$</span><input aria-label="Monthly recurring expense total draft" readOnly={readOnly} type="number" min="0" step="0.01" value={activeDraft.planningExpense ?? draftModel.planningExpense} onChange={event => updateScenarioDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || (Number(draftModel.planningExpense) === Number(active.planningExpense ?? model.planningExpense) && model.expenseMode === 'scenario')} onClick={reviewPlanningExpense}>Review expense total</button>}</div>
       </div>
     </div>
 
+    <p className="scenario-draft-guidance">Live calculation preview. Changes are saved only after review and approval.</p>
     <section className="scenario-summary" aria-label={`${active.title} summary`}>
       <SummaryMetric label="Monthly net income" value={money.format(result.monthlyNetIncome)} />
       <SummaryMetric label="Recurring expenses" value={money.format(result.monthlyExpense)} tone="expense" />
@@ -313,13 +312,13 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       </div>
 
       <div className="scenario-income-tools">
-        <p className="scenario-draft-guidance">Edit descriptions and assumptions, or add and remove income sources. Every shared change opens Action Mode review before it is applied.</p>
+        <p className="scenario-draft-guidance">Calculated preview updates immediately. Edit net pay directly, or change annual gross to estimate net using the displayed take-home ratio. This is not a tax calculation. Income shares and totals are calculated. Review and approve to save assumptions.</p>
         {!readOnly && <button type="button" className="scenario-add" disabled={reviewBusy} onClick={addIncomeDraft}><i className="ti ti-plus"/> Add income source</button>}
       </div>
 
       <div className="scenario-table-wrap">
         <table className="scenario-table">
-          <thead><tr><th>Description</th><th>Monthly net</th><th>Annual gross</th><th>Contribution</th><th>Work</th><th>Employment</th><th>Notes</th><th><span className="sr-only">Review</span></th></tr></thead>
+          <thead><tr><th>Description</th><th>Monthly net</th><th>Annual gross</th><th>Income share (net)</th><th>Work</th><th>Employment</th><th>Notes</th><th><span className="sr-only">Review</span></th></tr></thead>
           <tbody>{activeDraft.incomes.map((draftRow, rowIndex) => {
             const row=active.incomes.find(item=>item.id===draftRow.id)
             const label=String(draftRow.description || '').trim() || `Income source ${rowIndex + 1}`
@@ -328,7 +327,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
             <td><input className="scenario-income-description" aria-label={`Income ${rowIndex + 1} description draft`} readOnly={readOnly} value={draftRow.description || ''} placeholder="Income source name" onChange={event => updateIncomeDraft(draftRow.id, 'description', event.target.value)}/></td>
             <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${label} monthly net draft`} readOnly={readOnly} type="number" min="0" step="0.01" value={draftRow.monthlyNet??''} onChange={event => updateIncomeDraft(draftRow.id, 'monthlyNet', event.target.value)}/></label></td>
             <td><label className="scenario-cell-money"><span>$</span><input aria-label={`${label} annual gross draft`} readOnly={readOnly} type="number" min="0" step="0.01" value={draftRow.annualGross??''} onChange={event => updateIncomeDraft(draftRow.id, 'annualGross', event.target.value)}/></label></td>
-            <td><label className="scenario-cell-percent"><input aria-label={`${label} contribution draft`} readOnly={readOnly} type="number" min="0" step="1" value={draftRow.contribution??''} onChange={event => updateIncomeDraft(draftRow.id, 'contribution', event.target.value)}/><span>%</span></label></td>
+            <td><output aria-label={`${label} calculated income share`}>{result.monthlyNetIncome > 0 ? ((Number(draftRow.monthlyNet) || 0) / result.monthlyNetIncome * 100).toFixed(2) : '0.00'}%</output><small>{Number(draftRow.annualGross) > 0 ? `Take-home ratio: ${(Number(draftRow.monthlyNet) * 1200 / Number(draftRow.annualGross)).toFixed(2)}%` : 'Enter gross and net to establish a take-home ratio.'}</small></td>
             <td><button type="button" disabled={readOnly} className={`scenario-remote${draftRow.remote ? ' is-active' : ''}`} aria-pressed={draftRow.remote} onClick={() => updateIncomeDraft(draftRow.id, 'remote', !draftRow.remote)}>{draftRow.remote==null ? (draftRow.workArrangement||'Unconfirmed') : draftRow.remote ? 'Remote' : 'On-site'}</button></td>
             <td><input aria-label={`${label} employment type draft`} readOnly={readOnly} value={draftRow.employment || ''} placeholder="Perm / Contract" onChange={event => updateIncomeDraft(draftRow.id, 'employment', event.target.value)}/></td>
             <td><input aria-label={`${label} notes draft`} readOnly={readOnly} value={draftRow.notes || ''} placeholder="Add note" onChange={event => updateIncomeDraft(draftRow.id, 'notes', event.target.value)}/></td>
@@ -339,11 +338,20 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       </div>
     </section>
 
-    {active.source&&<section className="scenario-projections" aria-label="Imported workbook payoff schedule"><div className="scenario-section-heading"><div><p className="scenario-eyebrow">Scenarios tab · {active.source.block}</p><h2>Workbook payoff plan</h2></div></div><p>Saved workbook results imported {model.workbookImport?.importedAt?.slice(0,10)}. These projections are not bank activity and do not recalculate when income assumptions above are edited. Reimport the workbook to update this saved schedule.</p><div className="scenario-summary"><SummaryMetric label="Listed debts paid by" value={active.source.summary.payoff}/><SummaryMetric label="Lowest modeled cash" value={money.format(active.source.summary.minimumCash)}/><SummaryMetric label="Unpaid listed liabilities" value={money.format(active.source.summary.unpaid)}/><SummaryMetric label="December 2036 cash" value={money.format(active.source.summary.endingCash)}/></div><details><summary>Assumptions and source notes</summary><ul>{active.source.notes.map((n,i)=><li key={i}>{n}</li>)}</ul><p>Total modeled payments: {money.format(active.source.summary.totalPaid)}. This includes recurring taxes as well as listed debt payoffs.</p></details><details><summary>Cashflow and payoff schedule · {active.source.schedule.length} entries</summary><div className="scenario-table-wrap"><table className="scenario-table"><thead><tr><th>Month</th><th>Cashflow / payoff item</th><th>Amount</th><th>Balance</th><th>Strategy</th></tr></thead><tbody>{active.source.schedule.map((r,i)=><tr key={i}><td>{r[0].slice(0,7)}</td><td>{r[1]}</td><td>{money.format(r[2])}</td><td>{money.format(r[3])}</td><td>{r[4]}</td></tr>)}</tbody></table></div></details></section>}
+    {active.source && <section className="scenario-projections" aria-label="Calculated payoff schedule">
+      <h2>Calculated payoff plan</h2>
+      <p>Recalculates from the income and expense assumptions above. Opening cash, reserve, liabilities, payment releases, and annual taxes come from the imported workbook. Payments follow the listed order, preserve the reserve and future annual tax coverage, and release monthly expenses starting the following month. No debt interest is assumed.</p>
+      {payoff.error ? <p role="alert">{payoff.error}</p> : <>
+        <div className="scenario-summary"><SummaryMetric label="Listed debts paid by" value={payoff.payoff}/><SummaryMetric label="Lowest modeled cash" value={money.format(payoff.minimumCash)}/><SummaryMetric label="Unpaid listed liabilities" value={money.format(payoff.unpaid)}/><SummaryMetric label="Ending modeled cash" value={money.format(payoff.endingCash)}/></div>
+        <details><summary>Calculation assumptions</summary><ul>{active.source.notes.filter(n => !n.includes('Contribution percentages are retained')).map((n,i)=><li key={i}>{n}</li>)}</ul><p>Total modeled payments: {money.format(payoff.totalPaid)}. Includes annual taxes and listed debt payoffs.</p></details>
+        <details><summary>Calculated cashflow and payoff schedule · {payoff.schedule.length} entries</summary><div className="scenario-table-wrap"><table className="scenario-table"><thead><tr><th>Month</th><th>Item</th><th>Amount</th><th>Balance</th><th>Calculation</th></tr></thead><tbody>{payoff.schedule.map((r,i)=><tr key={i}><td>{r[0].slice(0,7)}</td><td>{r[1]}</td><td>{money.format(r[2])}</td><td>{money.format(r[3])}</td><td>{r[4]}</td></tr>)}</tbody></table></div></details>
+      </>}
+    </section>}
+
     <section className="scenario-projections">
       <div className="scenario-section-heading">
         <div><p className="scenario-eyebrow">Cumulative projection</p><h2>Cash flow over time</h2></div>
-        <p>Assumes the modeled monthly income and expense baseline remain constant.</p>
+        <p>Baseline cashflow only: assumes constant income and recurring expenses. Excludes opening cash, annual taxes, and debt payoffs shown in the calculated payoff plan.</p>
       </div>
       <div className="scenario-projection-grid">
         <div><span>1 year</span><strong>{wholeMoney.format(result.annualCashFlow)}</strong></div>

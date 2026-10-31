@@ -730,8 +730,9 @@ export function normalizeActionOperation(input = {}) {
   }
   if(type==='nutrition.targets.update' && !HOUSEHOLD_MEMBERS.includes(operation.targetId)) throw new Error('Choose a household member for nutrition targets.')
   if (type === 'forecast.update') {
+    if (payload.planningExpense !== undefined && (!Number.isFinite(payload.planningExpense) || payload.planningExpense < 0)) throw new Error('Monthly planning expense must be a non-negative amount.')
     const modelFields = ['planningExpense', 'expenseMode']
-    const scenarioFields = ['title', 'description', 'favorite']
+    const scenarioFields = ['title', 'description', 'favorite', 'planningExpense']
     const incomeFields = ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']
     const fields = Object.keys(payload)
     if (payload.scenarioImportJson !== undefined) {

@@ -39,3 +39,6 @@
 .scenario-choice{position:relative;min-width:0}.scenario-choice>[role=tab]{width:100%;padding-right:68px}
 .scenario-choice .scenario-star{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;min-height:44px;padding:0;text-align:center;font-size:27px;background:transparent;border:0;color:var(--brevity-gold)}
 .scenario-star:disabled{opacity:.45;cursor:not-allowed}.scenario-star:focus-visible{outline:2px solid var(--brevity-gold);outline-offset:2px}.scenario-filters button.is-active{background:var(--brevity-gold);color:#101513}
+
+.scenario-table td output { display: block; font-variant-numeric: tabular-nums; }
+.scenario-table td output + small { display: block; max-width: 170px; margin-top: 6px; color: var(--text-muted); font-size: .75rem; white-space: normal; }
