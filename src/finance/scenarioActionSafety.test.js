@@ -52,7 +52,7 @@ test('Scenario Modeling never persists or claims a forecast change before Action
   assert.match(component,/window\.addEventListener\(SHARED_STATE_EVENT, refresh\)/)
   assert.match(component,/Draft only — review and approve before Brevity changes the forecast\./)
   assert.match(component,/No forecast value changes until you approve it\./)
-  assert.match(component,/calculateScenario\(active, expense\)/,'summary totals must use authoritative values rather than drafts')
+  assert.match(component,/calculateScenario\(activeDraft, expense\)/,'preview totals must recalculate drafts without persisting them')
   assert.doesNotMatch(component,/localStorage\.setItem\(SCENARIO_STORAGE_KEY/)
   assert.doesNotMatch(component,/saveModel\(/)
   assert.doesNotMatch(component,/window\.confirm\(/)
@@ -163,4 +163,19 @@ test('October 15 pending and priced models retain drivers through approved saves
     await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'opportunity-undo'})
     assert.deepEqual(resources.snapshot().value,initial)
   }
+})
+
+
+test('reviewed scenario expense changes stay isolated and support undo',async()=>{
+ const initial={expenseMode:'scenario',planningExpense:2000,scenarios:[{id:'one',planningExpense:1000,incomes:[]},{id:'two',planningExpense:3000,incomes:[]}]}
+ const repository=memoryRepository(),resources=versionedForecastResources(initial,3)
+ const session={member:'Larry',role:'admin'},permissions=defaultActionPermissions('admin'),now=()=>new Date('2026-10-31T00:00:00Z')
+ const proposal=await prepareDirectProposal({input:{summary:'Change one scenario expense',expectedVersion:3,operation:{type:'forecast.update',targetId:'one',payload:{planningExpense:1500}}},session,permissions,repository,resources,now:now(),id:'scenario-expense'})
+ assert.deepEqual(resources.snapshot().value,initial)
+ const execution=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions,resources,event:{},now,createAttemptId:()=> 'expense-execute'})
+ assert.equal(resources.snapshot().value.scenarios[0].planningExpense,1500)
+ assert.equal(resources.snapshot().value.scenarios[1].planningExpense,3000)
+ assert.equal(resources.snapshot().value.planningExpense,2000)
+ await undoActionWithJournal({repository,auditId:execution.audit.id,session,resources,event:{},now,createAttemptId:()=> 'expense-undo'})
+ assert.deepEqual(resources.snapshot().value,initial)
 })
