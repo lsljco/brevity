@@ -1,3 +1,4 @@
+import { archiveLocalRecoveryCopies } from './storageRecovery.js'
 export const SHARED_STATE_EVENT = 'brevity-shared-state-updated'
 export const SHARED_STATE_SYNC_ERROR_EVENT = 'brevity-shared-state-sync-error'
 export const SHARED_STATE_HEALTH_EVENT = 'brevity-shared-state-health'
@@ -533,7 +534,14 @@ export async function syncSharedState(storage = window.localStorage, onError) {
   updateHealth(storage, { status:'syncing' })
   try {
     const remote = await request('GET')
-    const result = reconcileSharedRecords(storage, remote.records || {})
+    let result
+    try { result = reconcileSharedRecords(storage, remote.records || {}) }
+    catch (error) {
+      if (!isSharedStorageQuotaError(error)) throw error
+      // Keep all originals if durable recovery storage is unavailable.
+      await archiveLocalRecoveryCopies(storage, SHARED_STATE_KEYS)
+      result = reconcileSharedRecords(storage, remote.records || {})
+    }
     dispatchRemoteChange(result.applied)
     const rejected = []
     if (result.blockedLocal.length) {
