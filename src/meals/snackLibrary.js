@@ -6,6 +6,10 @@ const snack = (id, mealType, name, serving, macros, sourceUrl, nutritionBasis) =
   yieldQuantity: 1, yieldUnit: 'serving', tags: ['snack'],
 })
 export const SNACK_LIBRARY = Object.freeze([
+  snack('snack-premier-banana','snack1','Premier Protein Shake — Bananas & Cream','1 shake (11 fl oz)',
+    {calories:160,proteinGrams:30,carbohydrateGrams:4,fatGrams:3},
+    'https://www.premierprotein.com/products/bananas-cream-protein-shake',
+    'Premier Protein Bananas & Cream 11 fl oz shake label, verified November 1, 2026.'),
   snack('snack-premier-chocolate','snack1','Premier Protein Shake — Chocolate','1 shake (11 fl oz)',
     {calories:160,proteinGrams:30,carbohydrateGrams:4,fatGrams:3},
     'https://www.premierprotein.com/products/chocolate-protein-shake',

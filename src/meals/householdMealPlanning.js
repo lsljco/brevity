@@ -56,7 +56,7 @@ export function automaticMeals(date,library=MEAL_LIBRARY){
   cycles.set(library,cycle)
  }
  const number=Math.floor(Date.parse(`${date}T00:00:00Z`)/86400000)
- return {...cycle[((number%42)+42)%42],snack1:null,snack2:null}
+ return {...cycle[((number%42)+42)%42],snack1:library.find(meal=>meal.id==='snack-premier-banana')||null,snack2:library.find(meal=>meal.id==='snack-envy-apple')||null}
 }
 export function scaleIngredient(line,factor){const p=parseGroceryIngredient(line);return p.amount==null?line:`${Number((p.amount*factor).toFixed(3))} ${p.unit?`${p.unit} `:''}${p.name}`}
 export function householdIngredients(meal,servings=6){return (meal?.ingredients||[]).map(line=>scaleIngredient(line,servings/(Number(meal.yieldQuantity)||1)))}
@@ -64,7 +64,7 @@ export function effectiveMealDay(day,schedule){
  const override=schedule?.days?.[day.date]
  if(!override)return day
  const merged={...day,...override,date:day.date,scheduleEdited:true,meals:{...override.meals}}
- for(const slot of ['snack1','snack2'])if(!override.substitutions?.[slot]&&!override.recipes?.[slot])merged.meals[slot]=day.substitutions?.[slot]?day.meals?.[slot]:null
+ for(const slot of ['snack1','snack2'])if(!override.substitutions?.[slot]&&!override.recipes?.[slot]&&!override.skippedSlots?.[slot])merged.meals[slot]=day.meals?.[slot]||null
  return merged
 }
 export function scheduleSlot(day,slot){return {mealId:day.meals?.[slot]||null,servings:day.servings?.[slot]??6,recipe:day.recipes?.[slot]||null,skippedMembers:day.skippedMembers?.[slot]||[]}}
@@ -130,7 +130,7 @@ export function applyMealScheduleCommand(schedule,command,baseDays){
 }
 export function refreshAutomaticDay(day,library=MEAL_LIBRARY){
  const automatic=automaticMeals(day.date,library)
- return {...day,meals:Object.fromEntries(Object.entries(automatic).map(([slot,meal])=>[slot,day.substitutions?.[slot]?day.meals?.[slot]:meal?.id||null]))}
+ return {...day,meals:Object.fromEntries(Object.entries(automatic).map(([slot,meal])=>[slot,day.substitutions?.[slot]||day.recipes?.[slot]||day.skippedSlots?.[slot]?day.meals?.[slot]:meal?.id||null]))}
 }
 export function mealPlanWarnings(days){
  const warnings=[];let previous=new Set();const history=[]

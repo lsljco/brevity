@@ -33,7 +33,8 @@
 .life-tabs { display:flex; gap:28px; border-bottom:1px solid var(--life-line); margin-top:24px; overflow-x:auto; }
 .life-tabs button { background:none; color:inherit; border:0; border-bottom:2px solid transparent; padding:18px 8px; font-size:15px; cursor:pointer; }
 .life-tabs button[aria-current] { color:var(--gold); border-color:var(--gold); }
-.life-workspace-nav { display:flex; gap:8px; overflow-x:auto; padding:12px 4px 18px; margin:0 0 16px; border-bottom:1px solid var(--life-line); scrollbar-width:thin; }
+/* Keep the navigation at its full height when the page below is long. */
+.life-workspace-nav { flex:0 0 auto; min-height:44px; box-sizing:content-box; display:flex; gap:8px; overflow-x:auto; padding:12px 4px 18px; margin:0 0 16px; border-bottom:1px solid var(--life-line); scrollbar-width:thin; }
 .life-workspace-nav button { flex:0 0 auto; min-height:44px; padding:10px 16px; background:transparent; color:inherit; border:1px solid transparent; border-radius:24px; cursor:pointer; }
 .life-workspace-nav button[aria-current] { border-color:var(--life-line); color:var(--gold); background:var(--life-surface); }
 .family-calendar-day-number button { background:none; color:inherit; font:inherit; border:0; min-width:44px; min-height:44px; cursor:pointer; }

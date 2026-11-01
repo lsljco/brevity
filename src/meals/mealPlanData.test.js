@@ -6,8 +6,8 @@ import { fallbackMealImage, MEAL_LIBRARY, MEAL_TYPES, mealsForType } from './mea
 import { addMealDays, createRollingMealDay, mealDateInTimeZone, mealLibrarySummary, resolveMealDay, rollingMealDates, rotatingMealForDate, validateMealSubstitution } from './mealPlanData.js'
 
 test('meal library includes the core rotation and every distinct Fuel with Purpose meal', () => {
-  assert.deepEqual(mealLibrarySummary(), { total: 119, counts: { breakfast: 37, lunch: 40, dinner: 40, snack1: 1, snack2: 1 } })
-  assert.equal(new Set(MEAL_LIBRARY.map(meal => meal.id)).size, 119)
+  assert.deepEqual(mealLibrarySummary(), { total: 120, counts: { breakfast: 37, lunch: 40, dinner: 40, snack1: 2, snack2: 1 } })
+  assert.equal(new Set(MEAL_LIBRARY.map(meal => meal.id)).size, 120)
   assert.equal(MEAL_LIBRARY.filter(meal => meal.tags.includes('fuel-with-purpose')).length, 27)
 })
 
