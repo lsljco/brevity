@@ -105,17 +105,17 @@ test('a small eligible library repeats transparently without relaxing hard food 
  assert.equal(mealPlanWarnings(dates.map(date=>({date,resolvedMeals:menus[date]}))).filter(w=>w.includes('within seven days')).length,18)
 })
 
-test('automatic snacks start empty while deliberate snack choices survive refresh and schedule edits',()=>{
+test('daily banana shake and apple defaults preserve deliberate snack choices',()=>{
  const date='2026-10-04',base=createRollingMealDay(date)
- assert.equal(base.meals.snack1,null);assert.equal(base.meals.snack2,null)
+ assert.equal(base.meals.snack1,'snack-premier-banana');assert.equal(base.meals.snack2,'snack-envy-apple')
  const old={...base,meals:{...base.meals,snack1:'snack-premier-chocolate',snack2:'snack-envy-apple'}}
  const cleared=refreshAutomaticDay(old)
- assert.equal(cleared.meals.snack1,null);assert.equal(cleared.meals.snack2,null)
+ assert.equal(cleared.meals.snack1,'snack-premier-banana');assert.equal(cleared.meals.snack2,'snack-envy-apple')
  const legacySchedule={days:{[date]:{meals:old.meals,substitutions:{dinner:{customized:true}}}}}
- assert.equal(effectiveMealDay(cleared,legacySchedule).meals.snack1,null)
+ assert.equal(effectiveMealDay(cleared,legacySchedule).meals.snack1,'snack-premier-banana')
  const edited=applyMealScheduleCommand(legacySchedule,{kind:'set',date,slot:'snack1',mealId:'snack-envy-apple',servings:1},{[date]:cleared})
  const saved=effectiveMealDay(cleared,edited)
- assert.equal(saved.meals.snack1,'snack-envy-apple');assert.equal(saved.servings.snack1,1);assert.equal(saved.meals.snack2,null)
+ assert.equal(saved.meals.snack1,'snack-envy-apple');assert.equal(saved.servings.snack1,1);assert.equal(saved.meals.snack2,'snack-envy-apple')
 })
 test('pushing dinner inserts an empty day and shifts dinners with portions across the week boundary',()=>{
  const c={kind:'push',date:'2026-10-05',slot:'dinner',destination:'next-day'},schedule={days:{'2026-10-12':{meals:{dinner:'saved-potroast'},servings:{dinner:4},recipes:{dinner:{name:'Custom roast',image:'photo'}}}}}
@@ -188,4 +188,17 @@ test('member skip saves and reloads through Action Mode and rejects cross-member
  await assert.rejects(prepareRecordOperations({proposal,session,permissions:{planning:false},resources}),/changed after your review/)
  await resources.write(MEAL_SCHEDULE_RESOURCE,before.value,1,'Nyla','undo-self-skip')
  assert.equal((await repository.getWindowReadOnly({startDate:date,count:1})).days[0].skippedMembers?.dinner,undefined)
+})
+
+test('seven days include exactly one shake and apple per person daily in nutrition and groceries',async()=>{
+ const {personalMealPlan}=await import('./personalMealPlan.js')
+ const days=Array.from({length:7},(_,i)=>resolveMealDay(createRollingMealDay(addMealDays('2026-11-01',i))))
+ for(const day of days){const plan=personalMealPlan(day.resolvedMeals,{});assert.equal(plan.meals.snack1.portionMultiplier,1);assert.equal(plan.meals.snack2.portionMultiplier,1);assert.equal(plan.meals.snack1.macros.proteinGrams,30)}
+ const grocery=proposeWeeklyGroceries(days,6).items
+ assert.equal(grocery.find(row=>row.name.includes('Bananas & Cream')).quantity,'42')
+ assert.equal(grocery.find(row=>row.name.includes('Envy apple')).quantity,'42')
+ const day=days[0],skip=applyMealScheduleCommand({}, {kind:'skip',date:day.date,slot:'snack1',scope:'household'}, {[day.date]:day})
+ assert.equal(resolveMealDay(effectiveMealDay(refreshAutomaticDay(day),skip)).resolvedMeals.snack1,null)
+ const explicit={...day,substitutions:{snack1:{customized:true}},meals:{...day.meals,snack1:'snack-premier-chocolate'}}
+ assert.equal(refreshAutomaticDay(explicit).meals.snack1,'snack-premier-chocolate')
 })

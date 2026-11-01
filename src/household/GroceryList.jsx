@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react'
 import {groceryRequest} from './groceryApi.js'
 import {GROCERY_CATEGORIES} from './groceryData.js'
 import WeeklyGroceries from './WeeklyGroceries.jsx'
+import {consolidateGroceries,groceryReport,groceryPrintHtml,grocerySmsLink,groceryText} from './groceryReport.js'
 import './GroceryList.css'
 function GroceryRow({item,canEdit,busy,onUpdate}){
  const [quantity,setQuantity]=useState(item.quantity)
@@ -15,6 +16,10 @@ export default function GroceryList(){
  const mutate=async body=>{setBusy(true);setError('');setNotice('');try{const result=await groceryRequest(body);setData(result);setNotice(body.action==='add'?'Item added to Grocery List.':'Grocery item updated.');return true}catch(cause){setError(cause.message);return false}finally{setBusy(false)}}
  const add=async event=>{event.preventDefault();if(await mutate({action:'add',items:[form]}))setForm({name:'',quantity:'1',category:'Other',sourceKey:crypto.randomUUID()})}
  const update=(item,patch)=>mutate({action:'update',id:item.id,revision:item.revision,patch})
+ const consolidated=consolidateGroceries(data?.items,filter)
+ const exportExcel=async()=>{setBusy(true);setError('');try{const {downloadFinanceReport}=await import('../finance/financeExportFiles.js');await downloadFinanceReport(groceryReport(consolidated,filter),'xlsx')}catch(cause){setError(`Could not export the list: ${cause.message}`)}finally{setBusy(false)}}
+ const copyList=async()=>{try{await navigator.clipboard.writeText(groceryText(consolidated,filter));setNotice('Grocery list copied. Paste it into a message to yourself.')}catch{setError('Could not copy the list. Use Print or Export to Excel.')}}
+ const printList=()=>{const popup=window.open('','_blank');if(!popup){setError('Allow pop-ups to open the printable grocery list.');return}popup.opener=null;popup.document.write(groceryPrintHtml(consolidated,filter));popup.document.close();popup.focus();popup.print()}
  const visible=(data?.items||[]).filter(item=>filter==='All'||item.completed===(filter==='Purchased'))
  return <main className="grocery-workspace"><header><div><p>Household Management</p><h1>Grocery List</h1><p>One shared list for food, paper goods, toiletries, cleaning, laundry, and other household needs.</p></div><button onClick={()=>{setShowProposal(value=>!value);if(showProposal)load()}}>{showProposal?'Back to Grocery List':'Propose from weekly meals'}</button></header>
  {showProposal?<WeeklyGroceries canEdit={data?.canEdit===true} onOpenList={()=>{setShowProposal(false);load()}}/>:<>
@@ -23,7 +28,9 @@ export default function GroceryList(){
  {data.canEdit&&<form className="grocery-controls grocery-add" onSubmit={add}><label>Item name<input disabled={busy} required maxLength={500} value={form.name} onChange={event=>setForm({...form,name:event.target.value})}/></label><label>Quantity<input disabled={busy} required maxLength={120} value={form.quantity} onChange={event=>setForm({...form,quantity:event.target.value})}/></label><label>Category<select disabled={busy} aria-label="Category" value={form.category} onChange={event=>setForm({...form,category:event.target.value})}>{GROCERY_CATEGORIES.map(category=><option key={category}>{category}</option>)}</select></label><button disabled={busy}>Add item</button></form>}
  {!data.canEdit&&<p>Your access to this list is read-only.</p>}
  <div className="grocery-controls"><label>Show items<select aria-label="Show items" value={filter} onChange={event=>setFilter(event.target.value)}>{['Needed','Purchased','All'].map(value=><option key={value}>{value}</option>)}</select></label><button disabled={busy} onClick={load}>Refresh list</button></div>
- {!visible.length&&<p>No {filter==='All'?'grocery':filter.toLowerCase()} items.</p>}<div className="grocery-rows">{visible.map(item=><GroceryRow key={item.id} item={item} canEdit={data.canEdit} busy={busy} onUpdate={update}/>)}</div><p>Check an item when purchased. Uncheck it in Purchased to put it back on the needed list.</p></>}
+ <section aria-label="Consolidated shopping list"><h2>Consolidated shopping list</h2><p>Matching items and units are combined. Different units remain separate. Save quantity changes below before printing or exporting.</p><div className="grocery-controls"><button disabled={busy||!consolidated.length} onClick={printList}>Print list</button><button disabled={busy||!consolidated.length} onClick={exportExcel}>{busy?'Working…':'Export to Excel'}</button>{consolidated.length>0&&<a className="grocery-text-link" href={grocerySmsLink(consolidated,filter,navigator.userAgent)}>Text to myself</a>}<button disabled={!consolidated.length||busy} onClick={copyList}>Copy list</button></div><p>Text opens your messaging app. Choose your own number and send. For long lists or devices without messaging, use Copy list or Excel.</p><div className="grocery-table-wrap"><table className="grocery-table"><thead><tr><th>Category</th><th>Item</th><th>Total quantity</th><th>Status</th></tr></thead><tbody>{consolidated.map((item,index)=><tr key={index}><td>{item.category}</td><td>{item.name}</td><td>{item.quantity}</td><td>{item.completed?'Purchased':'Needed'}</td></tr>)}</tbody></table></div></section>
+ <details><summary>Update individual items and quantities</summary>
+ {!visible.length&&<p>No {filter==='All'?'grocery':filter.toLowerCase()} items.</p>}<div className="grocery-rows">{visible.map(item=><GroceryRow key={item.id} item={item} canEdit={data.canEdit} busy={busy} onUpdate={update}/>)}</div><p>Check an item when purchased. Uncheck it in Purchased to put it back on the needed list.</p></details></>}
  </>}
  </main>
 }
