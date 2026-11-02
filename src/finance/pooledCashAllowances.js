@@ -12,11 +12,29 @@ export function applyPooledCashAllowances(projection,{accounts,scheduled,actuals
  const unique=[...new Map(actuals.filter(t=>t.id&&!t._deleted&&t.date<=today).map(t=>[t.id,t])).values()],replaced=new Set(unique.filter(t=>!t.pending).map(t=>t.pendingTransactionId).filter(Boolean))
  const matchedBills=new Set(buildAutoReconciliationReport({accounts,scheduled:scheduled.filter(p=>!isCategoryAllowancePlan(p)),actuals:unique,today,lookbackDays:32,allowAmountVariance:true}).suggestions.map(m=>m.actual.id))
  for(const t of unique){if(Number(t.amount)<=0||isTransferTransaction(t)||t.pending&&replaced.has(t.id)||matchedBills.has(t.id))continue;const cat=budgetCategoryForTransaction({...t,pending:false})||'Uncategorized',g=groups.get(`${links[t.accountId]}|${String(t.date).slice(0,7)}|${cat}`);if(g)g.spent+=cents(t.amount)}
+ // Keep category spending on its scheduled dates. Earlier purchases consume
+ // the earliest remaining capacity, but never constitute a bank match.
+ for(const g of groups.values()) {
+  g.remaining=Math.max(0,g.target-g.spent)
+  g.future=0
+  for(const [date,point] of projection)if(date>=today&&date.startsWith(g.month))for(const p of point.txns||[])if(isCategoryAllowancePlan(p)&&p.acct===g.accountId&&p.cat===g.category)g.future+=cents(p.amount)
+  g.consume=Math.max(0,g.future-g.remaining)
+ }
  let offset=0
- for(const [date,point] of projection){if(date<today)continue;let released=0;const realization=(point.realization||[]).map(r=>{const plan=point.txns.find(p=>p.id===r.id);if(!plan||!isCategoryAllowancePlan(plan)||!groups.has(`${plan.acct}|${date.slice(0,7)}|${plan.cat}`))return r;released-=cents(r.delta);return {...r,delta:0,statuses:[{status:'category-allowance'}]}})
- const allowances=[...groups.values()].filter(g=>(g.month===today.slice(0,7)?today:g.month+'-01')===date&&g.target>g.spent).map(g=>({accountId:g.accountId,category:g.category,amount:(g.target-g.spent)/100}))
- const reserve=allowances.reduce((s,g)=>s+cents(g.amount),0);offset+=released-reserve
- projection.set(date,{...point,realization,remainingDelta:(cents(point.remainingDelta)+released)/100,bal:(cents(point.bal)+offset)/100,budgetAllowances:allowances,budgetAllowanceDelta:-reserve/100})
+ for(const [date,point] of projection){
+  if(date<today)continue
+  let adjustment=0
+  const realization=(point.realization||[]).map(r=>{
+   const plan=point.txns.find(p=>p.id===r.id)
+   const g=plan&&isCategoryAllowancePlan(plan)&&groups.get(`${plan.acct}|${date.slice(0,7)}|${plan.cat}`)
+   if(!g)return r
+   const used=Math.min(cents(plan.amount),g.consume);g.consume-=used
+   const delta=-(cents(plan.amount)-used)
+   adjustment+=delta-cents(r.delta)
+   return {...r,delta:delta/100,statuses:[{status:'category-allowance',consumedAmount:used/100}],categoryAllowance:true}
+  })
+  offset+=adjustment
+  projection.set(date,{...point,realization,remainingDelta:(cents(point.remainingDelta)+adjustment)/100,bal:(cents(point.bal)+offset)/100})
  }
  return projection
 }

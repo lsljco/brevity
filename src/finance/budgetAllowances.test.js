@@ -9,8 +9,10 @@ test('category allowance reserves only unspent, unheld, unscheduled capacity; ba
  const scheduled=[{id:'groceries',acct:'a',name:'Groceries',cat:'Food',type:'expense',amount:80,freq:'once',start:'2026-10-28'}]
  const p=buildOutstandingCashForecast([account],scheduled,actuals,{today:'2026-10-25',days:6,pastDays:6,reconcile:true,budget})
  assert.equal(p.get('2026-10-25').budgetAllowanceDelta,-70)
- assert.equal(p.get('2026-10-25').bal,880)
- assert.equal(p.get('2026-10-28').bal,800)
+ assert.equal(p.get('2026-10-25').bal,950)
+ assert.equal(p.get('2026-10-25').balanceAfterBudgetReserve,880)
+ assert.equal(p.get('2026-10-28').bal,870)
+ assert.equal(p.get('2026-10-28').balanceAfterBudgetReserve,800)
 })
 test('ordinary budget targets do not invent extra scheduled payments',()=>{
  const plain=structuredClone(budget);plain.lines['allowance-food'].cashAllowance=false
