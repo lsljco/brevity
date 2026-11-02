@@ -43,3 +43,9 @@ test('saved custom bounds remain stable and invalid custom bounds fall back safe
     resolveTimeframe('last-12-months', now),
   )
 })
+
+test('all-time ends today and cannot project recurring schedules through 2100', () => {
+  const range = resolveTimeframe('all-time', new Date(2026, 10, 2))
+  assert.equal(range.to, '2026-11-02')
+  assert.equal(range.from, '2000-01-01')
+})
