@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import {forecastPlanPresentation} from './forecastPlanPresentation.js'
 import { fmtMoney } from './projection.js'
 import { bankBalanceMovement, cashForecastSourceSeverity } from './calendarSemantics.js'
 import { isTransferTransaction } from './reportingData.js'
@@ -43,7 +44,7 @@ export default function CashForecastAgenda({
     .map(cell => {
       const key = `${cell.year}-${String(cell.month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`
       const point = projection.get(key)
-      const planned = orderRows(point?.txns || [])
+      const planned = orderRows((point?.txns || []).map(tx=>{const display=forecastPlanPresentation(tx,point);return {...tx,amount:display.matched?0:display.amount,forecastLabel:display.label}}))
       const bank = orderRows(showBankActivity && key <= todayKey ? (actualsByDate?.[key] || []) : [])
       const postedBank = bank.filter(transaction => !transaction?.pending)
       const pendingBank = bank.filter(transaction => transaction?.pending)
@@ -53,7 +54,7 @@ export default function CashForecastAgenda({
         currentBalance:point?.currentBalance,
         planned,
         bank,
-        plannedNet:Number(point?.delta || 0),
+        plannedNet:Number(point?.remainingDelta ?? point?.delta ?? 0),
         bankNet:bankBalanceMovement(postedBank),
         pendingNet:bankBalanceMovement(pendingBank),
         postedBankCount:postedBank.length,
@@ -99,7 +100,7 @@ export default function CashForecastAgenda({
     <div ref={agendaRef} className="finance-calendar-mobile-agenda" aria-label={`${monthName} cash forecast agenda`}>
       {earlierCount > 0 && <div className="finance-calendar-earlier"><button type="button" aria-expanded={showEarlier} onClick={() => setShowEarlier(value => !value)}>{showEarlier ? 'Hide' : 'Show'} earlier days ({earlierCount})</button></div>}
       {visibleDays.length > 0 ? visibleDays.map(day => {
-        const plannedPreview = day.planned.map(tx => ({ label:tx.vendorName && tx.vendorName !== 'Unassigned' ? `${tx.vendorName} · ${transactionDescription(tx)}` : transactionDescription(tx), amount:Number(tx.amount || 0), direction:tx.type }))
+        const plannedPreview = day.planned.map(tx => ({ label:(tx.forecastLabel||'') + (tx.vendorName && tx.vendorName !== 'Unassigned' ? `${tx.vendorName} · ${transactionDescription(tx)}` : transactionDescription(tx)), amount:Number(tx.amount || 0), direction:tx.type }))
         const namedBankTransactions = day.bank.filter(transaction => transactionDescription(transaction))
         const bankPreview = namedBankTransactions.map(transaction => {
           const label = transactionDescription(transaction)

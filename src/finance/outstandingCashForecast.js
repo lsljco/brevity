@@ -79,7 +79,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   }
   const reconcile = options.reconcile !== false
   const yesterday = toISO(addDays(parseISODate(today), -1))
-  const verifiedClose = options.closingBalances?.[yesterday]
+  const verifiedClose = options.recordedClosingBalances?.[yesterday] ?? options.closingBalances?.[yesterday]
   const reconstructedClose = options.reconstructedBalances?.[yesterday]
   const snapshot = options.balanceHistory?.find(row => row.date === yesterday && accounts.every(account => Number.isFinite(row.balances?.[account.plaidAccountId])))
   const observed = snapshot ? accounts.reduce((sum,account) => sum + cents(snapshot.balances[account.plaidAccountId]),0) : null
@@ -87,6 +87,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     : Number.isFinite(reconstructedClose) ? cents(reconstructedClose)
     : observed !== null ? observed
     : current + bank.filter(row => !row.pending && row.date === today).reduce((sum,row) => sum + cents(row.amount), 0)
+  const postedTodayDelta = bank.filter(row => !row.pending && row.date === today).reduce((sum,row) => sum - cents(row.amount), 0)
   const openingSource = Number.isFinite(verifiedClose) ? 'verified-close'
     : Number.isFinite(reconstructedClose) ? 'reconstructed-close' : 'estimated-opening'
   // Planned mode follows occurrence dates only. A pending/late-posted match
@@ -118,7 +119,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     })
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
-      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', anchorEstimated:Boolean(options.anchorEstimated), openingBalance:opening / 100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
+      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', anchorEstimated:Boolean(options.anchorEstimated), openingBalance:opening / 100, postedTodayDelta:postedTodayDelta/100, bankReconciliationDelta:(current-opening-postedTodayDelta)/100, availabilityDelta:(anchor-current)/100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
         anchorKind:availableIds.size === accounts.length ? 'available' : availableIds.size ? 'mixed' : 'current',
         pendingActivity:bank.filter(actual => actual.pending).map(actual => ({ id:actual.id, date:actual.date, name:actual.name || actual.merchant_name || 'Pending transaction', accountName:accounts.find(account => account.id === accountMap[actual.accountId])?.name || 'Cash account', delta:-cents(actual.amount) / 100, applied:reconcile && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]) })),
         pendingDelta:reconcile ? pendingDelta / 100 : 0,
@@ -144,7 +145,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   }
   for (const [date, adjustment] of adjustments) {
     const point=result.get(date)
-    if (point) result.set(date,{...point,bal:(cents(point.bal)+adjustment.offset)/100,projectionAdjustment:adjustment.offset/100,isOverridden:adjustment.accounts.length>0,overriddenAccounts:adjustment.accounts})
+    if (point) result.set(date,{...point,bal:(cents(point.bal)+adjustment.offset)/100,...(Number.isFinite(point.balanceAfterBudgetReserve)?{balanceAfterBudgetReserve:(cents(point.balanceAfterBudgetReserve)+adjustment.offset)/100}:{}),projectionAdjustment:adjustment.offset/100,isOverridden:adjustment.accounts.length>0,overriddenAccounts:adjustment.accounts})
   }
   return result
 }

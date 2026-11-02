@@ -62,6 +62,8 @@ const SpendingReview = lazy(() => import('./SpendingReview.jsx'))
 import { buildDatedCashLedger } from './datedCashLedger.js'
 import { buildUniquePlaidAccountMap, cashForecastScope, hasVerifiedCashLedgerAnchors, mappedTransactionsForBalanceReconstruction, transactionsForCalendarMonth } from './calendarSemantics.js'
 import CashForecastBalances from './CashForecastBalances.jsx'
+import CashForecastBalanceBridge from './CashForecastBalanceBridge.jsx'
+import {forecastPlanPresentation} from './forecastPlanPresentation.js'
 import './FinanceOverview.css'
 const FinanceOverview = lazy(() => import('./FinanceOverview.jsx'))
 import { buildOutstandingCashForecast } from './outstandingCashForecast.js'
@@ -4312,9 +4314,10 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
         scopeLabel={scopeLabel} accountFilter={accountFilter} showActuals={showActuals} toggleActuals={toggleActuals} loading={actualsLoading} bankCount={monthBankCount}
         onReconcile={()=>{const panel=reconciliationRef.current;if(panel){panel.open=true;panel.scrollIntoView({block:'start'});panel.querySelector('summary')?.focus({preventScroll:true})}}}
       /></Suspense>
-      <FinanceExport buildReport={()=>({title:`Cash Forecast ${calYear}-${String(calMonth+1).padStart(2,'0')}`,notes:[scopeLabel,actualsFreshnessMessage,balanceDataMessage,showActuals?'Includes actual transaction details':'Scheduled transaction details'],sections:[recordsSection('Daily balances',Array.from({length:daysInMo},(_,day)=>{const date=toISO(new Date(calYear,calMonth,day+1)),p=proj.get(date);const recorded=date<=todayStr?recordedClosingBals[date]:undefined,reconstructed=date<todayStr?historicalBals[date]:undefined;return {date,endingBalance:recorded??reconstructed??p?.bal,balanceSource:recorded!==undefined?'Recorded':reconstructed!==undefined?'Calculated from bank history':p?.isOverridden?'User-set projection':Number.isFinite(p?.bal)?'Projected':'Unavailable',projectedBalance:p?.bal,netChange:p?.delta}})),transactionSection([...proj].filter(([date])=>date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)).flatMap(([date,p])=>(p.txns||[]).map(tx=>({...tx,date}))),accounts,{scheduled:true}),...(showActuals?[transactionSection((plaidActuals||[]).filter(tx=>String(tx.date).startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)),accounts)]:[])]})}/>
+      <FinanceExport buildReport={()=>({title:`Cash Forecast ${calYear}-${String(calMonth+1).padStart(2,'0')}`,notes:[scopeLabel,actualsFreshnessMessage,balanceDataMessage,showActuals?'Includes actual transaction details':'Scheduled transaction details'],sections:[recordsSection('Daily balances',Array.from({length:daysInMo},(_,day)=>{const date=toISO(new Date(calYear,calMonth,day+1)),p=proj.get(date);const recorded=date<=todayStr?recordedClosingBals[date]:undefined,reconstructed=date<todayStr?historicalBals[date]:undefined;return {date,endingBalance:recorded??reconstructed??p?.bal,balanceSource:recorded!==undefined?'Recorded':reconstructed!==undefined?'Calculated from bank history':p?.isOverridden?'User-set projection':Number.isFinite(p?.bal)?'Projected':'Unavailable',projectedBalance:p?.bal,netChange:p?.remainingDelta ?? p?.delta,unscheduledBudgetReserve:p?.budgetReserved ?? 0,cashAfterBudgetReserve:p?.balanceAfterBudgetReserve ?? p?.bal}})),transactionSection([...proj].filter(([date])=>date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)).flatMap(([date,p])=>(p.txns||[]).map(tx=>({...tx,date}))),accounts,{scheduled:true}),...(showActuals?[transactionSection((plaidActuals||[]).filter(tx=>String(tx.date).startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)),accounts)]:[])]})}/>
       <div className={selDay&&selPt?'finance-forecast-workspace has-selection':'finance-forecast-workspace'}>
       <div className="finance-forecast-calendar">
+      <CashForecastBalanceBridge point={proj.get(todayStr)} />
       <Suspense fallback={<p>Loading forecast days…</p>}><CashForecastAgenda vendorOrder={vendorOrder}
         cells={cells}
         projection={proj}
@@ -4360,7 +4363,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
           const showActualPills= showActuals && (isPast || isToday) && dayActuals.length > 0
           const dayReconciliation = reconciliationByDate.get(key)
           const matchedRows = showActualPills ? (dayReconciliation?.rows || []).filter(row => row.state === 'matched') : []
-          const realized = new Map((pt?.realization || []).filter(row=>row.delta===0&&row.statuses.length&&row.statuses.every(s=>s.status!=='expected')).map(row=>[row.id,row]))
+          const realized = new Map((pt?.realization || []).filter(row=>row.delta===0&&row.statuses.length&&row.statuses.every(s=>['posted','pending'].includes(s.status)&&s.actualId)).map(row=>[row.id,row]))
           const matchedPlanIds = new Set([...matchedRows.map(row => row.expected.id),...Array.from(realized).filter(([,row])=>showActualPills&&row.statuses.every(s=>dayActuals.some(a=>a.id===s.actualId))).map(([id])=>id)])
           const matchedActualIds = new Set([...matchedRows.map(row => row.actual.id),...Array.from(realized.values()).flatMap(row=>row.statuses.map(s=>s.actualId))])
           const approvedActualIds = new Set(matchedRows.filter(row=>row.approved).map(row=>row.actual.id))
@@ -4405,9 +4408,9 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                         overflow: 'hidden', cursor: readOnly ? 'default' : 'pointer',
                         opacity: showActualPills ? 0.6 : 1,
                       }}>
-                      <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{realized.has(tx.id) ? 'Matched · ' : ''}{transactionDescription(tx)}</span>
+                      <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{forecastPlanPresentation(tx,pt).label}{transactionDescription(tx)}</span>
                       <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                        {realized.has(tx.id) ? '$0 remaining' : tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(tx.amount)})`}
+                        {realized.has(tx.id) ? '$0 remaining' : tx.type === 'income' ? `+${fmtK(tx.amount)}` : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? `→${fmtK(tx.amount)}` : `+${fmtK(tx.amount)}`) : `(${fmtK(forecastPlanPresentation(tx,pt).amount)})`}
                       </span>
                     </div>
                   )
@@ -4422,7 +4425,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                       }}>
                         <span className="finance-calendar-description" title={transactionDescription(tx)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{approvedActualIds.has(tx.id) ? '✓ Reconciled · ' : matchedActualIds.has(tx.id) ? (tx.pending ? 'Pending · matched · ' : '✓ Included in balance · ') : isTransfer ? 'Transfer · ' : ''}{transactionDescription(tx)}</span>
                         <span className="finance-calendar-amount" style={{ flexShrink: 0, fontWeight: 600 }}>
-                          {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(tx.amount)})`}
+                          {isIncome ? `+${fmtK(Math.abs(tx.amount))}` : `(${fmtK(forecastPlanPresentation(tx,pt).amount)})`}
                         </span>
                       </div>
                   )
@@ -4499,7 +4502,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                               ? `→ ${accounts.find(a => a.id === tx.transferTo)?.name || 'Unknown account'}`
                               : `← from ${accounts.find(a => a.id === tx.acct)?.name || 'Unknown account'}`)
                           : `${tx.cat || 'Uncategorized'} · ${FREQ_OPTS.find(f => f.v === tx.freq)?.l || 'Scheduled'}`}
-                        <span className="finance-forecast-projected">Projected</span>{!readOnly && <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>}
+                        <span className="finance-forecast-projected">{forecastPlanPresentation(tx,selPt).matched ? 'Matched' : 'Projected'}</span>{forecastPlanPresentation(tx,selPt).pooled && <span> · Remaining category allowance {fmtMoney(forecastPlanPresentation(tx,selPt).amount)}</span>}{!readOnly && <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>}
                       </p>
                     </div>
                     <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
@@ -4674,7 +4677,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
       </div>
       <details className="finance-forecast-details"><summary>Projection details &amp; forecast help</summary>
       <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
-      <p>Explicit category allowances reserve remaining capacity today and at the start of future months. Posted purchases, pending holds and remaining scheduled payments reduce that reservation so they are counted once.</p>
+      <p>Scheduled category allowances stay on their scheduled dates. Purchases reduce remaining category capacity without being labeled as matches. Unscheduled budget reserves are shown separately from cash balances.</p>
       <p>The forecast carries the preceding balance forward. Scheduled items are plans, not proof of payment. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.</p>
       <p>Historical estimates use saved dated bank balances, posted activity, and your recorded closes. A failed refresh does not erase history. Intraday balances and incomplete bank history can differ from statement closes; record a confirmed ending balance to reconcile a date.</p>
       <ul aria-label="Balance history sources">{ledgerSources.map(source => <li key={source.id}>{source.name}: {source.anchorDate ? `${source.anchorKind === 'recorded' ? 'Recorded close' : 'Bank observation'} ${source.anchorDate}` : 'No dated balance anchor — record a closing balance'}; {source.postedCount} retained posted transactions.</li>)}</ul>
