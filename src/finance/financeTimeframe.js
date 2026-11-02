@@ -53,7 +53,7 @@ export function resolveTimeframe(preset = 'last-12-months', now = getHouseholdCa
     to = new Date(today.getFullYear() - 1, 11, 31)
   } else if (preset === 'all-time') {
     from = new Date(2000, 0, 1)
-    to = new Date(2100, 11, 31)
+    to = new Date(today)
   } else if (preset === 'custom') {
     from = custom.from ? new Date(`${custom.from}T12:00:00`) : from
     to = custom.to ? new Date(`${custom.to}T12:00:00`) : to

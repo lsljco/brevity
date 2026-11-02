@@ -1260,7 +1260,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const [accountLinkDrafts, setAccountLinkDrafts] = useState({})
   const [preparingAccountLink, setPreparingAccountLink] = useState('')
   const [accountLinkError, setAccountLinkError] = useState('')
-  const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null), getHouseholdCalendarDate()))
+  const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null)?.preset === 'all-time' ? null : loadSavedValue('brevity_finance_timeframe_v1', null), getHouseholdCalendarDate(), 'this-month'))
   const [transactionFilter, setTransactionFilter] = useState(null)
   const [transactionListOptions, setTransactionListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
   const [dashboardSearch, setDashboardSearch] = useState('')
@@ -2487,7 +2487,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           <div className="dash-header">
             <div>
               <div className="dash-greeting">{getHouseholdGreeting()}, {currentMember}</div>
-              <div className="dash-date">{todayLabel}</div>
+              <div className="dash-date">{todayLabel}</div><p aria-label="Dashboard reporting period">{financePresetLabel} · {timeframeLabel(financeRange)}</p>
             </div>
             <div className="dash-actions">
               {!readOnly && <Suspense fallback={<p role="status">Loading bank controls…</p>}><PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onSyncAvailableTransactions={() => fetchActuals({ requestBankUpdate:false })} onRecoverTransactions={() => fetchActuals({ recoverHistory:true })} onReviewAccountLinks={() => setView('accounts')} /></Suspense>}
