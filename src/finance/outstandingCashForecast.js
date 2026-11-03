@@ -36,6 +36,9 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
   const scoped = actuals.filter(actual => actual.id && ids.has(accountMap[actual.accountId]) && Number.isFinite(Number(actual.amount)) && parseISODate(actual.date) && actual.date <= today)
   const superseded = new Set(scoped.filter(actual => !actual.pending).map(actual => actual.pendingTransactionId).filter(Boolean))
   const bank = [...new Map(scoped.filter(actual => !actual.pending || !superseded.has(actual.id)).map(actual => [actual.id, actual])).values()]
+  // Historical cash must include outstanding authorizations on their own dates,
+  // without changing the posted ledger or subtracting them again today.
+  const pendingThrough = date => bank.filter(row => row.pending && row.date <= date).reduce((sum,row) => sum - cents(row.amount), 0)
   const pending = bank.filter(actual => actual.pending && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]))
   const pendingDelta = pending.reduce((sum, actual) => sum - cents(actual.amount), 0)
   const occurrences = []
@@ -87,6 +90,9 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     : Number.isFinite(reconstructedClose) ? cents(reconstructedClose)
     : observed !== null ? observed
     : current + bank.filter(row => !row.pending && row.date === today).reduce((sum,row) => sum + cents(row.amount), 0)
+  const priorPendingDelta = pendingThrough(yesterday)
+  const availableOpening = Number.isFinite(verifiedClose) ? opening : opening + priorPendingDelta
+  const newPendingDelta = pendingThrough(today) - priorPendingDelta
   const postedTodayDelta = bank.filter(row => !row.pending && row.date === today).reduce((sum,row) => sum - cents(row.amount), 0)
   const openingSource = Number.isFinite(verifiedClose) ? 'verified-close'
     : Number.isFinite(reconstructedClose) ? 'reconstructed-close' : 'estimated-opening'
@@ -99,7 +105,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     if (date < today) {
       const recorded = options.recordedClosingBalances?.[date]
       const reconstructed = options.reconstructedBalances?.[date]
-      projection.set(date, {...point, bal:Number.isFinite(recorded) ? recorded : Number.isFinite(reconstructed) ? reconstructed : undefined,
+      projection.set(date, {...point, bal:Number.isFinite(recorded) ? recorded : Number.isFinite(reconstructed) ? (cents(reconstructed)+pendingThrough(date))/100 : undefined, postedBalance:Number.isFinite(reconstructed)?reconstructed:undefined, historicalPendingDelta:pendingThrough(date)/100,
         balanceSource:Number.isFinite(recorded) ? 'user-recorded' : Number.isFinite(reconstructed) ? 'reconstructed' : 'unavailable'})
       continue
     }
@@ -119,7 +125,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     })
     balance += remaining
     projection.set(date, { ...point, bal:balance / 100, remainingDelta:remaining / 100, realization,
-      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', anchorEstimated:Boolean(options.anchorEstimated), openingBalance:opening / 100, postedTodayDelta:postedTodayDelta/100, bankReconciliationDelta:(current-opening-postedTodayDelta)/100, availabilityDelta:(anchor-current)/100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
+      ...(date === today ? { mode:reconcile ? 'reconciled' : 'planned', anchorEstimated:Boolean(options.anchorEstimated), openingBalance:opening / 100, availableOpeningBalance:availableOpening/100, newPendingDelta:newPendingDelta/100, cashReconciliationDelta:(anchor+pendingDelta-availableOpening-postedTodayDelta-newPendingDelta)/100, postedTodayDelta:postedTodayDelta/100, bankReconciliationDelta:(current-opening-postedTodayDelta)/100, availabilityDelta:(anchor-current)/100, openingSource, openingDate:yesterday, overdueDelta:0, overdue:[], currentBalance:current / 100, anchorBalance:anchor / 100,
         anchorKind:availableIds.size === accounts.length ? 'available' : availableIds.size ? 'mixed' : 'current',
         pendingActivity:bank.filter(actual => actual.pending).map(actual => ({ id:actual.id, date:actual.date, name:actual.name || actual.merchant_name || 'Pending transaction', accountName:accounts.find(account => account.id === accountMap[actual.accountId])?.name || 'Cash account', delta:-cents(actual.amount) / 100, applied:reconcile && ledgerIds.has(accountMap[actual.accountId]) && !availableIds.has(accountMap[actual.accountId]) })),
         pendingDelta:reconcile ? pendingDelta / 100 : 0,

@@ -41,3 +41,39 @@ test('only actual bank matches receive the matched label',()=>{
  assert.equal(forecastPlanPresentation(grocery,{realization:[{id:grocery.id,delta:0,statuses:[{status:'category-allowance'}]}]}).matched,false)
  assert.equal(forecastPlanPresentation(grocery,{realization:[{id:grocery.id,delta:0,statuses:[{status:'posted',actualId:'bank-tx'}]}]}).matched,true)
 })
+
+test('historical cash deducts outstanding expenses on their dates and rolls into Nov 2 once',()=>{
+ const actuals=[['2026-10-29',16.69],['2026-10-30',183.08],['2026-10-31',513.69],['2026-11-01',248.49],['2026-11-02',72.51]].map(([date,amount],i)=>({id:`pending-${i}`,date,amount,accountId:'bank',pending:true}))
+ const raw={'2026-10-30':2845.88,'2026-10-31':2845.88,'2026-11-01':2845.88}
+ const p=buildOutstandingCashForecast([account],[],actuals,{...opts,pastDays:5,reconstructedBalances:raw})
+ assert.equal(p.get('2026-10-30').bal,2646.11)
+ assert.equal(p.get('2026-10-31').bal,2132.42)
+ assert.equal(p.get('2026-11-01').bal,1883.93)
+ assert.equal(p.get('2026-11-02').bal,1811.42)
+ assert.equal(p.get('2026-11-02').availableOpeningBalance,1883.93)
+ assert.equal(p.get('2026-11-02').newPendingDelta,-72.51)
+ assert.equal(p.get('2026-11-02').cashReconciliationDelta,0)
+ assert.equal(p.get('2026-11-01').postedBalance,2845.88)
+ assert.deepEqual(raw,{'2026-10-30':2845.88,'2026-10-31':2845.88,'2026-11-01':2845.88})
+})
+
+test('settled expenses replace pending holds and are deducted once in the historical roll-forward',async()=>{
+ const {buildDatedCashLedger}=await import('./datedCashLedger.js')
+ const a={...account,plaidCurrentBalance:2083.70,plaidAvailableBalance:2011.19}
+ const actuals=[{id:'old',accountId:'bank',date:'2026-10-31',amount:513.69,pending:true},{id:'settled',accountId:'bank',date:'2026-10-31',amount:513.69,pendingTransactionId:'old'},{id:'sunday',accountId:'bank',date:'2026-11-01',amount:248.49},{id:'monday',accountId:'bank',date:'2026-11-02',amount:72.51,pending:true}]
+ const ledger=buildDatedCashLedger({accounts:[a],transactions:actuals,today:opts.today,balanceHistory:[{date:'2026-10-30',kind:'intraday',balances:{bank:2845.88}}]})
+ const p=buildOutstandingCashForecast(ledger.forecastAccounts,[],actuals,{...opts,pastDays:5,reconstructedBalances:ledger.balances})
+ assert.equal(p.get('2026-10-30').bal,2845.88)
+ assert.equal(p.get('2026-10-31').bal,2332.19)
+ assert.equal(p.get('2026-11-01').bal,2083.70)
+ assert.equal(p.get('2026-11-01').historicalPendingDelta,0)
+ assert.equal(p.get(opts.today).bal,2011.19)
+})
+
+test('recorded historical closes are preserved and mixed bank differences remain explicit',()=>{
+ const p=buildOutstandingCashForecast([account],[],[{id:'hold',accountId:'bank',date:'2026-11-01',amount:50,pending:true}],{...opts,recordedClosingBalances:{'2026-11-01':1900}})
+ assert.equal(p.get('2026-11-01').bal,1900)
+ assert.equal(p.get(opts.today).availableOpeningBalance,1900)
+ assert.equal(p.get(opts.today).cashReconciliationDelta,-88.58)
+ assert.equal(p.get(opts.today).bal,1811.42)
+})
