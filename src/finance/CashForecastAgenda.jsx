@@ -111,7 +111,7 @@ export default function CashForecastAgenda({
         const dateLabel = new Date(`${day.key}T12:00:00`).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
         const plannedNetLabel = `${day.plannedNet >= 0 ? 'plus' : 'minus'} ${fmtMoney(Math.abs(day.plannedNet))}`
         const balanceKind = day.balanceIsRecorded ? 'User-recorded ending balance' : day.balanceIsReconstructed
-          ? 'Estimated balance from posted activity'
+          ? 'Estimated cash including pending holds'
           : day.key < todayKey
             ? 'Past balance unavailable'
             : day.key === todayKey

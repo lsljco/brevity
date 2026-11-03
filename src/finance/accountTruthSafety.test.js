@@ -24,7 +24,7 @@ test('account balances and household account structure have no manual mutation c
   assert.match(planner, /reviewed link does not move money or change credentials/)
   assert.match(planner, /type:'finance\.account\.link'/)
   assert.match(planner, /payload:\{ plaidAccountId \}/)
-  assert.match(planner, /title="Estimated end-of-day balance from dated bank observations and posted history"/)
+  assert.match(planner, /title="Estimated cash after posted activity and pending holds; not a verified bank close"/)
   assert.match(planner, /Reconstructed end-of-day balance/)
   assert.doesNotMatch(planner, /Actual ending balance from bank/)
   assert.match(planner, /`Projected from \$\{balanceSource\}`/)

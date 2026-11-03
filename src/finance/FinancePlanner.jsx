@@ -1649,14 +1649,15 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       balanceHistory:[...(meta.plaidBalanceHistory || []), ...(loadSavedValue('brevity_shared_state_meta_v1', {})?.plaid_actuals_cache?.plaidBalanceHistory || [])], closingRecords:data.dailyClosingBalances || {},
       today:getHouseholdDateKey(), legacyAnchorDate:Number.isFinite(legacyAt.getTime()) ? getHouseholdDateKey(legacyAt) : ''})
   }, [cashForecastPostedActuals, forecastScope.accounts, data.dailyClosingBalances, balanceDataStatus, actualsFreshness])
-  const historicalBals = cashLedger.balances
+  const postedHistoricalBals = cashLedger.balances
 
   const recordedClosingBals = useMemo(() => scopedClosingBalances(forecastScope.accounts, data.dailyClosingBalances), [forecastScope.accounts, data.dailyClosingBalances])
 
   const cashForecastProjection = useMemo(() => buildOutstandingCashForecast(
     cashLedger.forecastAccounts, forecastScope.transactions, cashForecastActuals,
-    { reconcile:true, reconstructedBalances:historicalBals, recordedClosingBalances:recordedClosingBals, anchorEstimated:cashLedger.estimatedAnchor, budget:dailyBudget, projectedClosingBalances:data.projectedClosingBalances, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
-  ), [forecastScope, cashLedger, cashForecastActuals, historicalBals, recordedClosingBals, dailyBudget, data.projectedClosingBalances])
+    { reconcile:true, reconstructedBalances:postedHistoricalBals, recordedClosingBalances:recordedClosingBals, anchorEstimated:cashLedger.estimatedAnchor, budget:dailyBudget, projectedClosingBalances:data.projectedClosingBalances, balanceHistory:loadSavedValue('brevity_shared_state_meta_v1', {})?.lslj_finance_v9?.plaidBalanceHistory || [] },
+  ), [forecastScope, cashLedger, cashForecastActuals, postedHistoricalBals, recordedClosingBals, dailyBudget, data.projectedClosingBalances])
+  const historicalBals = useMemo(() => Object.fromEntries([...cashForecastProjection].filter(([date,point]) => date < getHouseholdDateKey() && Number.isFinite(point.bal)).map(([date,point]) => [date,point.bal])), [cashForecastProjection])
   // Dashboard, reporting and calendar share the same reconciled cash forecast.
   const proj = cashForecastProjection
   const forecastTodayPlanUnresolved = Boolean(cashForecastProjection.get(toISO(getHouseholdCalendarDate()))?.unmatchedCount)
@@ -4314,7 +4315,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
         scopeLabel={scopeLabel} accountFilter={accountFilter} showActuals={showActuals} toggleActuals={toggleActuals} loading={actualsLoading} bankCount={monthBankCount}
         onReconcile={()=>{const panel=reconciliationRef.current;if(panel){panel.open=true;panel.scrollIntoView({block:'start'});panel.querySelector('summary')?.focus({preventScroll:true})}}}
       /></Suspense>
-      <FinanceExport buildReport={()=>({title:`Cash Forecast ${calYear}-${String(calMonth+1).padStart(2,'0')}`,notes:[scopeLabel,actualsFreshnessMessage,balanceDataMessage,showActuals?'Includes actual transaction details':'Scheduled transaction details'],sections:[recordsSection('Daily balances',Array.from({length:daysInMo},(_,day)=>{const date=toISO(new Date(calYear,calMonth,day+1)),p=proj.get(date);const recorded=date<=todayStr?recordedClosingBals[date]:undefined,reconstructed=date<todayStr?historicalBals[date]:undefined;return {date,endingBalance:recorded??reconstructed??p?.bal,balanceSource:recorded!==undefined?'Recorded':reconstructed!==undefined?'Calculated from bank history':p?.isOverridden?'User-set projection':Number.isFinite(p?.bal)?'Projected':'Unavailable',projectedBalance:p?.bal,netChange:p?.remainingDelta ?? p?.delta,unscheduledBudgetReserve:p?.budgetReserved ?? 0,cashAfterBudgetReserve:p?.balanceAfterBudgetReserve ?? p?.bal}})),transactionSection([...proj].filter(([date])=>date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)).flatMap(([date,p])=>(p.txns||[]).map(tx=>({...tx,date}))),accounts,{scheduled:true}),...(showActuals?[transactionSection((plaidActuals||[]).filter(tx=>String(tx.date).startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)),accounts)]:[])]})}/>
+      <FinanceExport buildReport={()=>({title:`Cash Forecast ${calYear}-${String(calMonth+1).padStart(2,'0')}`,notes:[scopeLabel,actualsFreshnessMessage,balanceDataMessage,showActuals?'Includes actual transaction details':'Scheduled transaction details'],sections:[recordsSection('Daily balances',Array.from({length:daysInMo},(_,day)=>{const date=toISO(new Date(calYear,calMonth,day+1)),p=proj.get(date);const recorded=date<=todayStr?recordedClosingBals[date]:undefined,reconstructed=date<todayStr?historicalBals[date]:undefined;return {date,endingBalance:recorded??reconstructed??p?.bal,balanceSource:recorded!==undefined?'Recorded':reconstructed!==undefined?'Estimated cash including pending holds':p?.isOverridden?'User-set projection':Number.isFinite(p?.bal)?'Projected':'Unavailable',postedBalance:p?.postedBalance,pendingAdjustment:p?.historicalPendingDelta,projectedBalance:p?.bal,netChange:p?.remainingDelta ?? p?.delta,unscheduledBudgetReserve:p?.budgetReserved ?? 0,cashAfterBudgetReserve:p?.balanceAfterBudgetReserve ?? p?.bal}})),transactionSection([...proj].filter(([date])=>date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)).flatMap(([date,p])=>(p.txns||[]).map(tx=>({...tx,date}))),accounts,{scheduled:true}),...(showActuals?[transactionSection((plaidActuals||[]).filter(tx=>String(tx.date).startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`)),accounts)]:[])]})}/>
       <div className={selDay&&selPt?'finance-forecast-workspace has-selection':'finance-forecast-workspace'}>
       <div className="finance-forecast-calendar">
       <CashForecastBalanceBridge point={proj.get(todayStr)} />
@@ -4435,11 +4436,11 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                   dates remain read-only projections from the latest balance. */}
               {(pt || reconstructedBal !== undefined) && (
                 <div style={{ marginTop: 'auto', paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
-                  {!readOnly ? <button type="button" className="finance-ending-balance-edit" title={recordedBal !== undefined ? 'User-recorded closing balance' : reconstructedBal !== undefined ? 'Calculated historical closing balance' : pt?.isOverridden ? 'User-set projected ending balance' : 'Projected ending balance'} aria-label={`Edit ending balance for ${key}`} onClick={event=>{event.stopPropagation();setBalanceEditDate(key)}}>
+                  {!readOnly ? <button type="button" className="finance-ending-balance-edit" title={recordedBal !== undefined ? 'User-recorded closing balance' : reconstructedBal !== undefined ? 'Estimated cash after posted activity and pending holds' : pt?.isOverridden ? 'User-set projected ending balance' : 'Projected ending balance'} aria-label={`Edit ending balance for ${key}`} onClick={event=>{event.stopPropagation();setBalanceEditDate(key)}}>
                     {recordedBal !== undefined ? fmtMoney(recordedBal) : reconstructedBal !== undefined ? fmtMoney(reconstructedBal) : Number.isFinite(pt?.bal) ? fmtMoney(pt.bal) : 'Record ending balance'}
                   </button> : <>
                   {recordedBal !== undefined ? <span title="User-recorded ending balance" style={{fontSize:9,fontWeight:700,color:'var(--gold)'}}>{fmtMoney(recordedBal)}</span> : reconstructedBal !== undefined ? (
-                    <span title="Estimated end-of-day balance from dated bank observations and posted history"
+                    <span title="Estimated cash after posted activity and pending holds; not a verified bank close"
                       style={{ fontSize: 9, fontWeight: 700, color: reconstructedBal < 0 ? 'var(--expense-color)' : '#90AADE' }}>
                       {fmtMoney(reconstructedBal)}
                     </span>
@@ -4679,7 +4680,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
       <CashForecastBalances point={proj.get(todayStr)} live={balanceVerifiedLive} />
       <p>Scheduled category allowances stay on their scheduled dates. Purchases reduce remaining category capacity without being labeled as matches. Unscheduled budget reserves are shown separately from cash balances.</p>
       <p>The forecast carries the preceding balance forward. Scheduled items are plans, not proof of payment. Pending and unmatched scheduled activity adjust the projection once; uncertain matches remain estimates.</p>
-      <p>Historical estimates use saved dated bank balances, posted activity, and your recorded closes. A failed refresh does not erase history. Intraday balances and incomplete bank history can differ from statement closes; record a confirmed ending balance to reconcile a date.</p>
+      <p>Historical cash estimates use dated bank balances and posted activity, with outstanding pending charges deducted on their transaction dates. Recorded closes are preserved. Pending history may be incomplete, so these are not verified bank closing balances. A failed refresh does not erase history. Intraday balances and incomplete bank history can differ from statement closes; record a confirmed ending balance to reconcile a date.</p>
       <ul aria-label="Balance history sources">{ledgerSources.map(source => <li key={source.id}>{source.name}: {source.anchorDate ? `${source.anchorKind === 'recorded' ? 'Recorded close' : 'Bank observation'} ${source.anchorDate}` : 'No dated balance anchor — record a closing balance'}; {source.postedCount} retained posted transactions.</li>)}</ul>
       <p>{balanceSource}. {actualsFreshnessMessage}</p>
       {balanceDataMessage && <p>{balanceDataMessage}</p>}
