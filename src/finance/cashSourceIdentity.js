@@ -5,6 +5,22 @@ const contributors={NS:'Nyla',LJ:'Larry',LS:'Lorenzo',TS:'Terica',JS:'Javin'}
 const ignored=new Set(['income','transfer','payroll','salary','deposit','payment','credit','debit','funds','direct','bank','checking','savings','account','pending','telephone','online','monthly','weekly','family','household','severance'])
 const words=text=>normalizeMerchantName({name:String(text||'').replace(/(\d)([a-z])/ig,'$1 $2').replace(/['’]s\b/g,'')}).split(' ').filter(Boolean)
 export const bankDescriptions=actual=>[actual.name,actual.merchant_name,actual.originalStatement,actual.original_description].filter(Boolean)
+// Match creditor identity inside bank memo wrappers, never amount alone or a
+// generic budget category. Keep this narrower than user-reviewed reconciliation.
+export function expenseSourceMatches(plan,actual){
+ if(plan.type!=='expense'||Number(actual.amount)<=0)return false
+ const normalize=text=>words(String(text||'').replace(/\bcap\s+one\b/ig,'capital one'))
+ const ignoredExpense=new Set([...ignored,'loan','bill','card','creditcard','ach','memo','entry','posted','today'])
+ const tokens=normalize(String(plan.name||'').replace(/^[A-Z]{2}\s*(?:-\s*)?/,''))
+  .filter(w=>w.length>=3&&!/\d/.test(w)&&!ignoredExpense.has(w))
+ // Allowances describe a pool of purchases, not an individual creditor.
+ if(!tokens.length||tokens.every(w=>['groceries','grocery','food','dining','fuel','gasoline','shopping','utilities','insurance','debt','other'].includes(w)))return false
+ return bankDescriptions(actual).some(description=>{
+  const bankWords=normalize(description)
+  if(bankWords.some(w=>['transfer','refund','reversal'].includes(w)))return false
+  return tokens.every(w=>bankWords.includes(w))
+ })
+}
 export function incomeSourceMatches(plan,actual,{allowContributor=true}={}){
  if(plan.type!=='income'||Number(actual.amount)>=0)return false
  const owner=plan.owner||contributors[String(plan.name||'').match(/^([A-Z]{2})\b/)?.[1]]

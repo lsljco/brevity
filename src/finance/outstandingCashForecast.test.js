@@ -243,3 +243,41 @@ test('named payroll recognizes early arrival but rejects wrong contributor, acco
  for(const row of [{...bank,name:'Transfer Terica payroll'},{...bank,accountId:'other'},{...bank,amount:-300},{...bank,name:'Nyla payroll reversal'}])assert.equal(forecast([plan],[row]).get(date(2)).remainingDelta,719.48)
  assert.equal(forecast([plan,{...plan,id:'ambiguous'}],[bank]).get(date(2)).remainingDelta,1438.96)
 })
+
+test('memo creditor payments and corrected payroll realize once against available cash', () => {
+  const plans=[
+    {...hoa,id:'loan',name:'LJ Prosper Loan Payment',amount:900},
+    {...hoa,id:'card',name:'LJ - Capital One Payment',amount:620},
+    {...hoa,id:'income',name:"NS - Women's Health Income",amount:450,type:'income'},
+    {...hoa,id:'insurance',name:'LS - Protective Life Insurance',amount:50},
+  ]
+  const bank=[
+    {id:'loan-bank',name:'Pending: Memo Debit PROSPER MARKETPL SR LT6 ACH Entry Memo Posted Today',amount:900},
+    {id:'card-bank',name:'Pending: Memo Debit DISCOVER CAP ONE CRCARDPMT ACH Entry Memo Posted Today',amount:620},
+    {id:'original-pay',name:'Telephone/OLB Transfer Credit from *150 to *200Nyla payroll',amount:-458},
+    {id:'correction',name:'Telephone/OLB Transfer Debit from *200 to *150correction',amount:458},
+    {id:'corrected-pay',name:'Telephone/OLB Transfer Credit from *150 to *200Nyla corrected payroll',amount:-450},
+  ].map(row=>({...actual,...row,pending:true}))
+  for(const pending of [true,false]){
+    const result=forecast(plans,bank.map(row=>({...row,pending})),[{...account,plaidAvailableBalance:500}])
+    const point=result.get(today)
+    assert.equal(point.bal,450)
+    assert.equal(point.remainingDelta,-50)
+    assert.equal(point.realization.find(row=>row.id==='income').statuses[0].actualId,'corrected-pay')
+    assert.equal(new Set(point.realization.flatMap(row=>row.statuses.map(s=>s.actualId).filter(Boolean))).size,3)
+    assert.equal(result.get(date(1)).bal,450)
+  }
+  const currentOnly=forecast(plans,bank).get(today)
+  assert.equal(currentOnly.bal,4600-900-620+450-50)
+})
+test('creditor memo matching rejects generic categories, conflicting vendors and ambiguous payments',()=>{
+  const plan={...hoa,name:'LJ Capital One Payment',amount:620}
+  const bank={...actual,name:'Memo Debit CAP ONE CRCARDPMT',amount:620,pending:true}
+  assert.equal(forecast([plan],[bank]).get(today).remainingDelta,0)
+  assert.equal(forecast([plan],[{...bank,date:date(-1)}]).get(today).remainingDelta,0)
+  assert.equal(forecast([{...plan,vendorId:'one'}],[{...bank,vendorId:'two'}]).get(today).remainingDelta,-620)
+  assert.equal(forecast([plan],[bank,{...bank,id:'duplicate'}]).get(today).remainingDelta,-620)
+  assert.equal(forecast([plan,{...plan,id:'duplicate'}],[bank]).get(today).remainingDelta,-1240)
+  assert.equal(forecast([plan],[{...bank,name:'Unrelated creditor'}]).get(today).remainingDelta,-620)
+  assert.equal(forecast([{...plan,name:'Groceries'}],[{...bank,name:'Memo debit groceries'}]).get(today).realization[0].statuses[0].actualId,undefined)
+})
