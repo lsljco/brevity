@@ -15,7 +15,7 @@ export const SHARED_STATE_KEYS = [
 const ENDPOINT = '/.netlify/functions/household-state'
 const META_KEY = 'brevity_shared_state_meta_v1'
 const HEALTH_KEY = 'brevity_shared_state_health_v1'
-const REQUEST_TIMEOUT_MS = 20000
+const REQUEST_TIMEOUT_MS = 45000
 const SHARED_STATE_KEY_SET = new Set(SHARED_STATE_KEYS)
 const PLAID_SOURCE_KEY_SET = new Set(['lslj_finance_v9', 'plaid_actuals_cache'])
 const RECOVERABLE_CACHE_KEYS = new Set(['brevity_icloud_calendar_cache_v1', 'brevity_health_alerts_v1'])
@@ -164,7 +164,7 @@ function request(method, body) {
 
 async function performRequest(method, body) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), method === 'GET' ? 45000 : REQUEST_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(ENDPOINT, {
       method,
@@ -183,7 +183,7 @@ async function performRequest(method, body) {
     }
     return payload
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('Household synchronization timed out. Your local cache is preserved and Brevity will retry automatically.')
+    if (error?.name === 'AbortError') throw Object.assign(new Error('Household synchronization timed out. Your local cache is preserved.'), { code:'HOUSEHOLD_REQUEST_TIMEOUT' })
     throw error
   } finally { clearTimeout(timeout) }
 }
@@ -280,6 +280,18 @@ function uploadRecordNow(storage, record, onError, { applyAcknowledgement = true
   pendingWrites += 1
   updateHealth(storage, { status:'syncing' })
   return request('PUT', { ...record, writeMode:'source-ingestion', source:'plaid' })
+    .catch(async error => {
+      // A lost response does not prove the conditional write failed. Read back
+      // server truth once, without replaying the write or advancing a cursor.
+      if (error.code !== 'HOUSEHOLD_REQUEST_TIMEOUT' && !(error instanceof TypeError)) throw error
+      let saved
+      try { saved = (await performRequest('GET')).records?.[record.key] } catch { throw error }
+      if (saved?.source !== 'plaid' || saved.value !== record.value || saved.hash !== record.hash
+        || saved.version !== record.expectedVersion + 1) throw error
+      // The durable snapshot is confirmed. Cursor state is unknown here; its
+      // existing receipt replay protocol handles the next source refresh.
+      return { record:saved, recoveredAfterInterruptedSave:true }
+    })
     .then(result => {
       if (result?.conflict && result.record) {
         // Do not let the response to an older in-flight write erase a newer

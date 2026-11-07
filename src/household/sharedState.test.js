@@ -557,3 +557,58 @@ test('failed shared downloads preserve local records and release the next retry'
     await assert.rejects(next,/offline/)
   } finally {globalThis.fetch=originalFetch}
 })
+
+test('interrupted bank saves recover only an exact newly committed server record without replaying the PUT', async () => {
+  const originalFetch = globalThis.fetch
+  const restore = installBrowserGlobals()
+  try {
+    for (const failure of ['timeout', 'network']) {
+      const storage = memoryStorage()
+      const calls = []
+      let submitted
+      globalThis.fetch = async (_url, options) => {
+        calls.push(options.method)
+        if (options.method === 'PUT') {
+          submitted = JSON.parse(options.body)
+          if (failure === 'network') throw new TypeError('Load failed')
+          throw Object.assign(new Error('aborted'), { name:'AbortError' })
+        }
+        return {ok:true,json:async()=>({records:{plaid_actuals_cache:{...submitted,source:'plaid',version:1}}})}
+      }
+      const result = await persistSharedSourceImport(storage, 'plaid_actuals_cache', [{id:'verified'}], {
+        sourceReceipts:[{cursorIdentity:'item-1',batchId:'a'.repeat(64)}],
+      })
+      assert.equal(result.durable, true)
+      assert.deepEqual(calls, ['PUT','GET'])
+      assert.deepEqual(JSON.parse(storage.getItem('plaid_actuals_cache')), [{id:'verified'}])
+    }
+  } finally { globalThis.fetch = originalFetch; restore() }
+})
+
+test('interrupted bank saves retain the cache when readback is absent, old, different, or unavailable', async () => {
+  const originalFetch = globalThis.fetch
+  const restore = installBrowserGlobals()
+  try {
+    for (const mismatch of ['absent','version','value','hash','source','unavailable']) {
+      const storage = memoryStorage({plaid_actuals_cache:'[]'})
+      let submitted
+      globalThis.fetch = async (_url, options) => {
+        if (options.method === 'PUT') {
+          submitted = JSON.parse(options.body)
+          throw Object.assign(new Error('aborted'), {name:'AbortError'})
+        }
+        if (mismatch === 'unavailable') throw new TypeError('offline')
+        const record = {...submitted,source:'plaid',version:1}
+        if (mismatch === 'version') record.version = 0
+        if (mismatch === 'value') record.value = '[]'
+        if (mismatch === 'hash') record.hash = 'wrong'
+        if (mismatch === 'source') record.source = 'manual'
+        return {ok:true,json:async()=>({records:mismatch === 'absent' ? {} : {plaid_actuals_cache:record}})}
+      }
+      await assert.rejects(persistSharedSourceImport(storage,'plaid_actuals_cache',[{id:'new'}],{
+        sourceReceipts:[{cursorIdentity:'item-1',batchId:'a'.repeat(64)}],
+      }), {code:'HOUSEHOLD_REQUEST_TIMEOUT'})
+      assert.equal(storage.getItem('plaid_actuals_cache'),'[]')
+    }
+  } finally { globalThis.fetch = originalFetch; restore() }
+})
