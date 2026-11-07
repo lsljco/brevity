@@ -152,9 +152,19 @@ function updateHealth(storage, patch) {
   return next
 }
 
-async function request(method, body) {
+let householdRead = null
+
+function request(method, body) {
+  if (method !== 'GET') return performRequest(method, body)
+  if (!householdRead) {
+    householdRead = performRequest(method, body).finally(() => { householdRead = null })
+  }
+  return householdRead
+}
+
+async function performRequest(method, body) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), method === 'GET' ? 45000 : REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(ENDPOINT, {
       method,

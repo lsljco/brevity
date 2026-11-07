@@ -519,3 +519,41 @@ test('routine synchronization preserves dated Plaid history and publishes metada
  assert.equal(JSON.parse(storage.getItem('brevity_shared_state_meta_v1'))[key].plaidBalanceHistory.length,2)
  assert.deepEqual(JSON.parse(storage.getItem('brevity_shared_state_meta_v1'))[key].plaidAccountReceipt,{sourceUpdatedAt:123})
 })
+
+test('overlapping household refreshes share one download and permit a fresh download after completion', async () => {
+  const originalFetch = globalThis.fetch
+  let resolve, calls = 0
+  globalThis.fetch = async () => { calls++; return new Promise(done => { resolve = done }) }
+  try {
+    const firstStorage = memoryStorage(), secondStorage = memoryStorage()
+    const first = syncSharedState(firstStorage), second = syncSharedState(secondStorage)
+    assert.equal(calls, 1)
+    resolve({ok:true,json:async()=>({records:{}})})
+    await Promise.all([first,second])
+    assert.equal(getSharedStateHealth(firstStorage).status,'healthy')
+    assert.equal(getSharedStateHealth(secondStorage).status,'healthy')
+    const next = syncSharedState(firstStorage)
+    assert.equal(calls, 2)
+    resolve({ok:true,json:async()=>({records:{}})})
+    await next
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('failed shared downloads preserve local records and release the next retry', async () => {
+  const originalFetch = globalThis.fetch
+  const storage = memoryStorage({[SHARED_STATE_KEYS[0]]:'preserve me'})
+  let reject, calls = 0
+  globalThis.fetch = async () => { calls++; return new Promise((_,fail)=>{reject=fail}) }
+  try {
+    const first=syncSharedState(storage), second=syncSharedState(storage)
+    reject(Object.assign(new Error('aborted'),{name:'AbortError'}))
+    const results=await Promise.allSettled([first,second])
+    assert.equal(calls,1)
+    assert.ok(results.every(row=>row.status==='rejected'&&/timed out/.test(row.reason.message)))
+    assert.equal(storage.getItem(SHARED_STATE_KEYS[0]),'preserve me')
+    const next=syncSharedState(storage)
+    assert.equal(calls,2)
+    reject(new Error('offline'))
+    await assert.rejects(next,/offline/)
+  } finally {globalThis.fetch=originalFetch}
+})
