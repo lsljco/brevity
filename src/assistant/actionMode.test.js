@@ -7,7 +7,7 @@ import { actionRisk, defaultActionPermissions, normalizeActionProposal, normaliz
 import { applyRecordOperation, captureExpectedVersions, createProductionActionResources, executeRecordOperations, resourceForOperation } from '../../netlify/lib/assistant-action-executor.mjs'
 import { createEmptyDailyPlan } from '../household/dailyPlan.js'
 import { createAssistantActionRepository } from '../../netlify/lib/assistant-action-repository.mjs'
-import { assertExecutableProposalVersions, calendarVersion, commitPreparedCalendarOperations, createPermissionActionResources, executeActionWithJournal, prepareCalendarProposal, prepareDirectProposal, prepareMealProposal, prepareRepeatMealProposal, publicAssistantAudit, reviewedExecutionSession, savePermissionsWithJournal, unchangedSinceAction, undoActionWithJournal, undoAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
+import { prepareCalendarOperations, assertExecutableProposalVersions, calendarVersion, commitPreparedCalendarOperations, createPermissionActionResources, executeActionWithJournal, prepareCalendarProposal, prepareDirectProposal, prepareMealProposal, prepareRepeatMealProposal, publicAssistantAudit, reviewedExecutionSession, savePermissionsWithJournal, unchangedSinceAction, undoActionWithJournal, undoAudit } from '../../netlify/functions/brevity-assistant-actions.mjs'
 import { createMealPlanRepository } from '../../netlify/lib/meal-plan-store.mjs'
 import { MEAL_LIBRARY } from '../meals/mealLibrary.js'
 import { hashValue } from '../household/sharedState.js'
@@ -1016,7 +1016,7 @@ test('execute journal recovers a calendar create that succeeded before the respo
     }
     throw new Error(`Unexpected ${method}`)
   }
-  const operation={id:'calendar-op',type:'calendar.create',domain:'calendar',description:'Create dinner',targetId:'',targetDate:'2026-09-08',payload:{title:'Dinner',date:'2026-09-08',owner:'Larry'},allowedScopes:['this-item'],defaultScope:'this-item',selectedScope:'this-item',risk:'confirmation'}
+  const operation={id:'calendar-op',type:'calendar.create',domain:'calendar',description:'Create dinner',targetId:'family-calendar',targetDate:'2026-09-08',payload:{title:'Dinner',date:'2026-09-08',owner:'Larry'},allowedScopes:['this-item'],defaultScope:'this-item',selectedScope:'this-item',risk:'confirmation'}
   const proposal={id:'proposal-calendar',summary:'Create dinner',expectedCalendarVersion:calendarVersion([]),operations:[operation]}
   const input={repository,proposal,operations:[operation],session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),resources:{},event:{},calendarRequestFn,leaseMs:0,now:()=>new Date('2026-09-07T12:00:00Z')}
   await assert.rejects(()=>executeActionWithJournal(input),/calendar response lost/)
@@ -1387,3 +1387,14 @@ test('a full year of category budgets retains every reviewed month',()=>{
  assert.equal(budget.categoryLimits['a|2026-12|dining out'].amount,500)
  assert.throws(()=>normalizeActionProposal({operations:[...operations,operations[0]]},{member:'Larry',role:'admin'}),/twelve category/)
 })
+
+ test('calendar container targets do not collide across unrelated creations',async()=>{
+ const events=[{sourceId:'assistant-family-calendar',title:'Previous meeting'}]
+ const base={type:'calendar.create',domain:'calendar',targetId:'family-calendar',payload:{title:'Kate meeting',date:'2026-11-10',owner:'Larry'}}
+ const prepare=async id=>prepareCalendarOperations({event:{},operations:[{...base,id}],session:{member:'Larry',role:'admin'},permissions:defaultActionPermissions('admin'),calendarRequestFn:async()=>({events})})
+ const first=await prepare('first-action'),second=await prepare('second-action')
+ assert.equal(first.prepared[0].after.sourceId,'assistant-first-action')
+ assert.equal(second.prepared[0].after.sourceId,'assistant-second-action')
+ events.push(first.prepared[0].after)
+ await assert.rejects(prepare('first-action'),{code:'VERSION_CONFLICT'})
+ })
