@@ -81,7 +81,7 @@ const sameCalendarValue=(current,planned)=>calendarFields.every(field=>{
   if(field==='time')return calendarTime(current?.[field])===calendarTime(planned[field])
   return JSON.stringify(current?.[field]??(Array.isArray(planned[field])?[]:''))===JSON.stringify(planned[field])
 })
-const calendarCreateSourceId=operation=>operation.projectSource ? `project-${operation.projectSource.id}` : `assistant-${operation.targetId||operation.id}`
+const calendarCreateSourceId=operation=>operation.projectSource ? `project-${operation.projectSource.id}` : `assistant-${operation.targetId && !['family-calendar','calendar','apple-family','calendar:apple-family'].includes(operation.targetId.toLowerCase()) ? operation.targetId : operation.id}`
 const sourceManagedCalendarEvent=event=>/^(?:daily-|household-(?:operation|schedule)-|project-|estate-maintenance-|finance-action-)/.test(String(event?.sourceId||event?.originalSourceId||''))
 const calendarCreateCandidate=(operation,member)=>{
   const payload=operation.payload||{},optional=['endDate','endTime','location','url','recurrenceFrequency','recurrenceInterval','recurrenceDays','recurrenceEndDate','alert1Minutes','alert2Minutes']
