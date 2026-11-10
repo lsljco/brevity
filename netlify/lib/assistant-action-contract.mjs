@@ -1,3 +1,4 @@
+import {validateStudio} from '../../src/finance/scenarioStudioModel.js'
 import {validateScenarioImport} from '../../src/finance/scenarioWorkbookImport.js'
 import { RECOVERY_DEFAULT, validateRecovery } from '../../src/finance/recoveryScenario.js'
 import {LEARNING_HUB_RESOURCE,normalizeLearningItem} from '../../src/education/learningHub.js'
@@ -166,7 +167,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount', 'cashAllowance', 'categoryLimit', 'forecastAllocation'],
-  'forecast.update': ['favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
+  'forecast.update': ['studioJson', 'favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'finance.reserve.set': ['amount'],
   'finance.statement.import': ['configJson'],
@@ -366,6 +367,10 @@ function normalizeActionPayload(type, input) {
     }else if(type==='meeting.packet.edit'&&field==='commandJson'){
       if(typeof value!=='string'||value.length>20000)throw Error('The report adjustment is too large.')
       normalized.commandJson=JSON.stringify(normalizePacketEdit(JSON.parse(value)))
+    }else if(type==='forecast.update'&&field==='studioJson'){
+      if(typeof value!=='string'||value.length>200000)throw Error('Invalid Studio assumptions.');
+      const x=JSON.parse(value);if(typeof x.useAsDefault!=='boolean')throw Error('Invalid default floor setting.');
+      normalized.studioJson=JSON.stringify({assumptions:validateStudio(x.assumptions),baseline:validateStudio(x.baseline),useAsDefault:x.useAsDefault});
     }else if(type==='forecast.update'&&field==='scenarioImportJson'){
       if(typeof value!=='string'||value.length>1500000)throw Error('Scenario import is too large.');
       normalized.scenarioImportJson=JSON.stringify(validateScenarioImport(JSON.parse(value)))
@@ -735,7 +740,9 @@ export function normalizeActionOperation(input = {}) {
     const scenarioFields = ['title', 'description', 'favorite', 'planningExpense']
     const incomeFields = ['description', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment', 'notes']
     const fields = Object.keys(payload)
-    if (payload.scenarioImportJson !== undefined) {
+    if (payload.studioJson !== undefined) {
+      if(fields.length!==1||!/^studio-[a-zA-Z0-9-]+$/.test(operation.targetId))throw Error('Studio updates require a stable scenario ID and only studioJson.');
+    } else if (payload.scenarioImportJson !== undefined) {
       if(fields.length!==1||operation.targetId!=='model')throw Error('Scenario import must target only the forecast model.')
     } else if (payload.recoveryJson !== undefined) {
       if(fields.length!==1 || !/^recovery-[a-zA-Z0-9-]+$|^household-financial-recovery-001$/.test(operation.targetId))throw Error('Recovery changes require a stable recovery scenario ID and only recoveryJson.')
