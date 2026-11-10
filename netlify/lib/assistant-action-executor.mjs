@@ -1,3 +1,4 @@
+import {validateStudio} from '../../src/finance/scenarioStudioModel.js'
 import {validateScenarioImport} from '../../src/finance/scenarioWorkbookImport.js'
 import {buildUniquePlaidAccountMap} from '../../src/finance/calendarSemantics.js'
 import {isTransferTransaction} from '../../src/finance/reportingData.js'
@@ -339,6 +340,12 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:applyBudgetTarget(value, payload, {changedAt:nowIso(context.now||(()=>new Date())),actor:context.actor}) }
   }
   if (operation.type === 'forecast.update') {
+    if (payload.studioJson !== undefined) {
+      const x=JSON.parse(payload.studioJson),assumptions=validateStudio(x.assumptions),baseline=validateStudio(x.baseline);
+      const plans=value?.studioPlans||[],previous=plans.find(p=>p.id===operation.targetId);
+      const plan={id:operation.targetId,assumptions,baseline,version:(previous?.version||0)+1,updatedAt:nowIso(context.now||(()=>new Date())),updatedBy:context.actor};
+      return {before,after:{...(value||{}),...(x.useAsDefault?{studioDefaultFloor:assumptions.cashFloor}:{}),studioPlans:previous?plans.map(p=>p.id===plan.id?plan:p):[...plans,plan]}};
+    }
     if (payload.scenarioImportJson !== undefined) {
       const imported=validateScenarioImport(JSON.parse(payload.scenarioImportJson))
       return {before,after:{...(value||{}),expenseMode:'scenario',planningExpense:imported.scenarios.find(s=>s.title==='Current State')?.planningExpense||imported.scenarios[0].planningExpense,scenarios:imported.scenarios.map(s=>({...s,favorite:value?.scenarios?.some(old=>old.id===s.id&&old.title===s.title&&old.favorite===true)||false})),workbookImport:{filename:imported.filename,sheet:imported.sheet,importedAt:nowIso(context.now||(()=>new Date())),importedBy:context.actor}}}

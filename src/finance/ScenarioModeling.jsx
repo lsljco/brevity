@@ -14,6 +14,8 @@ import {
 } from './scenarioModelingData.js'
 import './ScenarioModeling.css'
 
+const ScenarioStudio = lazy(() => import('./ScenarioStudio.jsx'))
+
 const RecoveryWorkspace = lazy(() => import('./RecoveryWorkspace.jsx'))
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
@@ -245,7 +247,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     })
   }
 
-  return <section className="scenario-page" aria-labelledby="scenario-title"><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
+  return <section className="scenario-page" aria-labelledby="scenario-title"><Suspense fallback={<p>Loading Scenario Studio…</p>}><ScenarioStudio scenarios={model.scenarios} planningExpense={expense} debts={debts||[]} readOnly={readOnly}/></Suspense><details className="scenario-legacy"><summary>Existing workbook scenarios, imports and recovery plans</summary><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
     <header className="scenario-header">
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>
@@ -290,7 +292,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
           <button type="button" disabled={readOnly || reviewBusy} className={model.expenseMode === 'scenario' ? 'is-active' : ''} onClick={() => reviewExpenseMode('scenario')}>Planning baseline</button>
           <button type="button" disabled={readOnly || reviewBusy || liveOperatingExpense <= 0} className={model.expenseMode === 'operating' ? 'is-active' : ''} onClick={() => reviewExpenseMode('operating')}>Live operating</button>
         </div>
-        <div className="scenario-expense-controls" ><label className="scenario-money-input"><span>$</span><input aria-label="Monthly recurring expense total draft" readOnly={readOnly} type="number" min="0" step="0.01" value={activeDraft.planningExpense ?? draftModel.planningExpense} onChange={event => updateScenarioDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || (Number(draftModel.planningExpense) === Number(active.planningExpense ?? model.planningExpense) && model.expenseMode === 'scenario')} onClick={reviewPlanningExpense}>Review expense total</button>}</div>
+        <div className="scenario-expense-controls" ><label className="scenario-money-input"><span>$</span><input aria-label="Monthly recurring expense total draft" readOnly={readOnly} type="number" min="0" step="0.01" value={activeDraft.planningExpense ?? draftModel.planningExpense} onChange={event => updateScenarioDraft({ planningExpense:event.target.value })}/></label>{!readOnly&&<button type="button" className="scenario-add" disabled={reviewBusy || (Number(activeDraft.planningExpense ?? draftModel.planningExpense) === Number(active.planningExpense ?? model.planningExpense) && model.expenseMode === 'scenario')} onClick={reviewPlanningExpense}>Review expense total</button>}</div>
       </div>
     </div>
 
@@ -360,5 +362,5 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     </section>
     </>}
     <Suspense fallback={<p>Loading recovery scenarios…</p>}><RecoveryWorkspace financeData={financeData} actuals={actuals} debts={debts} freshness={freshness} readOnly={readOnly} /></Suspense>
-  </section>
+  </details></section>
 }
