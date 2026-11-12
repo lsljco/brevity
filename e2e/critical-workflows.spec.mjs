@@ -4025,7 +4025,7 @@ test('Scenario Studio known monthly take-home updates net income without changin
  const before=Number((await total.innerText()).replace(/[^0-9.-]/g,''))
  await studio.getByLabel('Known monthly net pay',{exact:true}).fill('12089.20')
  await expect(total).toHaveText(new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(before+12089.2))
- const incomeRow=studio.getByRole('row').filter({has:studio.getByRole('button',{name:'QTS Data Centers',exact:true})})
+ const incomeRow=studio.getByRole('row').filter({hasText:'QTS Data Centers'})
  await expect(incomeRow).toContainText('$12,089.20')
  await expect(incomeRow).toContainText('$210,000.00')
  await studio.getByText('Annual gross for tax estimates (optional)',{exact:true}).click()
