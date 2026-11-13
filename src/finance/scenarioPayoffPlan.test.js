@@ -5,10 +5,10 @@ import {upgradeStudioPlan,savedScenarioCash} from './scenarioPayoffPlan.js'
 const plan=()=>({...createStudio({title:'Income opportunity',incomes:[{id:'job',description:'LJ job',monthlyNet:8000}]},5000,[],'2026-01-01'),months:12,openingCash:24000})
 const debt=(overrides={})=>({id:'card',name:'LJ Discover',balance:5000,payment:1000,apr:0,dueDay:1,include:true,method:'Principal only',...overrides})
 const tax=(overrides={})=>({id:'tax',name:'Annual property tax',taxKind:'property-tax',amount:12000,frequency:'annual',start:'2026-10-01',end:'',enabled:true,...overrides})
-test('monthly plan settles earliest affordable month and releases minimums without inventing income',()=>{
+test('monthly plan settles the full balance without deducting or releasing minimum payments',()=>{
  const a=plan();a.liabilities=[debt()];const r=projectStudio(a)
- assert.equal(r.payoffs[0].date,'2026-02-28');assert.equal(r.payoffs[0].amount,3000)
- assert.equal(r.months[0].cashFlow,2000);assert.equal(r.months[1].endingCash,25000)
+ assert.equal(r.payoffs[0].date,'2026-02-28');assert.equal(r.payoffs[0].amount,5000)
+ assert.equal(r.months[0].cashFlow,3000);assert.equal(r.months[1].endingCash,25000)
  assert.equal(r.months[2].required,0);assert.equal(r.months[2].cashFlow,3000)
  assert.equal(r.lowest,24000);assert.equal(r.endingCash,55000)
  assert.equal(r.months.reduce((s,m)=>s+m.required+m.extra,0),5000)
@@ -51,10 +51,10 @@ test('negative future cash flow prevents otherwise affordable extra settlement',
  const a=plan();a.openingCash=30000;a.incomes[0].end='2026-02-28';a.liabilities=[debt({balance:1000,payment:0})]
  assert.equal(projectStudio(a).payoffs.length,0)
 })
-test('planning start does not prorate income, while minimum-only debts mature naturally',()=>{
+test('excluded debts stay outstanding and minimums never reduce cash flow',()=>{
  const a=plan();a.start='2026-01-16';a.liabilities=[debt({balance:1500,payment:1000,include:false})]
- const r=projectStudio(a);assert.equal(r.months[0].income,8000);assert.equal(r.months[1].required,500);assert.equal(r.months[2].required,0)
- assert.equal(r.payoffs[0].source,'required');assert.equal(r.months.every(m=>m.extra===0),true)
+ const r=projectStudio(a);assert.equal(r.months[0].income,8000);assert.equal(r.months[1].required,0);assert.equal(r.months[2].required,0)
+ assert.equal(r.payoffs.length,0);assert.equal(r.unpaid,1500);assert.equal(r.months.every(m=>m.extra===0),true)
 })
 test('migration is a draft and preserves explicitly edited version-two reserve',()=>{
  const old={...plan(),cashFloor:9000};delete old.planningVersion
@@ -76,9 +76,9 @@ test('current tax bills are not starved to save for a later unfundable tax bill'
  const r=projectStudio(a);assert.equal(r.months[0].taxes,10000);assert.equal(r.endingCash,24000);assert.equal(r.unpaid,20000)
 })
 
-test('monthly APR accrual is included once in minimum and final settlement',()=>{
+test('monthly APR accrual is included once in the lump-sum settlement',()=>{
  const a=plan();a.openingCash=30000;a.liabilities=[debt({balance:1000,payment:100,apr:36.5,method:'Amortized APR'})]
- const r=projectStudio(a);assert.equal(r.months[0].required,100);assert.equal(r.months[0].extra,931)
+ const r=projectStudio(a);assert.equal(r.months[0].required,0);assert.equal(r.months[0].extra,1031)
  assert.equal(r.months[0].endingCash,31969);assert.equal(r.months[1].required,0)
 })
 
@@ -104,14 +104,14 @@ test('upcoming property-tax funding is protected before paying income-tax balanc
  const r=projectStudio(a);assert.equal(r.months[0].taxes,0);assert.equal(r.endingCash,34000)
 })
 
-test('payoff highlights and non-tax milestone are emitted once even while taxes remain',()=>{
+test('payoff highlights and non-tax milestone are emitted once with future annual taxes remaining',()=>{
  const a=plan();a.openingCash=30000;a.incomes[0].monthlyNet=5000
- a.liabilities=[debt({balance:500,payment:500}),debt({id:'property',name:'Property tax',taxKind:'property-tax',balance:10000,payment:0})]
+ a.incomes[0].monthlyNet=8000;a.liabilities=[debt({balance:500,payment:500})];a.expenses.push(tax({amount:10000}))
  const r=projectStudio(a),milestones=r.ledger.filter(row=>row.type==='milestone')
  assert.equal(milestones.length,1);assert.equal(milestones[0].date,'2026-01-31')
- assert.equal(milestones[0].amount,0);assert.equal(milestones[0].unpaidLiabilities,10000)
- assert.equal(r.nonTaxDebtFree,'2026-01-31');assert.equal(r.debtFree,null)
- assert.equal(r.ledger.filter(row=>row.type==='payoff').length,1)
+ assert.equal(milestones[0].amount,0);assert.equal(milestones[0].unpaidLiabilities,0)
+ assert.equal(r.nonTaxDebtFree,'2026-01-31');assert.equal(r.debtFree,'2026-01-31')
+ assert.equal(r.ledger.filter(row=>row.type==='payoff').length,2)
  assert.match(milestones[0].description,/All non-tax liabilities paid off/)
  assert.equal(projectStudio({...a,liabilities:a.liabilities.slice(1)}).ledger.some(r=>r.type==='milestone'),false)
 })
@@ -129,3 +129,25 @@ test('payoff highlights and non-tax milestone are emitted once even while taxes 
  assert.equal(a.incomes[0].start,'2026-11-16');assert.equal(a.incomes[0].end,'2026-11-20')
  assert.equal(projectStudio(a).months[0].income,500)
  })
+
+test('legacy saved snapshot repairs inherited income dates without touching explicit dates or the source record',()=>{
+ const a=createStudio({title:'Current State',incomes:[8488,2736.12,5498,6374.32,3540].map((monthlyNet,i)=>({id:`income-${i}`,monthlyNet}))},25000,[],'2026-11-12')
+ delete a.incomeDateVersion;delete a.planningVersion
+ for(const row of a.incomes){row.start=a.start;delete row.startDateSource}
+ const fixed=upgradeStudioPlan(a)
+ assert.equal(projectStudio(fixed).months[0].income,26636.44)
+ assert.equal(a.incomes[0].start,'2026-11-12')
+ assert.deepEqual(upgradeStudioPlan(fixed),fixed)
+ a.incomes[0].startDateSource='explicit';a.incomes[1].start='2026-11-20';a.incomes[2].end='2026-11-15'
+ const mixed=upgradeStudioPlan({...a,planningVersion:2})
+ assert.equal(mixed.incomes[0].start,'2026-11-12');assert.equal(mixed.incomes[1].start,'2026-11-20')
+ assert.equal(mixed.incomes[2].end,'2026-11-15')
+ const current=createStudio({incomes:[{monthlyNet:3000,start:'2026-11-12'}]},0,[],'2026-11-12')
+ assert.equal(upgradeStudioPlan(current).incomes[0].start,'2026-11-12')
+})
+
+test('changing monthly minimums cannot change monthly cash flow or lump-sum payoff dates',()=>{
+ const a=plan();a.liabilities=[debt({payment:0})]
+ const original=projectStudio(a);a.liabilities[0].payment=999999
+ assert.deepEqual(projectStudio(a),original)
+})

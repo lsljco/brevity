@@ -6,7 +6,7 @@ const stamp=d=>Date.parse(d+'T12:00:00Z')
 const iso=t=>new Date(t).toISOString().slice(0,10)
 export const frequencyFactors={monthly:12,semimonthly:24,biweekly:26,weekly:52,annual:1,once:0}
 const sum=(rows,key)=>round(rows.reduce((s,r)=>s+(r[key]||0),0))
-export function newIncome(start) {return {id:crypto.randomUUID(),name:'New income',person:'LJ',mode:'gross',annualGross:0,monthlyNet:0,pretax:0,posttax:0,extraWithholding:0,frequency:'monthly',start,end:'',enabled:true}}
+export function newIncome(start) {return {id:crypto.randomUUID(),name:'New income',person:'LJ',mode:'gross',annualGross:0,monthlyNet:0,pretax:0,posttax:0,extraWithholding:0,frequency:'monthly',start,startDateSource:'explicit',end:'',enabled:true}}
 export function newExpense(start){return {id:crypto.randomUUID(),name:'New expense',amount:0,frequency:'monthly',start,end:'',enabled:true}}
 export function createStudio(scenario,expense,debts,start,floor=DEFAULT_STUDIO_RESERVE) {
  let liabilities=debts.filter(d=>d.status==='Active'&&d.currentBalance>0).map(d=>({id:d.id,name:d.creditor||d.accountName||'Liability',balance:d.currentBalance,apr:d.interestRate,payment:d.minimumPayment,dueDay:d.dueDay||1,include:true,method:d.interestMethod||'Amortized APR'}))
@@ -15,8 +15,8 @@ export function createStudio(scenario,expense,debts,start,floor=DEFAULT_STUDIO_R
  if(importedDebts.length)liabilities=importedDebts
  const annualTaxes=notes.flatMap(note=>{const m=note.match(/^Annual (.*tax.*):\s*\$([\d,.]+)/i);if(!m)return [];const month=/property/i.test(m[1])?'10':'04';const year=Number(start.slice(0,4))+(start.slice(5)>`${month}-01`?1:0);return [{...newExpense(`${year}-${month}-01`),name:`Annual ${m[1]}`,amount:Number(m[2].replaceAll(',','')),frequency:'annual'}]})
  const payments=sum(liabilities,'payment')
- const incomes=(scenario.incomes||[]).map((r,i)=>({...newIncome(r.start||start.slice(0,7)+'-01'),end:r.end||'',id:r.id||`income-${i}`,name:r.description||'Income',person:(r.description||'').match(/^(LJ|LS|NS|JS|TS)\b/)?.[1]||`Person ${i+1}`,mode:'net',annualGross:Number(r.annualGross)||0,monthlyNet:Number(r.monthlyNet)||0}))
- return {version:1,planningVersion:2,projectionMode:'monthly',title:scenario.title||'Current State',favorite:false,start,months:36,openingCash:null,cashFloor:floor,protectedReserve:0,strategy:'priority',timingConfirmed:false,
+ const incomes=(scenario.incomes||[]).map((r,i)=>({...newIncome(r.start||start.slice(0,7)+'-01'),end:r.end||'',startDateSource:r.start?'explicit':'month-default',id:r.id||`income-${i}`,name:r.description||'Income',person:(r.description||'').match(/^(LJ|LS|NS|JS|TS)\b/)?.[1]||`Person ${i+1}`,mode:'net',annualGross:Number(r.annualGross)||0,monthlyNet:Number(r.monthlyNet)||0}))
+ return {version:1,incomeDateVersion:1,planningVersion:2,projectionMode:'monthly',title:scenario.title||'Current State',favorite:false,start,months:36,openingCash:null,cashFloor:floor,protectedReserve:0,strategy:'priority',timingConfirmed:false,
   source:'Snapshot of existing scenario; recurring total includes required debt payments. Confirm bill/pay dates and debt allocation.'+(importedDebts.length?' Imported workbook liabilities are principal-only until you supply APRs. Annual tax assumptions are included.':''),
   incomes,expenses:[{...newExpense(start),id:'baseline-expense',name:'Existing recurring living expenses',amount:Math.max(0,expense-payments)},...annualTaxes],liabilities,profiles:Object.fromEntries(incomes.map(r=>[r.person,{...TAX_PROFILE}]))}
 }
@@ -70,7 +70,7 @@ export function studioMonthly(raw,date=raw.start) {
  const incomes=calculateIncomeRows(a.incomes.filter(active),a.profiles)
  const income=sum(incomes,'monthlyNet'),gross=sum(incomes,'annualGross')/12
  const living=round(a.expenses.filter(r=>active(r)&&!(a.projectionMode==='monthly'&&taxKind(r)&&['annual','once'].includes(r.frequency))).reduce((s,r)=>s+r.amount*frequencyFactors[r.frequency]/12,0))
- const required=sum(a.liabilities.filter(d=>d.balance>0),'payment')
+ const required=a.projectionMode==='monthly'?0:sum(a.liabilities.filter(d=>d.balance>0),'payment')
  return {income,gross:round(gross),deductions:incomes.every(r=>r.annualGross>0)?round(gross-income):null,living,required,cashFlow:round(income-living-required),incomes}
 }
 export function projectStudio(raw){
