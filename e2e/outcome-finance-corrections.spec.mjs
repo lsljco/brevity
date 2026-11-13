@@ -48,7 +48,7 @@ test('Legacy saved scenario repairs inherited dates and respects edited source d
  const a=createStudio({title:'Six income audit',incomes:[8488,2736.12,5498,6374.32,3540,12089.2].map((monthlyNet,i)=>({id:`income-${i}`,description:`Income ${i+1}`,monthlyNet}))},25000,[],'2026-11-12')
  delete a.incomeDateVersion;delete a.planningVersion
  for(const row of a.incomes){row.start=a.start;delete row.startDateSource}
- a.openingCash=24000;a.liabilities=[{id:'income-tax',name:'Income tax',taxKind:'income-tax',dueDate:'2026-04-15',balance:3000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'},{id:'property-tax',name:'Property tax',taxKind:'property-tax',dueDate:'2026-10-15',balance:30000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'},{id:'card',name:'Discover payoff audit',balance:1000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'}]
+ a.openingCash=24000;a.liabilities=[{id:'income-tax',name:'Income tax',taxKind:'income-tax',dueDate:'2026-04-15',balance:3000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'},{id:'property-tax',name:'Property tax',taxKind:'property-tax',dueDate:'2026-10-15',balance:30000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'},{id:'card',name:'Discover payoff audit',balance:1000,payment:900,apr:0,dueDay:1,include:true,method:'Principal only'}]
  const value={studioPlans:[{id:'studio-six',assumptions:a,baseline:a}]}
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{brevity_finance_scenarios_v1:{key:'brevity_finance_scenarios_v1',value:JSON.stringify(value),version:1,updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
  await page.goto('/');await finance(page,info,'Scenario Modeling')
@@ -58,6 +58,7 @@ test('Legacy saved scenario repairs inherited dates and respects edited source d
   await studio.getByRole('navigation',{name:'Scenario Studio tabs'}).getByRole('button',{name,exact:true}).click()
   await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$38,725.64')
   await expect(studio.getByRole('note')).toHaveCount(0)
+  await expect(studio.locator('.studio-summary').first().locator('strong').nth(2)).toHaveText('$22,892.31')
   if(name==='Forecast'){
    await expect(studio).toContainText('Surplus held for property taxes')
    await expect(studio.locator('.studio-ledger .studio-milestone')).toHaveCount(1)

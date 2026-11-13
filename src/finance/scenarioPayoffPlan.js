@@ -27,13 +27,8 @@ export function savedScenarioCash(accounts=[]){
 export const payoffPriority=debt=>taxKind(debt)==='property-tax'?0:taxKind(debt)==='income-tax'?1:2
 const outstanding=debt=>round(Math.max(0,debt.remaining+debt.interest))
 const total=debts=>round(debts.reduce((s,d)=>s+outstanding(d),0))
-function minimum(debt,days){
- if(!debt.remaining||taxKind(debt))return 0
- if(debt.method!=='Principal only')debt.interest+=debt.remaining*debt.apr/100*days/365
- const payment=round(Math.min(outstanding(debt),debt.payment)),interest=Math.min(payment,debt.interest)
- debt.interest-=interest;debt.remaining=round(Math.max(0,debt.remaining-payment+interest))
- if(outstanding(debt)<.005){debt.remaining=0;debt.interest=0}
- return payment
+function accrue(debt,days){
+ if(debt.remaining&&!taxKind(debt)&&debt.method!=='Principal only')debt.interest+=debt.remaining*debt.apr/100*days/365
 }
 function periodInputs(a,count){
  const first=new Date(stamp(a.start)),cache=new Map(),rows=[]
@@ -63,17 +58,14 @@ function periodInputs(a,count){
  }
  return rows
 }
-// Recompute actual remaining amortization after each candidate settlement.
-// Do not reserve payments for a debt that is already paid, or for payments
-// beyond its natural maturity. Annual taxes are included beyond the visible horizon.
+// Protect living expenses and higher-priority taxes; monthly debt minimums are not modeled.
 function fundingNeed(inputs,index,current,excludedId,priority=2){
- const debts=current.filter(d=>d.id!==excludedId&&outstanding(d)>0&&(!taxKind(d)||payoffPriority(d)<priority)).map(d=>({...d}))
+ const debts=current.filter(d=>d.id!==excludedId&&outstanding(d)>0&&taxKind(d)&&payoffPriority(d)<priority).map(d=>({...d}))
  let running=-debts.filter(d=>taxKind(d)&&(!d.dueDate||d.dueDate<=inputs[index].date)).reduce((s,d)=>{const amount=outstanding(d);d.remaining=0;d.interest=0;return s+amount},0),need=Math.max(0,-running)
  for(let i=index+1;i<inputs.length;i++){
   const r=inputs[i];let required=0
   for(const d of debts){
    if(taxKind(d)){if(outstanding(d)&&d.dueDate<=r.date){required+=outstanding(d);d.remaining=0;d.interest=0}}
-   else required+=minimum(d,r.days)
   }
   running=round(running+r.income-r.expenses-required-r.taxBills.filter(t=>payoffPriority(t)<priority).reduce((s,t)=>s+t.amount,0));need=Math.max(need,-running)
  }
@@ -87,15 +79,12 @@ export function projectMonthlyStudio(a){
  const append=(date,description,amount,unpaid,note='',type='movement')=>ledger.push({type,year:Number(date.slice(0,4)),month:monthName(date),date,description,amount,cashBalance:cash,protectedReserve:round(a.cashFloor+a.protectedReserve),unpaidLiabilities:unpaid,note})
  append(a.start,'Opening savings / cash',0,total(debts),a.openingCash===null?'Opening cash is required.':'Starting balance, not new income.')
  for(let index=0;index<a.months;index++){
-  const r=inputs[index],events=[];let required=0,extra=0,taxes=0
-  for(const d of debts){
-   const before=outstanding(d),payment=minimum(d,r.days);required=round(required+payment)
-   if(before>0&&outstanding(d)===0){const p={date:r.date,name:d.name,amount:payment,releasedMonthly:d.payment,source:'required',id:d.id};payoffs.push(p);events.push(p)}
-  }
+  const r=inputs[index];const required=0;let extra=0,taxes=0
+  for(const d of debts)accrue(d,r.days)
   for(const bill of r.taxBills){if(bill.amount>0)debts.push({...bill,balance:bill.amount,remaining:bill.amount,interest:0,payment:0,apr:0,include:true,method:'Principal only',original:false});taxDeadlines.push({...bill,paidDate:bill.amount===0?r.date:null})}
-  const cashFlow=round(r.income-r.expenses-required)
+  const cashFlow=round(r.income-r.expenses)
   if(cash!==null)cash=round(cash+cashFlow)
-  append(r.date,`${monthName(r.date)} cash flow`,cashFlow,total(debts),`Net income $${r.income.toFixed(2)}; living / one-time costs $${r.expenses.toFixed(2)}; required payments $${required.toFixed(2)}.`)
+  append(r.date,`${monthName(r.date)} cash flow`,cashFlow,total(debts),`Net income $${r.income.toFixed(2)}; living / one-time costs $${r.expenses.toFixed(2)}; monthly debt minimums are not deducted.`)
   const order=debts.filter(d=>d.include&&outstanding(d)>0&&(!taxKind(d)||d.original||!d.dueDate||d.dueDate<=r.date)).sort((x,y)=>{
    if(payoffPriority(x)!==payoffPriority(y))return payoffPriority(x)-payoffPriority(y)
    if(taxKind(x))return (x.dueDate||a.start).localeCompare(y.dueDate||a.start)
@@ -111,11 +100,10 @@ export function projectMonthlyStudio(a){
    if(round(cash-settlement-a.cashFloor-a.protectedReserve)<need){deferred++;continue}
    cash=round(cash-settlement);d.remaining=0;d.interest=0
    const isTax=Boolean(taxKind(d));if(isTax)taxes=round(taxes+settlement);else extra=round(extra+settlement)
-   const p={date:r.date,name:d.name,amount:settlement,releasedMonthly:d.payment,source:isTax?'tax':'extra',id:d.id};payoffs.push(p)
+   const p={date:r.date,name:d.name,amount:settlement,releasedMonthly:0,source:isTax?'tax':'extra',id:d.id};payoffs.push(p)
    const bill=taxDeadlines.find(t=>t.id===d.id);if(bill)bill.paidDate=r.date
-   append(r.date,/payoff$/i.test(d.name)?d.name:`${d.name} payoff`,-settlement,total(debts),isTax?'Tax balance paid; payroll withholding is not charged again.':`Required monthly payment of ${d.payment.toFixed(2)} stops next month.`,'payoff')
+   append(r.date,/payoff$/i.test(d.name)?d.name:`${d.name} payoff`,-settlement,total(debts),isTax?'Tax balance paid; payroll withholding is not charged again.':'Full liability payoff; no monthly minimums were deducted.','payoff')
   }
-  for(const event of events)append(r.date,`${event.name} paid off through required payments`,0,total(debts),`Final required payment ${event.amount.toFixed(2)} is already included in monthly cash flow.`,'payoff')
   if(!nonTaxDebtFree&&nonTaxIds.size&&debts.filter(d=>nonTaxIds.has(d.id)).every(d=>outstanding(d)===0)){nonTaxDebtFree=r.date;append(r.date,'All non-tax liabilities paid off',0,total(debts),'Property taxes and income taxes are excluded from this milestone and continue in the forecast.','milestone')}
   if(!debtFree&&originalIds.size&&debts.filter(d=>originalIds.has(d.id)).every(d=>outstanding(d)===0))debtFree=r.date
   const available=cash===null?null:round(cash-a.protectedReserve)

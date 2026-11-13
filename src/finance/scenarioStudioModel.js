@@ -70,7 +70,7 @@ export function studioMonthly(raw,date=raw.start) {
  const incomes=calculateIncomeRows(a.incomes.filter(active),a.profiles)
  const income=sum(incomes,'monthlyNet'),gross=sum(incomes,'annualGross')/12
  const living=round(a.expenses.filter(r=>active(r)&&!(a.projectionMode==='monthly'&&taxKind(r)&&['annual','once'].includes(r.frequency))).reduce((s,r)=>s+r.amount*frequencyFactors[r.frequency]/12,0))
- const required=sum(a.liabilities.filter(d=>d.balance>0),'payment')
+ const required=a.projectionMode==='monthly'?0:sum(a.liabilities.filter(d=>d.balance>0),'payment')
  return {income,gross:round(gross),deductions:incomes.every(r=>r.annualGross>0)?round(gross-income):null,living,required,cashFlow:round(income-living-required),incomes}
 }
 export function projectStudio(raw){
