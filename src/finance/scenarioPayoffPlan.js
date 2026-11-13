@@ -30,11 +30,12 @@ const total=debts=>round(debts.reduce((s,d)=>s+outstanding(d),0))
 function accrue(debt,days){
  if(debt.remaining&&!taxKind(debt)&&debt.method!=='Principal only')debt.interest+=debt.remaining*debt.apr/100*days/365
 }
-function periodInputs(a,count){
+export function periodInputs(a,count){
  const first=new Date(stamp(a.start)),cache=new Map(),rows=[]
  for(let index=0;index<count;index++){
   const begin=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+index,1,12)),end=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+index+1,0,12))
-  const start=index===0?a.start:iso(begin),last=iso(end),days=end.getUTCDate(),r={date:last,month:last.slice(0,7),days:Math.round((stamp(last)-stamp(start))/DAY)+1,income:0,gross:0,deductions:0,expenses:0,taxBills:[]}
+  const start=index===0?a.start:iso(begin),last=iso(end),days=end.getUTCDate(),r={date:last,month:last.slice(0,7),days:Math.round((stamp(last)-stamp(start))/DAY)+1,income:0,gross:0,deductions:0,expenses:0,recurring:0,oneTime:0,taxBills:[]}
+  r.recurring=round(a.expenses.filter(x=>x.enabled&&factors[x.frequency]&&x.start<=last&&(!x.end||x.end>=iso(begin))).reduce((sum,x)=>sum+x.amount*factors[x.frequency]/12,0))
   for(let t=stamp(iso(begin));t<=stamp(last);t+=DAY){
    const date=iso(new Date(t)),active=a.incomes.filter(x=>x.enabled&&x.start<=date&&(!x.end||x.end>=date)),key=JSON.stringify(active.map(x=>x.id))
    if(!cache.has(key))cache.set(key,calculateIncomeRows(active,a.profiles))
@@ -45,14 +46,14 @@ function periodInputs(a,count){
    else if(r.deductions!==null)r.deductions+=(gross-net)/days
    if(date<start)continue
    for(const x of a.expenses.filter(x=>x.enabled&&x.start<=date&&(!x.end||x.end>=date))){
-    if(factors[x.frequency])r.expenses+=x.amount*factors[x.frequency]/12/days
-    else if((x.frequency==='once'&&x.start===date)||(x.frequency==='annual'&&date.slice(5,7)===x.start.slice(5,7)&&Number(date.slice(8))===Math.min(Number(x.start.slice(8)),days))){
+    if(!factors[x.frequency]&&((x.frequency==='once'&&x.start===date)||(x.frequency==='annual'&&date.slice(5,7)===x.start.slice(5,7)&&Number(date.slice(8))===Math.min(Number(x.start.slice(8)),days)))){
      const kind=taxKind(x)
      if(kind){const year=Number(date.slice(0,4))-(kind==='income-tax'?1:0);r.taxBills.push({id:`${x.id}:${date}`,name:x.frequency==='once'?`${x.name}${/payoff$/i.test(x.name)?'':' payoff'}`:`${year} ${kind==='property-tax'?'property':'income'} tax payoff`,amount:x.amount,dueDate:date,taxKind:kind})}
-     else r.expenses+=x.amount
+     else r.oneTime+=x.amount
     }
    }
   }
+  r.oneTime=round(r.oneTime);r.expenses=round(r.recurring+r.oneTime)
   for(const key of ['income','gross','expenses'])r[key]=round(r[key]);if(r.deductions!==null)r.deductions=round(r.deductions)
   rows.push(r)
  }
@@ -82,9 +83,10 @@ export function projectMonthlyStudio(a){
   const r=inputs[index];const required=0;let extra=0,taxes=0
   for(const d of debts)accrue(d,r.days)
   for(const bill of r.taxBills){if(bill.amount>0)debts.push({...bill,balance:bill.amount,remaining:bill.amount,interest:0,payment:0,apr:0,include:true,method:'Principal only',original:false});taxDeadlines.push({...bill,paidDate:bill.amount===0?r.date:null})}
-  const cashFlow=round(r.income-r.expenses)
+  const cashFlow=round(r.income-r.recurring)
   if(cash!==null)cash=round(cash+cashFlow)
-  append(r.date,`${monthName(r.date)} cash flow`,cashFlow,total(debts),`Net income $${r.income.toFixed(2)}; living / one-time costs $${r.expenses.toFixed(2)}; monthly debt minimums are not deducted.`)
+  append(r.date,`${monthName(r.date)} cash flow`,cashFlow,total(debts),`Net income $${r.income.toFixed(2)}; monthly recurring expenses $${r.recurring.toFixed(2)}; monthly debt minimums are not deducted.`)
+  if(r.oneTime){if(cash!==null)cash=round(cash-r.oneTime);append(r.date,`${monthName(r.date)} one-time expenses`,-r.oneTime,total(debts),'Separate from net monthly cash flow.')}
   const order=debts.filter(d=>d.include&&outstanding(d)>0&&(!taxKind(d)||d.original||!d.dueDate||d.dueDate<=r.date)).sort((x,y)=>{
    if(payoffPriority(x)!==payoffPriority(y))return payoffPriority(x)-payoffPriority(y)
    if(taxKind(x))return (x.dueDate||a.start).localeCompare(y.dueDate||a.start)
@@ -111,7 +113,7 @@ export function projectMonthlyStudio(a){
   const overdue=debts.filter(d=>taxKind(d)&&outstanding(d)>0&&(!d.dueDate||d.dueDate<=r.date))
   const propertyRemaining=total(debts.filter(d=>taxKind(d)==='property-tax'&&outstanding(d)>0))
   const reason=cash===null?'Enter opening cash to calculate payoff dates.':available<a.cashFloor?`Rebuilding reserve: ${round(a.cashFloor-available).toFixed(2)} below target.`:propertyRemaining?`Surplus held for property taxes: ${propertyRemaining.toFixed(2)} remains before income taxes or extra debt payoffs.`:overdue.length?`Tax balance awaiting safe funding: ${total(overdue).toFixed(2)}.`:deferred?'Remaining balances are not yet affordable after the reserve and future obligations.':order.length?'All affordable selected balances settled.':'No selected balances remain due.'
-  const m={month:r.month,income:r.income,gross:r.gross,deductions:r.deductions,expenses:r.expenses,required,cashFlow,taxes,extra,endingCash:cash,available,unpaid:total(debts),reason}
+  const m={month:r.month,income:r.income,gross:r.gross,deductions:r.deductions,expenses:r.recurring,oneTime:r.oneTime,required,cashFlow,taxes,extra,endingCash:cash,available,unpaid:total(debts),reason}
   months.push(m);append(r.date,`${monthName(r.date)} ending savings / cash`,0,m.unpaid,reason)
  }
  const end=inputs[a.months-1].date
