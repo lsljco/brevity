@@ -1,4 +1,5 @@
 async function openTodayDetails(page) {
+  if(!await page.locator('.today-dashboard').isVisible())await page.locator((page.viewportSize()?.width||1440)<700?'.mobile-app-nav':'.sidebar-nav').getByRole('button',{name:'Today',exact:true}).click()
   await expect(page.locator('.today-dashboard')).toBeVisible()
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
@@ -2595,7 +2596,7 @@ test('Chart the Course starts and speaks with one tap while Today stays visible'
  await page.route('**/elevenlabs-tts',async route=>{spoken.push(route.request().postDataJSON());await route.fulfill({contentType:'audio/wav',body:wav})})
  await page.route('**/.netlify/functions/evening-recap-voice',route=>route.fulfill({contentType:'application/sdp',body:'v=0\r\n'}))
  await page.route('**/.netlify/functions/meeting-recordings*',async route=>{if(route.request().method()==='PUT')saved.push(route.request().postDataJSON());await route.fulfill({json:{saved:true,meetings:[]}})})
- await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await openTodayDetails(page);await closeMenuIfMobile(page,testInfo)
  await page.getByRole('button',{name:/Start Chart the Course/}).click()
  const session=page.getByRole('region',{name:'Chart the Course conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
@@ -2882,7 +2883,7 @@ test('Evening Recap starts inline and keeps Today items available',async({page},
  await page.route('**/elevenlabs-tts',async route=>{spoken.push(route.request().postDataJSON());await route.fulfill({contentType:'audio/wav',body:wav})})
  await page.route('**/.netlify/functions/evening-recap-voice',route=>{voice.push(route.request().postDataJSON());return route.fulfill({contentType:'application/sdp',body:'v=0\r\n'})})
  await page.route('**/.netlify/functions/meeting-recordings*',async route=>{if(route.request().method()==='PUT')saved.push(route.request().postDataJSON());await route.fulfill({json:{saved:true,meetings:[]}})})
- await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await page.reload();await openTodayDetails(page);await closeMenuIfMobile(page,testInfo)
  await page.getByRole('button',{name:/Start Evening Recap/}).click()
  const session=page.getByRole('region',{name:'Evening Recap conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()

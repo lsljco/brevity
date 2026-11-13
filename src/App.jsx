@@ -1,3 +1,4 @@
+import {landingView} from './homehq/landingView.js'
 import {PageActionsContext} from './PageActions.jsx'
 import CompletionSignoffs from './notifications/CompletionSignoffs.jsx'
 import MeetingHub from './meetings/MeetingHub.jsx'
@@ -128,12 +129,16 @@ export default function App() {
   const [todayDate,setTodayDate]=useState('')
   const [viewedPlanDate,setViewedPlanDate]=useState('')
   const [todayNavigationTarget,setTodayNavigationTarget]=useState(null)
-  const [activeView,setActiveView]=useState(()=>new URLSearchParams(window.location.search).has('enhancements')?'enhancements':'today')
+  const [activeView,setActiveView]=useState(()=>landingView(window.location.search))
   const [activePillar,setActivePillar]=useState('')
   const [pageActionsTarget,setPageActionsTarget]=useState(null)
   const [archiveOpen,setArchiveOpen]=useState(false)
   useEffect(()=>setArchiveOpen(false),[activeView,activePillar,auth.member])
   const [navigationHistory,setNavigationHistory]=useState([])
+  useEffect(()=>{
+    if(!auth.authenticated||!auth.member)return
+    setActiveView(landingView(window.location.search));setActivePillar('');setExpandedPillar(null);setNavigationHistory([])
+  },[auth.authenticated,auth.member])
   const appMainRef=useRef(null)
   const [theme,setTheme]=useState(()=>localStorage.getItem('brevity_theme')||'dark')
   const [sidebarExpanded,setSidebarExpanded]=useState(initialSidebarExpanded)
@@ -295,7 +300,7 @@ export default function App() {
   }
   const openPillar=pillarId=>navigateTo(pillarId,'pillar-analysis')
   const handlePillarClick=pillar=>{
-    setNavigationHistory([{pillarId:'',viewId:'today',label:'Today',scrollTop:0}])
+    setNavigationHistory([{pillarId:'',viewId:'home',label:'Home',scrollTop:0}])
     setActivePillar(pillar.id);setActiveView('pillar-analysis');setExpandedPillar(pillar.id)
     requestAnimationFrame(()=>{if(appMainRef.current)appMainRef.current.scrollTop=0})
   }

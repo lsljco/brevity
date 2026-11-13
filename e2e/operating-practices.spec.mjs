@@ -1,4 +1,5 @@
 async function openTodayDetails(page) {
+  if(!await page.locator('.today-dashboard').isVisible())await page.locator((page.viewportSize()?.width||1440)<700?'.mobile-app-nav':'.sidebar-nav').getByRole('button',{name:'Today',exact:true}).click()
   await expect(page.locator('.today-dashboard')).toBeVisible()
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
