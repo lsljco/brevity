@@ -163,10 +163,50 @@ test('screenshot cash flow is net income minus full recurring expenses regardles
  }
  a.expenses.push({id:'repair',name:'One-time repair',amount:500,frequency:'once',start:'2026-11-15',end:'',enabled:true})
  const r=projectStudio(a);assert.equal(r.months[0].cashFlow,2305.34);assert.equal(r.months[0].oneTime,500)
- assert.equal(r.months[0].endingCash,10805.34);assert.ok(r.ledger.some(row=>row.description==='November one-time expenses'&&row.amount===-500))
+ assert.equal(r.months[0].endingCash,10805.34);assert.ok(r.ledger.some(row=>row.description==='One-time repair'&&row.amount===-500))
 })
 
 test('new snapshots retain recurring expense total without hidden debt adjustments',()=>{
  const a=createStudio({incomes:[{monthlyNet:26636.44}]},24331.10,[{id:'debt',status:'Active',currentBalance:10000,minimumPayment:2959.33,interestRate:0}], '2026-11-12')
  assert.equal(a.expenses[0].amount,24331.10);assert.equal(projectStudio(a).months[0].cashFlow,2305.34)
+})
+
+test('dated bonuses and projected expenses change forecast cash once, not recurring cash flow',()=>{
+ const a=plan();a.months=3;a.bonuses=[{id:'bonus',name:'Annual bonus',amount:8000,date:'2026-02-15',enabled:true}]
+ a.expenses.push({id:'repair',name:'Roof repair',amount:2000,frequency:'once',start:'2026-02-20',end:'',enabled:true})
+ const r=projectStudio(a)
+ assert.deepEqual(r.months.map(m=>m.cashFlow),[3000,3000,3000])
+ assert.deepEqual(r.months.map(m=>m.bonus),[0,8000,0])
+ assert.equal(r.endingCash,39000)
+ assert.equal(r.ledger.filter(row=>row.description==='Annual bonus').length,1)
+ assert.deepEqual(r.ledger.find(row=>row.description==='Roof repair').item,{kind:'expenses',id:'repair'})
+ assert.equal(projectStudio({...a,bonuses:[{...a.bonuses[0],enabled:false}]}).endingCash,31000)
+})
+test('planned payoff waits for target month and can be moved or cleared',()=>{
+ const a=plan();a.openingCash=40000;a.liabilities=[debt({plannedPayoffDate:'2026-03-12'})]
+ assert.equal(projectStudio(a).payoffs[0].date,'2026-03-12')
+ a.liabilities[0].plannedPayoffDate='2026-02-09';assert.equal(projectStudio(a).payoffs[0].date,'2026-02-09')
+ a.liabilities[0].plannedPayoffDate='';assert.equal(projectStudio(a).payoffs[0].date,'2026-01-31')
+})
+test('unaffordable requested payoff defers without breaching reserve and bonus can fund it',()=>{
+ const a=plan();a.liabilities=[debt({balance:10000,plannedPayoffDate:'2026-01-12'})]
+ const r=projectStudio(a);assert.equal(r.months[0].extra,0);assert.match(r.months[0].reason,/Planned payoff deferred/);assert.ok(r.lowest>=24000)
+ a.bonuses=[{id:'bonus',name:'Bonus',amount:7000,date:'2026-01-05',enabled:true}]
+ assert.equal(projectStudio(a).payoffs[0].date,'2026-01-12')
+})
+test('dated item validation preserves fields and rejects malformed amounts and dates',()=>{
+ const a=plan();a.bonuses=[{id:'b',name:'Bonus',amount:100,date:'2026-02-15',enabled:true}];a.liabilities=[debt({plannedPayoffDate:'2026-03-01'})]
+ assert.equal(validateStudio(a).bonuses[0].amount,100)
+ assert.equal(validateStudio(a).liabilities[0].plannedPayoffDate,'2026-03-01')
+ assert.throws(()=>validateStudio({...a,bonuses:[{...a.bonuses[0],amount:-1}]}),/Net bonus amount/)
+ a.liabilities[0].plannedPayoffDate='bad';assert.throws(()=>validateStudio(a),/planned payoff date/)
+})
+
+test('manual payoff dates cannot bypass property-tax priority',()=>{
+ const a=plan();a.openingCash=50000
+ a.liabilities=[debt({id:'property',name:'Property tax',taxKind:'property-tax',balance:1000,plannedPayoffDate:'2026-03-15'}),debt({id:'income',name:'Income tax',taxKind:'income-tax',balance:1000})]
+ const r=projectStudio(a)
+ assert.equal(r.months[0].taxes,0);assert.equal(r.months[1].taxes,0)
+ assert.deepEqual(r.payoffs.slice(0,2).map(p=>p.id),['property','income'])
+ assert.equal(r.payoffs[0].date,'2026-03-15');assert.equal(r.months[2].taxes,2000)
 })

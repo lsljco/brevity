@@ -17,11 +17,12 @@ export function createStudio(scenario,expense,debts,start,floor=DEFAULT_STUDIO_R
  const incomes=(scenario.incomes||[]).map((r,i)=>({...newIncome(r.start||start.slice(0,7)+'-01'),end:r.end||'',startDateSource:r.start?'explicit':'month-default',id:r.id||`income-${i}`,name:r.description||'Income',person:(r.description||'').match(/^(LJ|LS|NS|JS|TS)\b/)?.[1]||`Person ${i+1}`,mode:'net',annualGross:Number(r.annualGross)||0,monthlyNet:Number(r.monthlyNet)||0}))
  return {version:1,incomeDateVersion:1,planningVersion:2,projectionMode:'monthly',title:scenario.title||'Current State',favorite:false,start,months:36,openingCash:null,cashFloor:floor,protectedReserve:0,strategy:'priority',timingConfirmed:false,
   source:'Snapshot of existing scenario; recurring expenses retain the entered monthly total. Liability payoffs are modeled separately.'+(importedDebts.length?' Imported workbook liabilities are principal-only until you supply APRs. Annual tax assumptions are included.':''),
-  incomes,expenses:[{...newExpense(start),id:'baseline-expense',name:'Existing recurring living expenses',amount:Math.max(0,expense)},...annualTaxes],liabilities,profiles:Object.fromEntries(incomes.map(r=>[r.person,{...TAX_PROFILE}]))}
+  bonuses:[],incomes,expenses:[{...newExpense(start),id:'baseline-expense',name:'Existing recurring living expenses',amount:Math.max(0,expense)},...annualTaxes],liabilities,profiles:Object.fromEntries(incomes.map(r=>[r.person,{...TAX_PROFILE}]))}
 }
 export function validateStudio(raw) {
  if(!raw||raw.version!==1)throw Error('Unsupported Scenario Studio version.')
  const a=JSON.parse(JSON.stringify(raw))
+ a.bonuses??=[]
  const num=(n,label,min=0,max=1e9)=>{if(typeof n!=='number'||!Number.isFinite(n)||n<min||n>max)throw Error(`${label} must be between ${min} and ${max}.`)}
  const text=(s,label)=>{if(typeof s!=='string'||!s.trim()||s.length>250)throw Error(`${label} is required (250 characters maximum).`)}
  if(a.projectionMode!==undefined&&!['monthly','dated'].includes(a.projectionMode))throw Error('Choose a valid projection mode.');
@@ -31,6 +32,10 @@ export function validateStudio(raw) {
  if(a.openingCash!==null)num(a.openingCash,'Opening cash',-1e9)
  if(!['priority','highest-apr','lowest-balance'].includes(a.strategy))throw Error('Choose a payoff strategy.')
  if(typeof a.favorite!=='boolean'||typeof a.timingConfirmed!=='boolean')throw Error('Invalid scenario settings.')
+ if(!Array.isArray(a.bonuses)||a.bonuses.length>100)throw Error('Use at most 100 bonus payouts.')
+ const bonusIds=new Set()
+ for(const b of a.bonuses){text(b.id,'Bonus ID');text(b.name,'Bonus name');if(bonusIds.has(b.id))throw Error('Duplicate bonus ID.');bonusIds.add(b.id);num(b.amount,'Net bonus amount');if(!validDate(b.date)||typeof b.enabled!=='boolean')throw Error('Choose a valid bonus date and inclusion setting.')}
+ if(a.bonuses.length&&a.projectionMode!=='monthly')throw Error('Bonus payouts require monthly planning.')
  for(const kind of ['incomes','expenses','liabilities']) {
   if(!Array.isArray(a[kind])||a[kind].length>100)throw Error('Use at most 100 rows per section.')
   const ids=new Set()
@@ -39,6 +44,7 @@ export function validateStudio(raw) {
    if(r.dueDate&&!validDate(r.dueDate))throw Error('Choose a valid tax due date.');
    text(r.id,'Row ID');if(ids.has(r.id))throw Error('Duplicate row ID.');ids.add(r.id);text(r.name,'Row name')
    if(kind==='liabilities'){
+    if(r.plannedPayoffDate&&!validDate(r.plannedPayoffDate))throw Error('Choose a valid planned payoff date.')
     for(const k of ['balance','apr','payment','dueDay'])num(r[k],k,0,k==='apr'?100:k==='dueDay'?31:1e9)
     if(!Number.isInteger(r.dueDay)||r.dueDay<1)throw Error('Debt due day must be 1–31.')
     if(r.method!=='Amortized APR'&&r.method!=='Principal only')throw Error('Use monthly APR or principal-only liabilities; fixed-interest debts need a supported schedule.')
