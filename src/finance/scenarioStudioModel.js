@@ -1,5 +1,5 @@
 import {TAX_PROFILE,calculateIncomeRows,round} from './scenarioTax.js'
-import {projectMonthlyStudio,DEFAULT_STUDIO_RESERVE,taxKind} from './scenarioPayoffPlan.js'
+import {projectMonthlyStudio,periodInputs,DEFAULT_STUDIO_RESERVE,taxKind} from './scenarioPayoffPlan.js'
 import {validDate} from './recoveryScenario.js'
 const DAY=86400000
 const stamp=d=>Date.parse(d+'T12:00:00Z')
@@ -14,11 +14,10 @@ export function createStudio(scenario,expense,debts,start,floor=DEFAULT_STUDIO_R
  const importedDebts=notes.flatMap(note=>{const m=note.match(/^(.*):\s*\$([\d,.]+); monthly cashflow released after payoff:\s*\$([\d,.]+)/i);return m?[{id:`imported-${crypto.randomUUID()}`,name:m[1],balance:Number(m[2].replaceAll(',','')),payment:Number(m[3].replaceAll(',','')),apr:0,dueDay:1,include:true,method:'Principal only'}]:[]})
  if(importedDebts.length)liabilities=importedDebts
  const annualTaxes=notes.flatMap(note=>{const m=note.match(/^Annual (.*tax.*):\s*\$([\d,.]+)/i);if(!m)return [];const month=/property/i.test(m[1])?'10':'04';const year=Number(start.slice(0,4))+(start.slice(5)>`${month}-01`?1:0);return [{...newExpense(`${year}-${month}-01`),name:`Annual ${m[1]}`,amount:Number(m[2].replaceAll(',','')),frequency:'annual'}]})
- const payments=sum(liabilities,'payment')
  const incomes=(scenario.incomes||[]).map((r,i)=>({...newIncome(r.start||start.slice(0,7)+'-01'),end:r.end||'',startDateSource:r.start?'explicit':'month-default',id:r.id||`income-${i}`,name:r.description||'Income',person:(r.description||'').match(/^(LJ|LS|NS|JS|TS)\b/)?.[1]||`Person ${i+1}`,mode:'net',annualGross:Number(r.annualGross)||0,monthlyNet:Number(r.monthlyNet)||0}))
  return {version:1,incomeDateVersion:1,planningVersion:2,projectionMode:'monthly',title:scenario.title||'Current State',favorite:false,start,months:36,openingCash:null,cashFloor:floor,protectedReserve:0,strategy:'priority',timingConfirmed:false,
-  source:'Snapshot of existing scenario; recurring total includes required debt payments. Confirm bill/pay dates and debt allocation.'+(importedDebts.length?' Imported workbook liabilities are principal-only until you supply APRs. Annual tax assumptions are included.':''),
-  incomes,expenses:[{...newExpense(start),id:'baseline-expense',name:'Existing recurring living expenses',amount:Math.max(0,expense-payments)},...annualTaxes],liabilities,profiles:Object.fromEntries(incomes.map(r=>[r.person,{...TAX_PROFILE}]))}
+  source:'Snapshot of existing scenario; recurring expenses retain the entered monthly total. Liability payoffs are modeled separately.'+(importedDebts.length?' Imported workbook liabilities are principal-only until you supply APRs. Annual tax assumptions are included.':''),
+  incomes,expenses:[{...newExpense(start),id:'baseline-expense',name:'Existing recurring living expenses',amount:Math.max(0,expense)},...annualTaxes],liabilities,profiles:Object.fromEntries(incomes.map(r=>[r.person,{...TAX_PROFILE}]))}
 }
 export function validateStudio(raw) {
  if(!raw||raw.version!==1)throw Error('Unsupported Scenario Studio version.')
@@ -67,7 +66,8 @@ function occurs(r,date){
 }
 export function studioMonthly(raw,date=raw.start) {
  const a=validateStudio(raw), active=r=>r.enabled&&r.start<=date&&(!r.end||r.end>=date)
- const incomes=calculateIncomeRows(a.incomes.filter(active),a.profiles)
+ const incomes=calculateIncomeRows(a.incomes.filter(r=>a.projectionMode==='monthly'?r.enabled&&r.start.slice(0,7)<=date.slice(0,7)&&(!r.end||r.end.slice(0,7)>=date.slice(0,7)):active(r)),a.profiles)
+ if(a.projectionMode==='monthly'){const r=periodInputs({...a,start:date},1)[0];return {income:r.income,gross:r.gross,deductions:r.deductions,living:r.recurring,required:0,cashFlow:round(r.income-r.recurring),incomes}}
  const income=sum(incomes,'monthlyNet'),gross=sum(incomes,'annualGross')/12
  const living=round(a.expenses.filter(r=>active(r)&&!(a.projectionMode==='monthly'&&taxKind(r)&&['annual','once'].includes(r.frequency))).reduce((s,r)=>s+r.amount*frequencyFactors[r.frequency]/12,0))
  const required=a.projectionMode==='monthly'?0:sum(a.liabilities.filter(d=>d.balance>0),'payment')

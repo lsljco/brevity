@@ -43,9 +43,9 @@ test('Groceries stays a 300 scheduled expense despite recorded category purchase
  await expect(grocery).toContainText('$300');await expect(grocery).not.toContainText('Category already spent');await expect(grocery).not.toContainText('$0')
  await grocery.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('grocery-scheduled-expense.png')})
 })
-test('Legacy saved scenario repairs inherited dates and respects edited source dates',async({page},info)=>{
+test('Screenshot cash flow equals net income minus full recurring expenses on every tab',async({page},info)=>{
  await setup(page)
- const a=createStudio({title:'Six income audit',incomes:[8488,2736.12,5498,6374.32,3540,12089.2].map((monthlyNet,i)=>({id:`income-${i}`,description:`Income ${i+1}`,monthlyNet}))},25000,[],'2026-11-12')
+ const a=createStudio({title:'Six income audit',incomes:[8488,2736.12,5498,6374.32,3540].map((monthlyNet,i)=>({id:`income-${i}`,description:`Income ${i+1}`,monthlyNet}))},24331.10,[],'2026-11-12')
  delete a.incomeDateVersion;delete a.planningVersion
  for(const row of a.incomes){row.start=a.start;delete row.startDateSource}
  a.openingCash=24000;a.liabilities=[{id:'income-tax',name:'Income tax',taxKind:'income-tax',dueDate:'2026-04-15',balance:3000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'},{id:'property-tax',name:'Property tax',taxKind:'property-tax',dueDate:'2026-10-15',balance:30000,payment:0,apr:0,dueDay:1,include:true,method:'Principal only'},{id:'card',name:'Discover payoff audit',balance:1000,payment:900,apr:0,dueDay:1,include:true,method:'Principal only'}]
@@ -56,9 +56,18 @@ test('Legacy saved scenario repairs inherited dates and respects edited source d
  await studio.getByLabel('Select scenario',{exact:true}).selectOption('studio-six')
  for(const name of ['Overview','Income','Expenses','Liabilities','Forecast','Compare']){
   await studio.getByRole('navigation',{name:'Scenario Studio tabs'}).getByRole('button',{name,exact:true}).click()
-  await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$38,725.64')
+  await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$26,636.44')
   await expect(studio.getByRole('note')).toHaveCount(0)
-  await expect(studio.locator('.studio-summary').first().locator('strong').nth(2)).toHaveText('$22,892.31')
+  await expect(studio.locator('.studio-summary').first()).toContainText('Monthly recurring expenses')
+  await expect(studio.locator('.studio-summary').first().locator('strong').nth(1)).toHaveText('$24,331.10')
+  await expect(studio.locator('.studio-summary').first()).not.toContainText('Taxes & deductions')
+  await expect(studio.locator('.studio-summary').first()).toContainText('$26,636.44 − $24,331.10 = $2,305.34')
+  if(name==='Overview'){
+   await expect(studio.getByRole('row').filter({hasText:'Net cash flow'})).toContainText('$2,305.34')
+   await studio.locator('.studio-summary').first().scrollIntoViewIfNeeded()
+   await page.screenshot({path:info.outputPath('cashflow-formula.png')})
+  }
+  await expect(studio.locator('.studio-summary').first().locator('strong').nth(2)).toHaveText('$2,305.34')
   if(name==='Forecast'){
    await expect(studio).toContainText('Surplus held for property taxes')
    await expect(studio.locator('.studio-ledger .studio-milestone')).toHaveCount(1)
@@ -73,10 +82,10 @@ test('Legacy saved scenario repairs inherited dates and respects edited source d
  await studio.getByRole('navigation',{name:'Scenario Studio tabs'}).getByRole('button',{name:'Income',exact:true}).click()
  await studio.getByRole('button',{name:'Income 1',exact:true}).click()
  await studio.getByLabel('End date (optional)',{exact:true}).fill('2026-11-15')
- await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$34,481.64')
+ await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$22,392.44')
  await expect(studio.getByRole('note')).toContainText('each source’s start and end dates')
  await studio.getByLabel('End date (optional)',{exact:true}).fill('')
  await studio.getByLabel('First payment / effective date',{exact:true}).fill('2026-11-16')
- await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$34,481.64')
+ await expect(studio.locator('.studio-summary').first().locator('strong').first()).toHaveText('$22,392.44')
  await studio.locator('.studio-summary').first().scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('monthly-income-reconciled.png')})
 })

@@ -151,3 +151,22 @@ test('changing monthly minimums cannot change monthly cash flow or lump-sum payo
  const original=projectStudio(a);a.liabilities[0].payment=999999
  assert.deepEqual(projectStudio(a),original)
 })
+
+test('screenshot cash flow is net income minus full recurring expenses regardless of planning day',async()=>{
+ const {studioMonthly}=await import('./scenarioStudioModel.js')
+ const a=createStudio({incomes:[8488,2736.12,5498,6374.32,3540].map((monthlyNet,i)=>({id:`source-${i}`,monthlyNet}))},24331.10,[],'2026-11-12')
+ a.openingCash=9000;a.liabilities=[debt({payment:2959.33,balance:10000})]
+ for(const day of ['2026-11-01','2026-11-12','2026-11-30']){
+  const plan={...a,start:day},summary=studioMonthly(plan),m=projectStudio(plan).months[0]
+  assert.equal(summary.income,26636.44);assert.equal(summary.living,24331.10);assert.equal(summary.cashFlow,2305.34)
+  assert.equal(m.income,summary.income);assert.equal(m.expenses,summary.living);assert.equal(m.cashFlow,summary.cashFlow)
+ }
+ a.expenses.push({id:'repair',name:'One-time repair',amount:500,frequency:'once',start:'2026-11-15',end:'',enabled:true})
+ const r=projectStudio(a);assert.equal(r.months[0].cashFlow,2305.34);assert.equal(r.months[0].oneTime,500)
+ assert.equal(r.months[0].endingCash,10805.34);assert.ok(r.ledger.some(row=>row.description==='November one-time expenses'&&row.amount===-500))
+})
+
+test('new snapshots retain recurring expense total without hidden debt adjustments',()=>{
+ const a=createStudio({incomes:[{monthlyNet:26636.44}]},24331.10,[{id:'debt',status:'Active',currentBalance:10000,minimumPayment:2959.33,interestRate:0}], '2026-11-12')
+ assert.equal(a.expenses[0].amount,24331.10);assert.equal(projectStudio(a).months[0].cashFlow,2305.34)
+})
