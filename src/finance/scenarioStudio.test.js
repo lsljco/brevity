@@ -5,7 +5,7 @@ import {createStudio,newIncome,validateStudio,studioMonthly,projectStudio} from 
 import {normalizeActionProposal} from '../../netlify/lib/assistant-action-contract.mjs'
 import {applyRecordOperation} from '../../netlify/lib/assistant-action-executor.mjs'
 const income=(gross=50000,person='LJ')=>({...newIncome('2026-01-01'),annualGross:gross,person})
-const base=()=>({...createStudio({title:'Current',incomes:[{id:'wage',description:'LJ job',annualGross:120000,monthlyNet:8000}]},3000,[],'2026-01-01'),months:12,openingCash:15000,timingConfirmed:true})
+const base=()=>({...createStudio({title:'Current',incomes:[{id:'wage',description:'LJ job',annualGross:120000,monthlyNet:8000}]},3000,[],'2026-01-01',9000),projectionMode:'dated',months:12,openingCash:15000,timingConfirmed:true})
 test('2026 single GA W-2 calculation matches independent bracket arithmetic',()=>{
  const r=calculateIncomeRows([income()],{LJ:TAX_PROFILE})[0]
  assert.equal(r.taxes.federal,3820) // 1240 + (33900 - 12400) * 12%
@@ -75,7 +75,7 @@ test('Studio shared save preserves legacy and recovery plans and normalizes serv
  assert.doesNotThrow(()=>normalizeActionProposal({operations:[operation]},{member:'Larry',role:'admin'}))
  const {before,after}=applyRecordOperation(value,operation)
  assert.deepEqual(before,value);assert.deepEqual(after.scenarios,value.scenarios);assert.deepEqual(after.recoveryPlans,value.recoveryPlans)
- assert.equal(after.studioDefaultFloor,9000);assert.equal(after.studioPlans[0].version,1)
+ assert.equal(after.studioDefaultFloor,9000);assert.equal(after.studioDefaultFloorVersion,2);assert.equal(after.studioPlans[0].version,1)
  assert.equal(applyRecordOperation(after,operation).after.studioPlans[0].version,2)
  assert.throws(()=>normalizeActionProposal({operations:[{...operation,targetId:'model'}]},{member:'Larry',role:'admin'}),/stable/)
 })

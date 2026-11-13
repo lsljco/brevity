@@ -344,7 +344,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
       const x=JSON.parse(payload.studioJson),assumptions=validateStudio(x.assumptions),baseline=validateStudio(x.baseline);
       const plans=value?.studioPlans||[],previous=plans.find(p=>p.id===operation.targetId);
       const plan={id:operation.targetId,assumptions,baseline,version:(previous?.version||0)+1,updatedAt:nowIso(context.now||(()=>new Date())),updatedBy:context.actor};
-      return {before,after:{...(value||{}),...(x.useAsDefault?{studioDefaultFloor:assumptions.cashFloor}:{}),studioPlans:previous?plans.map(p=>p.id===plan.id?plan:p):[...plans,plan]}};
+      return {before,after:{...(value||{}),...(x.useAsDefault?{studioDefaultFloor:assumptions.cashFloor,studioDefaultFloorVersion:assumptions.planningVersion||1}:{}),studioPlans:previous?plans.map(p=>p.id===plan.id?plan:p):[...plans,plan]}};
     }
     if (payload.scenarioImportJson !== undefined) {
       const imported=validateScenarioImport(JSON.parse(payload.scenarioImportJson))
