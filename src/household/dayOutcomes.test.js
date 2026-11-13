@@ -49,3 +49,19 @@ test('a tomorrow outcome review updates that dated plan and its recap source ato
  assert.equal(ops[0].targetDate,tomorrow.date)
  for(const field of ['id','title','owner','status','date'])assert.equal(ops[0].payload.patch.priorities[0][field],after.topPriorities[0][field])
 })
+
+test('distinct household outcomes are retained beyond the canonical overview list',()=>{
+ const plan=createEmptyDailyPlan('2026-11-13')
+ const rows=Array.from({length:5},(_,i)=>({id:`o${i}`,title:`Outcome ${i+1}`,owner:'Family',status:i===2?'complete':'pending'}))
+ plan.topPriorities=rows.slice(0,2);plan.household.priorities=rows
+ assert.deepEqual(visibleDayOutcomes(plan,'Larry','household').map(r=>r.id),rows.map(r=>r.id))
+ const {after}=applyRecordOperation(plan,outcomesOperation(plan,rows.filter(r=>r.id!=='o1')))
+ assert.equal(savedDayOutcomes(after).some(r=>r.id==='o1'),false)
+})
+test('canonical scheduled dates win over stale mirrored dates and completed legacy focus stays visible',()=>{
+ const plan=createEmptyDailyPlan('2026-11-13')
+ plan.topPriorities=[{id:'a',title:'Moved outcome',owner:'Family',date:'2026-11-14'}]
+ plan.household.priorities=[{id:'a',title:'Moved outcome',owner:'Family',date:plan.date}]
+ plan.household.keyFocus='Completed focus';plan.household.keyFocusCompleted=true
+ assert.deepEqual(visibleDayOutcomes(plan,'Larry','household').map(r=>[r.title,r.status]),[['Completed focus','complete']])
+})

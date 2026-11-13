@@ -16,18 +16,18 @@ test('Nov 2 bridge explains holds once and leaves all four grocery dates intact'
  for(const [i,date] of ['2026-11-06','2026-11-13','2026-11-20','2026-11-27'].entries()){
   assert.equal(p.get(date).bal,Math.round((1811.42-300*(i+1))*100)/100)
   assert.equal(p.get(date).realization[0].delta,-300)
-  assert.deepEqual(forecastPlanPresentation(grocery,p.get(date)),{matched:false,pooled:true,amount:300,label:''})
+  assert.deepEqual(forecastPlanPresentation(grocery,p.get(date)),{matched:false,pooled:false,amount:300,label:''})
  }
  assert.equal(p.get('2026-12-01').remainingDelta,0)
  assert.equal(p.get('2026-12-04').remainingDelta,-300)
 })
-test('posted purchases reduce earliest scheduled grocery capacity and are not bank matches',()=>{
+test('posted category purchases never reduce the scheduled grocery expense',()=>{
  const p=buildOutstandingCashForecast([account],[grocery],[{id:'p',name:'Market',category:'Food',accountId:'bank',date:'2026-11-01',amount:350}],opts)
- assert.equal(p.get('2026-11-06').remainingDelta,0)
- assert.equal(p.get('2026-11-13').remainingDelta,-250)
+ assert.equal(p.get('2026-11-06').remainingDelta,-300)
+ assert.equal(p.get('2026-11-13').remainingDelta,-300)
  assert.equal(p.get('2026-11-20').remainingDelta,-300)
  assert.equal(forecastPlanPresentation(grocery,p.get('2026-11-06')).matched,false)
- assert.equal(forecastPlanPresentation(grocery,p.get('2026-11-06')).label,'Category already spent · ')
+ assert.equal(forecastPlanPresentation(grocery,p.get('2026-11-06')).label,'')
 })
 test('bank snapshot mismatch is explicit and recorded prior closing balance is respected',()=>{
  const p=buildOutstandingCashForecast([account],[],[{id:'posted',accountId:'bank',date:'2026-11-02',amount:50}],{...opts,recordedClosingBalances:{'2026-11-01':3000}}).get(opts.today)
