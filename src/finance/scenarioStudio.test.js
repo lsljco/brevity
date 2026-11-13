@@ -71,9 +71,11 @@ test('invalid dates, negative amounts, unsupported debt methods and duplicates r
 })
 test('Studio shared save preserves legacy and recovery plans and normalizes server-side',()=>{
  const a=base(),value={scenarios:[{id:'old'}],recoveryPlans:[{id:'recovery'}]}
+ a.projectionMode='monthly';a.bonuses=[{id:'bonus',name:'Bonus',amount:2500,date:'2026-12-15',enabled:true}];a.liabilities=[{id:'loan',name:'Loan',balance:4000,apr:0,payment:0,dueDay:1,include:true,method:'Principal only',plannedPayoffDate:'2026-12-20'}]
  const operation={type:'forecast.update',targetId:'studio-test',domain:'finance',description:'Save hypothetical scenario',payload:{studioJson:JSON.stringify({assumptions:a,baseline:a,useAsDefault:true})}}
  assert.doesNotThrow(()=>normalizeActionProposal({operations:[operation]},{member:'Larry',role:'admin'}))
  const {before,after}=applyRecordOperation(value,operation)
+ assert.deepEqual(after.studioPlans[0].assumptions.bonuses,a.bonuses);assert.equal(after.studioPlans[0].assumptions.liabilities[0].plannedPayoffDate,'2026-12-20')
  assert.deepEqual(before,value);assert.deepEqual(after.scenarios,value.scenarios);assert.deepEqual(after.recoveryPlans,value.recoveryPlans)
  assert.equal(after.studioDefaultFloor,9000);assert.equal(after.studioDefaultFloorVersion,2);assert.equal(after.studioPlans[0].version,1)
  assert.equal(applyRecordOperation(after,operation).after.studioPlans[0].version,2)
