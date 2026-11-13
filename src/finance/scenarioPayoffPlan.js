@@ -92,6 +92,7 @@ export function projectMonthlyStudio(a){
   for(const x of r.oneTimeItems){if(cash!==null)cash=round(cash-x.amount);append(x.date,x.name,-x.amount,total(debts),'One-time expense; separate from monthly cash flow.','movement',{kind:'expenses',id:x.id})}
   const order=debts.filter(d=>d.include&&outstanding(d)>0&&(!taxKind(d)||d.original||!d.dueDate||d.dueDate<=r.date)).sort((x,y)=>{
    if(payoffPriority(x)!==payoffPriority(y))return payoffPriority(x)-payoffPriority(y)
+   if(a.strategy==='priority')return 0
    if(taxKind(x))return (x.dueDate||a.start).localeCompare(y.dueDate||a.start)
    return a.strategy==='highest-apr'?y.apr-x.apr:a.strategy==='lowest-balance'?outstanding(x)-outstanding(y):0
   })

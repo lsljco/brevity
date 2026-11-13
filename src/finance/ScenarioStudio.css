@@ -9,3 +9,6 @@
 .scenario-studio .studio-payoff td{background:rgba(197,164,109,.13);border-bottom-color:var(--brevity-gold)}.scenario-studio .studio-payoff td:first-child{border-left:3px solid var(--brevity-gold)}.scenario-studio .studio-milestone td{background:rgba(197,164,109,.24);border-top:2px solid var(--brevity-gold);border-bottom:2px solid var(--brevity-gold);padding:18px 12px;white-space:normal;max-width:none;font-weight:700}.studio-milestone strong{font-weight:800;font-size:15px}.studio-milestone small{display:block;margin-top:7px;font-weight:500}
 
 .studio-milestone strong,.studio-milestone small{display:block;max-width:min(600px,calc(100vw - 120px))}
+
+.studio-priority-controls{display:flex;align-items:center;gap:8px}.studio-drag-handle{cursor:grab!important;touch-action:none;min-width:42px}.studio-drop-target{outline:2px solid var(--brevity-gold);outline-offset:-2px}.studio-priority-table td:first-child select{margin-top:8px;min-width:125px}.studio-comparison td:first-child{min-width:180px;max-width:280px}.studio-comparison td{vertical-align:top}
+.studio-comparison-name{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
