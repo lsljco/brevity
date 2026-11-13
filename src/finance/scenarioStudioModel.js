@@ -1,4 +1,5 @@
 import {TAX_PROFILE,calculateIncomeRows,round} from './scenarioTax.js'
+import {projectMonthlyStudio,DEFAULT_STUDIO_RESERVE,taxKind} from './scenarioPayoffPlan.js'
 import {validDate} from './recoveryScenario.js'
 const DAY=86400000
 const stamp=d=>Date.parse(d+'T12:00:00Z')
@@ -7,7 +8,7 @@ export const frequencyFactors={monthly:12,semimonthly:24,biweekly:26,weekly:52,a
 const sum=(rows,key)=>round(rows.reduce((s,r)=>s+(r[key]||0),0))
 export function newIncome(start) {return {id:crypto.randomUUID(),name:'New income',person:'LJ',mode:'gross',annualGross:0,monthlyNet:0,pretax:0,posttax:0,extraWithholding:0,frequency:'monthly',start,end:'',enabled:true}}
 export function newExpense(start){return {id:crypto.randomUUID(),name:'New expense',amount:0,frequency:'monthly',start,end:'',enabled:true}}
-export function createStudio(scenario,expense,debts,start,floor=9000) {
+export function createStudio(scenario,expense,debts,start,floor=DEFAULT_STUDIO_RESERVE) {
  let liabilities=debts.filter(d=>d.status==='Active'&&d.currentBalance>0).map(d=>({id:d.id,name:d.creditor||d.accountName||'Liability',balance:d.currentBalance,apr:d.interestRate,payment:d.minimumPayment,dueDay:d.dueDay||1,include:true,method:d.interestMethod||'Amortized APR'}))
  const notes=scenario.source?.notes||[]
  const importedDebts=notes.flatMap(note=>{const m=note.match(/^(.*):\s*\$([\d,.]+); monthly cashflow released after payoff:\s*\$([\d,.]+)/i);return m?[{id:`imported-${crypto.randomUUID()}`,name:m[1],balance:Number(m[2].replaceAll(',','')),payment:Number(m[3].replaceAll(',','')),apr:0,dueDay:1,include:true,method:'Principal only'}]:[]})
@@ -15,7 +16,7 @@ export function createStudio(scenario,expense,debts,start,floor=9000) {
  const annualTaxes=notes.flatMap(note=>{const m=note.match(/^Annual (.*tax.*):\s*\$([\d,.]+)/i);if(!m)return [];const month=/property/i.test(m[1])?'10':'04';const year=Number(start.slice(0,4))+(start.slice(5)>`${month}-01`?1:0);return [{...newExpense(`${year}-${month}-01`),name:`Annual ${m[1]}`,amount:Number(m[2].replaceAll(',','')),frequency:'annual'}]})
  const payments=sum(liabilities,'payment')
  const incomes=(scenario.incomes||[]).map((r,i)=>({...newIncome(start),id:r.id||`income-${i}`,name:r.description||'Income',person:(r.description||'').match(/^(LJ|LS|NS|JS|TS)\b/)?.[1]||`Person ${i+1}`,mode:'net',annualGross:Number(r.annualGross)||0,monthlyNet:Number(r.monthlyNet)||0}))
- return {version:1,title:scenario.title||'Current State',favorite:false,start,months:36,openingCash:null,cashFloor:floor,protectedReserve:0,strategy:'priority',timingConfirmed:false,
+ return {version:1,planningVersion:2,projectionMode:'monthly',title:scenario.title||'Current State',favorite:false,start,months:36,openingCash:null,cashFloor:floor,protectedReserve:0,strategy:'priority',timingConfirmed:false,
   source:'Snapshot of existing scenario; recurring total includes required debt payments. Confirm bill/pay dates and debt allocation.'+(importedDebts.length?' Imported workbook liabilities are principal-only until you supply APRs. Annual tax assumptions are included.':''),
   incomes,expenses:[{...newExpense(start),id:'baseline-expense',name:'Existing recurring living expenses',amount:Math.max(0,expense-payments)},...annualTaxes],liabilities,profiles:Object.fromEntries(incomes.map(r=>[r.person,{...TAX_PROFILE}]))}
 }
@@ -24,6 +25,7 @@ export function validateStudio(raw) {
  const a=JSON.parse(JSON.stringify(raw))
  const num=(n,label,min=0,max=1e9)=>{if(typeof n!=='number'||!Number.isFinite(n)||n<min||n>max)throw Error(`${label} must be between ${min} and ${max}.`)}
  const text=(s,label)=>{if(typeof s!=='string'||!s.trim()||s.length>250)throw Error(`${label} is required (250 characters maximum).`)}
+ if(a.projectionMode!==undefined&&!['monthly','dated'].includes(a.projectionMode))throw Error('Choose a valid projection mode.');
  text(a.title,'Scenario name');if(!validDate(a.start))throw Error('Choose a valid planning start.')
  num(a.months,'Horizon',1,60);if(!Number.isInteger(a.months))throw Error('Horizon must be whole months.')
  for(const k of ['cashFloor','protectedReserve'])num(a[k],k)
@@ -34,6 +36,8 @@ export function validateStudio(raw) {
   if(!Array.isArray(a[kind])||a[kind].length>100)throw Error('Use at most 100 rows per section.')
   const ids=new Set()
   for(const r of a[kind]){
+   if(r.taxKind!==undefined&&!['','property-tax','income-tax'].includes(r.taxKind))throw Error('Choose a valid tax category.');
+   if(r.dueDate&&!validDate(r.dueDate))throw Error('Choose a valid tax due date.');
    text(r.id,'Row ID');if(ids.has(r.id))throw Error('Duplicate row ID.');ids.add(r.id);text(r.name,'Row name')
    if(kind==='liabilities'){
     for(const k of ['balance','apr','payment','dueDay'])num(r[k],k,0,k==='apr'?100:k==='dueDay'?31:1e9)
@@ -65,12 +69,12 @@ export function studioMonthly(raw,date=raw.start) {
  const a=validateStudio(raw), active=r=>r.enabled&&r.start<=date&&(!r.end||r.end>=date)
  const incomes=calculateIncomeRows(a.incomes.filter(active),a.profiles)
  const income=sum(incomes,'monthlyNet'),gross=sum(incomes,'annualGross')/12
- const living=round(a.expenses.filter(active).reduce((s,r)=>s+r.amount*frequencyFactors[r.frequency]/12,0))
+ const living=round(a.expenses.filter(r=>active(r)&&!(a.projectionMode==='monthly'&&taxKind(r)&&['annual','once'].includes(r.frequency))).reduce((s,r)=>s+r.amount*frequencyFactors[r.frequency]/12,0))
  const required=sum(a.liabilities.filter(d=>d.balance>0),'payment')
  return {income,gross:round(gross),deductions:incomes.every(r=>r.annualGross>0)?round(gross-income):null,living,required,cashFlow:round(income-living-required),incomes}
 }
 export function projectStudio(raw){
- const a=validateStudio(raw),start=stamp(a.start),endDate=new Date(start);endDate.setUTCMonth(endDate.getUTCMonth()+a.months,1);const end=endDate.getTime()-DAY
+ const a=validateStudio(raw);if(a.projectionMode==='monthly')return projectMonthlyStudio(a);const start=stamp(a.start),endDate=new Date(start);endDate.setUTCMonth(endDate.getUTCMonth()+a.months,1);const end=endDate.getTime()-DAY
  const dates=[];for(let t=start;t<=end;t+=DAY)dates.push(iso(t))
  const debts=a.liabilities.map(d=>({...d,remaining:d.balance,interest:0,paidDate:null}))
  const inputs=dates.map(date=>{

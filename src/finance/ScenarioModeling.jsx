@@ -247,7 +247,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     })
   }
 
-  return <section className="scenario-page" aria-labelledby="scenario-title"><Suspense fallback={<p>Loading Scenario Studio…</p>}><ScenarioStudio scenarios={model.scenarios} planningExpense={expense} debts={debts||[]} readOnly={readOnly}/></Suspense><details className="scenario-legacy"><summary>Existing workbook scenarios, imports and recovery plans</summary><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
+  return <section className="scenario-page" aria-labelledby="scenario-title"><Suspense fallback={<p>Loading Scenario Studio…</p>}><ScenarioStudio financeData={financeData} freshness={freshness} scenarios={model.scenarios} planningExpense={expense} debts={debts||[]} readOnly={readOnly}/></Suspense><details className="scenario-legacy"><summary>Existing workbook scenarios, imports and recovery plans</summary><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
     <header className="scenario-header">
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>
