@@ -8,6 +8,14 @@ export const taxKind=row=>row.taxKind??(/property.*tax/i.test(row.name)?'propert
 export const DEFAULT_STUDIO_RESERVE=24000
 export function upgradeStudioPlan(raw){
  const a=JSON.parse(JSON.stringify(raw))
+ // Older scenario snapshots copied the planning date into every imported net-income row.
+ // Repair that inherited default once; keep explicitly marked or distinct source dates.
+ if(a.incomeDateVersion!==1){
+  if(a.source?.startsWith('Snapshot of existing scenario;'))for(const row of a.incomes||[]){
+   if(row.mode==='net'&&!row.startDateSource&&row.start===a.start){row.start=a.start.slice(0,7)+'-01';row.startDateSource='month-default'}
+  }
+  a.incomeDateVersion=1
+ }
  if(a.planningVersion!==2){a.cashFloor=Math.max(DEFAULT_STUDIO_RESERVE,a.cashFloor||0);a.projectionMode='monthly';a.planningVersion=2}
  return a
 }

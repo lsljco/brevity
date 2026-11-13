@@ -129,3 +129,19 @@ test('payoff highlights and non-tax milestone are emitted once even while taxes 
  assert.equal(a.incomes[0].start,'2026-11-16');assert.equal(a.incomes[0].end,'2026-11-20')
  assert.equal(projectStudio(a).months[0].income,500)
  })
+
+test('legacy saved snapshot repairs inherited income dates without touching explicit dates or the source record',()=>{
+ const a=createStudio({title:'Current State',incomes:[8488,2736.12,5498,6374.32,3540].map((monthlyNet,i)=>({id:`income-${i}`,monthlyNet}))},25000,[],'2026-11-12')
+ delete a.incomeDateVersion;delete a.planningVersion
+ for(const row of a.incomes){row.start=a.start;delete row.startDateSource}
+ const fixed=upgradeStudioPlan(a)
+ assert.equal(projectStudio(fixed).months[0].income,26636.44)
+ assert.equal(a.incomes[0].start,'2026-11-12')
+ assert.deepEqual(upgradeStudioPlan(fixed),fixed)
+ a.incomes[0].startDateSource='explicit';a.incomes[1].start='2026-11-20';a.incomes[2].end='2026-11-15'
+ const mixed=upgradeStudioPlan({...a,planningVersion:2})
+ assert.equal(mixed.incomes[0].start,'2026-11-12');assert.equal(mixed.incomes[1].start,'2026-11-20')
+ assert.equal(mixed.incomes[2].end,'2026-11-15')
+ const current=createStudio({incomes:[{monthlyNet:3000,start:'2026-11-12'}]},0,[],'2026-11-12')
+ assert.equal(upgradeStudioPlan(current).incomes[0].start,'2026-11-12')
+})
