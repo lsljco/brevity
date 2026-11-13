@@ -5,6 +5,7 @@ import {FINANCE_REFRESH_EVENT,FINANCE_STORAGE_KEY,PLAID_ACTUALS_KEY,readLatestBa
 import {getHouseholdDateTimeLabel} from '../finance/financeTime.js'
 import {SHARED_STATE_EVENT} from './sharedState.js'
 import './TodayFinanceBrief.css'
+import {nextHomeBill} from '../homehq/nextHomeBill.js'
 const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)
 
 function readSnapshot() {
@@ -15,7 +16,7 @@ function readSnapshot() {
   } catch { return { data:null, actuals:null, balanceStatus:{status:'unknown'}, transactionStatus:{status:'unknown'} } }
 }
 
-export default function TodayFinanceBrief({ date, finance = {}, canViewFinance = false, onOpenFinance, compact = false }) {
+export default function TodayFinanceBrief({ date, finance = {}, canViewFinance = false, onOpenFinance, compact = false, home = false }) {
   const [snapshot, setSnapshot] = useState(() => canViewFinance ? readSnapshot() : null)
   useEffect(() => {
     if (!canViewFinance) return undefined
@@ -31,6 +32,11 @@ export default function TodayFinanceBrief({ date, finance = {}, canViewFinance =
     return () => { window.removeEventListener(FINANCE_REFRESH_EVENT, refresh); window.removeEventListener(SHARED_STATE_EVENT, refresh); window.removeEventListener('storage', refresh) }
   }, [canViewFinance])
   const model = useMemo(() => canViewFinance ? dailyFinancialBrief({date,finance:snapshot?.data,actuals:snapshot?.actuals,updatedAt:snapshot?.balanceStatus?.checkedAt,plan:{finance}}) : null,[date,snapshot,canViewFinance,finance])
+  if (home) {
+    if (!canViewFinance) return null
+    const next=nextHomeBill(snapshot?.data,date,model.bills)
+    return <section className="home-financial" aria-label="Financial Snapshot"><div><h2>Financial Snapshot</h2><small>{readLatestBalanceRefreshStatus().status==='fresh'&&model.updatedAt?`Bank checked · ${getHouseholdDateTimeLabel(new Date(model.updatedAt))}`:'Saved balances · freshness unverified'}</small></div>{[['Operating cash',model.operatingBalance],['Savings balance',model.savingsBalance]].map(([label,value])=><div key={label}><span className="home-eyebrow">{label}</span><strong className={value===null?'home-balance-unavailable':undefined}>{value===null?'Unavailable':money(value)}</strong></div>)}<small className="home-next-bill">{next?`Next scheduled bill · ${next.title} · ${next.date} · ${Number.isFinite(next.amount)?money(next.amount):'Amount unavailable'}`:'No scheduled bills in the next 31 days'}</small><button onClick={()=>onOpenFinance?.('finance')} aria-label="Open financial snapshot">↗</button></section>
+  }
   if (compact) {
     if (!canViewFinance) return null
     const knownAmounts = model.bills.every(item=>Number.isFinite(item.amount))

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { requestAssistantConversation } from '../assistant/actionEvents.js'
 import { useDailyPlan } from '../household/useDailyPlan.js'
 
@@ -44,16 +44,7 @@ export function HouseholdHome({ onNavigate, modules = [], initialSection = 'over
   </section>
 }
 
-export default function LifeHome({ currentMember, pillars, onNavigate, onOpenPillar, onOpenHistory }) {
-  return <section className="life-workspace" aria-labelledby="life-home-heading">
-    <header className="life-hero"><p className="life-eyebrow">Brevity of Life</p><h1 id="life-home-heading">Welcome home, {currentMember}.</h1><p>Live with intention. Make space for what matters.</p></header>
-    <div className="life-destinations life-destinations--primary">
-      <Destination image="/imagery/planning-desk.webp" title="My day" description="Your outcomes, meals, movement and appointments." icon="ti-sun" onClick={()=>onNavigate('','today')}/>
-      {pillars.some(pillar=>pillar.id==='household')&&<Destination image="/imagery/home-lounge.webp" title="Our household" description="Shared responsibilities. A home in harmony." icon="ti-home-heart" onClick={()=>onOpenPillar('household')}/>}
-      <Destination image="/imagery/garden-path.webp" title="Our seven pillars" description="The foundations of an intentional life." icon="ti-columns" onClick={()=>document.getElementById('life-pillars')?.scrollIntoView({block:'start',behavior:'smooth'})}/>
-    </div>
-    <button type="button" className="life-concierge" onClick={()=>requestAssistantConversation('Help me chart today’s course. Use my goals, unfinished work and appointments to propose three outcomes, explain why each matters today, and identify household conflicts. Preserve my existing decisions and ask me to review any proposed changes.')}><i className="ti ti-sparkles" aria-hidden="true"/><span>Chart the course for today</span><i className="ti ti-arrow-right" aria-hidden="true"/></button>
-    <section id="life-pillars" className="life-pillars"><header><p className="life-eyebrow">An integrated life</p><h2>Our seven pillars</h2></header><div>{pillars.map(pillar=><Destination key={pillar.id} title={pillar.id==='finance'?'Finance & Stewardship':pillar.label} description={pillar.description} icon={pillar.icon} onClick={()=>onOpenPillar(pillar.id)}/>)}</div></section>
-    <footer className="life-footer"><button type="button" onClick={onOpenHistory}>History & records <i className="ti ti-history" aria-hidden="true"/></button><button type="button" onClick={()=>onNavigate('','settings')}>Preferences & connections <i className="ti ti-settings" aria-hidden="true"/></button></footer>
-  </section>
+const HomeDashboard = lazy(() => import('./HomeDashboard.jsx'))
+export default function LifeHome(props) {
+  return <Suspense fallback={<p role="status">Opening your home…</p>}><HomeDashboard {...props}/></Suspense>
 }

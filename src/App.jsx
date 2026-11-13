@@ -322,7 +322,7 @@ export default function App() {
     const configured=modules.find(item=>item.id===activeView),configuredPillar=modules.find(item=>item.id===activePillar)
     if(configured?.enabled===false||configuredPillar?.enabled===false)return <section style={{padding:24}}><h1>This module is hidden</h1><p>Saved records are preserved. Ask Brevity to enable it again.</p><button onClick={()=>requestAssistantConversation(`Enable the ${configured?.label||configuredPillar?.label} module again.`)}>Ask Brevity</button></section>
     if(activeView.startsWith('custom-')&&configured)return <ModuleWorkspace module={configured} currentMember={currentMember} revision={moduleRevision}/>
-    if(activeView==='home')return <LifeHome currentMember={currentMember} pillars={visiblePillars} onNavigate={navigateTo} onOpenPillar={openPillar} onOpenHistory={()=>setArchiveOpen(true)}/>
+    if(activeView==='home')return <LifeHome canViewFinance={auth.role==='admin'} currentMember={currentMember} pillars={visiblePillars} onNavigate={navigateTo} onOpenPillar={openPillar} onOpenHistory={()=>setArchiveOpen(true)}/>
     if(activePillar==='household'&&['pillar-analysis','household-manage','household-maintain'].includes(activeView))return <HouseholdHome key={activeView} initialSection={activeView==='household-manage'?'manage':activeView==='household-maintain'?'maintain':'overview'} onNavigate={navigateTo} modules={modules}/>
     if(activeView==='household-supplies')return <Suspense fallback={<div className="app-view-loading">Loading supplies…</div>}><HouseholdMaintenance currentMember={currentMember} canEdit={canEditPlanning} isAdmin={auth.role==='admin'} initialWorkspace="inventory"/></Suspense>
 
