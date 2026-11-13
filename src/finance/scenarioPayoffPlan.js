@@ -32,7 +32,7 @@ function periodInputs(a,count){
  for(let index=0;index<count;index++){
   const begin=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+index,1,12)),end=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+index+1,0,12))
   const start=index===0?a.start:iso(begin),last=iso(end),days=end.getUTCDate(),r={date:last,month:last.slice(0,7),days:Math.round((stamp(last)-stamp(start))/DAY)+1,income:0,gross:0,deductions:0,expenses:0,taxBills:[]}
-  for(let t=stamp(start);t<=stamp(last);t+=DAY){
+  for(let t=stamp(iso(begin));t<=stamp(last);t+=DAY){
    const date=iso(new Date(t)),active=a.incomes.filter(x=>x.enabled&&x.start<=date&&(!x.end||x.end>=date)),key=JSON.stringify(active.map(x=>x.id))
    if(!cache.has(key))cache.set(key,calculateIncomeRows(active,a.profiles))
    const incomes=cache.get(key)
@@ -40,6 +40,7 @@ function periodInputs(a,count){
    r.income+=net/days;r.gross+=gross/days
    if(incomes.some(x=>!x.annualGross&&x.monthlyNet>0))r.deductions=null
    else if(r.deductions!==null)r.deductions+=(gross-net)/days
+   if(date<start)continue
    for(const x of a.expenses.filter(x=>x.enabled&&x.start<=date&&(!x.end||x.end>=date))){
     if(factors[x.frequency])r.expenses+=x.amount*factors[x.frequency]/12/days
     else if((x.frequency==='once'&&x.start===date)||(x.frequency==='annual'&&date.slice(5,7)===x.start.slice(5,7)&&Number(date.slice(8))===Math.min(Number(x.start.slice(8)),days))){
@@ -123,5 +124,5 @@ export function projectMonthlyStudio(a){
  const knownKinds=new Set(a.expenses.filter(x=>x.enabled&&x.frequency==='annual').map(taxKind))
  return {months,daily:[],payoffs,ledger,taxDeadlines,lowest,firstShortfall,endingCash:cash,unpaid:total(debts),debtFree,nonTaxDebtFree,lateTaxes,
   warnings:[...(cash===null?['Enter opening cash or use a saved cash snapshot. The reserve target is not your opening balance.']:[]),...(lateTaxes.length?[`${lateTaxes.length} tax obligation(s) cannot be paid in the due month while preserving the reserve. Review the tax funding table.`]:[]),...(['property-tax','income-tax'].filter(k=>!knownKinds.has(k)).map(k=>`No ${k==='property-tax'?'property':'income'} tax assumption is recorded. Add the annual balance due, or explicitly record zero if none is owed.`)),
-   'Interest uses estimated APR accrual; lender fees are not included.','Monthly planning estimates prorate the first month and income start/end dates. Actual payroll and bill-day liquidity can differ.','Future obligations are protected through the displayed horizon plus 12 months; future years retain the entered tax amounts and 2026 W-2 rules.','Unpaid tax balances already owed belong in Liabilities; future annual balances due belong in Expenses. Do not enter the same tax year twice.']}
+   'Interest uses estimated APR accrual; lender fees are not included.','Monthly income is prorated only by each source’s start/end dates, never by the planning start date. Actual payroll and bill-day liquidity can differ.','Future obligations are protected through the displayed horizon plus 12 months; future years retain the entered tax amounts and 2026 W-2 rules.','Unpaid tax balances already owed belong in Liabilities; future annual balances due belong in Expenses. Do not enter the same tax year twice.']}
 }
