@@ -1,5 +1,4 @@
 async function openTodayDetails(page) {
-  if(!await page.locator('.today-dashboard').isVisible())await page.locator((page.viewportSize()?.width||1440)<700?'.mobile-app-nav':'.sidebar-nav').getByRole('button',{name:'Today',exact:true}).click()
   await expect(page.locator('.today-dashboard')).toBeVisible()
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
@@ -83,7 +82,7 @@ test.beforeEach(async ({ page }) => {
   // Netlify's preview-only feedback drawer overlaps app controls on tablets.
   if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort())
   await mockBackend(page)
-  await page.goto('/')
+  await page.goto('/?view=today')
   await expect(page.locator('.app-shell')).toBeVisible()
   await openTodayDetails(page)
 })
@@ -237,11 +236,11 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
 
-test('top-level pillar navigation returns to Today instead of the previously viewed pillar', async ({ page }, testInfo) => {
+test('top-level pillar navigation returns to Home instead of the previously viewed pillar', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Household Management',exact:true}).click()
   await page.getByRole('button', { name:'Spiritual Maturity',exact:true}).click()
-  await expect(page.getByRole('button', { name:'Back to Today' })).toBeVisible()
+  await expect(page.getByRole('button', { name:'Back to Home' })).toBeVisible()
 })
 
 test('direct shared household writes remain local and never bypass Action Mode review', async ({ page }) => {
@@ -990,7 +989,7 @@ test('routine workspace reviews a single day, a recurring change and household e
  const routine=(id,owner)=>({id,title:`${owner} focus`,owner,participants:[],days:[0,1,2,3,4,5,6],startTime:'08:00',endTime:'12:00',enabled:true,pillar:'Household Management',notes:''})
  const key='brevity_household_schedule_v1',source={version:1,blocks:[],routines:[routine('larry-focus','Larry'),routine('nyla-focus','Nyla')],routineOverrides:{}}
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{[key]:{key,version:1,value:JSON.stringify(source),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
- await page.reload();await openTodayDetails(page)
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
  let request
  await page.route('**/.netlify/functions/brevity-assistant-actions?*',async route=>{if(route.request().method()==='POST'){request=route.request().postDataJSON();return route.fulfill({status:409,json:{error:'Review captured for test'}})}return route.fallback()})
  if(testInfo.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()
@@ -1030,7 +1029,7 @@ test('members default to their routines and can view everyone without editing ot
  const key='brevity_household_schedule_v1',source={version:1,blocks:[],routines:[routine('larry-focus','Larry'),routine('nyla-focus','Nyla')],routineOverrides:{}}
  await page.route('**/.netlify/functions/household-auth?action=session',route=>route.fulfill({json:{authenticated:true,member:'Nyla',role:'member',bootstrapRequired:false}}))
  await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:{[key]:{key,version:1,value:JSON.stringify(source),updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
- await page.reload();await openTodayDetails(page)
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible()
  if(testInfo.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()
  await page.getByRole('button',{name:'Household Management',exact:true}).click()
  await page.getByRole('button',{name:'Schedule & Routines',exact:true}).click()

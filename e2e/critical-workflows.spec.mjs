@@ -1,5 +1,4 @@
 async function openTodayDetails(page) {
-  if(!await page.locator('.today-dashboard').isVisible())await page.locator((page.viewportSize()?.width||1440)<700?'.mobile-app-nav':'.sidebar-nav').getByRole('button',{name:'Today',exact:true}).click()
   await expect(page.locator('.today-dashboard')).toBeVisible()
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
   const restore=(page.viewportSize()?.width||1440)<700&&await collapse.isVisible()
@@ -197,7 +196,7 @@ async function mockBackend(page,{financeFixture=false,accountLinkFixture=false,a
 async function openMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if(!(await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu'}).click();await expect(drawer).toHaveClass(/is-expanded/)}}
 async function closeMenuIfMobile(page,testInfo){if(testInfo.project.name==='iphone'){const drawer=page.locator('#primary-navigation-drawer');if((await drawer.getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation'}).click();await expect(drawer).not.toHaveClass(/is-expanded/)}}
 
-test.beforeEach(async({page},testInfo)=>{if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort());const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category')||testInfo.title.includes('transaction metadata'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/');if(process.env.PREVIEW_BASE_URL)await page.addStyleTag({content:'[data-netlify-deploy-id]{display:none!important}'});await expect(page.locator('.app-shell')).toBeVisible({timeout:process.env.PREVIEW_BASE_URL?20000:7000});await openTodayDetails(page)})
+test.beforeEach(async({page},testInfo)=>{if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort());const ownerLifecycle=testInfo.title.includes('chore owner completes');await mockBackend(page,{financeFixture:testInfo.title.includes('Cash Forecast')||testInfo.title.includes('Projected Expenses')||testInfo.title.includes('categorization rules')||testInfo.title.includes('transaction category')||testInfo.title.includes('transaction metadata'),accountLinkFixture:testInfo.title.includes('account-link repair'),alreadyLinkedExtrasFixture:testInfo.title.includes('already-linked'),scenarioFixture:testInfo.title.includes('Scenario Modeling edits'),debtPaymentFixture:testInfo.title.includes('applies posted bank activity'),householdTaskFixture:testInfo.title.includes('starts an assigned household task')||ownerLifecycle,projectFixture:testInfo.title.includes('Project review repairs'),intelligenceFixture:testInfo.title.includes('Household Intelligence dashboard'),sessionMember:ownerLifecycle?'Javin':'Larry',sessionRole:ownerLifecycle?'member':'admin'});await page.goto('/?view=today');if(process.env.PREVIEW_BASE_URL)await page.addStyleTag({content:'[data-netlify-deploy-id]{display:none!important}'});await expect(page.locator('.app-shell')).toBeVisible({timeout:process.env.PREVIEW_BASE_URL?20000:7000});await openTodayDetails(page)})
 
 test('expanded side panel remains expanded while navigating until its toggle is used',async({page},testInfo)=>{
   const drawer=page.locator('#primary-navigation-drawer')
@@ -967,7 +966,7 @@ test('saved task opens its exact dated record after reload and detects Undo',asy
     const date=new URL(route.request().url()).searchParams.get('date')
     return route.fulfill({json:{plan:{...plan(date),assignments:date===task.date&&!removed?[task]:[]}}})
   })
-  await page.goto('/')
+  await page.goto('/?view=today')
   await page.reload();await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Brevity Assistant',exact:true}).click()
   await page.getByRole('button',{name:'Open task: Inspect garage',exact:true}).click()
@@ -1324,7 +1323,7 @@ test('missing meal photos generate automatically and replace placeholders withou
     const id=new URL(route.request().url()).searchParams.get('jobId').replace(/^auto-/,'')
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({state:'ready',meal:{...meals.find(meal=>meal.id===id),image:'/meal-images/breakfast-01.webp'}})})
   })
-  await page.goto('/');await openTodayDetails(page)
+  await page.goto('/?view=today');await openTodayDetails(page)
   await page.getByRole('button',{name:'Open Meal Plan',exact:true}).click()
   await expect.poll(()=>jobs.length).toBeGreaterThan(0)
   expect(jobs[0].onlyIfMissing).toBe(true)
@@ -1614,7 +1613,7 @@ test('spiritual fallback presents the devotion once with one response and source
     const input=route.request().postDataJSON()
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({pillar:input.pillar,date:input.date,member:input.currentMember,contextSignature:input.contextSignature,generatedAt:new Date().toISOString(),quality:{status:'evidence-fallback'},analysis:buildDeterministicPillarFallback({pillar:input.pillar,date:input.date,pillarData:input.plan.spiritual,localContext:input.localContext})})})
   })
-  await page.goto('/')
+  await page.goto('/?view=today')
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Spiritual Maturity',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
@@ -2596,7 +2595,7 @@ test('Chart the Course starts and speaks with one tap while Today stays visible'
  await page.route('**/elevenlabs-tts',async route=>{spoken.push(route.request().postDataJSON());await route.fulfill({contentType:'audio/wav',body:wav})})
  await page.route('**/.netlify/functions/evening-recap-voice',route=>route.fulfill({contentType:'application/sdp',body:'v=0\r\n'}))
  await page.route('**/.netlify/functions/meeting-recordings*',async route=>{if(route.request().method()==='PUT')saved.push(route.request().postDataJSON());await route.fulfill({json:{saved:true,meetings:[]}})})
- await page.reload();await openTodayDetails(page);await closeMenuIfMobile(page,testInfo)
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible();await closeMenuIfMobile(page,testInfo)
  await page.getByRole('button',{name:/Start Chart the Course/}).click()
  const session=page.getByRole('region',{name:'Chart the Course conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
@@ -2883,7 +2882,7 @@ test('Evening Recap starts inline and keeps Today items available',async({page},
  await page.route('**/elevenlabs-tts',async route=>{spoken.push(route.request().postDataJSON());await route.fulfill({contentType:'audio/wav',body:wav})})
  await page.route('**/.netlify/functions/evening-recap-voice',route=>{voice.push(route.request().postDataJSON());return route.fulfill({contentType:'application/sdp',body:'v=0\r\n'})})
  await page.route('**/.netlify/functions/meeting-recordings*',async route=>{if(route.request().method()==='PUT')saved.push(route.request().postDataJSON());await route.fulfill({json:{saved:true,meetings:[]}})})
- await page.reload();await openTodayDetails(page);await closeMenuIfMobile(page,testInfo)
+ await page.reload();await expect(page.locator('.today-dashboard')).toBeVisible();await closeMenuIfMobile(page,testInfo)
  await page.getByRole('button',{name:/Start Evening Recap/}).click()
  const session=page.getByRole('region',{name:'Evening Recap conversation'})
  await expect(session).toBeVisible();await expect(page.locator('.today-dashboard')).toBeVisible()
