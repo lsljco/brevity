@@ -31,7 +31,7 @@ test('future tax funding prevents an early debt payoff and pays annual bills in 
 test('unfundable tax remains outstanding instead of spending protected reserves',()=>{
  const a=plan();a.months=1;a.expenses.push(tax({frequency:'once',start:'2026-01-15',amount:10000}))
  const r=projectStudio(a);assert.equal(r.months[0].taxes,0);assert.equal(r.unpaid,10000);assert.equal(r.endingCash,27000);assert.equal(r.lateTaxes.length,1)
- assert.match(r.months[0].reason,/Tax balance awaiting/)
+ assert.match(r.months[0].reason,/Surplus held for property taxes/)
 })
 test('arrears and future annual taxes are distinct and all cash ledger rows reconcile',()=>{
  const a=plan();a.openingCash=40000;a.liabilities=[debt({id:'arrears',name:'2025 property tax',taxKind:'property-tax',dueDate:'2025-10-15',balance:5000,payment:0}),debt()];a.expenses.push(tax())
@@ -80,4 +80,38 @@ test('monthly APR accrual is included once in minimum and final settlement',()=>
  const a=plan();a.openingCash=30000;a.liabilities=[debt({balance:1000,payment:100,apr:36.5,method:'Amortized APR'})]
  const r=projectStudio(a);assert.equal(r.months[0].required,100);assert.equal(r.months[0].extra,931)
  assert.equal(r.months[0].endingCash,31969);assert.equal(r.months[1].required,0)
+})
+
+test('November 12 forecast is separate from the full six-income monthly rate',async()=>{
+ const {studioMonthly}=await import('./scenarioStudioModel.js')
+ const a=createStudio({title:'Six incomes',incomes:[8488,2736.12,5498,6374.32,3540,12089.2].map((monthlyNet,i)=>({id:`income-${i}`,description:`Income ${i}`,monthlyNet}))},25000,[],'2026-11-12')
+ assert.equal(studioMonthly(a).income,38725.64)
+ assert.equal(projectStudio(a).months[0].income,24526.24)
+})
+
+test('property tax wins over earlier income tax and an affordable liability',()=>{
+ const a=plan();a.openingCash=26000;a.liabilities=[debt({id:'income',name:'Income tax',taxKind:'income-tax',dueDate:'2025-04-01',balance:1000,payment:0}),debt({id:'property',name:'Property tax',taxKind:'property-tax',dueDate:'2025-10-01',balance:7000,payment:0}),debt({balance:500,payment:0})]
+ const r=projectStudio(a)
+ assert.equal(r.months[0].taxes,0);assert.equal(r.months[0].extra,0)
+ assert.match(r.months[0].reason,/held for property taxes/)
+ assert.deepEqual(r.payoffs.slice(0,3).map(p=>p.id),['property','income','card'])
+ assert.ok(r.lowest>=24000)
+})
+test('upcoming property-tax funding is protected before paying income-tax balances',()=>{
+ const a=plan();a.months=1;a.openingCash=34000;a.incomes[0].monthlyNet=5000
+ a.expenses.push(tax({amount:10000}))
+ a.liabilities=[debt({name:'Income tax',taxKind:'income-tax',balance:5000,payment:0})]
+ const r=projectStudio(a);assert.equal(r.months[0].taxes,0);assert.equal(r.endingCash,34000)
+})
+
+test('payoff highlights and non-tax milestone are emitted once even while taxes remain',()=>{
+ const a=plan();a.openingCash=30000;a.incomes[0].monthlyNet=5000
+ a.liabilities=[debt({balance:500,payment:500}),debt({id:'property',name:'Property tax',taxKind:'property-tax',balance:10000,payment:0})]
+ const r=projectStudio(a),milestones=r.ledger.filter(row=>row.type==='milestone')
+ assert.equal(milestones.length,1);assert.equal(milestones[0].date,'2026-01-31')
+ assert.equal(milestones[0].amount,0);assert.equal(milestones[0].unpaidLiabilities,10000)
+ assert.equal(r.nonTaxDebtFree,'2026-01-31');assert.equal(r.debtFree,null)
+ assert.equal(r.ledger.filter(row=>row.type==='payoff').length,1)
+ assert.match(milestones[0].description,/All non-tax liabilities paid off/)
+ assert.equal(projectStudio({...a,liabilities:a.liabilities.slice(1)}).ledger.some(r=>r.type==='milestone'),false)
 })
