@@ -84,7 +84,7 @@ export function projectMonthlyStudio(a){
   for(const bill of r.taxBills){if(bill.amount>0)debts.push({...bill,balance:bill.amount,remaining:bill.amount,interest:0,payment:0,apr:0,include:true,method:'Principal only',original:false});taxDeadlines.push({...bill,paidDate:bill.amount===0?r.date:null})}
   const cashFlow=round(r.income-r.expenses-required)
   if(cash!==null)cash=round(cash+cashFlow)
-  append(r.date,`${monthName(r.date)} cash flow`,cashFlow,total(debts),`Net income ${r.income.toFixed(2)} less living / one-time costs ${r.expenses.toFixed(2)} and required payments ${required.toFixed(2)}. Annual tax settlements are separate.`)
+  append(r.date,`${monthName(r.date)} cash flow`,cashFlow,total(debts),`Net income $${r.income.toFixed(2)}; living / one-time costs $${r.expenses.toFixed(2)}; required payments $${required.toFixed(2)}.`)
   const order=debts.filter(d=>d.include&&outstanding(d)>0&&(!taxKind(d)||!d.dueDate||d.dueDate<=r.date)).sort((x,y)=>{
    if(Boolean(taxKind(x))!==Boolean(taxKind(y)))return taxKind(x)?-1:1
    if(taxKind(x))return (x.dueDate||a.start).localeCompare(y.dueDate||a.start)

@@ -75,3 +75,9 @@ test('current tax bills are not starved to save for a later unfundable tax bill'
  a.expenses.push(tax({id:'due-now',frequency:'once',start:'2026-01-01',amount:10000}),tax({id:'future',amount:20000}))
  const r=projectStudio(a);assert.equal(r.months[0].taxes,10000);assert.equal(r.endingCash,24000);assert.equal(r.unpaid,20000)
 })
+
+test('monthly APR accrual is included once in minimum and final settlement',()=>{
+ const a=plan();a.openingCash=30000;a.liabilities=[debt({balance:1000,payment:100,apr:36.5,method:'Amortized APR'})]
+ const r=projectStudio(a);assert.equal(r.months[0].required,100);assert.equal(r.months[0].extra,931)
+ assert.equal(r.months[0].endingCash,31969);assert.equal(r.months[1].required,0)
+})

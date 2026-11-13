@@ -3,3 +3,5 @@
 @media(max-width:550px){.studio-summary,.studio-form{grid-template-columns:1fr}.scenario-studio article{padding:14px}.scenario-studio nav button{padding:12px}.studio-toolbar{align-items:stretch}.studio-toolbar>.studio-field{width:100%}}
 
 .studio-ledger table{min-width:950px}.studio-ledger td:first-child{min-width:55px}.studio-ledger td:nth-child(3){min-width:190px;white-space:normal}.studio-ledger td:last-child{min-width:230px;max-width:300px;white-space:normal}.studio-ledger th{position:sticky;top:0;background:var(--brevity-ink);z-index:1}
+
+[data-theme="light"] .studio-ledger th{background:#f0ece3;color:#514b42}.studio-ledger th{color:var(--brevity-soft-white,var(--brevity-white))}[data-theme="light"] .studio-ledger th{color:#514b42}
