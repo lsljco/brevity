@@ -51,9 +51,9 @@ test('negative future cash flow prevents otherwise affordable extra settlement',
  const a=plan();a.openingCash=30000;a.incomes[0].end='2026-02-28';a.liabilities=[debt({balance:1000,payment:0})]
  assert.equal(projectStudio(a).payoffs.length,0)
 })
-test('partial months prorate net income, while minimum-only debts mature naturally',()=>{
+test('planning start does not prorate income, while minimum-only debts mature naturally',()=>{
  const a=plan();a.start='2026-01-16';a.liabilities=[debt({balance:1500,payment:1000,include:false})]
- const r=projectStudio(a);assert.equal(r.months[0].income,4129.03);assert.equal(r.months[1].required,500);assert.equal(r.months[2].required,0)
+ const r=projectStudio(a);assert.equal(r.months[0].income,8000);assert.equal(r.months[1].required,500);assert.equal(r.months[2].required,0)
  assert.equal(r.payoffs[0].source,'required');assert.equal(r.months.every(m=>m.extra===0),true)
 })
 test('migration is a draft and preserves explicitly edited version-two reserve',()=>{
@@ -82,11 +82,11 @@ test('monthly APR accrual is included once in minimum and final settlement',()=>
  assert.equal(r.months[0].endingCash,31969);assert.equal(r.months[1].required,0)
 })
 
-test('November 12 forecast is separate from the full six-income monthly rate',async()=>{
+test('November 12 planning start retains the full six-income monthly rate',async()=>{
  const {studioMonthly}=await import('./scenarioStudioModel.js')
  const a=createStudio({title:'Six incomes',incomes:[8488,2736.12,5498,6374.32,3540,12089.2].map((monthlyNet,i)=>({id:`income-${i}`,description:`Income ${i}`,monthlyNet}))},25000,[],'2026-11-12')
  assert.equal(studioMonthly(a).income,38725.64)
- assert.equal(projectStudio(a).months[0].income,24526.24)
+ assert.equal(projectStudio(a).months[0].income,38725.64)
 })
 
 test('property tax wins over earlier income tax and an affordable liability',()=>{
@@ -115,3 +115,17 @@ test('payoff highlights and non-tax milestone are emitted once even while taxes 
  assert.match(milestones[0].description,/All non-tax liabilities paid off/)
  assert.equal(projectStudio({...a,liabilities:a.liabilities.slice(1)}).ledger.some(r=>r.type==='milestone'),false)
 })
+
+ test('only explicit source dates prorate income, including days before planning start',()=>{
+ const a=plan();a.start='2026-01-16';a.incomes[0].end='2026-01-10';
+ assert.equal(projectStudio(a).months[0].income,2580.65)
+ a.incomes[0].start='2026-01-20';a.incomes[0].end='2026-01-25';
+ assert.equal(projectStudio(a).months[0].income,1548.39)
+ a.incomes[0].start='2026-02-01';a.incomes[0].end='';
+ assert.equal(projectStudio(a).months[0].income,0)
+ })
+ test('import preserves explicit source start and end dates',()=>{
+ const a=createStudio({incomes:[{monthlyNet:3000,start:'2026-11-16',end:'2026-11-20'}]},0,[],'2026-11-12')
+ assert.equal(a.incomes[0].start,'2026-11-16');assert.equal(a.incomes[0].end,'2026-11-20')
+ assert.equal(projectStudio(a).months[0].income,500)
+ })
