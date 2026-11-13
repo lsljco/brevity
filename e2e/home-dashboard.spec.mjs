@@ -23,6 +23,7 @@ test('Home scopes private calendars, shows meals and routes to details',async({p
  await expect(page.locator('.home-main-meals .home-meal')).toHaveCount(3)
  await expect(page.locator('.home-snacks .home-meal')).toHaveCount(2)
  await expect(page.locator('.home-financial')).toContainText('Operating cash')
+ await expect(page.locator('.home-financial')).toContainText('freshness unverified')
  await page.getByRole('button',{name:'Open chores',exact:true}).click()
  await expect(page.getByRole('navigation',{name:'Household operating areas'})).toBeVisible()
 })
