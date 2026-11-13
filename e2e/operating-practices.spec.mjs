@@ -61,7 +61,7 @@ async function backend(page, { readonly = false, activated = false } = {}) {
   return { date, plans, prepared, writes, schedule }
 }
 async function enter(page) {
-  await page.goto('/');await openTodayDetails(page)
+  await page.goto('/?view=today');await openTodayDetails(page)
   await expect(page.locator('.app-shell')).toBeVisible()
   await page.getByTestId('operating-practices').getByRole('button', { name: 'Policies & Practices', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Policies & Practices', exact: true })).toBeVisible()
@@ -74,7 +74,7 @@ async function fits(page) {
 
 test('Today readiness stays compact and routes to authoritative controls', async ({ page }, testInfo) => {
   await backend(page, { activated: true })
-  await page.goto('/');await openTodayDetails(page)
+  await page.goto('/?view=today');await openTodayDetails(page)
   const panel = page.getByTestId('operating-practices')
   await expect(panel).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Policies & Practices', exact: true })).toBeVisible()

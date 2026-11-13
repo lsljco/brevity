@@ -82,7 +82,7 @@ test.beforeEach(async ({ page }) => {
   // Netlify's preview-only feedback drawer overlaps app controls on tablets.
   if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',route=>route.abort())
   await mockBackend(page)
-  await page.goto('/')
+  await page.goto('/?view=today')
   await expect(page.locator('.app-shell')).toBeVisible()
   await openTodayDetails(page)
 })
@@ -236,11 +236,11 @@ test('deprecated My Planner workspace is not present in navigation', async ({ pa
   await expect(page.getByRole('button', { name:'My Planner' })).toHaveCount(0)
 })
 
-test('top-level pillar navigation returns to Today instead of the previously viewed pillar', async ({ page }, testInfo) => {
+test('top-level pillar navigation returns to Home instead of the previously viewed pillar', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'iphone') await page.getByRole('button', { name:'Menu' }).click()
   await page.getByRole('button', { name:'Household Management',exact:true}).click()
   await page.getByRole('button', { name:'Spiritual Maturity',exact:true}).click()
-  await expect(page.getByRole('button', { name:'Back to Today' })).toBeVisible()
+  await expect(page.getByRole('button', { name:'Back to Home' })).toBeVisible()
 })
 
 test('direct shared household writes remain local and never bypass Action Mode review', async ({ page }) => {

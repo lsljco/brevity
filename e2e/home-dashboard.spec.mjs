@@ -9,8 +9,6 @@ async function openHome(page,testInfo,role='admin'){
  await page.route('**/.netlify/functions/household-auth?action=session',route=>route.fulfill({json:{authenticated:true,member:'Larry',role,bootstrapRequired:false}}))
  await page.goto('/')
  await expect(page.locator('.app-shell')).toBeVisible()
- const nav=page.locator(testInfo.project.name==='iphone'?'.mobile-app-nav':'.sidebar-nav')
- await nav.getByRole('button',{name:'Home',exact:true}).click()
  await expect(page.locator('.home-dashboard')).toBeVisible()
  await expect(page.locator('.home-main-meals')).toContainText('Eggs and Toast')
 }
@@ -46,4 +44,13 @@ test('Home visual audit in both themes',async({page},testInfo)=>{
 test('Home keeps financial balances restricted to administrator access',async({page},testInfo)=>{
  await openHome(page,testInfo,'member')
  await expect(page.locator('.home-financial')).toHaveCount(0)
+})
+
+test('Home is the default after reload and Today notification links still open Today',async({page},testInfo)=>{
+ await openHome(page,testInfo)
+ await page.reload()
+ await expect(page.locator('.home-dashboard')).toBeVisible()
+ await page.goto('/?briefing=1#daily-briefing')
+ await expect(page.locator('.today-dashboard')).toBeVisible()
+ await expect(page.getByRole('region',{name:'Daily briefing'})).toBeVisible()
 })
