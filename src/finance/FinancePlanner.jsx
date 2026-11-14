@@ -2385,7 +2385,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts · select multiple</span>
-      {!['budget','calendar','overview','daily-alignment'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
+      {!['dashboard','budget','calendar','overview','daily-alignment'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
 
       {/* All pill */}
       <button
@@ -2421,7 +2421,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         )
       })}
 
-      {!['calendar','overview','daily-alignment'].includes(view) && (
+      {!['dashboard','calendar','overview','daily-alignment'].includes(view) && (
         <>
           {/* Cash Forecast owns its month-scoped bank-activity toggle. */}
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 6px', flexShrink: 0 }} />
@@ -2467,7 +2467,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar'].includes(view) && AccountFilterBar}
       {!isForm&&['transactions','vendors','recurring','reporting'].includes(view)&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
-      {!formView && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {!formView && view !== 'dashboard' && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
         <div role="status" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10, margin:'10px 28px 0', padding:'10px 13px', borderRadius:10, border:'1px solid rgba(232,150,122,.30)', background:'rgba(232,150,122,.08)', color:'var(--soft-white)', fontSize:11, lineHeight:1.45 }}>
           <span><strong>Account-linkage status:</strong> {unmappedActuals.length} bank transaction{unmappedActuals.length === 1 ? '' : 's'} across all available history {unmappedActuals.length === 1 ? 'is' : 'are'} not linked to a unique Brevity account. {unmappedActuals.length === 1 ? 'It is' : 'They are'} excluded from account balances, reconstruction, and Cash Forecast totals; use the all-bank-activity ledger to review {unmappedActuals.length === 1 ? 'it' : 'them'}.</span>
@@ -2492,7 +2492,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           <div className="dash-header">
             <div>
               <div className="dash-greeting">{getHouseholdGreeting()}, {currentMember}</div>
-              <div className="dash-date">{todayLabel}</div><p aria-label="Dashboard reporting period">{financePresetLabel} · {timeframeLabel(financeRange)}</p>
+              <div className="dash-date">{todayLabel}</div><p aria-label="Dashboard reporting period">{timeframeLabel(financeRange)}</p>
             </div>
             <div className="dash-actions">
               {!readOnly && <Suspense fallback={<p role="status">Loading bank controls…</p>}><PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onSyncAvailableTransactions={() => fetchActuals({ requestBankUpdate:false })} onRecoverTransactions={() => fetchActuals({ recoverHistory:true })} onReviewAccountLinks={() => setView('accounts')} /></Suspense>}
@@ -2507,7 +2507,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             </div>
           </div>
 
-          <Suspense fallback={<p>Loading monthly outlook…</p>}><DashboardMonthOutlook accounts={cashLedger.forecastAccounts} scheduled={forecastScope.transactions} actuals={cashForecastActuals} sourceStatus={actualsFreshness?.status} projection={cashForecastProjection} today={getHouseholdDateKey()} onAccounts={()=>setView('accounts')} onForecast={()=>setView('calendar')}/></Suspense>
+          <Suspense fallback={<p>Loading monthly outlook…</p>}><DashboardMonthOutlook accounts={cashLedger.forecastAccounts} scheduled={forecastScope.transactions} actuals={cashForecastActuals} sourceStatus={actualsFreshness?.status} onPeriodChange={range=>setFinanceRange(previous=>previous.from===range.from&&previous.to===range.to?previous:{preset:'custom',...range})} projection={cashForecastProjection} today={getHouseholdDateKey()} onAccounts={()=>setView('accounts')} onForecast={()=>setView('calendar')}/></Suspense>
 
           <button
             type="button"
