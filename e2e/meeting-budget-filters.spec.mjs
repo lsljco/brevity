@@ -20,3 +20,23 @@ test('meeting monthly budgets filter actuals and preserve unclassified spending'
  await panel.getByLabel('Budget category filter').selectOption('all');await panel.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('budget-actual.png'),fullPage:true})
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false)
 })
+
+test('existing category budget name is editable without replacing its category identity',async({page},info)=>{
+ await mockBackend(page)
+ const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date()),month=date.slice(0,7)
+ const accounts=[{id:'a1',name:'Operating',type:'checking',balance:24000,plaidAccountId:'bank'}]
+ const values={lslj_finance_v9:{calendarDataVersion:6,accounts,transactions:[]},lslj_budget_v1:{categoryLimits:{food:{accountId:'a1',month,category:'Food',amount:100},utilities:{accountId:'a1',month,category:'Utilities',amount:100}}},plaid_actuals_cache:[{id:'food',accountId:'bank',date,name:'Food purchase',category:'Food',amount:65},{id:'utilities',accountId:'bank',date,name:'Electric utility',category:'Utilities',amount:110},{id:'unclassified',accountId:'bank',date,name:'Unknown purchase',category:'Uncategorized',amount:40},{id:'income',accountId:'bank',date,name:'Payroll',category:'Income',amount:-2000}]}
+ await page.route('**/.netlify/functions/household-state*',r=>r.fulfill({json:{records:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt:new Date().toISOString()}])),serverTime:new Date().toISOString()}}))
+ await page.goto('/')
+ const menu=async()=>{if(info.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()}
+ await menu();await page.getByRole('button',{name:'Finance',exact:true}).click();await menu();await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Budget',exact:true}).click()
+ if(info.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ const section=page.getByRole('region',{name:'Category budget allocation'})
+ await section.getByRole('button',{name:'Edit Food budget',exact:true}).click()
+ const editor=page.getByRole('form',{name:'Category budget settings'})
+ await editor.getByLabel('Category name').fill('Family food budget')
+ await expect(editor.getByLabel('Category name')).toHaveValue('Family food budget')
+ await expect(editor.getByLabel('Category budget ($)',{exact:true})).toHaveValue('100')
+ await editor.getByRole('button',{name:'Cancel',exact:true}).click()
+ await expect(section.getByRole('button',{name:'Edit Food budget',exact:true})).toBeVisible()
+})

@@ -1398,3 +1398,10 @@ test('a full year of category budgets retains every reviewed month',()=>{
  events.push(first.prepared[0].after)
  await assert.rejects(prepare('first-action'),{code:'VERSION_CONFLICT'})
  })
+test('category budget rename survives action review validation',()=>{
+ const operation={type:'budget.update',targetId:'category-budget:test',description:'Rename category budget',payload:{lineId:'category-budget:test',accountId:'a',category:'Credit Cards',displayName:'Card payments',categoryLimit:true,direction:'expense',lineName:'Credit Cards',year:2026,month:10,value:300,forecastAllocation:300}}
+ const proposal=normalizeActionProposal({summary:'Rename budget',operations:[operation]},{member:'Larry',role:'admin'})
+ assert.equal(proposal.operations[0].payload.displayName,'Card payments')
+ assert.equal(proposal.operations[0].payload.category,'Credit Cards')
+ assert.throws(()=>normalizeActionProposal({operations:[{...operation,payload:{...operation.payload,displayName:' '}}]},{member:'Larry',role:'admin'}),/name/)
+})
