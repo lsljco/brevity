@@ -28,10 +28,10 @@ export default function SortableFinancialTable({children, onSortChange, ...props
   const toggle = column => changeSort(sort?.column === column ? sort.direction === 'asc' ? {column,direction:'desc'} : null : {column,direction:'asc'})
   const notice = sort && <span className="financial-sort-notice">Sorted by {label(sort.column)} · {sort.direction==='asc'?'ascending':'descending'} <button type="button" onClick={()=>changeSort(null)}>Restore original order</button></span>
   return <table {...props} className={`financial-sort-table ${props.className||''}`}>
-    {notice&&!sections.some(section=>section?.type==='caption')&&<caption>{notice}</caption>}
+    {notice&&!sections.some(section=>section?.type==='caption')&&<caption className="financial-sort-caption">{notice}</caption>}
     {sections.map((section,index) => {
       if (!isValidElement(section)) return section
-      if(section.type==='caption'&&notice)return cloneElement(section,{},section.props.children,notice)
+      if(section.type==='caption'&&notice)return cloneElement(section,{className:`financial-sort-caption ${section.props.className||''}`},section.props.children,notice)
       if (section.type === 'thead') return cloneElement(section,{key:section.key||index},flatten(section.props.children).map(row => row?.type !== 'tr' ? row : cloneElement(row,{},cells(row).map((cell,column) => {
         const title = label(column)
         if (!title || /^(?:actions?|review|edit|include|select)$/i.test(title) || Number(cell.props.colSpan)>1) return cell
