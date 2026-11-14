@@ -79,11 +79,11 @@ function monthsFor(period){
   for(let d=new Date(start.getFullYear(),start.getMonth(),1);d<=end;d=new Date(d.getFullYear(),d.getMonth()+1,1))months.push({year:d.getFullYear(),month:d.getMonth(),key:toISO(d).slice(0,7)})
   return months
 }
-function budgetReport({scheduled,budget,accounts,period,posted,legacyYear,legacyAccountId}){
-  const lines=buildBudgetLines(scheduled.filter(t=>!isTransferTransaction(t)),budget,{accountIds:new Set(accounts.map(a=>a.id))}).filter(l=>l.direction==='expense')
+export function budgetReport({scheduled,budget,accounts,period,posted,legacyYear,legacyAccountId,direction='expense'}){
+  const lines=buildBudgetLines(scheduled.filter(t=>!isTransferTransaction(t)),budget,{accountIds:new Set(accounts.map(a=>a.id))}).filter(l=>l.direction===direction)
   const owners=buildLegacyBudgetOwners(lines),months=monthsFor(period),categories=new Map()
   for(const line of lines){
-    const category=budgetCategory({cat:line.category,amount:1})
+    const category=direction==='income'?'Income':line.category||'Uncategorized'
     const row=categories.get(category)||{category,budget:0,missingTargets:0,planningBaseline:0,missingPlan:false}
     for(const m of months){
       const target=budgetTargetForLine({budget,line,year:m.year,month:m.month,legacyYear,legacyAccountId,legacyOwners:owners})
@@ -94,9 +94,9 @@ function budgetReport({scheduled,budget,accounts,period,posted,legacyYear,legacy
     }
     categories.set(category,row)
   }
-  for(const t of posted.filter(t=>Number(t.amount)>=0)){
-    const cat=budgetCategory(t)||'Other',row=categories.get(cat)||{category:cat,budget:0,missingTargets:1,planningBaseline:null,missingPlan:true}
-    row.posted=(row.posted||0)+Number(t.amount);categories.set(cat,row)
+  for(const t of posted.filter(t=>direction==='income'?Number(t.amount)<0&&isRealizedIncomeTransaction(t):Number(t.amount)>=0)){
+    const cat=direction==='income'?'Income':budgetCategory(t)||'Uncategorized',row=categories.get(cat)||{category:cat,budget:0,missingTargets:1,planningBaseline:null,missingPlan:true}
+    row.posted=(row.posted||0)+Math.abs(Number(t.amount));categories.set(cat,row)
   }
   return [...categories.values()].map(r=>{const {missingPlan,...report}=r;return {...report,planningBaseline:missingPlan?null:round(r.planningBaseline),budget:r.missingTargets?null:round(r.budget),posted:round(r.posted||0),remaining:r.missingTargets?null:round(r.budget-(r.posted||0))}}).sort((a,b)=>b.posted-a.posted)
 }
