@@ -1,4 +1,4 @@
-import {Children, Fragment, cloneElement, isValidElement, useState} from 'react'
+import {Children, Fragment, cloneElement, isValidElement, useState, useEffect} from 'react'
 import {sortFinancialSections} from './financialSort.js'
 import './SortableFinancialTable.css'
 const flatten = children => Children.toArray(children).flatMap(child => isValidElement(child) && child.type === Fragment ? flatten(child.props.children) : [child])
@@ -23,6 +23,8 @@ export default function SortableFinancialTable({children, onSortChange, ...props
   const sections = flatten(children)
   const head = sections.find(child => child?.type === 'thead')
   const headers = cells(flatten(head?.props.children).find(child=>child?.type==='tr'))
+  const headerSignature=headers.map(header=>textOf(header)).join('|')
+  useEffect(()=>{setSort(null);onSortChange?.(false)},[headerSignature])
   const label = index => textOf(headers[index]).trim()
   const changeSort = next => {setSort(next);onSortChange?.(Boolean(next))}
   const toggle = column => changeSort(sort?.column === column ? sort.direction === 'asc' ? {column,direction:'desc'} : null : {column,direction:'asc'})
