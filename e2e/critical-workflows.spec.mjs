@@ -672,14 +672,11 @@ test('Projected Expenses includes one-time calendar obligations in the selected 
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Dashboard',exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
-  const card=page.locator('.kpi-card').filter({hasText:'Projected Expenses'})
-  await expect(card).toContainText('$40.00')
-  await expect(card).toContainText('1 projected item')
-  await card.click()
-  await expect(page.getByText('Projected expenses',{exact:true})).toBeVisible()
-  await expect(page.getByText('Planned groceries',{exact:true})).toBeVisible()
-  await expect(page.getByText('Expected Expenses',{exact:true})).toBeVisible()
-  await expect(page.getByText('$40.00',{exact:true}).first()).toBeVisible()
+  const panel=page.getByRole('region',{name:'Monthly cash flow outlook'})
+  await expect(panel.getByLabel('Cash flow view')).toHaveValue('outlook')
+  await panel.getByRole('button',{name:'View expected full-month expenses details',exact:true}).click()
+  await expect(panel.getByRole('cell',{name:'Planned groceries',exact:true})).toBeVisible()
+  await expect(panel.getByRole('cell',{name:'-$40.00',exact:true})).toBeVisible()
 })
 
 test('Transactions keep account and timeframe scope visible with filtered totals',async({page},testInfo)=>{
@@ -2533,7 +2530,7 @@ test('Finance hero cards keep graphs and captions separate and expose a page scr
  await openMenuIfMobile(page,testInfo)
  await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Dashboard',exact:true}).click()
  await closeMenuIfMobile(page,testInfo)
- await expect(page.locator('.finance-root .kpi-card')).toHaveCount(5)
+ await expect(page.locator('.finance-root .month-outlook article')).toHaveCount(6)
  const dashboardLayout=await page.locator('.dash-header').evaluate(e=>{const greeting=e.firstElementChild.getBoundingClientRect(),actions=e.querySelector('.dash-actions').getBoundingClientRect();return {column:getComputedStyle(e).flexDirection==='column',greetingHeight:greeting.height,gap:actions.top-greeting.bottom}})
  if(dashboardLayout.column){expect(dashboardLayout.greetingHeight).toBeLessThan(150);expect(dashboardLayout.gap).toBeLessThan(60)}
  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-app-refresh-started',{detail:{bankUpdateRequested:true}})))
@@ -2541,10 +2538,10 @@ test('Finance hero cards keep graphs and captions separate and expose a page scr
  await expect(page.getByRole('button',{name:'Syncing…',exact:true})).toHaveCount(0)
  await expect(page.locator('.plaid-connect')).toContainText('Bank refresh timed out (504).')
 
- for(const card of await page.locator('.finance-root .kpi-card').all()){
-  const boxes=await card.evaluate(e=>Object.fromEntries(['kpi-sub','kpi-sparkline','kpi-trend'].map(name=>{const r=e.querySelector(`.${name}`).getBoundingClientRect();return[name,{top:r.top,bottom:r.bottom}]})))
-  expect(boxes['kpi-sparkline'].top).toBeGreaterThanOrEqual(boxes['kpi-sub'].bottom)
-  expect(boxes['kpi-trend'].top).toBeGreaterThanOrEqual(boxes['kpi-sparkline'].bottom)
+ for(const card of await page.locator('.finance-root .month-outlook article').all()){
+  const boxes=await card.evaluate(e=>Object.fromEntries(['h3','strong','small','button'].map(name=>{const r=e.querySelector(name).getBoundingClientRect();return[name,{top:r.top,bottom:r.bottom}]})))
+  expect(boxes.small.top).toBeGreaterThanOrEqual(boxes.strong.bottom-1)
+  expect(boxes.button.top).toBeGreaterThanOrEqual(boxes.small.bottom-1)
  }
  await expect.poll(()=>page.locator('.app-main').evaluate(e=>e.scrollWidth-e.clientWidth)).toBeLessThanOrEqual(1)
  await page.screenshot({path:`test-results/finance-hero-${testInfo.project.name}.png`,fullPage:true})
