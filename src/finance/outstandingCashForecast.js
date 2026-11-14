@@ -2,7 +2,7 @@ import {expenseSourceMatches,incomeSourceMatches,withinCashMatchTolerance} from 
 import {applyBudgetAllowances} from './budgetAllowances.js'
 import { buildProjection, today0, toISO, parseISODate, addDays } from './projection.js'
 import { buildUniquePlaidAccountMap } from './calendarSemantics.js'
-import { normalizeMerchantName } from './financialTruth.js'
+import { normalizeMerchantName, matchesExpenseDescriptor } from './financialTruth.js'
 import { approvedReconciliationMatches } from './autoReconciliation.js'
 
 const cents = value => Math.round(Number(value || 0) * 100)
@@ -64,6 +64,7 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     if (!exactDate && candidate.leg.amount !== cents(actual.amount) && !payrollIdentity) return false
     if (candidate.plan.vendorId && actual.vendorId) return candidate.plan.vendorId === actual.vendorId
     if (exactDate && candidate.leg.amount === cents(actual.amount) && genericPayrollMatch(candidate.plan, actual)) return true
+    if (matchesExpenseDescriptor(candidate.plan, actual, candidate.date)) return true
     const name = normalizeMerchantName(candidate.plan)
     const expenseIdentity=expenseSourceMatches(candidate.plan,actual)&&withinCashMatchTolerance(candidate.plan,actual)
     return Boolean(name && (name === normalizeMerchantName(actual) || expenseIdentity || payrollIdentity || (exactDate&&incomeSourceMatches(candidate.plan,actual,{allowContributor:false}))))
