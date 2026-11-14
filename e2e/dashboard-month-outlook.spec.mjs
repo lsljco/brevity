@@ -1,0 +1,36 @@
+import {test,expect} from '@playwright/test'
+import {mockBackend} from './home-fixtures.mjs'
+test('dashboard combines actuals with remaining forecast and switches comparison views',async({page},info)=>{
+ await mockBackend(page)
+ const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date()),month=date.slice(0,7)
+ const accounts=[{id:'a1',name:'Operating',type:'checking',balance:1000,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking',plaidCurrentBalance:1000}]
+ const transactions=[{id:'salary',acct:'a1',name:'Employer payroll',type:'income',amount:2000,freq:'once',start:date},{id:'bill',acct:'a1',name:'Utility',type:'expense',amount:300,freq:'once',start:date}]
+ const actuals=[{id:'income',accountId:'bank',date,name:'Other receipt',amount:-500},{id:'expense',accountId:'bank',date,name:'Shopping',amount:820.61}]
+ const values={lslj_finance_v9:{calendarDataVersion:6,accounts,transactions},plaid_actuals_cache:actuals}
+ await page.route('**/.netlify/functions/household-state*',r=>r.fulfill({json:{records:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt:new Date().toISOString()}])),serverTime:new Date().toISOString()}}))
+ await page.route('**/.netlify/functions/plaid-transactions*',r=>r.fulfill({json:{transactions:actuals,errors:[]}}))
+ await page.goto('/')
+ const menu=async()=>{if(info.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()}
+ await menu();await page.getByRole('button',{name:'Finance',exact:true}).click();await menu();await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Dashboard',exact:true}).click()
+ if(info.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ const panel=page.getByRole('region',{name:'Monthly cash flow outlook'})
+ await expect(panel.getByLabel('Cash flow view')).toHaveValue('outlook')
+ await expect(panel.getByLabel('Outlook month')).toHaveValue(month)
+ await expect(panel.locator('article').filter({hasText:'Expected full-month cash flow'})).toContainText('$1,379.39')
+ await panel.getByLabel('Cash flow view').selectOption('actual')
+ await expect(panel.locator('article').filter({hasText:'Actual cash flow to date'})).toContainText('-$320.61')
+ await panel.getByRole('button',{name:'View actual expenses to date details',exact:true}).click()
+ await expect(panel.getByRole('cell',{name:'Shopping',exact:true})).toBeVisible()
+ await expect(panel.getByRole('cell',{name:'Utility',exact:true})).toHaveCount(0)
+ await panel.getByLabel('Cash flow view').selectOption('compare')
+ await expect(panel.getByRole('columnheader',{name:'Remaining forecast',exact:true})).toBeVisible()
+ await expect(panel.getByRole('row',{name:/Cash flow/})).toContainText('$1,700.00')
+ await panel.getByLabel('Outlook detail activity').selectOption('all')
+ await expect(panel.getByRole('cell',{name:'Shopping',exact:true})).toBeVisible()
+ await panel.evaluate(el=>el.scrollIntoView({block:"start"}));await page.screenshot({path:info.outputPath('monthly-outlook.png'),fullPage:true})
+ await page.evaluate(()=>document.documentElement.setAttribute('data-theme','light'))
+ await page.screenshot({path:info.outputPath('monthly-outlook-light.png'),fullPage:true})
+ await panel.getByLabel('Outlook month').fill('2026-10')
+ await expect(page.getByLabel('Dashboard reporting period')).toContainText('Oct')
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false)
+})

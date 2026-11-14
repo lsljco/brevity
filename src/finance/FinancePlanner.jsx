@@ -1,3 +1,4 @@
+const DashboardMonthOutlook = lazy(() => import('./DashboardMonthOutlook.jsx'))
 const MeetingBudgetActual = lazy(() => import('./MeetingBudgetActual.jsx'))
 import {operatingSpendingSources} from './householdCashControls.js'
 import './BudgetCoverage.css'
@@ -2384,7 +2385,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }}>
       <i className="ti ti-filter" style={{ fontSize: 13, color: 'var(--brevity-gold)', flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brevity-muted)', marginRight: 4, flexShrink: 0 }}>Accounts · select multiple</span>
-      {!['budget','calendar','overview','daily-alignment'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
+      {!['dashboard','budget','calendar','overview','daily-alignment'].includes(view) && <span className="finance-current-scope" aria-label={`Current Finance scope: ${financeScopeSummary}`} title={timeframeLabel(financeRange)}>{financePresetLabel}</span>}
 
       {/* All pill */}
       <button
@@ -2420,7 +2421,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
         )
       })}
 
-      {!['calendar','overview','daily-alignment'].includes(view) && (
+      {!['dashboard','calendar','overview','daily-alignment'].includes(view) && (
         <>
           {/* Cash Forecast owns its month-scoped bank-activity toggle. */}
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', margin: '0 6px', flexShrink: 0 }} />
@@ -2466,7 +2467,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
 
       {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar'].includes(view) && AccountFilterBar}
       {!isForm&&['transactions','vendors','recurring','reporting'].includes(view)&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
-      {!formView && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {!formView && view !== 'dashboard' && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
         <div role="status" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10, margin:'10px 28px 0', padding:'10px 13px', borderRadius:10, border:'1px solid rgba(232,150,122,.30)', background:'rgba(232,150,122,.08)', color:'var(--soft-white)', fontSize:11, lineHeight:1.45 }}>
           <span><strong>Account-linkage status:</strong> {unmappedActuals.length} bank transaction{unmappedActuals.length === 1 ? '' : 's'} across all available history {unmappedActuals.length === 1 ? 'is' : 'are'} not linked to a unique Brevity account. {unmappedActuals.length === 1 ? 'It is' : 'They are'} excluded from account balances, reconstruction, and Cash Forecast totals; use the all-bank-activity ledger to review {unmappedActuals.length === 1 ? 'it' : 'them'}.</span>
@@ -2491,7 +2492,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           <div className="dash-header">
             <div>
               <div className="dash-greeting">{getHouseholdGreeting()}, {currentMember}</div>
-              <div className="dash-date">{todayLabel}</div><p aria-label="Dashboard reporting period">{financePresetLabel} · {timeframeLabel(financeRange)}</p>
+              <div className="dash-date">{todayLabel}</div><p aria-label="Dashboard reporting period">{timeframeLabel(financeRange)}</p>
             </div>
             <div className="dash-actions">
               {!readOnly && <Suspense fallback={<p role="status">Loading bank controls…</p>}><PlaidConnect onAccountsSync={handlePlaidSync} onTransactionsSync={() => fetchActuals({ requestBankUpdate:true })} onSyncAvailableTransactions={() => fetchActuals({ requestBankUpdate:false })} onRecoverTransactions={() => fetchActuals({ recoverHistory:true })} onReviewAccountLinks={() => setView('accounts')} /></Suspense>}
@@ -2506,35 +2507,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             </div>
           </div>
 
-          {/* ── 5 KPI Cards ── */}
-          <div className="kpi-grid">
-            {[
-              { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'Verified balance history', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
-              { label: showActuals ? 'Realized Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(isRealizedIncomeTransaction).length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted income · cumulative' : 'Expected income · cumulative', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', realizedIncomeOnly:true, label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
-              { label: showActuals ? 'Posted Expenses' : 'Projected Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${postedTimeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} posted transactions` : `${projectedExpenseSources.length} projected item${projectedExpenseSources.length === 1 ? '' : 's'}`, trend:showActuals ? 'Posted expenses · cumulative' : 'Projected expenses · cumulative', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', postedOnly:true, label:'Posted expenses' }) : openScheduledTransactions({ direction:'expense', label:'Projected expenses' }) },
-              { label: showActuals ? 'Posted Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Posted cash inflows minus posted outflows; transfers excluded' : 'Expected income minus expected outflow', trend:'Cumulative cash flow', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ excludeTransfers:true, postedOnly:true, label:'Posted cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
-              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'Daily balance · next 90 days', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) { setSelDay(toISO(minDay)); setCalMonth(minDay.getMonth()); setCalYear(minDay.getFullYear()) } setView('calendar') } },
-            ].map((kpi, i) => {
-              const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
-              return (
-                <div key={i} className="kpi-card" role="button" tabIndex={0} title="View what makes up this total" onClick={kpi.open} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') kpi.open() }} style={{ cursor: 'pointer' }}>
-                  <div className="kpi-icon"><i className={`ti ${kpi.icon}`} /></div>
-                  <div className="kpi-label">{kpi.label}</div>
-                  <div className="kpi-value">{kpi.value}</div>
-                  <div className="kpi-sub">{kpi.sub}</div>
-                  {/* Full-width sparkline flush to card bottom */}
-                  <div className="kpi-sparkline" role="img" aria-label={`${kpi.label}: ${kpi.trend}${i > 0 && i < 4 ? ` · ${financeRange.from} to ${financeRange.to}` : ''}${kpi.spark.length > 1 ? ` · ${kpi.spark.map(value=>fmtMoney(value)).join(', ')}` : ': not enough history'}`}>
-                    {kpi.spark.length > 1 ? <Sparkline data={kpi.spark} color={spkColor} height={44} fullWidth /> : <small>Not enough history for a trend</small>}
-                  </div>
-                  <div className="kpi-trend">
-                    <span className="kpi-trend-val">{kpi.spark.length < 2 ? '—' : kpi.spark.at(-1) > kpi.spark[0] ? '↑' : kpi.spark.at(-1) < kpi.spark[0] ? '↓' : '→'}</span>
-                    <span className="kpi-trend-sep">·</span>
-                    <span>{kpi.trend}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <Suspense fallback={<p>Loading monthly outlook…</p>}><DashboardMonthOutlook accounts={cashLedger.forecastAccounts} scheduled={forecastScope.transactions} actuals={cashForecastActuals} sourceStatus={actualsFreshness?.status} onPeriodChange={range=>setFinanceRange(previous=>previous.from===range.from&&previous.to===range.to?previous:{preset:'custom',...range})} projection={cashForecastProjection} today={getHouseholdDateKey()} onAccounts={()=>setView('accounts')} onForecast={()=>setView('calendar')}/></Suspense>
 
           <button
             type="button"

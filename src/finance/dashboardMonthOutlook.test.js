@@ -1,0 +1,15 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {dashboardMonthOutlook} from './dashboardMonthOutlook.js'
+const accounts=[{id:'a',type:'checking',plaidType:'depository',plaidSubtype:'checking',name:'Cash',balance:1000,plaidAccountId:'bank',plaidCurrentBalance:1000}]
+const plans=[{id:'salary',name:'Employer payroll',type:'income',amount:2000,acct:'a',freq:'once',start:'2026-11-20'},{id:'bill',name:'Utility',type:'expense',amount:300,acct:'a',freq:'once',start:'2026-11-22'}]
+const row=(id,date,amount,name,pending=false)=>({id,date,amount,name,pending,accountId:'bank'})
+const model=(actuals,scheduled=plans)=>dashboardMonthOutlook({accounts,scheduled,actuals,month:'2026-11',today:'2026-11-14'})
+test('combines posted actuals with the remaining monthly schedule',()=>{const m=model([row('income','2026-11-03',-500,'Old salary'),row('expense','2026-11-04',820.61,'Purchase')]);assert.equal(m.actual.net,-320.61);assert.equal(m.remaining.net,1700);assert.equal(m.outlook.net,1379.39)})
+test('early posted income replaces its matching future occurrence',()=>{const m=model([row('income','2026-11-14',-2000,'Employer payroll')]);assert.equal(m.outlook.income,2000);assert.equal(m.remaining.income,0)})
+test('pending matched charge counted once; overdue stays explicit',()=>{const scheduled=[{...plans[1],start:'2026-11-14'},{...plans[0],start:'2026-11-01'}];const m=model([row('pending','2026-11-14',300,'Utility',true)],scheduled);assert.equal(m.outlook.expense,300);assert.equal(m.overdue.length,1);assert.equal(m.endBalance,null)})
+test('posted replaces superseded pending; transfers excluded',()=>{const p=row('pending','2026-11-14',300,'Utility',true),a={...row('posted','2026-11-14',300,'Utility'),pendingTransactionId:'pending'};const m=model([p,a,{...row('transfer','2026-11-14',900,'Transfer'),type:'transfer'}],[{...plans[1],start:'2026-11-14'}]);assert.equal(m.outlook.expense,300);assert.equal(m.remaining.expense,0)})
+test('past matched expenses use actual amounts and do not remain overdue',()=>{const m=model([row('paid','2026-11-03',350,'Utility')],[{...plans[1],start:'2026-11-03'}]);assert.equal(m.outlook.expense,350);assert.equal(m.remaining.expense,0);assert.equal(m.overdue.length,0)})
+test('duplicate bank IDs and other accounts do not inflate actuals',()=>{const a=row('paid','2026-11-03',350,'Utility');const m=model([a,a,{...row('outside','2026-11-04',900,'Purchase'),accountId:'other'}],[]);assert.equal(m.actual.expense,350)})
+test('historical month reports posted activity without rolling overdue plans forward',()=>{const m=dashboardMonthOutlook({accounts,scheduled:plans,actuals:[row('paid','2026-11-03',350,'Utility')],month:'2026-11',today:'2026-12-14'});assert.equal(m.outlook.net,-350);assert.equal(m.remaining.net,0);assert.equal(m.endBalance,null)})
+test('selected month excludes activity outside its dates',()=>{const m=model([row('prior','2026-10-31',-900,'Payroll'),row('future','2026-12-01',-900,'Payroll')],[]);assert.equal(m.actual.income,0);assert.equal(m.outlook.income,0)})
