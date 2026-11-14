@@ -4,7 +4,7 @@ test('meeting monthly budgets filter actuals and preserve unclassified spending'
  await mockBackend(page)
  const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date()),month=date.slice(0,7)
  const accounts=[{id:'a1',name:'Operating',type:'checking',balance:24000,plaidAccountId:'bank'}]
- const values={lslj_finance_v9:{calendarDataVersion:6,accounts,transactions:[]},lslj_budget_v1:{categoryLimits:{food:{accountId:'a1',month,category:'Food',amount:100},utilities:{accountId:'a1',month,category:'Utilities',amount:100}}},plaid_actuals_cache:[{id:'food',accountId:'bank',date,name:'Food purchase',category:'Food',amount:65},{id:'utilities',accountId:'bank',date,name:'Electric utility',category:'Utilities',amount:110},{id:'unclassified',accountId:'bank',date,name:'Unknown purchase',category:'Uncategorized',amount:40},{id:'income',accountId:'bank',date,name:'Payroll',category:'Income',amount:-2000}]}
+ const values={lslj_finance_v9:{calendarDataVersion:6,accounts,transactions:[{id:'weekly-food',acct:'a1',name:'Food purchase',cat:'Food',type:'expense',amount:100,freq:'weekly',start:date}]},lslj_budget_v1:{categoryLimits:{food:{accountId:'a1',month,category:'Food',amount:100},utilities:{accountId:'a1',month,category:'Utilities',amount:100}}},plaid_actuals_cache:[{id:'food',accountId:'bank',date,name:'Food purchase',category:'Food',amount:65},{id:'utilities',accountId:'bank',date,name:'Electric utility',category:'Utilities',amount:110},{id:'unclassified',accountId:'bank',date,name:'Unknown purchase',category:'Uncategorized',amount:40},{id:'income',accountId:'bank',date,name:'Payroll',category:'Income',amount:-2000}]}
  await page.route('**/.netlify/functions/household-state*',r=>r.fulfill({json:{records:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt:new Date().toISOString()}])),serverTime:new Date().toISOString()}}))
  await page.goto('/')
  const menu=async()=>{if(info.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()}
@@ -17,7 +17,14 @@ test('meeting monthly budgets filter actuals and preserve unclassified spending'
  await panel.getByLabel('Budget category filter').selectOption('50');await expect(panel.getByRole('button',{name:'Food',exact:true})).toBeVisible()
  await panel.getByLabel('Budget activity').selectOption('income');await panel.getByLabel('Budget category filter').selectOption('all');await expect(panel).toContainText('$2,000.00');await expect(panel).toContainText('Unknown purchase')
  await panel.getByLabel('Budget activity').selectOption('expense');await panel.getByLabel('Budget category filter').selectOption('custom');await panel.getByLabel('More than (%)').fill('110');await expect(panel).toContainText('No categories match')
- await panel.getByLabel('Budget category filter').selectOption('all');await panel.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('budget-actual.png'),fullPage:true})
+ await panel.getByLabel('Budget category filter').selectOption('all')
+ await panel.getByLabel('Budget period',{exact:true}).selectOption('weekly')
+ await expect(panel).toContainText('Weekly cash forecast plan')
+ await expect(panel).toContainText('65.0%')
+ await panel.getByLabel('Group by').selectOption('item')
+ await expect(panel.getByRole('button',{name:'Food purchase',exact:true})).toBeVisible()
+ await panel.getByLabel('Budget period',{exact:true}).selectOption('monthly')
+ await panel.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('budget-actual.png'),fullPage:true})
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2)).toBe(false)
 })
 
@@ -25,12 +32,13 @@ test('existing category budget name is editable without replacing its category i
  await mockBackend(page)
  const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date()),month=date.slice(0,7)
  const accounts=[{id:'a1',name:'Operating',type:'checking',balance:24000,plaidAccountId:'bank'}]
- const values={lslj_finance_v9:{calendarDataVersion:6,accounts,transactions:[]},lslj_budget_v1:{categoryLimits:{food:{accountId:'a1',month,category:'Food',amount:100},utilities:{accountId:'a1',month,category:'Utilities',amount:100}}},plaid_actuals_cache:[{id:'food',accountId:'bank',date,name:'Food purchase',category:'Food',amount:65},{id:'utilities',accountId:'bank',date,name:'Electric utility',category:'Utilities',amount:110},{id:'unclassified',accountId:'bank',date,name:'Unknown purchase',category:'Uncategorized',amount:40},{id:'income',accountId:'bank',date,name:'Payroll',category:'Income',amount:-2000}]}
+ const values={lslj_finance_v9:{calendarDataVersion:6,accounts,transactions:[{id:'weekly-food',acct:'a1',name:'Food purchase',cat:'Food',type:'expense',amount:100,freq:'weekly',start:date}]},lslj_budget_v1:{categoryLimits:{food:{accountId:'a1',month,category:'Food',amount:100},utilities:{accountId:'a1',month,category:'Utilities',amount:100}}},plaid_actuals_cache:[{id:'food',accountId:'bank',date,name:'Food purchase',category:'Food',amount:65},{id:'utilities',accountId:'bank',date,name:'Electric utility',category:'Utilities',amount:110},{id:'unclassified',accountId:'bank',date,name:'Unknown purchase',category:'Uncategorized',amount:40},{id:'income',accountId:'bank',date,name:'Payroll',category:'Income',amount:-2000}]}
  await page.route('**/.netlify/functions/household-state*',r=>r.fulfill({json:{records:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt:new Date().toISOString()}])),serverTime:new Date().toISOString()}}))
  await page.goto('/')
  const menu=async()=>{if(info.project.name==='iphone'&&!(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Menu',exact:true}).click()}
  await menu();await page.getByRole('button',{name:'Finance',exact:true}).click();await menu();await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Budget',exact:true}).click()
  if(info.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
+ const comparison=page.getByRole('region',{name:'Budget versus actual'});await comparison.getByLabel('Budget period',{exact:true}).selectOption('weekly');await expect(comparison).toContainText('Weekly cash forecast plan')
  const section=page.getByRole('region',{name:'Category budget allocation'})
  await section.getByRole('button',{name:'Edit Food budget',exact:true}).click()
  const editor=page.getByRole('form',{name:'Category budget settings'})
