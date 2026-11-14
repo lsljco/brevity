@@ -100,3 +100,10 @@ button.brevity-assistant-launcher>i{display:none!important}
 .brevity-action-review.is-standalone:not([open]){display:none}
 .brevity-action-review.is-standalone::backdrop{background:rgba(0,0,0,.65)}
 .brevity-action-review.is-standalone>section{max-height:88dvh}
+
+/* Keep long bank descriptions inside the review on narrow screens. */
+.brevity-action-review,.brevity-action-review>section{box-sizing:border-box;min-width:0;max-width:100%}
+.brevity-action-review>section{width:100%;overflow-wrap:anywhere}
+.brevity-action-review header>div,.brevity-action-review article,.brevity-action-fields,.brevity-action-fields>div,.brevity-action-fields dd{min-width:0;max-width:100%}
+.brevity-action-review h3,.brevity-action-review article>strong{white-space:normal;overflow-wrap:anywhere}
+.brevity-action-review footer>button{max-width:100%}

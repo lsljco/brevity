@@ -2784,7 +2784,7 @@ test('Meal Ideas compares ingredients, images and per-serving macros then saves 
  await expect(card.getByRole('button',{name:'Plan this meal with Brevity',exact:true})).toBeVisible()
 })
 
-test('failed confirmed apply is visible inside review and can be retried',async({page})=>{
+test('button approval needs no typing and failed apply can be retried',async({page},testInfo)=>{
  let attempts=0
  await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',async route=>{
   const body=route.request().postDataJSON();expect(body.confirmation).toBe('CONFIRM');attempts++
@@ -2794,8 +2794,11 @@ test('failed confirmed apply is visible inside review and can be retried',async(
  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('brevity-action-review-requested',{detail:{proposal:{id:'apply-test',summary:'Remove one reviewed schedule occurrence',risk:'strong-confirmation',operations:[{id:'op-1',description:'Cancel one occurrence only',domain:'planning',risk:'strong-confirmation',type:'household.schedule.block.delete',targetDate:'2026-10-10',targetId:'test-block',payload:{},defaultScope:'this-item',allowedScopes:['this-item']}]}}})))
  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
  const apply=review.getByRole('button',{name:'Apply approved changes'})
- await expect(apply).toBeDisabled()
- await review.getByPlaceholder('CONFIRM').fill('CONFIRM')
+ await expect(review.getByPlaceholder('CONFIRM')).toHaveCount(0)
+ await expect(apply).toBeEnabled()
+ expect(attempts).toBe(0)
+ await expect(review).toHaveJSProperty('scrollWidth',await review.evaluate(el=>el.clientWidth))
+ await page.screenshot({path:testInfo.outputPath('button-approval.png'),fullPage:true})
  await apply.click()
  await expect(review.getByRole('alert')).toContainText('Household data changed after your review.')
  await expect(apply).toBeEnabled()

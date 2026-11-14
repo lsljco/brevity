@@ -1,0 +1,30 @@
+name: Action review interface
+on:
+  pull_request:
+    paths:
+      - 'src/assistant/ActionReview.jsx'
+      - 'src/assistant/BrevityAssistant.css'
+      - 'e2e/critical-workflows.spec.mjs'
+      - '.github/workflows/action-review-check.yml'
+permissions:
+  contents: read
+jobs:
+  action-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npx playwright test critical-workflows --grep "button approval needs no typing" --workers=4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: action-review-interface
+          path: test-results/
