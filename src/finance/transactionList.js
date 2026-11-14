@@ -100,6 +100,8 @@ export function sortAndFilterTransactions(transactions = [], options = {}) {
     .sort((left, right) => {
       let comparison = 0
       if(settings.sortBy==='vendor')comparison=String(left.vendorName||'Unassigned').localeCompare(String(right.vendorName||'Unassigned'),undefined,{sensitivity:'base'})
+      else if (settings.sortBy === 'category') comparison = String(left.category||left.cat||'Uncategorized').localeCompare(String(right.category||right.cat||'Uncategorized'))
+      else if (settings.sortBy === 'status') comparison = String(left.pending?'Pending':left.date?'Posted':'Projected').localeCompare(String(right.pending?'Pending':right.date?'Posted':'Projected'))
       else if (settings.sortBy === 'description') comparison = transactionVisibleName(left).localeCompare(transactionVisibleName(right), undefined, { sensitivity: 'base' })
       else if (settings.sortBy === 'date') {
         const leftDates = transactionOccurrenceDates(left)

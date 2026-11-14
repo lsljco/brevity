@@ -1,3 +1,4 @@
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 import MeetingBudgetActual from './MeetingBudgetActual.jsx'
 import HouseholdCashControls from './HouseholdCashControls.jsx'
 import FinanceExport from './FinanceExport.jsx'
@@ -10,7 +11,7 @@ import FinancePacketIntelligence,{usePacketIntelligence} from './FinancePacketIn
 
 const money=v=>v==null?'Unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v)
 function Table({caption,headers,rows,empty='No records available for this selection.'}){
-  return <div className="fm-packet-table"><table><caption>{caption}</caption><thead><tr>{headers.map(h=><th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((row,i)=><tr key={i}>{row.map((v,j)=><td key={j}>{v}</td>)}</tr>):<tr><td colSpan={headers.length}>{empty}</td></tr>}</tbody></table></div>
+  return <div className="fm-packet-table"><SortableFinancialTable><caption>{caption}</caption><thead><tr>{headers.map(h=><th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((row,i)=><tr key={i}>{row.map((v,j)=><td key={j}>{v}</td>)}</tr>):<tr><td colSpan={headers.length}>{empty}</td></tr>}</tbody></SortableFinancialTable></div>
 }
 export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={},onEdit,onProposeAction,onArchive,readOnly=false,editReadOnly=readOnly,recording=false,commitments=null}){
   const [mode,setMode]=useState('previous'),[now,setNow]=useState(()=>new Date()),[busy,setBusy]=useState(false),[error,setError]=useState('')

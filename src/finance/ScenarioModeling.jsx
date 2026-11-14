@@ -1,3 +1,4 @@
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 import {readScenarioWorkbook} from './scenarioWorkbookImport.js'
 import { calculatePayoffProjection } from './scenarioProjection.js'
 import FinanceExport from './FinanceExport.jsx'
@@ -319,7 +320,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       </div>
 
       <div className="scenario-table-wrap">
-        <table className="scenario-table">
+        <SortableFinancialTable className="scenario-table">
           <thead><tr><th>Description</th><th>Monthly net</th><th>Annual gross</th><th>Income share (net)</th><th>Work</th><th>Employment</th><th>Notes</th><th><span className="sr-only">Review</span></th></tr></thead>
           <tbody>{activeDraft.incomes.map((draftRow, rowIndex) => {
             const row=active.incomes.find(item=>item.id===draftRow.id)
@@ -336,7 +337,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
             <td>{!readOnly && <div className="scenario-row-actions"><button type="button" className="scenario-add" disabled={reviewBusy||!rowChanged} aria-label={`${row ? 'Review changes to' : 'Review addition of'} ${label}`} onClick={() => reviewIncome(draftRow.id)}><i className="ti ti-shield-check"/><span>Review</span></button><button type="button" className="scenario-delete" disabled={reviewBusy} aria-label={`${row ? 'Review removal of' : 'Discard'} ${label}`} onClick={() => reviewRemoveIncome(draftRow.id)}><i className="ti ti-trash"/></button></div>}</td>
           </tr>})}</tbody>
           <tfoot><tr><th>Total</th><th>{money.format(result.monthlyNetIncome)}</th><th>{money.format(result.annualGrossIncome)}</th><th>{result.contribution}%</th><th colSpan="4"/></tr></tfoot>
-        </table>
+        </SortableFinancialTable>
       </div>
     </section>
 
@@ -346,7 +347,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
       {payoff.error ? <p role="alert">{payoff.error}</p> : <>
         <div className="scenario-summary"><SummaryMetric label="Listed debts paid by" value={payoff.payoff}/><SummaryMetric label="Lowest modeled cash" value={money.format(payoff.minimumCash)}/><SummaryMetric label="Unpaid listed liabilities" value={money.format(payoff.unpaid)}/><SummaryMetric label="Ending modeled cash" value={money.format(payoff.endingCash)}/></div>
         <details><summary>Calculation assumptions</summary><ul>{active.source.notes.filter(n => !n.includes('Contribution percentages are retained')).map((n,i)=><li key={i}>{n}</li>)}</ul><p>Total modeled payments: {money.format(payoff.totalPaid)}. Includes annual taxes and listed debt payoffs.</p></details>
-        <details><summary>Calculated cashflow and payoff schedule · {payoff.schedule.length} entries</summary><div className="scenario-table-wrap"><table className="scenario-table"><thead><tr><th>Month</th><th>Item</th><th>Amount</th><th>Balance</th><th>Calculation</th></tr></thead><tbody>{payoff.schedule.map((r,i)=><tr key={i}><td>{r[0].slice(0,7)}</td><td>{r[1]}</td><td>{money.format(r[2])}</td><td>{money.format(r[3])}</td><td>{r[4]}</td></tr>)}</tbody></table></div></details>
+        <details><summary>Calculated cashflow and payoff schedule · {payoff.schedule.length} entries</summary><div className="scenario-table-wrap"><SortableFinancialTable className="scenario-table"><thead><tr><th>Month</th><th>Item</th><th>Amount</th><th>Balance</th><th>Calculation</th></tr></thead><tbody>{payoff.schedule.map((r,i)=><tr key={i}><td>{r[0].slice(0,7)}</td><td>{r[1]}</td><td>{money.format(r[2])}</td><td>{money.format(r[3])}</td><td>{r[4]}</td></tr>)}</tbody></SortableFinancialTable></div></details>
       </>}
     </section>}
 

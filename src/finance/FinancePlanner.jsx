@@ -1,3 +1,5 @@
+import {useFinancialListSort} from './FinancialListSort.jsx'
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 const DashboardMonthOutlook = lazy(() => import('./DashboardMonthOutlook.jsx'))
 const MeetingBudgetActual = lazy(() => import('./MeetingBudgetActual.jsx'))
 import {operatingSpendingSources} from './householdCashControls.js'
@@ -1213,7 +1215,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
 // ── Main Component ──────────────────────────────────────────────────────────────
 function TransactionListControls({ options, onChange, showDateFilters = true, compact = false, categories = [] }) {
   const set = (key, value) => onChange(current => ({ ...current, [key]: value }))
-  const directionLabels = ['description','vendor'].includes(options.sortBy)
+  const directionLabels = ['description','vendor','category','status'].includes(options.sortBy)
     ? [['asc', 'A to Z'], ['desc', 'Z to A']]
     : options.sortBy === 'date'
       ? [['desc', 'Newest first'], ['asc', 'Oldest first']]
@@ -1228,7 +1230,7 @@ function TransactionListControls({ options, onChange, showDateFilters = true, co
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Maximum amount</span><input aria-label="Maximum amount" type="number" min="0" step="0.01" placeholder="Any" value={options.maxAmount} onChange={event => set('maxAmount', event.target.value)} style={inputStyle}/></label>
       {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">From date</span><input aria-label="Filter from date" type="date" value={options.dateFrom} onChange={event => set('dateFrom', event.target.value)} style={inputStyle}/></label>}
       {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">To date</span><input aria-label="Filter to date" type="date" value={options.dateTo} onChange={event => set('dateTo', event.target.value)} style={inputStyle}/></label>}
-      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="vendor">Vendor</option><option value="amount">Amount</option><option value="date">Date</option></select></label>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="vendor">Vendor</option><option value="amount">Amount</option><option value="date">Date</option><option value="category">Category</option><option value="status">Status</option></select></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Order</span><select aria-label="Transaction sort order" value={options.sortDirection} onChange={event => set('sortDirection', event.target.value)} style={inputStyle}>{directionLabels.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <button type="button" onClick={()=>onChange({ ...DEFAULT_TRANSACTION_LIST_OPTIONS })} style={{ ...inputStyle, cursor: 'pointer', color: 'var(--gold)', whiteSpace: 'nowrap' }}>Reset</button>
     </section>
@@ -1264,6 +1266,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const [accountLinkDrafts, setAccountLinkDrafts] = useState({})
   const [preparingAccountLink, setPreparingAccountLink] = useState('')
   const [accountLinkError, setAccountLinkError] = useState('')
+  const accountListSort=useFinancialListSort([{key:'name',label:'Account name'},{key:'type',label:'Type'},{key:'balance',label:'Balance',value:a=>a.plaidAvailableBalance??a.plaidCurrentBalance??a.balance}],'accounts')
   const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null)?.preset === 'all-time' ? null : loadSavedValue('brevity_finance_timeframe_v1', null), getHouseholdCalendarDate(), 'this-month'))
   const [transactionFilter, setTransactionFilter] = useState(null)
   const [transactionListOptions, setTransactionListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
@@ -3219,7 +3222,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ ACCOUNTS ══════════ */}
       {view === 'accounts' && (
         <div className="finance-inner">
-          <Suspense fallback={<p>Loading source history…</p>}><AccountHistory accounts={data.accounts} actuals={plaidActuals || []} history={loadSavedValue('brevity_shared_state_meta_v1',{})?.lslj_finance_v9?.plaidBalanceHistory || []} readOnly={readOnly} onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}/></Suspense>
+          {accountListSort.controls}
+          <Suspense fallback={<p>Loading source history…</p>}><AccountHistory accounts={accountListSort.sortRows(data.accounts)} actuals={plaidActuals || []} history={loadSavedValue('brevity_shared_state_meta_v1',{})?.lslj_finance_v9?.plaidBalanceHistory || []} readOnly={readOnly} onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}/></Suspense>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>{data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</p>
           </div>
@@ -3231,7 +3235,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           {plaidAccountCandidates.length === 0 && <div role="status" style={{marginBottom:16,padding:'10px 13px',borderRadius:10,border:'1px solid rgba(255,255,255,.10)',background:'rgba(255,255,255,.04)',color:'var(--muted)',fontSize:11,lineHeight:1.5}}>No current bank-account list is loaded on this screen. Return to the Finance Dashboard and choose Sync now, then use Review account links if Brevity cannot match the returned accounts.</div>}
           {accountLinkError && <p role="alert" style={{margin:'0 0 14px',padding:'9px 12px',borderRadius:9,border:'1px solid rgba(196,120,90,.30)',background:'rgba(196,120,90,.09)',color:'#C4785A',fontSize:11}}>{accountLinkError}</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {data.accounts.map(acct => {
+            {accountListSort.sortRows(data.accounts).map(acct => {
               const compatibleSources = plaidAccountCandidates.filter(source => compatiblePlaidAccountType(acct, source) && !data.accounts.some(other => other.id !== acct.id && other.plaidAccountId === source.accountId))
               const selectedSourceId = accountLinkDrafts[acct.id] ?? acct.plaidAccountId ?? ''
               const selectedSource = plaidAccountCandidates.find(source => source.accountId === selectedSourceId)
@@ -3687,7 +3691,7 @@ function CashFlowReport({ plaidActuals = [], onOpenTransactions }) {
             </span>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <SortableFinancialTable style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                   {[['Date','left','100px'],['Merchant','left',''],['Status','left','90px'],['Amount','right','100px']].map(([h, a, w]) => (
@@ -3720,7 +3724,7 @@ function CashFlowReport({ plaidActuals = [], onOpenTransactions }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </SortableFinancialTable>
           </div>
         </div>
       )}
@@ -3910,7 +3914,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
             <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{hasActuals ? `Actual results · ${yr}` : `Planned calendar occurrences · ${yr}`}</p>
           </div>
           <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 20 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+            <SortableFinancialTable style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                   <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', width: 120 }}></th>
@@ -3939,7 +3943,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </SortableFinancialTable>
           </div>
           <div className="finance-card" style={{ padding: '20px 24px' }}>
             {sectionTitle('Monthly Expense Breakdown by Category')}
@@ -3980,7 +3984,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
         <div>
           <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Vendor Spend</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Actual payments by merchant · {yr}</p></div>
           {!hasActuals?<div className="finance-card" style={{padding:'42px 20px',textAlign:'center',color:'var(--muted)'}}>Connect or sync an account to analyze actual vendor spending.</div>:
-          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', postedOnly:true, displayBy:'vendor', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
+          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><SortableFinancialTable style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', postedOnly:true, displayBy:'vendor', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></SortableFinancialTable></div>}
         </div>
       )}
 
@@ -4393,7 +4397,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
           </div>
 
           {selDay > todayStr && selPt.projectionAdjustment !== undefined && <p>Forecast includes a reviewed balance override. Live bank balances are unchanged.</p>}
-          <details className="finance-forecast-day-filters"><summary>Filter day activity</summary><TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/></details>
+          <details className="finance-forecast-day-filters"><summary>Sort and filter day activity</summary><TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/></details>
 
           {/* Planned transactions */}
           {selPt.txns.length > 0 && (

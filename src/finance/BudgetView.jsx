@@ -1,3 +1,4 @@
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 import MeetingBudgetActual from './MeetingBudgetActual.jsx'
 import {getHouseholdDateKey} from './financeTime.js'
 import CategoryBudgetSummary from './CategoryBudgetSummary.jsx'
@@ -333,7 +334,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', freshn
       <MeetingBudgetActual data={{accounts:data.accounts,scheduled:data.transactions,actuals:plaidActuals,budget,budgetLegacyYear:legacyYear,budgetLegacyAccountId:legacyAccountId,transactionFreshnessStatus:freshnessStatus}} asOf={getHouseholdDateKey()} readOnly={readOnly}/><CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly} actualsAvailable={hasActualsSnapshot}/>
       {/* Table */}
       <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: period === 'monthly' ? 1100 : 500 }}>
+        <SortableFinancialTable style={{ width: '100%', borderCollapse: 'collapse', minWidth: period === 'monthly' ? 1100 : 500 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', width: 200 }}>Category</th>
@@ -424,7 +425,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', freshn
               </td>
             </tr>
           </tbody>
-        </table>
+        </SortableFinancialTable>
       </div>
       <p style={{ marginTop: 10, fontSize: 11, color: 'var(--muted)' }}>{readOnly ? 'Budget targets are read-only for household members.' : 'Editing a monthly target opens Action Mode review · unreviewed months follow the recurring plan · annual totals are calculated from all monthly budget values'}</p>
     </div>
