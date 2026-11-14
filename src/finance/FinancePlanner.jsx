@@ -1,3 +1,4 @@
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 const DashboardMonthOutlook = lazy(() => import('./DashboardMonthOutlook.jsx'))
 const MeetingBudgetActual = lazy(() => import('./MeetingBudgetActual.jsx'))
 import {operatingSpendingSources} from './householdCashControls.js'
@@ -1213,7 +1214,7 @@ function TxForm({ tx, accounts, onSave, onCancel }) {
 // ── Main Component ──────────────────────────────────────────────────────────────
 function TransactionListControls({ options, onChange, showDateFilters = true, compact = false, categories = [] }) {
   const set = (key, value) => onChange(current => ({ ...current, [key]: value }))
-  const directionLabels = ['description','vendor'].includes(options.sortBy)
+  const directionLabels = ['description','vendor','category','status'].includes(options.sortBy)
     ? [['asc', 'A to Z'], ['desc', 'Z to A']]
     : options.sortBy === 'date'
       ? [['desc', 'Newest first'], ['asc', 'Oldest first']]
@@ -1228,7 +1229,7 @@ function TransactionListControls({ options, onChange, showDateFilters = true, co
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Maximum amount</span><input aria-label="Maximum amount" type="number" min="0" step="0.01" placeholder="Any" value={options.maxAmount} onChange={event => set('maxAmount', event.target.value)} style={inputStyle}/></label>
       {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">From date</span><input aria-label="Filter from date" type="date" value={options.dateFrom} onChange={event => set('dateFrom', event.target.value)} style={inputStyle}/></label>}
       {showDateFilters&&<label style={{ display: 'grid', gap: 4 }}><span className="field-label">To date</span><input aria-label="Filter to date" type="date" value={options.dateTo} onChange={event => set('dateTo', event.target.value)} style={inputStyle}/></label>}
-      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="vendor">Vendor</option><option value="amount">Amount</option><option value="date">Date</option></select></label>
+      <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Sort by</span><select aria-label="Sort transactions by" value={options.sortBy} onChange={event => set('sortBy', event.target.value)} style={inputStyle}><option value="description">Description</option><option value="vendor">Vendor</option><option value="amount">Amount</option><option value="date">Date</option><option value="category">Category</option><option value="status">Status</option></select></label>
       <label style={{ display: 'grid', gap: 4 }}><span className="field-label">Order</span><select aria-label="Transaction sort order" value={options.sortDirection} onChange={event => set('sortDirection', event.target.value)} style={inputStyle}>{directionLabels.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <button type="button" onClick={()=>onChange({ ...DEFAULT_TRANSACTION_LIST_OPTIONS })} style={{ ...inputStyle, cursor: 'pointer', color: 'var(--gold)', whiteSpace: 'nowrap' }}>Reset</button>
     </section>
@@ -3687,7 +3688,7 @@ function CashFlowReport({ plaidActuals = [], onOpenTransactions }) {
             </span>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <SortableFinancialTable style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                   {[['Date','left','100px'],['Merchant','left',''],['Status','left','90px'],['Amount','right','100px']].map(([h, a, w]) => (
@@ -3720,7 +3721,7 @@ function CashFlowReport({ plaidActuals = [], onOpenTransactions }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </SortableFinancialTable>
           </div>
         </div>
       )}
@@ -3910,7 +3911,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
             <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>{hasActuals ? `Actual results · ${yr}` : `Planned calendar occurrences · ${yr}`}</p>
           </div>
           <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 20 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+            <SortableFinancialTable style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                   <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', width: 120 }}></th>
@@ -3939,7 +3940,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </SortableFinancialTable>
           </div>
           <div className="finance-card" style={{ padding: '20px 24px' }}>
             {sectionTitle('Monthly Expense Breakdown by Category')}
@@ -3980,7 +3981,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
         <div>
           <div style={{marginBottom:24}}><h2 style={{margin:0,fontSize:22,fontWeight:600,fontFamily:'var(--font-serif)',color:'var(--white)'}}>Vendor Spend</h2><p style={{margin:'4px 0 0',fontSize:12,color:'var(--muted)'}}>Actual payments by merchant · {yr}</p></div>
           {!hasActuals?<div className="finance-card" style={{padding:'42px 20px',textAlign:'center',color:'var(--muted)'}}>Connect or sync an account to analyze actual vendor spending.</div>:
-          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', postedOnly:true, displayBy:'vendor', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></table></div>}
+          <div style={{overflowX:'auto',borderRadius:16,border:'1px solid rgba(255,255,255,.07)'}}><SortableFinancialTable style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>{[['Vendor','left'],['Amount','right'],['Share of Spend','right']].map(([label,align])=><th key={label} style={{padding:'12px 16px',textAlign:align,fontSize:10,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--muted)'}}>{label}</th>)}</tr></thead><tbody>{actualReport.vendorSpend.map(([vendor,amount])=><tr key={vendor} role="button" tabIndex={0} title="Open vendor transactions" onClick={() => onOpenTransactions?.({ direction:'expense', postedOnly:true, displayBy:'vendor', value:vendor, dateFrom:`${yr}-01-01`, dateTo:`${yr}-12-31`, label:`${vendor} · ${yr}` })} style={{borderTop:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}}><td style={{padding:'11px 16px',fontSize:13,color:'var(--soft-white)'}}>{vendor}</td><td style={{padding:'11px 16px',fontSize:13,textAlign:'right',color:'var(--expense-color)',fontWeight:600}}>{fmtMoney(amount)}</td><td style={{padding:'11px 16px',fontSize:12,textAlign:'right',color:'var(--muted)'}}>{actualReport.expenses?`${((amount/actualReport.expenses)*100).toFixed(1)}%`:'0%'}</td></tr>)}</tbody></SortableFinancialTable></div>}
         </div>
       )}
 

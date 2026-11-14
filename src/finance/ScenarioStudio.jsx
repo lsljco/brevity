@@ -1,3 +1,4 @@
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 import {useEffect,useMemo,useState,useRef} from 'react'
 import {createStudio,newIncome,newExpense,validateStudio,studioMonthly,projectStudio} from './scenarioStudioModel.js'
 import {upgradeStudioPlan,taxKind,DEFAULT_STUDIO_RESERVE,savedScenarioCash} from './scenarioPayoffPlan.js'
@@ -18,7 +19,7 @@ const id=()=>`studio-${crypto.randomUUID()}`
 const tabs=['Overview','Income','Expenses','Liabilities','Forecast','Compare']
 function Field({label,value,onChange,type='text',options,disabled=false}){return <label className="studio-field"><span>{label}</span>{options?<select aria-label={label} disabled={disabled} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>:<input aria-label={label} disabled={disabled} type={type} min={type==='number'?0:undefined} step={type==='number'?'any':undefined} value={value??''} onChange={e=>onChange(type==='number'?(e.target.value===''?null:Number(e.target.value)):e.target.value)}/>}</label>}
 const frequencies=[['monthly','Monthly'],['semimonthly','Twice monthly (1st / 16th)'],['biweekly','Every two weeks'],['weekly','Weekly'],['annual','Annual'],['once','One time']]
-function Table({heads,rows,className='',rowTypes=[]}){return <div className={`studio-table-scroll ${className}`}><table><thead><tr>{heads.map(h=><th scope="col" key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i} className={rowTypes[i]?`studio-${rowTypes[i]}`:undefined}>{rowTypes[i]==='milestone'?<td colSpan={heads.length}><strong>{row[0]} · {row[1]} · {row[2]}</strong><small>{row[6]}</small></td>:row.map((v,j)=><td key={j}>{v}</td>)}</tr>)}</tbody></table></div>}
+function Table({heads,rows,className='',rowTypes=[]}){return <div className={`studio-table-scroll ${className}`}><SortableFinancialTable><thead><tr>{heads.map(h=><th scope="col" key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i} className={rowTypes[i]?`studio-${rowTypes[i]}`:undefined}>{rowTypes[i]==='milestone'?<td colSpan={heads.length}><strong>{row[0]} · {row[1]} · {row[2]}</strong><small>{row[6]}</small></td>:row.map((v,j)=><td key={j}>{v}</td>)}</tr>)}</tbody></SortableFinancialTable></div>}
 export default function ScenarioStudio({scenarios=[],planningExpense=0,debts=[],financeData,freshness,readOnly=false}){
  const savedCash=savedScenarioCash(financeData?.accounts||[])
  const dirty=useRef(false)

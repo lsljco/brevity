@@ -1,3 +1,4 @@
+import SortableFinancialTable from './SortableFinancialTable.jsx'
 import {transactionVendorHistory} from './vendorHistory.js'
 import {fmtMoney} from './projection.js'
 export default function TransactionVendorHistory({transaction,transactions=[],scopeLabel='',onOpenTransaction}){
@@ -15,7 +16,7 @@ export default function TransactionVendorHistory({transaction,transactions=[],sc
     </svg>
     <small>Most recent 12 months with imported records. Gaps do not establish zero spending.</small>
    </figure>}
-   <div style={{overflowX:'auto'}}><table><thead><tr><th>Month</th><th>Expenses</th><th>Expense count</th><th>Average expense</th><th>Credits</th></tr></thead><tbody>{h.months.map(m=><tr key={m.month}><td>{m.month}</td><td>{fmtMoney(m.expenses)}</td><td>{m.count}</td><td>{fmtMoney(m.average)}</td><td>{fmtMoney(m.credits)}</td></tr>)}</tbody></table></div>
+   <div style={{overflowX:'auto'}}><SortableFinancialTable><thead><tr><th>Month</th><th>Expenses</th><th>Expense count</th><th>Average expense</th><th>Credits</th></tr></thead><tbody>{h.months.map(m=><tr key={m.month}><td>{m.month}</td><td>{fmtMoney(m.expenses)}</td><td>{m.count}</td><td>{fmtMoney(m.average)}</td><td>{fmtMoney(m.credits)}</td></tr>)}</tbody></SortableFinancialTable></div>
    <ul>{h.rows.map(t=><li key={t.id}>{onOpenTransaction&&t.id!==transaction.id&&<button type="button" onClick={()=>onOpenTransaction(t)} style={{minHeight:44,background:'transparent',color:'#D9BD8B',border:'1px solid rgba(197,164,109,.3)',borderRadius:8,marginRight:8}}>Open transaction</button>}{t.date} · {t.name} · {fmtMoney(Math.abs(Number(t.amount)||0))} · {t.pending?'Pending':Number(t.amount)<0?'Posted credit':'Posted expense'}</li>)}</ul>
   </details>}
  </section>
