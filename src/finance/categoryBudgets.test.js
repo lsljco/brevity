@@ -26,3 +26,16 @@ test('saved custom category is not overwritten by a matching plan in a different
 test('grocery actuals update budget reporting without reducing the scheduled cash expense',()=>{const plans=[{...scheduled[0],name:'Groceries',cat:'Food',amount:100,start:'2026-10-30'}];const actuals=[{id:'g',name:'Grocery store',accountId:'bank',date:'2026-10-20',amount:60,category:'Food'}];const summary=buildCategoryBudgetSummary({accounts,scheduled:plans,actuals,budget:{},month,today:'2026-10-21'});assert.equal(summary.rows[0].remainingForecast,40);assert.equal(summary.rows[0].expectedOverrun,0);const p=buildOutstandingCashForecast(accounts,plans,actuals,{today:'2026-10-21',days:12,reconcile:true});assert.equal(p.get('2026-10-21').bal,1000);assert.equal(p.get('2026-10-30').bal,900);assert.equal(p.get('2026-10-30').realization[0].delta,-100)})
 test('elapsed unmatched named bills do not invent future spending in the budget forecast',()=>{const summary=buildCategoryBudgetSummary({accounts,scheduled,actuals:[],budget:make(),month,today:'2026-10-21'});assert.equal(summary.rows[0].remainingForecast,0)})
 test('planned-only cash mode retains dated grocery amounts without consuming bank actuals',()=>{const plans=[{...scheduled[0],name:'Groceries',cat:'Food',amount:100,start:'2026-10-30'}];const p=buildOutstandingCashForecast(accounts,plans,[{id:'g',accountId:'bank',date:'2026-10-20',amount:60,category:'Food'}],{today:'2026-10-21',days:12,reconcile:false});assert.equal(p.get('2026-10-30').realization[0].delta,-100);assert.equal(p.get('2026-10-30').bal,900)})
+test('renaming a budget preserves its category identity and linked amounts',()=>{
+ const original=make(500,300)
+ const op=categoryBudgetOperation({accountId:'a',month,category:'Dining Out',displayName:'Meals away from home',amount:500,forecastAllocation:300})
+ const renamed=applyBudgetTarget(original,op.payload)
+ assert.equal(Object.keys(renamed.categoryLimits).length,1)
+ const entry=Object.values(renamed.categoryLimits)[0]
+ assert.equal(entry.category,'Dining Out');assert.equal(entry.displayName,'Meals away from home');assert.equal(entry.originalAmount,500);assert.equal(entry.forecastAllocation,300)
+ const next=applyBudgetTarget(renamed,categoryBudgetOperation({accountId:'a',month,category:'Dining Out',amount:600,forecastAllocation:300}).payload)
+ assert.equal(Object.values(next.categoryLimits)[0].displayName,'Meals away from home')
+ const model=buildCategoryBudgetSummary({accounts,scheduled:[],actuals:[],budget:renamed,month})
+ assert.equal(model.rows[0].displayName,'Meals away from home')
+ assert.equal(model.totals.budget,500)
+})

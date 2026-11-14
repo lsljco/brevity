@@ -172,7 +172,8 @@ export function applyBudgetTarget(value = {}, payload = {}, { migrationYear = ne
     if(direction!=='expense'||!String(payload.category||'').trim()||!Number.isFinite(amount)||amount<0||!Number.isFinite(forecastAllocation)||forecastAllocation<0)throw new Error('Category budgets require non-negative amounts and an expense category.')
     const period=`${year}-${String(month+1).padStart(2,'0')}`,key=`${accountId}|${period}|${payload.category.trim().toLowerCase()}`
     const previous=value.categoryLimits?.[key]
-    const entry={accountId,month:period,category:payload.category.trim(),amount,forecastAllocation,originalAmount:previous ? previous.originalAmount : (period+'-01'>=changedAt.slice(0,10)?amount:null),changedAt}
+    if(payload.displayName!==undefined&&(typeof payload.displayName!=='string'||!payload.displayName.trim()||payload.displayName.length>120))throw new Error('Enter a category budget name up to 120 characters.')
+    const entry={accountId,month:period,category:payload.category.trim(),...(payload.displayName!==undefined?{displayName:payload.displayName.trim()}:previous?.displayName?{displayName:previous.displayName}:{}),amount,forecastAllocation,originalAmount:previous ? previous.originalAmount : (period+'-01'>=changedAt.slice(0,10)?amount:null),changedAt}
     return {...value,categoryLimits:{...(value.categoryLimits||{}),[key]:entry},revisions:[...(value.revisions||[]),{categoryKey:key,before:previous||null,after:entry,changedAt,actor}]}
   }
 

@@ -22,7 +22,7 @@ export function meetingBudgetActual(data,month,asOf){
   if(direction==='expense')for(const limit of Object.values(data.budget?.categoryLimits||{}).filter(l=>l.accountId===account.id&&l.month===month)){
    let row=accountRows.find(r=>r.category.toLowerCase()===limit.category.toLowerCase())
    if(!row){row={category:limit.category,posted:0};accountRows.push(row)}
-   row.budget=Number(limit.amount)
+   row.budget=Number(limit.amount);row.displayName=limit.displayName||limit.category
   }
   for(const row of accountRows){const key=direction+':'+row.category,prior=grouped.get(key);grouped.set(key,{...row,direction,budget:prior?(prior.budget==null||row.budget==null?null:prior.budget+row.budget):row.budget,posted:available?(prior?.posted||0)+row.posted:null})}
  }
