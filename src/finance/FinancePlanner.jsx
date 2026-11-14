@@ -1,3 +1,4 @@
+import {useFinancialListSort} from './FinancialListSort.jsx'
 import SortableFinancialTable from './SortableFinancialTable.jsx'
 const DashboardMonthOutlook = lazy(() => import('./DashboardMonthOutlook.jsx'))
 const MeetingBudgetActual = lazy(() => import('./MeetingBudgetActual.jsx'))
@@ -1265,6 +1266,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const [accountLinkDrafts, setAccountLinkDrafts] = useState({})
   const [preparingAccountLink, setPreparingAccountLink] = useState('')
   const [accountLinkError, setAccountLinkError] = useState('')
+  const accountListSort=useFinancialListSort([{key:'name',label:'Account name'},{key:'type',label:'Type'},{key:'balance',label:'Balance',value:a=>a.plaidAvailableBalance??a.plaidCurrentBalance??a.balance}],'accounts')
   const [financeRange, setFinanceRange] = useState(() => restoreTimeframe(loadSavedValue('brevity_finance_timeframe_v1', null)?.preset === 'all-time' ? null : loadSavedValue('brevity_finance_timeframe_v1', null), getHouseholdCalendarDate(), 'this-month'))
   const [transactionFilter, setTransactionFilter] = useState(null)
   const [transactionListOptions, setTransactionListOptions] = useState(() => ({ ...DEFAULT_TRANSACTION_LIST_OPTIONS }))
@@ -3220,7 +3222,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {/* ══════════ ACCOUNTS ══════════ */}
       {view === 'accounts' && (
         <div className="finance-inner">
-          <Suspense fallback={<p>Loading source history…</p>}><AccountHistory accounts={data.accounts} actuals={plaidActuals || []} history={loadSavedValue('brevity_shared_state_meta_v1',{})?.lslj_finance_v9?.plaidBalanceHistory || []} readOnly={readOnly} onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}/></Suspense>
+          {accountListSort.controls}
+          <Suspense fallback={<p>Loading source history…</p>}><AccountHistory accounts={accountListSort.sortRows(data.accounts)} actuals={plaidActuals || []} history={loadSavedValue('brevity_shared_state_meta_v1',{})?.lslj_finance_v9?.plaidBalanceHistory || []} readOnly={readOnly} onReview={input=>stageDirectFinanceReview({...input,surfaceError:true})}/></Suspense>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>{data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</p>
           </div>
@@ -3232,7 +3235,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           {plaidAccountCandidates.length === 0 && <div role="status" style={{marginBottom:16,padding:'10px 13px',borderRadius:10,border:'1px solid rgba(255,255,255,.10)',background:'rgba(255,255,255,.04)',color:'var(--muted)',fontSize:11,lineHeight:1.5}}>No current bank-account list is loaded on this screen. Return to the Finance Dashboard and choose Sync now, then use Review account links if Brevity cannot match the returned accounts.</div>}
           {accountLinkError && <p role="alert" style={{margin:'0 0 14px',padding:'9px 12px',borderRadius:9,border:'1px solid rgba(196,120,90,.30)',background:'rgba(196,120,90,.09)',color:'#C4785A',fontSize:11}}>{accountLinkError}</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {data.accounts.map(acct => {
+            {accountListSort.sortRows(data.accounts).map(acct => {
               const compatibleSources = plaidAccountCandidates.filter(source => compatiblePlaidAccountType(acct, source) && !data.accounts.some(other => other.id !== acct.id && other.plaidAccountId === source.accountId))
               const selectedSourceId = accountLinkDrafts[acct.id] ?? acct.plaidAccountId ?? ''
               const selectedSource = plaidAccountCandidates.find(source => source.accountId === selectedSourceId)
@@ -4394,7 +4397,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
           </div>
 
           {selDay > todayStr && selPt.projectionAdjustment !== undefined && <p>Forecast includes a reviewed balance override. Live bank balances are unchanged.</p>}
-          <details className="finance-forecast-day-filters"><summary>Filter day activity</summary><TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/></details>
+          <details className="finance-forecast-day-filters"><summary>Sort and filter day activity</summary><TransactionListControls options={dayListOptions} onChange={setDayListOptions} showDateFilters={false} compact/></details>
 
           {/* Planned transactions */}
           {selPt.txns.length > 0 && (

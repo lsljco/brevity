@@ -15,7 +15,7 @@ const cells = row => flatten(row?.props?.children).filter(isValidElement)
 const pinned = row => {
   const columns = cells(row)
   return !isValidElement(row) || row.type !== 'tr' || columns.some(cell => Number(cell.props.colSpan) > 1)
-    || /^\s*(?:grand total|total|subtotal)\b/i.test(textOf(columns[0]))
+    || /^\s*(?:grand total|total|subtotal)\s*:?[\s]*$/i.test(textOf(columns[0]))
     || /milestone|divider|all-paid/.test(row.props.className || '')
 }
 export default function SortableFinancialTable({children, onSortChange, ...props}) {
