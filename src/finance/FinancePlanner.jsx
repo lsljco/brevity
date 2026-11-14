@@ -1,3 +1,4 @@
+const DashboardMonthOutlook = lazy(() => import('./DashboardMonthOutlook.jsx'))
 const MeetingBudgetActual = lazy(() => import('./MeetingBudgetActual.jsx'))
 import {operatingSpendingSources} from './householdCashControls.js'
 import './BudgetCoverage.css'
@@ -2506,35 +2507,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             </div>
           </div>
 
-          {/* ── 5 KPI Cards ── */}
-          <div className="kpi-grid">
-            {[
-              { label: 'Total Balance', value: fmtMoney(totBal), sub: `${fd.accounts.length} account${fd.accounts.length !== 1 ? 's' : ''}`, trend: 'Verified balance history', icon: 'ti-wallet', spark: sparkBalance, good: true, open:() => setView('accounts') },
-              { label: showActuals ? 'Realized Income' : 'Expected Income', value:fmtMoney(dashboardIncome), sub:showActuals ? `${timeframeActuals.filter(isRealizedIncomeTransaction).length} realized transactions` : `${expectedIncomeSources.length} expected sources`, trend:showActuals ? 'posted income · cumulative' : 'Expected income · cumulative', icon:'ti-trending-up', spark:sparkIncome, good:true, open:() => showActuals ? openFilteredTransactions({ direction:'income', realizedIncomeOnly:true, label:'Realized income' }) : openScheduledTransactions({ direction:'income', label:'Expected income' }) },
-              { label: showActuals ? 'Posted Expenses' : 'Projected Expenses', value:fmtMoney(dashboardExpense), sub:showActuals ? `${postedTimeframeActuals.filter(transaction => transactionDirection(transaction) === 'expense').length} posted transactions` : `${projectedExpenseSources.length} projected item${projectedExpenseSources.length === 1 ? '' : 's'}`, trend:showActuals ? 'Posted expenses · cumulative' : 'Projected expenses · cumulative', icon:'ti-trending-down', spark:sparkExpense, good:false, open:() => showActuals ? openFilteredTransactions({ direction:'expense', postedOnly:true, label:'Posted expenses' }) : openScheduledTransactions({ direction:'expense', label:'Projected expenses' }) },
-              { label: showActuals ? 'Posted Cash Flow' : 'Cash Flow', value:(dashboardCashFlow >= 0 ? '+' : '') + fmtMoney(dashboardCashFlow), sub:showActuals ? 'Posted cash inflows minus posted outflows; transfers excluded' : 'Expected income minus expected outflow', trend:'Cumulative cash flow', icon:'ti-arrows-exchange', spark:sparkNet, good:dashboardCashFlow >= 0, open:() => showActuals ? openFilteredTransactions({ excludeTransfers:true, postedOnly:true, label:'Posted cash flow' }) : openScheduledTransactions({ label:'Expected cash flow' }) },
-              { label:'90-Day Floor', value:minDay ? fmtMoney(minBal) : '—', sub:minDay ? minDay.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—', trend:'Daily balance · next 90 days', icon:'ti-chart-bar', spark:sparkFloor, good:minBal >= 1000, open:() => { if (minDay) { setSelDay(toISO(minDay)); setCalMonth(minDay.getMonth()); setCalYear(minDay.getFullYear()) } setView('calendar') } },
-            ].map((kpi, i) => {
-              const spkColor = kpi.good ? '#C5A46D' : 'rgba(196,120,90,0.85)'
-              return (
-                <div key={i} className="kpi-card" role="button" tabIndex={0} title="View what makes up this total" onClick={kpi.open} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') kpi.open() }} style={{ cursor: 'pointer' }}>
-                  <div className="kpi-icon"><i className={`ti ${kpi.icon}`} /></div>
-                  <div className="kpi-label">{kpi.label}</div>
-                  <div className="kpi-value">{kpi.value}</div>
-                  <div className="kpi-sub">{kpi.sub}</div>
-                  {/* Full-width sparkline flush to card bottom */}
-                  <div className="kpi-sparkline" role="img" aria-label={`${kpi.label}: ${kpi.trend}${i > 0 && i < 4 ? ` · ${financeRange.from} to ${financeRange.to}` : ''}${kpi.spark.length > 1 ? ` · ${kpi.spark.map(value=>fmtMoney(value)).join(', ')}` : ': not enough history'}`}>
-                    {kpi.spark.length > 1 ? <Sparkline data={kpi.spark} color={spkColor} height={44} fullWidth /> : <small>Not enough history for a trend</small>}
-                  </div>
-                  <div className="kpi-trend">
-                    <span className="kpi-trend-val">{kpi.spark.length < 2 ? '—' : kpi.spark.at(-1) > kpi.spark[0] ? '↑' : kpi.spark.at(-1) < kpi.spark[0] ? '↓' : '→'}</span>
-                    <span className="kpi-trend-sep">·</span>
-                    <span>{kpi.trend}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <Suspense fallback={<p>Loading monthly outlook…</p>}><DashboardMonthOutlook accounts={cashLedger.forecastAccounts} scheduled={forecastScope.transactions} actuals={cashForecastActuals} sourceStatus={actualsFreshness?.status} projection={cashForecastProjection} today={getHouseholdDateKey()} onAccounts={()=>setView('accounts')} onForecast={()=>setView('calendar')}/></Suspense>
 
           <button
             type="button"

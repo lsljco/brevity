@@ -110,7 +110,8 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     if (date < today) {
       const recorded = options.recordedClosingBalances?.[date]
       const reconstructed = options.reconstructedBalances?.[date]
-      projection.set(date, {...point, bal:Number.isFinite(recorded) ? recorded : Number.isFinite(reconstructed) ? (cents(reconstructed)+pendingThrough(date))/100 : undefined, postedBalance:Number.isFinite(reconstructed)?reconstructed:undefined, historicalPendingDelta:pendingThrough(date)/100,
+      const realization=point.txns.map(plan=>{const occurrence={date,plan,key:`${date}:${plan.id}`};let delta=0;const statuses=legs(occurrence).map((leg,index)=>{const actual=assigned.get(`${occurrence.key}:${index}`);if(!actual)delta-=leg.amount;return actual?{status:actual.pending?'pending':'posted',actualId:actual.id}:{status:'expected'}});return {id:plan.id,name:plan.name,delta:delta/100,statuses}})
+      projection.set(date, {...point, realization, bal:Number.isFinite(recorded) ? recorded : Number.isFinite(reconstructed) ? (cents(reconstructed)+pendingThrough(date))/100 : undefined, postedBalance:Number.isFinite(reconstructed)?reconstructed:undefined, historicalPendingDelta:pendingThrough(date)/100,
         balanceSource:Number.isFinite(recorded) ? 'user-recorded' : Number.isFinite(reconstructed) ? 'reconstructed' : 'unavailable'})
       continue
     }

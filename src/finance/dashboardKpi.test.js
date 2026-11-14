@@ -4,35 +4,13 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('./FinancePlanner.jsx', import.meta.url), 'utf8')
 
-test('dashboard income and expense cards use matching timeframe drill-downs', () => {
-  assert.match(source, /dashboardIncome = showActuals \? actualRangeTotals\.income : expectedRangeTotals\.income/)
-  assert.match(source, /dashboardExpense = showActuals \? actualRangeTotals\.expenses : expectedRangeTotals\.expenses/)
-  assert.match(source, /openFilteredTransactions\(\{ direction:'income', realizedIncomeOnly:true, label:'Realized income' \}\)/)
-  assert.match(source, /openScheduledTransactions\(\{ direction:'income', label:'Expected income' \}\)/)
-  assert.match(source, /openFilteredTransactions\(\{ direction:'expense', postedOnly:true, label:'Posted expenses' \}\)/)
-  assert.match(source, /openScheduledTransactions\(\{ direction:'expense', label:'Projected expenses' \}\)/)
-})
-
-test('dashboard cash flow and 90-day floor drill into their own supporting records', () => {
-  assert.match(source, /dashboardCashFlow = showActuals \? actualRangeTotals\.net : expectedRangeTotals\.net/)
-  assert.match(source, /openFilteredTransactions\(\{ excludeTransfers:true, postedOnly:true, label:'Posted cash flow' \}\)/)
-  assert.match(source, /openScheduledTransactions\(\{ label:'Expected cash flow' \}\)/)
-  assert.match(source, /setCalMonth\(minDay\.getMonth\(\)\); setCalYear\(minDay\.getFullYear\(\)\)/)
-})
-
+// The dashboard now uses one shared actual-plus-forecast model. Its arithmetic
+// and view-specific drilldowns are covered by dashboardMonthOutlook.test.js and
+// e2e/dashboard-month-outlook.spec.mjs.
 test('scheduled timeframe drill-downs display occurrence totals instead of one base amount', () => {
   assert.match(source, /buildScheduledTransactionRows\(fd\.transactions, financeRange, transactionFilter, transactionListOptions\)/)
   assert.match(source, /fmtMoney\(tx\.rangeAmount \?\? tx\.amount\)/)
   assert.match(source, /occurrence.*in timeframe/)
-})
-
-test('dashboard labels distinguish expected income and all projected expenses', () => {
-  assert.doesNotMatch(source, /Monthly Net Income/)
-  assert.match(source, /showActuals \? 'Realized Income' : 'Expected Income'/)
-  assert.match(source, /showActuals \? 'Posted Expenses' : 'Projected Expenses'/)
-  assert.match(source, /projectedExpenseSources\.length/)
-  assert.match(source, /Recurring baseline cash flow/)
-  assert.match(source, /One-time items are excluded/)
 })
 
 test('dashboard icon buttons expose explicit accessible names', () => {
@@ -53,7 +31,6 @@ test('dashboard baselines, budget health, and sparklines follow the selected acc
 })
 
 test('realized-income labels consistently describe posted income only', () => {
-  assert.match(source, /trend:showActuals \? 'posted income · cumulative'/)
   assert.match(source, /transactionFilter\?\.realizedIncomeOnly[\s\S]*posted income transaction/)
   assert.doesNotMatch(source, /realized transactions[^\n]+posted and pending/)
 })
