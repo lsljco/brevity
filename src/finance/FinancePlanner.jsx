@@ -1,3 +1,4 @@
+const MeetingBudgetActual = lazy(() => import('./MeetingBudgetActual.jsx'))
 import {operatingSpendingSources} from './householdCashControls.js'
 import './BudgetCoverage.css'
 import FinanceExport from './FinanceExport.jsx'
@@ -3999,66 +4000,7 @@ function ReportingView({ data, proj, vendorOrder='', plaidActuals = [], legacyAc
       )}
 
       {/* ── Budget vs Actual ── */}
-      {tab === 'budget-actual' && (
-        <div>
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, fontFamily: 'var(--font-serif)', color: 'var(--white)' }}>Budget vs Actual</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>Monthly budget targets vs {hasActuals?'actual year-to-date monthly averages':'scheduled transaction estimates'} · set budgets in the Budget tab</p>
-          </div>
-          <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                  {[['Category','left','200px'],['Budgeted','right','120px'],['Actual','right','120px'],['Variance','right','120px'],['Progress','right','180px']].map(([h, align, w]) => (
-                    <th key={h} style={{ padding: '12px 16px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: align, width: w }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reportBudgetCategories.map(cat => {
-                  const budgeted = budgetMonthly[cat] || 0
-                  const scheduledActual = data.transactions.filter(t => t.type === 'expense').reduce((s, t) => {
-                    const matchesCat = (t.cat || 'Other') === cat
-                    return matchesCat ? s + calculateTransactionAmountForMonth(t, new Date(yr, mo, 1)) : s
-                  }, 0)
-                  const actual = cat === 'Income'
-                    ? (hasActuals ? (normalizedActuals.Income || 0) / actualMonthCount : totalIncome)
-                    : (hasActuals ? (normalizedActuals[cat] || 0) / actualMonthCount : scheduledActual)
-                  const variance = cat === 'Income' ? actual - budgeted : budgeted - actual
-                  const pct = budgeted > 0 ? Math.min((actual / budgeted) * 100, 200) : 0
-                  const isGood = variance >= 0
-                  return (
-                    <tr key={cat} onClick={() => onOpenTransactions?.({ budgetCategory: cat, direction: cat === 'Income' ? 'income' : 'expense', label: cat })} style={{ borderTop: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer' }}>
-                      <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: 'var(--soft-white)' }}>{cat}</td>
-                      <td style={{ padding: '12px 16px', fontSize: 13, textAlign: 'right', color: 'var(--muted)' }}>
-                        {budgeted ? fmtMoney(budgeted) : <span style={{ opacity: 0.3 }}>—</span>}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: 13, textAlign: 'right', color: cat === 'Income' ? 'var(--gold)' : 'var(--expense-color)' }}>
-                        {fmtMoney(actual)}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, textAlign: 'right',
-                        color: budgeted ? (isGood ? 'var(--gold)' : 'var(--expense-color)') : 'rgba(255,255,255,0.2)' }}>
-                        {budgeted ? `${variance >= 0 ? '+' : ''}${fmtMoney(variance)}` : '—'}
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        {budgeted > 0 ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
-                              <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', borderRadius: 3, opacity: 0.85,
-                                background: pct > 110 ? 'var(--expense-color)' : pct > 85 ? 'var(--gold)' : 'rgba(197,164,109,0.5)' }} />
-                            </div>
-                            <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 36, textAlign: 'right' }}>{pct.toFixed(0)}%</span>
-                          </div>
-                        ) : <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>No budget set</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {tab === 'budget-actual' && <Suspense fallback={<p>Loading budget comparison…</p>}><MeetingBudgetActual data={{accounts:data.accounts,scheduled:data.transactions,actuals:plaidActuals,budget,budgetLegacyYear:yr,budgetLegacyAccountId:legacyAccountId,transactionFreshnessStatus:'unknown'}} asOf={getHouseholdDateKey()} readOnly={true}/></Suspense>}
 
       {/* ── Vendor Spend ── */}
       {tab === 'vendor-spend' && (

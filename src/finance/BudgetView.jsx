@@ -1,3 +1,5 @@
+import MeetingBudgetActual from './MeetingBudgetActual.jsx'
+import {getHouseholdDateKey} from './financeTime.js'
 import CategoryBudgetSummary from './CategoryBudgetSummary.jsx'
 import BudgetCoverage from './BudgetCoverage.jsx'
 import {hasBudgetActualsSnapshot} from './budgetCoverage.js'
@@ -138,7 +140,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', freshn
           </div>
         </div>
 
-        <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly} actualsAvailable={hasActualsSnapshot}/>
+        <MeetingBudgetActual data={{accounts:data.accounts,scheduled:data.transactions,actuals:plaidActuals,budget,budgetLegacyYear:legacyYear,budgetLegacyAccountId:legacyAccountId,transactionFreshnessStatus:freshnessStatus}} asOf={getHouseholdDateKey()} readOnly={readOnly}/><CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly} actualsAvailable={hasActualsSnapshot}/>
         {!hasActualsSnapshot ? <section className="budget-coverage" role="status" aria-label="Budget actuals unavailable">
           <h3>Actual spending is unavailable</h3>
           <p>{freshnessMessage || 'No verified bank transaction snapshot is available.'}</p>
@@ -328,7 +330,7 @@ export default function BudgetView({ vendorOrder='', freshnessMessage='', freshn
       </div>
 
       <FinanceExport report={{title:`Budget Plan ${selYear}`,notes:[`Accounts: ${data.accounts.map(a=>a.name).join(', ')}`,'Individual reviewed target records; totals include all scheduled occurrences.'],sections:[recordsSection('Annual plan',budgetLines.map(line=>({group:line.category,category:line.name,account:line.accountId,...Object.fromEntries(MONTHS.map((m,i)=>[m,getBudgeted(line,i,selYear)])),total:annualTotal(line)})))]}}/>
-      <CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly} actualsAvailable={hasActualsSnapshot}/>
+      <MeetingBudgetActual data={{accounts:data.accounts,scheduled:data.transactions,actuals:plaidActuals,budget,budgetLegacyYear:legacyYear,budgetLegacyAccountId:legacyAccountId,transactionFreshnessStatus:freshnessStatus}} asOf={getHouseholdDateKey()} readOnly={readOnly}/><CategoryBudgetSummary accounts={data.accounts} scheduled={data.transactions} actuals={plaidActuals} budget={budget} month={monthKey} legacyYear={legacyYear} legacyAccountId={legacyAccountId} onReview={onReview} readOnly={readOnly} actualsAvailable={hasActualsSnapshot}/>
       {/* Table */}
       <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: period === 'monthly' ? 1100 : 500 }}>
