@@ -22,7 +22,7 @@ export default function RuleSuggestions({planned,transactions,rules,accounts,ove
   {rows.map(row=><article key={row.id} style={{padding:'16px 0',borderTop:'1px solid var(--glass-border)'}}>
    <strong>{row.ruleId?'Update existing rule':'Create rule'}: {row.title}</strong>
    <p>{row.reason}<br/>Category: <strong>{row.category}</strong><br/>{describeRuleCriteria(row.criteria,accounts)}</p>
-   <VendorSelector label={`Vendor for ${row.title}`} fieldLabel="Proposed vendor / payer" value={row.vendorId} onChange={value=>setVendorOverrides(prev=>({...prev,[row.id]:value}))}/>
+   <VendorSelector required label={`Vendor for ${row.title}`} fieldLabel="Proposed vendor / payer" value={row.vendorId} onChange={value=>setVendorOverrides(prev=>({...prev,[row.id]:value}))}/>
    {!row.vendorId&&<p>Choose or create the vendor or payer to complete this proposal.</p>}
    <details><summary>{row.transactions.length} matching past transactions</summary>{row.transactions.map((tx,i)=><p key={tx.id||i}>{tx.date} · {tx.originalStatement||tx.original_description||tx.name} · ${Math.abs(Number(tx.amount)).toFixed(2)}<br/>Current category: {tx.category||tx.cat||'Uncategorized'} → {row.category}</p>)}</details>
    <div style={{display:'flex',gap:10,marginTop:12}}><button type="button" disabled={busy||!row.vendorId} onClick={()=>approve([row])}>Approve</button><button type="button" disabled={busy} onClick={()=>deny([row])}>Deny</button></div>

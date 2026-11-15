@@ -41,3 +41,12 @@ test('approve all never silently truncates a rule batch at eight operations',()=
  assert.equal(proposal.operations.length,12)
  assert.throws(()=>normalizeActionProposal({operations:Array.from({length:501},()=>structuredClone(operation))},{member:'Larry',role:'admin'}),/500/)
 })
+
+test('Uncategorized display preserves source cash classification until a category is approved',async()=>{
+ const {actualTransactionKind,summarizeActualCashActivity}=await import('./reportingData.js')
+ const transfer={name:'ACH 123',amount:100,category:'Uncategorized',_reviewSourceCategory:'TRANSFER_OUT'}
+ const income={name:'ACH 456',amount:-200,category:'Uncategorized',_reviewSourceCategory:'INCOME',pending:false}
+ assert.equal(actualTransactionKind(transfer),'transfer');assert.equal(actualTransactionKind(income),'income')
+ assert.equal(summarizeActualCashActivity([transfer,income]).net,200)
+ assert.equal(actualTransactionKind({...transfer,category:'Groceries'}),'expense')
+})

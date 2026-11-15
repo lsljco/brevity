@@ -1546,7 +1546,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     return new Set([...report.unresolved.map(r=>r.transaction.id),...report.suggestions.flatMap(r=>r.transactions.map(t=>t.id))])
   },[data.transactions,retainedActuals,txRules,txOverrides,data.accounts,vendorDirectory])
   const categorizeReviewedActual=tx=>categoryReviewIds.has(tx.id)&&!tx._categoryResolved&&!txOverrides[tx.id]?.category
-    ? {...tx,category:'Uncategorized',needsReview:'Category and vendor',categoryReason:'Waiting for your category and vendor review.'}
+    ? {...tx,_reviewSourceCategory:tx.category||tx.cat||'',category:'Uncategorized',needsReview:'Category and vendor',categoryReason:'Waiting for your category and vendor review.'}
     : categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})
   // Actuals filtered by selected accounts, with user overrides applied
   const filteredActuals = useMemo(() => {

@@ -50,7 +50,7 @@ export function transactionDirection(transaction) {
 
 export function isRecognizedIncomeTransaction(transaction, { allowPending = true } = {}) {
   if ((!allowPending && transaction?.pending) || isTransferTransaction(transaction) || Number(transaction?.amount) >= 0) return false
-  const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
+  const category = String(transaction?.category==='Uncategorized'&&transaction?._reviewSourceCategory ? transaction._reviewSourceCategory : transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
   const name = String(transaction?.name || transaction?.merchant_name || transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
   if (/\b(?:memo credit pos|merchant credit|purchase refund|refund|reversal|cash ?back)\b/.test(name)) return false
   return /\b(?:income|payroll|salary|wages?|interest|dividend|pension|benefits?|reimbursement)\b/.test(`${category} ${name}`)
@@ -70,7 +70,7 @@ export function isTransferTransaction(transaction) {
   // Reviewed household distributions leave the managed household cash boundary.
   // Preserve the bank category and signed amount; only management reporting changes.
   if(transaction?.managementCategory==='Dividend Expense' && Number(transaction.amount)>0)return false
-  const category = String(transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
+  const category = String(transaction?.category==='Uncategorized'&&transaction?._reviewSourceCategory ? transaction._reviewSourceCategory : transaction?.category || transaction?.cat || '').toLowerCase().replaceAll('_', ' ')
   const name = String(transaction?.name || transaction?.merchant_name || '').toLowerCase()
   const statement = String(transaction?.originalStatement || transaction?.original_description || '').toLowerCase()
   const combined = `${category} ${name} ${statement}`
