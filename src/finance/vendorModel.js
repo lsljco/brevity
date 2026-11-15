@@ -57,6 +57,7 @@ export function vendorForExpense(workspace,kind,expense){
  if(kind==='posted'&&expense.pending===false&&typeof expense.pendingTransactionId==='string'&&expense.pendingTransactionId&&expense.pendingTransactionId!==expense.id){
   if(links[`posted:${expense.pendingTransactionId}`])return links[`posted:${expense.pendingTransactionId}`]
  }
+ if(kind==='posted'&&!expense.pending&&expense._ruleVendorId&&(workspace?.vendors||[]).some(v=>v.id===expense._ruleVendorId&&!v.archived))return expense._ruleVendorId
  const normalize=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ')
  const identity=normalize(expense.merchant_name||expense.merchantName),description=normalize(expense.originalStatement||expense.original_description||expense.name)
  const matches=(workspace?.vendors||[]).filter(v=>!v.archived&&(v.aliases||[]).some(alias=>normalize(alias)===identity||normalize(alias)===description))

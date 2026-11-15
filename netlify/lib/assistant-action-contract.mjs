@@ -1,3 +1,4 @@
+import {normalizeRuleCriteria} from '../../src/finance/ruleCriteria.js'
 import {validateStudio} from '../../src/finance/scenarioStudioModel.js'
 import {validateScenarioImport} from '../../src/finance/scenarioWorkbookImport.js'
 import { RECOVERY_DEFAULT, validateRecovery } from '../../src/finance/recoveryScenario.js'
@@ -157,7 +158,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'transaction.categorize': ['category'],
   'transaction.allocate': ['budgetLineId','category'],
   'transaction.update': ['name', 'category', 'notes', 'tags', 'goal', 'managementCategory'],
-  'transaction.rule.create': ['title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
+  'transaction.rule.create': ['criteria', 'vendorId', 'title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
   'transaction.rule.delete': [],
   'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence', 'transactionId'],
   'meeting.action.update': ['text', 'owner', 'due', 'status', 'verifiedResult'],
@@ -424,6 +425,8 @@ function normalizeActionPayload(type, input) {
     } else if (type === 'sermon.activate' && (field === 'draftId' || field === 'sourceHash')) {
       assertString(type, field, value)
       normalized[field] = clean(value, field === 'sourceHash' ? 64 : 160)
+    } else if (type === 'transaction.rule.create' && field === 'criteria') {
+      normalized.criteria=normalizeRuleCriteria(value)
     } else if (field === 'vendorId' || field === 'accountId' || field === 'transferAccountId' || field === 'legacyAccountId') {
       assertString(type, field, value)
       normalized[field] = cleanId(value)
@@ -684,7 +687,7 @@ export function normalizeActionOperation(input = {}) {
     if(hasCadenceNote&&(!payload.cadence||!Number.isInteger(payload.noteIndex)||payload.noteIndex<0||payload.noteIndex>3||typeof payload.note!=='string'))throw new Error('A Finance Meeting cadence note requires a cadence, note position, and text.')
     if(!hasSnapshot&&!hasCadenceNote)throw new Error('Choose a supported Finance Meeting guidance field to update.')
   }
-  if (type === 'transaction.rule.create' && (!payload.matchText || !payload.category || !isDate(payload.createdDate))) throw new Error('A future categorization rule requires match text, a category, and a YYYY-MM-DD start date.')
+  if (type === 'transaction.rule.create' && ((!payload.criteria && !payload.matchText) || !payload.category || !isDate(payload.createdDate))) throw new Error('A future categorization rule requires match text, a category, and a YYYY-MM-DD start date.')
   if (type === 'transaction.rule.delete' && !operation.targetId) throw new Error('Removing a categorization rule requires its exact id.')
   if (type === 'budget.update') {
     if (!Number.isInteger(payload.month) || payload.month < 0 || payload.month > 11 || (payload.value === undefined && payload.amount === undefined)) throw new Error('A budget update requires a month from 0 through 11 and a numeric value.')

@@ -1,3 +1,4 @@
+import {matchesRuleCriteria,ruleAccountMatches} from './ruleCriteria.js'
 function normalized(value) {
   return String(value ?? '').trim().toLowerCase()
 }
@@ -7,11 +8,12 @@ function active(condition) {
 }
 
 export function transactionMatchesRule(transaction, rule, accounts = []) {
-  if (!rule?.conditions) return false
+  if (!rule?.conditions && !rule?.criteria) return false
   if (transaction?.pending) return false
   if (!rule.applyToExisting && rule.createdDate && String(transaction.date || '') < rule.createdDate) return false
 
-  const conditions = rule.conditions
+  const conditions = rule.conditions || {}
+  if (rule.criteria) return matchesRuleCriteria(transaction,rule.criteria,accounts) && (!active(conditions.accounts) || ruleAccountMatches(transaction,conditions.accounts.value,accounts))
   if (active(conditions.originalStatement)) {
     const source = normalized(transaction.originalStatement || transaction.original_description || transaction.name)
     const value = normalized(conditions.originalStatement.value)
@@ -47,6 +49,7 @@ export function applyTransactionRule(transaction, rule, accounts = []) {
   if (!transactionMatchesRule(transaction, rule, accounts)) return transaction
   const actions = rule.actions || {}
   const next = { ...transaction }
+  if(active(actions.assignVendor) && actions.assignVendor.value) next._ruleVendorId = actions.assignVendor.value
   if (active(actions.renameMerchant) && actions.renameMerchant.value) next.name = actions.renameMerchant.value.trim()
   if (active(actions.updateCategory) && actions.updateCategory.value) { next.category = actions.updateCategory.value.trim(); next._categoryResolved = true }
   if (active(actions.addTags) && actions.addTags.value) {
