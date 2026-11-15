@@ -773,7 +773,9 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
   const requestedOperations=Array.isArray(input.operations)?input.operations:[]
   const categoryYear=requestedOperations.length>0&&requestedOperations.every(op=>op.type==='budget.update'&&op.payload?.categoryLimit===true&&op.payload.category===requestedOperations[0].payload.category&&op.payload.accountId===requestedOperations[0].payload.accountId)
   if(categoryYear&&requestedOperations.length>12)throw new Error('Review no more than twelve category budget months at a time.')
-  const operations = requestedOperations.slice(0, categoryYear?12:MAX_OPERATIONS).map(normalizeActionOperation)
+  const ruleBatch=requestedOperations.length>0&&requestedOperations.every(op=>['transaction.rule.create','transaction.rule.update'].includes(op.type))
+  if(ruleBatch&&requestedOperations.length>500)throw new Error('Review up to 500 categorization rules at a time.')
+  const operations = requestedOperations.slice(0, ruleBatch?500:categoryYear?12:MAX_OPERATIONS).map(normalizeActionOperation)
   if (!operations.length) throw new Error('The assistant did not identify a supported Brevity action.')
   if (operations.filter(operation => operation.domain === 'calendar').length > 1) throw new Error('For safety, each Family Calendar confirmation can change only one event.')
   const resourceGroups = new Set(operations.map(resourceGroupForOperation))

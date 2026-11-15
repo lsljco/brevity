@@ -1,4 +1,5 @@
 import './TransactionRuleModal.css'
+import RuleSuggestions from './RuleSuggestions.jsx'
 import RuleCriteriaEditor from './RuleCriteriaEditor.jsx'
 import VendorSelector from './VendorSelector.jsx'
 import {useVendorDirectory} from './vendorApi.js'
@@ -23,9 +24,10 @@ function ruleDescription(rule, accounts, vendors) {
   return { text, category, vendor, account:account?.name || '', applyToExisting:Boolean(rule?.applyToExisting) }
 }
 
-export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], today, initial = null, onReviewCreate, onReviewDelete, onClose }) {
+export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], overrides = {}, planned = [], onReviewSuggestions, today, initial = null, onReviewCreate, onReviewDelete, onClose }) {
   const editorRef=useRef(null)
   const [editingRule,setEditingRule]=useState(null)
+  const [showSuggestions,setShowSuggestions]=useState(false)
   const [ruleTitle,setRuleTitle]=useState('')
   const [startDate,setStartDate]=useState(today)
   const titleId = useId()
@@ -35,7 +37,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
   const {directory}=useVendorDirectory()
   const [category, setCategory] = useState(initial?.category || '')
   const [accountId, setAccountId] = useState(initial?.accountId || '')
-  const [applyToExisting, setApplyToExisting] = useState(false)
+  const [applyToExisting, setApplyToExisting] = useState(true)
   const [preparing, setPreparing] = useState('')
   const [error, setError] = useState('')
 
@@ -57,7 +59,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
     }catch(cause){setError(cause.message)}
   }
   const backToRules = () => {
-    setEditingRule(null);setRuleTitle('');setStartDate(today);setVendorId('');setCategory(initial?.category||'');setAccountId(initial?.accountId||'');setApplyToExisting(false);setError('')
+    setEditingRule(null);setRuleTitle('');setStartDate(today);setVendorId('');setCategory(initial?.category||'');setAccountId(initial?.accountId||'');setApplyToExisting(true);setError('')
     setCriteria([{field:initial?.matchField||'originalStatement',operator:initial?.matchMode||'contains',value:initial?.matchText||'',join:'and'}])
     editorRef.current?.scrollTo({top:0})
   }
@@ -108,6 +110,10 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           <label>Rule name<input style={fieldStyle} value={ruleTitle} onChange={event=>setRuleTitle(event.target.value)} maxLength={300}/></label>
           <label>Rule start date<input type="date" style={fieldStyle} value={startDate} onChange={event=>setStartDate(event.target.value)}/></label>
           <small>Changes keep this rule’s identity and priority. The start date applies when past matches are not included.</small>
+        </div>}
+
+        {!editingRule&&onReviewSuggestions&&<div style={{marginTop:18}}><button type="button" className="rule-back" onClick={()=>setShowSuggestions(v=>!v)}>{showSuggestions?'Hide suggested changes':'Find suggested categories and vendors'}</button>
+          {showSuggestions&&<RuleSuggestions planned={planned} transactions={transactions} rules={rules} overrides={overrides} accounts={accounts} directory={directory} onReview={onReviewSuggestions} onClose={onClose}/>}
         </div>}
 
         <RuleCriteriaEditor criteria={criteria} onChange={setCriteria} accounts={accounts} fieldStyle={fieldStyle}/>
