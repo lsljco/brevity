@@ -68,7 +68,7 @@ test('actual bank facts stay immutable and metadata enters reviewed Action Mode'
   assert.match(actualTransaction, /Yes, set up rule/)
   assert.match(actualTransaction, /No, just this transaction/)
   assert.match(transactionRule, /Apply this rule to all past matching transactions/)
-  assert.match(transactionRule, /Match method/)
+  assert.match(readFileSync(new URL('./RuleCriteriaEditor.jsx',import.meta.url),'utf8'), /Match method/)
   assert.equal(actualTransaction.includes('<CategoryToast'), false)
   assert.equal(actualTransaction.includes('<RuleModal'), false)
 

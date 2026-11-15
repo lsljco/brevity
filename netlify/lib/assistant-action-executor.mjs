@@ -328,6 +328,8 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if (operation.type === 'transaction.rule.create') {
     const matchField=payload.matchField||'originalStatement',matchMode=payload.matchMode||'contains'
     const item={id:createId(),name:payload.title||`Categorize ${payload.matchText}`,createdDate:payload.createdDate,applyToExisting:Boolean(payload.applyToExisting),conditions:{originalStatement:{on:matchField==='originalStatement',match:matchMode,value:payload.matchText},merchantName:{on:matchField==='merchantName',match:matchMode,value:payload.matchText},accounts:{on:Boolean(payload.accountId),value:payload.accountId||''}},actions:{updateCategory:{on:true,value:payload.category}},splits:[]}
+    if(payload.criteria)item.criteria=clone(payload.criteria)
+    if(payload.vendorId)item.actions.assignVendor={on:true,value:payload.vendorId}
     return {before,after:[...(Array.isArray(value)?value:[]),item],createdId:item.id}
   }
   if (operation.type === 'transaction.rule.delete') {
@@ -789,7 +791,7 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
         const items=planned?source.value?.transactions:source.value
         if(!Array.isArray(items)||!items.some(item=>item.id===operation.payload.expenseId))throw new Error('That expense no longer exists. Refresh Finance.')
       }
-      if(['recurring.create','recurring.update','debt.create','debt.update','project.create','project.update'].includes(operation.type)&&operation.payload?.vendorId){
+      if(['transaction.rule.create','recurring.create','recurring.update','debt.create','debt.update','project.create','project.update'].includes(operation.type)&&operation.payload?.vendorId){
         const directory=await resources.read(VENDOR_RESOURCE)
         if(!directory.value?.vendors?.some(v=>v.id===operation.payload.vendorId&&!v.archived&&vendorVisible(v,session)))throw new Error('Choose an available vendor you can access for this record.')
       }

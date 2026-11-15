@@ -1,3 +1,7 @@
+import RuleCriteriaEditor from './RuleCriteriaEditor.jsx'
+import VendorSelector from './VendorSelector.jsx'
+import {useVendorDirectory} from './vendorApi.js'
+import {normalizeRuleCriteria,describeRuleCriteria} from './ruleCriteria.js'
 import { useId, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_TRANSACTION_CATEGORIES, mergeCategoryOptions, transactionCategories } from './categoryData.js'
@@ -9,20 +13,21 @@ const fieldStyle = {
   color:'var(--white)', font:'inherit', fontSize:13,
 }
 
-function ruleDescription(rule, accounts) {
-  const text = rule?.conditions?.originalStatement?.value || rule?.conditions?.merchantName?.value || 'matching text'
+function ruleDescription(rule, accounts, vendors) {
+  const text = rule.criteria ? describeRuleCriteria(rule.criteria,accounts) : rule?.conditions?.originalStatement?.value || rule?.conditions?.merchantName?.value || 'matching text'
   const category = rule?.actions?.updateCategory?.value || 'Uncategorized'
   const accountId = rule?.conditions?.accounts?.on ? rule.conditions.accounts.value : ''
   const account = accounts.find(item => String(item.id) === String(accountId))
-  return { text, category, account:account?.name || '', applyToExisting:Boolean(rule?.applyToExisting) }
+  const vendor=vendors.find(v=>v.id===rule.actions?.assignVendor?.value)?.name||''
+  return { text, category, vendor, account:account?.name || '', applyToExisting:Boolean(rule?.applyToExisting) }
 }
 
 export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], today, initial = null, onReviewCreate, onReviewDelete, onClose }) {
   const titleId = useId()
   const categoryListId = useId()
-  const [matchText, setMatchText] = useState(initial?.matchText || '')
-  const [matchField, setMatchField] = useState(initial?.matchField || 'originalStatement')
-  const [matchMode, setMatchMode] = useState(initial?.matchMode || 'contains')
+  const [criteria,setCriteria]=useState([{field:initial?.matchField||'originalStatement',operator:initial?.matchMode||'contains',value:initial?.matchText||'',join:'and'}])
+  const [vendorId,setVendorId]=useState('')
+  const {directory}=useVendorDirectory()
   const [category, setCategory] = useState(initial?.category || '')
   const [accountId, setAccountId] = useState(initial?.accountId || '')
   const [applyToExisting, setApplyToExisting] = useState(false)
@@ -33,29 +38,16 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
     () => mergeCategoryOptions(DEFAULT_TRANSACTION_CATEGORIES, transactions.map(transactionCategories), rules.map(rule => rule?.actions?.updateCategory?.value)),
     [rules, transactions],
   )
-  const previewRule = useMemo(() => ({
-    applyToExisting:true,
-    conditions:{
-      originalStatement:{ on:matchField === 'originalStatement', match:matchMode, value:matchText },
-      merchantName:{ on:matchField === 'merchantName', match:matchMode, value:matchText },
-      accounts:{ on:Boolean(accountId), value:accountId },
-    },
-    actions:{ updateCategory:{ on:true, value:category } },
-  }), [accountId, category, matchField, matchMode, matchText])
-  const matches = useMemo(() => {
-    if (!matchText.trim()) return []
-    return transactions.filter(transaction => !transaction.pending && transactionMatchesRule(transaction, previewRule, accounts))
-  }, [accounts, matchText, previewRule, transactions])
+  const previewRule = useMemo(() => ({applyToExisting:true,criteria,conditions:{accounts:{on:Boolean(accountId),value:accountId}}}),[criteria,accountId])
+  const matches = useMemo(() => transactions.filter(transaction => transactionMatchesRule(transaction,previewRule,accounts)),[accounts,previewRule,transactions])
 
   const reviewCreate = async () => {
-    if (!matchText.trim() || !category.trim()) {
-      setError('Enter bank statement text and the category Brevity should apply.')
-      return
-    }
+    let normalized
+    try{normalized=normalizeRuleCriteria(criteria);if(!category.trim())throw Error('Choose the category Brevity should apply.')}catch(cause){setError(cause.message);return}
     setPreparing('create')
     setError('')
     try {
-      const prepared = await onReviewCreate({ matchText:matchText.trim(), matchField, matchMode, category:category.trim(), accountId, applyToExisting, createdDate:today })
+      const prepared = await onReviewCreate({ criteria:normalized, vendorId, vendorName:directory?.vendors?.find(v=>v.id===vendorId)?.name||'', category:category.trim(), accountId, applyToExisting, createdDate:today })
       if (prepared !== false) onClose()
     } catch (cause) {
       setError(cause?.message || 'This rule could not be prepared for review.')
@@ -79,35 +71,20 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
 
   return createPortal(
     <div role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }} style={{position:'fixed',inset:0,zIndex:9300,display:'flex',alignItems:'center',justifyContent:'center',padding:16,background:'rgba(0,0,0,.75)'}}>
-      <section role="dialog" aria-modal="true" aria-labelledby={titleId} style={{width:'min(720px,100%)',maxHeight:'90vh',overflowY:'auto',padding:24,borderRadius:18,border:'1px solid rgba(197,164,109,.3)',background:'var(--card-bg,#181818)',boxShadow:'0 24px 80px rgba(0,0,0,.65)'}}>
+      <section role="dialog" aria-modal="true" aria-labelledby={titleId} style={{boxSizing:'border-box',minWidth:0,overflowWrap:'anywhere',width:'min(720px,100%)',maxHeight:'90vh',overflowY:'auto',padding:24,borderRadius:18,border:'1px solid rgba(197,164,109,.3)',background:'var(--card-bg,#181818)',boxShadow:'0 24px 80px rgba(0,0,0,.65)'}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'flex-start'}}>
           <div>
             <p style={{margin:'0 0 5px',fontSize:10,textTransform:'uppercase',letterSpacing:'.14em',color:'var(--gold)'}}>Posted bank activity</p>
             <h2 id={titleId} style={{margin:0,fontSize:24,color:'var(--white)'}}>Categorization rules</h2>
-            <p style={{margin:'8px 0 0',fontSize:12,lineHeight:1.5,color:'var(--muted)'}}>When a transaction posts, Brevity can match its original bank statement text and display your chosen category. Bank amounts, dates, and source descriptions stay unchanged.</p>
+            <p style={{margin:'8px 0 0',fontSize:12,lineHeight:1.5,color:'var(--muted)'}}>When a transaction posts, Brevity can match your criteria and apply your chosen category and vendor or payer. Bank amounts, dates, and source descriptions stay unchanged.</p>
           </div>
           <button type="button" aria-label="Close categorization rules" onClick={onClose} style={{border:0,background:'transparent',color:'var(--muted)',fontSize:22,cursor:'pointer'}}>×</button>
         </div>
 
         {initial ? <div role="status" style={{marginTop:18,padding:'10px 12px',borderRadius:10,background:'rgba(197,164,109,.08)',border:'1px solid rgba(197,164,109,.2)',fontSize:11,lineHeight:1.5,color:'var(--muted)'}}>Started from <strong style={{color:'var(--soft-white)'}}>{initial.matchText}</strong>. Adjust the rule below, then return to the transaction editor to review the individual category change.</div> : null}
 
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginTop:22}}>
-          <label style={{fontSize:11,color:'var(--muted)'}}>Match using
-            <select value={matchField} onChange={event => setMatchField(event.target.value)} style={{...fieldStyle,marginTop:6}}>
-              <option value="originalStatement">Original bank statement</option>
-              <option value="merchantName">Merchant name</option>
-            </select>
-          </label>
-          <label style={{fontSize:11,color:'var(--muted)'}}>Match method
-            <select value={matchMode} onChange={event => setMatchMode(event.target.value)} style={{...fieldStyle,marginTop:6}}>
-              <option value="contains">Contains</option>
-              <option value="exactly">Exactly matches</option>
-              <option value="starts">Starts with</option>
-            </select>
-          </label>
-          <label style={{fontSize:11,color:'var(--muted)'}}>Match text
-            <input autoFocus value={matchText} onChange={event => setMatchText(event.target.value)} placeholder="e.g. PUBLIX" style={{...fieldStyle,marginTop:6}} />
-          </label>
+        <RuleCriteriaEditor criteria={criteria} onChange={setCriteria} accounts={accounts} fieldStyle={fieldStyle}/>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:12,marginTop:22}}>
           <label style={{fontSize:11,color:'var(--muted)'}}>Apply category
             <input list={categoryListId} value={category} onChange={event => setCategory(event.target.value)} placeholder="Type or select…" style={{...fieldStyle,marginTop:6}} />
             <datalist id={categoryListId}>{categories.map(option => <option key={option} value={option} />)}</datalist>
@@ -120,9 +97,11 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           </label>
         </div>
 
+        <div style={{marginTop:16}}><VendorSelector value={vendorId} onChange={setVendorId} label="Rule vendor or payer" fieldLabel="Vendor / payer"/></div>
+
         <label style={{display:'flex',alignItems:'flex-start',gap:10,marginTop:14,padding:'12px 14px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',color:'var(--soft-white)',fontSize:12,cursor:'pointer'}}>
           <input type="checkbox" checked={applyToExisting} onChange={event => setApplyToExisting(event.target.checked)} style={{width:18,height:18,margin:0,accentColor:'var(--gold)'}} />
-          <span><strong>Apply this rule to all past matching transactions</strong><small style={{display:'block',marginTop:3,color:'var(--muted)',lineHeight:1.4}}>If selected, existing posted transactions that match these criteria will display the new category after approval. Pending bank activity remains unchanged.</small></span>
+          <span><strong>Apply this rule to all past matching transactions</strong><small style={{display:'block',marginTop:3,color:'var(--muted)',lineHeight:1.4}}>If selected, existing posted transactions that match these criteria will display the new category and selected vendor or payer after approval. Pending bank activity remains unchanged.</small></span>
         </label>
 
         <div style={{marginTop:14,padding:'12px 14px',borderRadius:11,background:'rgba(197,164,109,.07)',border:'1px solid rgba(197,164,109,.18)',fontSize:12,color:'var(--muted)',lineHeight:1.5}}>
@@ -137,9 +116,9 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
         <div style={{marginTop:24,paddingTop:18,borderTop:'1px solid rgba(255,255,255,.08)'}}>
           <p style={{margin:'0 0 10px',fontSize:10,textTransform:'uppercase',letterSpacing:'.12em',color:'var(--muted)'}}>Active rules · {rules.length}</p>
           {rules.length === 0 ? <p style={{margin:0,fontSize:12,color:'var(--muted)'}}>No automatic categorization rules are active.</p> : rules.map(rule => {
-            const description = ruleDescription(rule, accounts)
+            const description = ruleDescription(rule, accounts, directory?.vendors||[])
             return <div key={rule.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,padding:'10px 0',borderTop:'1px solid rgba(255,255,255,.06)'}}>
-              <div style={{minWidth:0}}><strong style={{display:'block',fontSize:13,color:'var(--soft-white)'}}>{description.text} → {description.category}</strong><span style={{fontSize:11,color:'var(--muted)'}}>{description.account || 'All linked accounts'} · {description.applyToExisting ? 'includes past posted matches' : `posts on or after ${rule.createdDate || 'rule creation'}`}</span></div>
+              <div style={{minWidth:0}}><strong style={{display:'block',fontSize:13,color:'var(--soft-white)'}}>{description.text} → {description.category}{description.vendor ? ` · ${description.vendor}` : ''}</strong><span style={{fontSize:11,color:'var(--muted)'}}>{description.account || 'All linked accounts'} · {description.applyToExisting ? 'includes past posted matches' : `posts on or after ${rule.createdDate || 'rule creation'}`}</span></div>
               <button type="button" onClick={() => reviewDelete(rule)} disabled={Boolean(preparing)} style={{flexShrink:0,padding:'7px 10px',borderRadius:8,border:'1px solid rgba(232,150,122,.3)',background:'transparent',color:'var(--expense-color)',font:'inherit',fontSize:11,cursor:preparing?'wait':'pointer'}}>{preparing === rule.id ? 'Preparing…' : 'Review removal'}</button>
             </div>
           })}

@@ -1,3 +1,4 @@
+import {describeRuleCriteria} from './ruleCriteria.js'
 import {useFinancialListSort} from './FinancialListSort.jsx'
 import SortableFinancialTable from './SortableFinancialTable.jsx'
 const DashboardMonthOutlook = lazy(() => import('./DashboardMonthOutlook.jsx'))
@@ -2030,12 +2031,12 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       return false
     }
   }
-  const reviewTransactionRule = ({ matchText, matchField, matchMode, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
-    summary:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${matchText} transactions as ${category}`,
+  const reviewTransactionRule = ({ criteria, vendorId, vendorName, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
+    summary:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${criteria.length===1?criteria[0].value:'matching'} transactions as ${category}${vendorName?` and assign ${vendorName}`:''}`,
     operation:{
       type:'transaction.rule.create',
-      description:`For posted bank transactions whose ${matchField === 'merchantName' ? 'merchant name' : 'original statement'} ${matchMode === 'exactly' ? 'exactly matches' : matchMode === 'starts' ? 'starts with' : 'contains'} “${matchText}”, apply ${category}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ''}`,
-      payload:{ title:`Categorize ${matchText} as ${category}`, matchText, matchField, matchMode, category, accountId, applyToExisting, createdDate },
+      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ''}`,
+      payload:{ title:`Categorize matching transactions as ${category}`, criteria, vendorId, category, accountId, applyToExisting, createdDate },
     },
     storageKey:'lslj_tx_rules_v1',
     surfaceError:true,
