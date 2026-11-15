@@ -1,6 +1,6 @@
 // Shared by rule preview, saved-rule matching and server validation.
-export const RULE_FIELDS = {originalStatement:'Original bank statement',merchantName:'Merchant name',amount:'Amount',direction:'Money direction',account:'Bank account'}
-export const RULE_OPERATORS = {originalStatement:{contains:'Contains',exactly:'Exactly matches',starts:'Starts with'},merchantName:{contains:'Contains',exactly:'Exactly matches',starts:'Starts with'},amount:{equals:'Equals',greater:'Greater than',less:'Less than',between:'Between'},direction:{equals:'Is'},account:{equals:'Is'}}
+export const RULE_FIELDS = {originalStatement:'Original bank statement',merchantName:'Merchant name',amount:'Amount',direction:'Money direction',account:'Bank account',category:'Transaction category'}
+export const RULE_OPERATORS = {originalStatement:{contains:'Contains',exactly:'Exactly matches',starts:'Starts with'},merchantName:{contains:'Contains',exactly:'Exactly matches',starts:'Starts with'},amount:{equals:'Equals',greater:'Greater than',less:'Less than',atLeast:'At least',atMost:'At most',between:'Between'},direction:{equals:'Is'},account:{equals:'Is'},category:{exactly:'Exactly matches'}}
 export function normalizeRuleCriteria(criteria){
  if(!Array.isArray(criteria)||criteria.length<1||criteria.length>5)throw Error('Add between one and five criteria.')
  return criteria.map((c,i)=>{
@@ -29,9 +29,9 @@ function matches(transaction,c,accounts){
  if(c.field==='amount'){
   if(transaction.amount==null||transaction.amount==='')return false
   const n=Math.abs(Number(transaction.amount));if(!Number.isFinite(n))return false
-  return c.operator==='equals'?n===c.value:c.operator==='greater'?n>c.value:c.operator==='less'?n<c.value:n>=c.value&&n<=c.max
+  return c.operator==='equals'?n===c.value:c.operator==='greater'?n>c.value:c.operator==='less'?n<c.value:c.operator==='atLeast'?n>=c.value:c.operator==='atMost'?n<=c.value:n>=c.value&&n<=c.max
  }
- const source=String(c.field==='merchantName'?(transaction.merchant_name||transaction.name||''):(transaction.originalStatement||transaction.original_description||transaction.name||'')).trim().toLowerCase(),value=c.value.toLowerCase()
+ const source=String(c.field==='category'?(transaction.category||transaction.cat||''):c.field==='merchantName'?(transaction.merchant_name||transaction.name||''):(transaction.originalStatement||transaction.original_description||transaction.name||'')).trim().toLowerCase(),value=c.value.toLowerCase()
  return c.operator==='exactly'?source===value:c.operator==='starts'?source.startsWith(value):source.includes(value)
 }
 export function matchesRuleCriteria(transaction,criteria,accounts=[]){
@@ -49,4 +49,16 @@ export function describeRuleCriteria(criteria,accounts=[]){
   groups.at(-1).push(`${RULE_FIELDS[c.field]} ${RULE_OPERATORS[c.field][c.operator].toLowerCase()} ${value}`)
  }
  return groups.map(g=>g.length>1?`(${g.join(' AND ')})`:g[0]).join(' OR ')
+}
+
+export function criteriaForSavedRule(rule){
+ if(rule.criteria)return normalizeRuleCriteria(rule.criteria)
+ const conditions=rule.conditions||{},criteria=[]
+ for(const field of ['originalStatement','merchantName'])if(conditions[field]?.on)criteria.push({field,operator:conditions[field].match||(field==='originalStatement'?'contains':'exactly'),value:conditions[field].value,join:'and'})
+ if(conditions.categories?.on)criteria.push({field:'category',operator:'exactly',value:conditions.categories.value,join:'and'})
+ if(conditions.amount?.on){
+  const {min,max}=conditions.amount,hasMin=min!==''&&min!=null,hasMax=max!==''&&max!=null
+  if(hasMin||hasMax)criteria.push({field:'amount',operator:hasMin&&hasMax?'between':hasMin?'atLeast':'atMost',value:hasMin?min:max,...(hasMin&&hasMax?{max}:{}),join:'and'})
+ }
+ return criteria.length?normalizeRuleCriteria(criteria):[{field:'originalStatement',operator:'contains',value:'',join:'and'}]
 }

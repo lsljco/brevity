@@ -86,7 +86,7 @@ export function resourceForOperation(operation) {
   if (operation.domain === 'projects') return `shared:${SHARED_KEYS.projects}`
   if (operation.type.startsWith('calendar.')) return 'calendar:apple-family'
   if (operation.type === 'transaction.allocate' || operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return `shared:${SHARED_KEYS.overrides}`
-  if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return `shared:${SHARED_KEYS.rules}`
+  if (['transaction.rule.create','transaction.rule.update','transaction.rule.delete'].includes(operation.type)) return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
   if (operation.type === 'forecast.update') return `shared:${SHARED_KEYS.forecasts}`
   if (operation.type === 'finance.account.link' || (operation.type.startsWith('finance.close.') || operation.type.startsWith('finance.forecast-close.') || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return `shared:${SHARED_KEYS.finance}`
@@ -120,7 +120,7 @@ export function recordForOperation(value, operation) {
   if (operation.type === 'meeting.action.update') return (value?.openActions || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.correction.update') return (value?.corrections || []).find(item => item.id === operation.targetId)
   if (operation.type === 'meeting.history.update') return (value?.meetings || []).find(item => item.id === operation.targetId)
-  if (operation.type === 'transaction.rule.delete') return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
+  if (['transaction.rule.update','transaction.rule.delete'].includes(operation.type)) return (Array.isArray(value) ? value : []).find(item => item.id === operation.targetId)
   return null
 }
 
@@ -331,6 +331,13 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     if(payload.criteria)item.criteria=clone(payload.criteria)
     if(payload.vendorId)item.actions.assignVendor={on:true,value:payload.vendorId}
     return {before,after:[...(Array.isArray(value)?value:[]),item],createdId:item.id}
+  }
+  if(operation.type==='transaction.rule.update'){
+    const items=Array.isArray(value)?value:[]
+    const prior=items.find(item=>item.id===operation.targetId)
+    if(!prior)throw Error('That categorization rule no longer exists. Refresh Brevity and try again.')
+    const updated={...prior,name:payload.title||prior.name,createdDate:payload.createdDate,applyToExisting:payload.applyToExisting??Boolean(prior.applyToExisting),criteria:clone(payload.criteria),conditions:{accounts:payload.accountId===undefined?clone(prior.conditions?.accounts||{on:false,value:''}):{on:Boolean(payload.accountId),value:payload.accountId||''}},actions:{...prior.actions,updateCategory:{on:true,value:payload.category},...(payload.vendorId===undefined?{}:{assignVendor:{on:Boolean(payload.vendorId),value:payload.vendorId||''}})}}
+    return {before,after:items.map(item=>item.id===operation.targetId?updated:item)}
   }
   if (operation.type === 'transaction.rule.delete') {
     const items=Array.isArray(value)?value:[]
@@ -791,7 +798,7 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
         const items=planned?source.value?.transactions:source.value
         if(!Array.isArray(items)||!items.some(item=>item.id===operation.payload.expenseId))throw new Error('That expense no longer exists. Refresh Finance.')
       }
-      if(['transaction.rule.create','recurring.create','recurring.update','debt.create','debt.update','project.create','project.update'].includes(operation.type)&&operation.payload?.vendorId){
+      if(['transaction.rule.create','transaction.rule.update','recurring.create','recurring.update','debt.create','debt.update','project.create','project.update'].includes(operation.type)&&operation.payload?.vendorId){
         const directory=await resources.read(VENDOR_RESOURCE)
         if(!directory.value?.vendors?.some(v=>v.id===operation.payload.vendorId&&!v.archived&&vendorVisible(v,session)))throw new Error('Choose an available vendor you can access for this record.')
       }

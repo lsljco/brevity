@@ -4,3 +4,7 @@
 .transaction-rule-editor .vendor-picker .vendor-picker-create{color:var(--gold)}
 .transaction-rule-editor .vendor-picker small{color:var(--muted)}
 .transaction-rule-editor select option{background:var(--slate);color:var(--white)}
+
+.transaction-rule-editor .rule-delete{margin-top:14px;padding:10px 14px;min-height:44px;border:1px solid var(--expense-color);border-radius:10px;background:transparent;color:var(--expense-color);font:inherit;cursor:pointer}
+
+.transaction-rule-editor .rule-back{justify-self:start;min-height:44px;padding:8px 12px;border:1px solid var(--gold);border-radius:9px;background:transparent;color:var(--gold);font:inherit;cursor:pointer}

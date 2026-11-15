@@ -2031,19 +2031,20 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       return false
     }
   }
-  const reviewTransactionRule = ({ criteria, vendorId, vendorName, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
-    summary:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${criteria.length===1?criteria[0].value:'matching'} transactions as ${category}${vendorName?` and assign ${vendorName}`:''}`,
+  const reviewTransactionRule = ({ ruleId, title, criteria, vendorId, vendorName, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
+    summary:ruleId?`Update rule: ${title||category}`:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${criteria.length===1?criteria[0].value:'matching'} transactions as ${category}${vendorName?` and assign ${vendorName}`:''}`,
     operation:{
-      type:'transaction.rule.create',
-      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ''}`,
-      payload:{ title:`Categorize matching transactions as ${category}`, criteria, vendorId, category, accountId, applyToExisting, createdDate },
+      type:ruleId?'transaction.rule.update':'transaction.rule.create',
+      ...(ruleId?{targetId:ruleId}:{}),
+      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ` for records on or after ${createdDate}`}`,
+      payload:{ title:title||`Categorize matching transactions as ${category}`, criteria, vendorId, category, accountId, applyToExisting, createdDate },
     },
     storageKey:'lslj_tx_rules_v1',
     surfaceError:true,
   })
   const reviewTransactionRuleRemoval = rule => stageDirectFinanceReview({
     summary:`Remove categorization rule ${rule.name || rule.id}`,
-    operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category for this bank-statement rule`, payload:{} },
+    operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category and any vendor assignment from this rule. Posted bank records are kept.`, payload:{} },
     storageKey:'lslj_tx_rules_v1',
     surfaceError:true,
   })
