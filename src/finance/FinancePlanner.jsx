@@ -1541,11 +1541,12 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const unmappedActuals = actualAccountScope.unmapped
 
   const reviewedCategoryOverrides=useMemo(()=>{const sources=new Map(retainedActuals.map(t=>[t.id,t]));return Object.fromEntries(Object.entries(txOverrides).map(([id,o])=>[id,{...sources.get(id),...o}]))},[retainedActuals,txOverrides])
+  const establishedCategories=useMemo(()=>[...data.transactions.map(tx=>tx.cat||tx.category),...Object.values(dailyBudget.categoryLimits||{}).map(row=>row.category)].filter(Boolean),[data.transactions,dailyBudget])
   const categoryReviewIds=useMemo(()=>{
-    const report=buildRuleSuggestions({planned:data.transactions,transactions:retainedActuals,rules:txRules,overrides:txOverrides,accounts:data.accounts,directory:vendorDirectory})
+    const report=buildRuleSuggestions({planned:data.transactions,transactions:retainedActuals,rules:txRules,overrides:txOverrides,establishedCategories,accounts:data.accounts,directory:vendorDirectory})
     return new Set([...report.unresolved.map(r=>r.transaction.id),...report.suggestions.flatMap(r=>r.transactions.map(t=>t.id))])
-  },[data.transactions,retainedActuals,txRules,txOverrides,data.accounts,vendorDirectory])
-  const categorizeReviewedActual=tx=>categoryReviewIds.has(tx.id)&&!tx._categoryResolved&&!txOverrides[tx.id]?.category
+  },[establishedCategories,data.transactions,retainedActuals,txRules,txOverrides,data.accounts,vendorDirectory])
+  const categorizeReviewedActual=tx=>categoryReviewIds.has(tx.id)&&!establishedCategories.some(category=>String(category).trim().toLowerCase()===String(tx.category||tx.cat||'').trim().toLowerCase())&&!tx._categoryResolved&&!txOverrides[tx.id]?.category
     ? {...tx,_reviewSourceCategory:tx.category||tx.cat||'',category:'Uncategorized',needsReview:'Category and vendor',categoryReason:'Waiting for your category and vendor review.'}
     : categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})
   // Actuals filtered by selected accounts, with user overrides applied
@@ -2055,7 +2056,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     await syncSharedState(localStorage)
     const current=loadData(),actuals=JSON.parse(localStorage.getItem(PLAID_ACTUALS_KEY)||'[]'),currentRules=JSON.parse(localStorage.getItem('lslj_tx_rules_v1')||'[]')
     const directory=await vendorRequest()
-    const fresh=buildRuleSuggestions({planned:current.transactions,transactions:actuals,rules:currentRules,overrides:JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')||'{}'),accounts:current.accounts,directory})
+    const fresh=buildRuleSuggestions({planned:current.transactions,transactions:actuals,rules:currentRules,overrides:JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')||'{}'),establishedCategories:[...current.transactions.map(tx=>tx.cat||tx.category),...Object.values(loadBudget().categoryLimits||{}).map(row=>row.category)].filter(Boolean),accounts:current.accounts,directory})
     for(const row of selected){
       const found=fresh.suggestions.find(r=>r.id===row.id)
       if(!found||found.evidence!==row.evidence||JSON.stringify(found.transactions)!==JSON.stringify(row.transactions))throw Error('The projected plan, rules, or matching transactions changed. Reopen suggestions to review the latest information.')
@@ -3138,7 +3139,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             <button type="button" onClick={()=>openScheduledTransactions()} aria-pressed={!showActuals}>Scheduled transactions</button>
             <span>{financeAccountScopeLabel} · {financeRange.from} through {financeRange.to}</span>
           </div>
-          {showActuals&&!readOnly&&<details style={{margin:'16px 0'}}><summary>Automatic category and vendor suggestions</summary><RuleSuggestions planned={data.transactions} transactions={plaidActuals||[]} rules={txRules} overrides={txOverrides} accounts={data.accounts} directory={vendorDirectory} onReview={reviewRuleSuggestions} onClose={()=>{}} onReviewTransaction={openActualTxModal}/></details>}
+          {showActuals&&!readOnly&&<details style={{margin:'16px 0'}}><summary>Automatic category and vendor suggestions</summary><RuleSuggestions planned={data.transactions} transactions={plaidActuals||[]} rules={txRules} overrides={txOverrides} establishedCategories={establishedCategories} accounts={data.accounts} directory={vendorDirectory} onReview={reviewRuleSuggestions} onClose={()=>{}} onReviewTransaction={openActualTxModal}/></details>}
           <TransactionListControls categories={[...filteredActuals.map(t=>t.category),...fd.transactions.map(t=>t.cat)]} options={transactionListOptions} onChange={options=>{setTransactionListOptions(options);setVendorOrder(options.sortBy==='vendor'?options.sortDirection:'')}}/>
 
           {/* ── Monthly totals summary ── */}
@@ -3412,6 +3413,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           transactions={plaidActuals || []}
           rules={txRules}
           overrides={txOverrides}
+          establishedCategories={establishedCategories}
           planned={data.transactions}
           onReviewSuggestions={reviewRuleSuggestions}
           onReviewTransaction={openActualTxModal}

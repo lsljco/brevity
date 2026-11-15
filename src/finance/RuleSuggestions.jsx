@@ -3,8 +3,8 @@ import {buildRuleSuggestions} from './ruleSuggestions.js'
 import {describeRuleCriteria} from './ruleCriteria.js'
 import VendorSelector from './VendorSelector.jsx'
 
-export default function RuleSuggestions({planned,transactions,rules,accounts,overrides,directory,onReview,onClose,onReviewTransaction}){
- const report=useMemo(()=>buildRuleSuggestions({planned,transactions,rules,accounts,overrides,directory}),[planned,transactions,rules,accounts,overrides,directory])
+export default function RuleSuggestions({planned,transactions,rules,accounts,overrides,establishedCategories,directory,onReview,onClose,onReviewTransaction}){
+ const report=useMemo(()=>buildRuleSuggestions({planned,transactions,rules,accounts,overrides,establishedCategories,directory}),[planned,transactions,rules,accounts,overrides,establishedCategories,directory])
  const [denied,setDenied]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem('lslj_rule_suggestion_denials_v1')||'[]'))}catch{return new Set()}}),[vendorOverrides,setVendorOverrides]=useState({}),[busy,setBusy]=useState(false),[error,setError]=useState('')
  const denialKey=row=>JSON.stringify([row.id,row.evidence])
  const deny=selected=>setDenied(prev=>{const next=new Set([...prev,...selected.map(denialKey)]);localStorage.setItem('lslj_rule_suggestion_denials_v1',JSON.stringify([...next]));return next})
@@ -27,7 +27,7 @@ export default function RuleSuggestions({planned,transactions,rules,accounts,ove
    <details><summary>{row.transactions.length} matching past transactions</summary>{row.transactions.map((tx,i)=><p key={tx.id||i}>{tx.date} · {tx.originalStatement||tx.original_description||tx.name} · ${Math.abs(Number(tx.amount)).toFixed(2)}<br/>Current category: {tx.category||tx.cat||'Uncategorized'} → {row.category}</p>)}</details>
    <div style={{display:'flex',gap:10,marginTop:12}}><button type="button" disabled={busy||!row.vendorId} onClick={()=>approve([row])}>Approve</button><button type="button" disabled={busy} onClick={()=>deny([row])}>Deny</button></div>
   </article>)}
-  {report.unresolved.length>0&&<details><summary>Uncategorized · Needs review ({report.unresolved.length})</summary>{report.unresolved.map(({transaction:tx,reason},i)=><p key={tx.id||i}><strong>Uncategorized · Needs review</strong><br/>{tx.date} · {tx.originalStatement||tx.name} · ${Math.abs(Number(tx.amount)).toFixed(2)}<br/>{reason}{onReviewTransaction&&<><br/><button type="button" onClick={()=>onReviewTransaction(tx)}>Review transaction</button></>}</p>)}</details>}
+  {report.unresolved.length>0&&<details><summary>Uncategorized · Needs review ({report.unresolved.length})</summary>{report.unresolved.map(({transaction:tx,reason,category},i)=><p key={tx.id||i}><strong>{category} · Needs review</strong><br/>{tx.date} · {tx.originalStatement||tx.name} · ${Math.abs(Number(tx.amount)).toFixed(2)}<br/>{reason}{onReviewTransaction&&<><br/><button type="button" onClick={()=>onReviewTransaction(tx)}>Review transaction</button></>}</p>)}</details>}
   {denied.size>0&&<button type="button" disabled={busy} onClick={()=>{localStorage.removeItem('lslj_rule_suggestion_denials_v1');setDenied(new Set())}}>Restore denied suggestions</button>}
   {error&&<p role="alert">{error}</p>}
  </section>

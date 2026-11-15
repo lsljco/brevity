@@ -11,10 +11,11 @@ const source=tx=>tx.originalStatement||tx.original_description||tx.name||''
 const fingerprint=value=>JSON.stringify(value)
 
 // Only identity evidence can suggest a category. Equal amounts alone never do.
-export function buildRuleSuggestions({planned=[],transactions=[],rules=[],accounts=[],overrides={},directory={vendors:[],links:{}}}){
+export function buildRuleSuggestions({planned=[],transactions=[],rules=[],accounts=[],overrides={},establishedCategories=[],directory={vendors:[],links:{}}}){
  const posted=transactions.filter(t=>!t.pending&&Number.isFinite(Number(t.amount))&&Number(t.amount)!==0)
  const vendors=(directory?.vendors||[]).filter(v=>!v.archived)
  const plans=planned.filter(p=>['income','expense'].includes(p.type)&&category(p)&&!p.deleted&&!p._deleted)
+ const knownCategories=new Set([...plans.map(category),...establishedCategories].map(norm).filter(v=>v&&v!=='uncategorized'))
  const suggestions=new Map(),unresolved=[]
  for(const tx of posted){
   if(overrides[tx.id]?._deleted||overrides[tx.id]?.category&&overrides[tx.id].category!=='Uncategorized')continue
@@ -34,12 +35,13 @@ export function buildRuleSuggestions({planned=[],transactions=[],rules=[],accoun
    suggestions.get(id).transactions.push(tx);continue
   }
   const assigned=vendorForExpense(directory,'posted',tx)
-  const candidatePlans=plans.filter(p=>{
+  let candidatePlans=plans.filter(p=>{
    if(p.type!==direction(tx))return false
    if(p.acct&&!accounts.some(a=>a.id===p.acct&&(a.id===(tx.accountId||tx.acct)||a.plaidAccountId===(tx.accountId||tx.acct))))return false
    const vendor=vendors.find(v=>v.id===p.vendorId)
    return p.vendorId&&assigned===p.vendorId || [p.name,...(vendor?[vendor.name,...(vendor.aliases||[])]:[])].some(label=>phrase(source(tx),label)||phrase(tx.merchant_name,label))
   })
+  if(!candidatePlans.length&&knownCategories.has(norm(tx.category||tx.cat)))candidatePlans=[{id:`category:${tx.category||tx.cat}`,name:tx.merchant_name||source(tx),cat:tx.category||tx.cat,type:direction(tx),vendorId:assigned}]
   const choices=new Map(candidatePlans.map(p=>[`${category(p)}|${p.vendorId||''}`,p]))
   if(choices.size!==1){unresolved.push({transaction:tx,reason:choices.size?'More than one projected category or vendor matches.':'No reliable identity match to a projected income or expense.'});continue}
   const plan=[...choices.values()][0]
@@ -55,7 +57,7 @@ export function buildRuleSuggestions({planned=[],transactions=[],rules=[],accoun
   if(!suggestions.has(id))suggestions.set(id,{id,criteria,category:category(plan),vendorId:vendor?.id||'',accountId,title:`${plan.name} categorization`,reason:`Matches projected ${plan.type}: ${plan.name}.`,transactions:[],evidence:fingerprint(plan)})
   suggestions.get(id).transactions.push(tx)
  }
- return {suggestions:[...suggestions.values()],unresolved,postedCount:posted.length}
+ return {suggestions:[...suggestions.values()],unresolved:unresolved.map(row=>({...row,category:knownCategories.has(norm(row.transaction.category||row.transaction.cat))?(row.transaction.category||row.transaction.cat):'Uncategorized'})),postedCount:posted.length}
 }
 export function suggestionOperation(row,today){
  if(!row.vendorId)throw Error('Choose a vendor or payer before approving this suggestion.')

@@ -50,3 +50,7 @@ test('Uncategorized display preserves source cash classification until a categor
  assert.equal(summarizeActualCashActivity([transfer,income]).net,200)
  assert.equal(actualTransactionKind({...transfer,category:'Groceries'}),'expense')
 })
+test('an established monthly budget category is preserved even when the vendor needs review',()=>{
+ const r=report({planned:[],establishedCategories:['Utilities'],transactions:[{...tx,merchant_name:'Electric utility',name:'Electric utility',category:'Utilities'}]})
+ assert.equal(r.suggestions.length,1);assert.equal(r.suggestions[0].category,'Utilities');assert.equal(r.suggestions[0].vendorId,'');assert.equal(r.unresolved.length,0)
+})
