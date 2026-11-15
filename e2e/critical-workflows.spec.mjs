@@ -4195,7 +4195,7 @@ test('categorization rules continuously propose categories and vendors with bulk
  await page.getByRole('button',{name:'Show posted bank activity'}).click()
  await page.getByText('Automatic category and vendor suggestions',{exact:true}).click()
  const queue=page.getByRole('region',{name:'Suggested categorization changes'})
- await expect(queue.getByText('Create rule: Neighborhood Market categorization',{exact:true})).toBeVisible()
+ await expect(queue).toContainText('Create rule: Neighborhood Market categorization')
  await expect(queue.getByRole('combobox',{name:'Vendor for Neighborhood Market categorization'})).toHaveValue('Neighborhood Market')
  await queue.getByRole('button',{name:'Deny all',exact:true}).click();await expect(queue.getByRole('button',{name:'Approve all',exact:true})).toBeDisabled();expect(executions).toBe(0)
  await queue.getByRole('button',{name:'Restore denied suggestions'}).click()

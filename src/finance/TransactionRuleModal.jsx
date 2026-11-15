@@ -24,7 +24,7 @@ function ruleDescription(rule, accounts, vendors) {
   return { text, category, vendor, account:account?.name || '', applyToExisting:Boolean(rule?.applyToExisting) }
 }
 
-export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], overrides = {}, planned = [], onReviewSuggestions, today, initial = null, onReviewCreate, onReviewDelete, onClose }) {
+export default function TransactionRuleModal({ accounts = [], transactions = [], rules = [], overrides = {}, planned = [], onReviewSuggestions, onReviewTransaction, today, initial = null, onReviewCreate, onReviewDelete, onClose }) {
   const editorRef=useRef(null)
   const [editingRule,setEditingRule]=useState(null)
   const [showSuggestions,setShowSuggestions]=useState(false)
@@ -113,7 +113,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
         </div>}
 
         {!editingRule&&onReviewSuggestions&&<div style={{marginTop:18}}><button type="button" className="rule-back" onClick={()=>setShowSuggestions(v=>!v)}>{showSuggestions?'Hide suggested changes':'Find suggested categories and vendors'}</button>
-          {showSuggestions&&<RuleSuggestions planned={planned} transactions={transactions} rules={rules} overrides={overrides} accounts={accounts} directory={directory} onReview={onReviewSuggestions} onClose={onClose}/>}
+          {showSuggestions&&<RuleSuggestions planned={planned} transactions={transactions} rules={rules} overrides={overrides} accounts={accounts} directory={directory} onReview={onReviewSuggestions} onClose={onClose} onReviewTransaction={tx=>{onClose();onReviewTransaction?.(tx)}}/>}
         </div>}
 
         <RuleCriteriaEditor criteria={criteria} onChange={setCriteria} accounts={accounts} fieldStyle={fieldStyle}/>

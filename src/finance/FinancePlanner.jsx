@@ -3138,7 +3138,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             <button type="button" onClick={()=>openScheduledTransactions()} aria-pressed={!showActuals}>Scheduled transactions</button>
             <span>{financeAccountScopeLabel} · {financeRange.from} through {financeRange.to}</span>
           </div>
-          {showActuals&&!readOnly&&<details style={{margin:'16px 0'}}><summary>Automatic category and vendor suggestions</summary><RuleSuggestions planned={data.transactions} transactions={plaidActuals||[]} rules={txRules} overrides={txOverrides} accounts={data.accounts} directory={vendorDirectory} onReview={reviewRuleSuggestions} onClose={()=>{}}/></details>}
+          {showActuals&&!readOnly&&<details style={{margin:'16px 0'}}><summary>Automatic category and vendor suggestions</summary><RuleSuggestions planned={data.transactions} transactions={plaidActuals||[]} rules={txRules} overrides={txOverrides} accounts={data.accounts} directory={vendorDirectory} onReview={reviewRuleSuggestions} onClose={()=>{}} onReviewTransaction={openActualTxModal}/></details>}
           <TransactionListControls categories={[...filteredActuals.map(t=>t.category),...fd.transactions.map(t=>t.cat)]} options={transactionListOptions} onChange={options=>{setTransactionListOptions(options);setVendorOrder(options.sortBy==='vendor'?options.sortDirection:'')}}/>
 
           {/* ── Monthly totals summary ── */}
@@ -3414,6 +3414,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           overrides={txOverrides}
           planned={data.transactions}
           onReviewSuggestions={reviewRuleSuggestions}
+          onReviewTransaction={openActualTxModal}
           today={todayKey}
           initial={transactionRuleInitial}
           onReviewCreate={reviewTransactionRule}
