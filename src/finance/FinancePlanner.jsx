@@ -1,3 +1,4 @@
+import {buildRuleSuggestions,suggestionOperation} from './ruleSuggestions.js'
 import {describeRuleCriteria} from './ruleCriteria.js'
 import {useFinancialListSort} from './FinancialListSort.jsx'
 import SortableFinancialTable from './SortableFinancialTable.jsx'
@@ -14,7 +15,7 @@ import { buildMetricTrends } from './metricTrends.js'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
 import AutoReconciliationReport from './AutoReconciliationReport.jsx'
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
-import {useVendorDirectory} from './vendorApi.js'
+import {useVendorDirectory,vendorRequest} from './vendorApi.js'
 import {decorateVendorTransactions} from './vendorModel.js'
 import VendorSelector from './VendorSelector.jsx'
 import { Fragment, lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react'
@@ -29,6 +30,7 @@ const DailyClosingBalanceEditor = lazy(() => import('./DailyClosingBalanceEditor
 const DailyClosingBalanceDialog = lazy(() => import('./DailyClosingBalanceEditor.jsx').then(module=>({default:module.DailyClosingBalanceDialog})))
 const PlaidConnect = lazy(() => import('./PlaidConnect.jsx'))
 import TransactionRuleModal from './TransactionRuleModal.jsx'
+import RuleSuggestions from './RuleSuggestions.jsx'
 import { buildProjection, toISO, addDays, fmtMoney, fmtK, txOccursOnDate } from './projection.js'
 import { CALENDAR_DATA_VERSION, loadFinanceData, migrateFinanceData, restorePersistedFinanceData } from './financeData.js'
 import { actualTransactionKind, budgetCategoryForTransaction, buildBalanceSheet, isRealizedIncomeTransaction, isRecognizedIncomeTransaction, isTransferTransaction, matchesTransactionFilter, summarizeActualCashActivity, summarizeActuals, summarizeBudgetActuals, transactionDirection } from './reportingData.js'
@@ -1539,21 +1541,29 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const unmappedActuals = actualAccountScope.unmapped
 
   const reviewedCategoryOverrides=useMemo(()=>{const sources=new Map(retainedActuals.map(t=>[t.id,t]));return Object.fromEntries(Object.entries(txOverrides).map(([id,o])=>[id,{...sources.get(id),...o}]))},[retainedActuals,txOverrides])
+  const establishedCategories=useMemo(()=>[...data.transactions.map(tx=>tx.cat||tx.category),...Object.values(dailyBudget.categoryLimits||{}).map(row=>row.category)].filter(Boolean),[data.transactions,dailyBudget])
+  const categoryReviewIds=useMemo(()=>{
+    const report=buildRuleSuggestions({planned:data.transactions,transactions:retainedActuals,rules:txRules,overrides:txOverrides,establishedCategories,accounts:data.accounts,directory:vendorDirectory})
+    return new Set([...report.unresolved.map(r=>r.transaction.id),...report.suggestions.flatMap(r=>r.transactions.map(t=>t.id))])
+  },[establishedCategories,data.transactions,retainedActuals,txRules,txOverrides,data.accounts,vendorDirectory])
+  const categorizeReviewedActual=tx=>categoryReviewIds.has(tx.id)&&!establishedCategories.some(category=>String(category).trim().toLowerCase()===String(tx.category||tx.cat||'').trim().toLowerCase())&&!tx._categoryResolved&&!txOverrides[tx.id]?.category
+    ? {...tx,_reviewSourceCategory:tx.category||tx.cat||'',category:'Uncategorized',needsReview:'Category and vendor',categoryReason:'Waiting for your category and vendor review.'}
+    : categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})
   // Actuals filtered by selected accounts, with user overrides applied
   const filteredActuals = useMemo(() => {
     return decorateVendorTransactions(actualAccountScope.included
       .map(tx => applyTransactionRules(tx, txRules, data.accounts))
       .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
-      .filter(tx => !tx._deleted).map(tx=>categorizeExpense(tx,{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})),vendorDirectory,'posted',vendorOrder)
-  }, [actualAccountScope, data.accounts, data.transactions,dailyBudget,reviewedCategoryOverrides, txOverrides, txRules,vendorDirectory,vendorOrder])
+      .filter(tx => !tx._deleted).map(categorizeReviewedActual),vendorDirectory,'posted',vendorOrder)
+  }, [categoryReviewIds,actualAccountScope, data.accounts, data.transactions,dailyBudget,reviewedCategoryOverrides, txOverrides, txRules,vendorDirectory,vendorOrder])
   const balanceActuals = useMemo(
     () => mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal).filter(transaction => !transaction.pending),
     [actualAccountScope.included, plaidIdToLocal],
   )
   const cashForecastActuals = useMemo(
     () => decorateVendorTransactions(mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal)
-      .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])).map(tx=>categorizeExpense({...applyTransactionRules(tx,txRules,data.accounts),...(txOverrides[tx.id]||{})},{overrides:reviewedCategoryOverrides,scheduled:data.transactions,budget:dailyBudget})),vendorDirectory,'posted',vendorOrder),
-    [actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder,txRules,txOverrides,dailyBudget,reviewedCategoryOverrides,data.accounts,data.transactions],
+      .filter(transaction => forecastScope.accountIds.has(plaidIdToLocal[transaction?.accountId])).map(tx=>categorizeReviewedActual({...applyTransactionRules(tx,txRules,data.accounts),...(txOverrides[tx.id]||{})})),vendorDirectory,'posted',vendorOrder),
+    [categoryReviewIds,actualAccountScope.included, forecastScope.accountIds, plaidIdToLocal,vendorDirectory,vendorOrder,txRules,txOverrides,dailyBudget,reviewedCategoryOverrides,data.accounts,data.transactions],
   )
   const recoveryFinanceSources = useMemo(() => ({
     data:{...data,transactions:decorateVendorTransactions(data.transactions,vendorDirectory,'planned',vendorOrder)},
@@ -2031,19 +2041,31 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       return false
     }
   }
-  const reviewTransactionRule = ({ criteria, vendorId, vendorName, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
-    summary:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${criteria.length===1?criteria[0].value:'matching'} transactions as ${category}${vendorName?` and assign ${vendorName}`:''}`,
+  const reviewTransactionRule = ({ ruleId, title, criteria, vendorId, vendorName, category, accountId, applyToExisting, createdDate }) => stageDirectFinanceReview({
+    summary:ruleId?`Update rule: ${title||category}`:`Automatically categorize ${applyToExisting ? 'matching past and future' : 'future'} ${criteria.length===1?criteria[0].value:'matching'} transactions as ${category}${vendorName?` and assign ${vendorName}`:''}`,
     operation:{
-      type:'transaction.rule.create',
-      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ''}`,
-      payload:{ title:`Categorize matching transactions as ${category}`, criteria, vendorId, category, accountId, applyToExisting, createdDate },
+      type:ruleId?'transaction.rule.update':'transaction.rule.create',
+      ...(ruleId?{targetId:ruleId}:{}),
+      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ` for records on or after ${createdDate}`}`,
+      payload:{ title:title||`Categorize matching transactions as ${category}`, criteria, vendorId, category, accountId, applyToExisting, createdDate },
     },
     storageKey:'lslj_tx_rules_v1',
     surfaceError:true,
   })
+  const reviewRuleSuggestions = async selected => {
+    await syncSharedState(localStorage)
+    const current=loadData(),actuals=JSON.parse(localStorage.getItem(PLAID_ACTUALS_KEY)||'[]'),currentRules=JSON.parse(localStorage.getItem('lslj_tx_rules_v1')||'[]')
+    const directory=await vendorRequest()
+    const fresh=buildRuleSuggestions({planned:current.transactions,transactions:actuals,rules:currentRules,overrides:JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')||'{}'),establishedCategories:[...current.transactions.map(tx=>tx.cat||tx.category),...Object.values(loadBudget().categoryLimits||{}).map(row=>row.category)].filter(Boolean),accounts:current.accounts,directory})
+    for(const row of selected){
+      const found=fresh.suggestions.find(r=>r.id===row.id)
+      if(!found||found.evidence!==row.evidence||JSON.stringify(found.transactions)!==JSON.stringify(row.transactions))throw Error('The projected plan, rules, or matching transactions changed. Reopen suggestions to review the latest information.')
+    }
+    return stageDirectFinanceReview({summary:`Approve ${selected.length} categorization rules for matching past and future transactions`,operations:selected.map(row=>suggestionOperation(row,todayKey)),storageKey:'lslj_tx_rules_v1',expectedVersion:getAcknowledgedSharedStateVersion(localStorage,'lslj_tx_rules_v1'),surfaceError:true})
+  }
   const reviewTransactionRuleRemoval = rule => stageDirectFinanceReview({
     summary:`Remove categorization rule ${rule.name || rule.id}`,
-    operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category for this bank-statement rule`, payload:{} },
+    operation:{ type:'transaction.rule.delete', targetId:rule.id, description:`Stop automatically applying the ${rule.actions?.updateCategory?.value || ''} category and any vendor assignment from this rule. Posted bank records are kept.`, payload:{} },
     storageKey:'lslj_tx_rules_v1',
     surfaceError:true,
   })
@@ -3117,6 +3139,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             <button type="button" onClick={()=>openScheduledTransactions()} aria-pressed={!showActuals}>Scheduled transactions</button>
             <span>{financeAccountScopeLabel} · {financeRange.from} through {financeRange.to}</span>
           </div>
+          {showActuals&&!readOnly&&<details style={{margin:'16px 0'}}><summary>Automatic category and vendor suggestions</summary><RuleSuggestions planned={data.transactions} transactions={plaidActuals||[]} rules={txRules} overrides={txOverrides} establishedCategories={establishedCategories} accounts={data.accounts} directory={vendorDirectory} onReview={reviewRuleSuggestions} onClose={()=>{}} onReviewTransaction={openActualTxModal}/></details>}
           <TransactionListControls categories={[...filteredActuals.map(t=>t.category),...fd.transactions.map(t=>t.cat)]} options={transactionListOptions} onChange={options=>{setTransactionListOptions(options);setVendorOrder(options.sortBy==='vendor'?options.sortDirection:'')}}/>
 
           {/* ── Monthly totals summary ── */}
@@ -3389,6 +3412,11 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           accounts={data.accounts}
           transactions={plaidActuals || []}
           rules={txRules}
+          overrides={txOverrides}
+          establishedCategories={establishedCategories}
+          planned={data.transactions}
+          onReviewSuggestions={reviewRuleSuggestions}
+          onReviewTransaction={openActualTxModal}
           today={todayKey}
           initial={transactionRuleInitial}
           onReviewCreate={reviewTransactionRule}

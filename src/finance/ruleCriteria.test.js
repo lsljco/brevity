@@ -47,3 +47,43 @@ test('server rejects unavailable vendor and invalid criteria before saving',asyn
  await assert.rejects(()=>prepareRecordOperations({proposal,session:{member:'Larry',role:'admin'},permissions:{finance:true},resources:{read:async key=>({version:0,value:key===VENDOR_RESOURCE?{vendors:[]}:[]})}}),/available vendor/)
  input.operations[0].payload.criteria=Array(6).fill(text('x'));assert.throws(()=>normalizeActionProposal(input,{member:'Larry',role:'admin'}),/five/)
 })
+
+test('editing a legacy rule keeps identity, position and unrelated actions while replacing its criteria',async()=>{
+ const {criteriaForSavedRule}=await import('./ruleCriteria.js')
+ const legacy={id:'legacy',name:'Original rule',createdDate:'2026-10-01',applyToExisting:true,conditions:{originalStatement:{on:true,match:'contains',value:'Market'},merchantName:{on:true,match:'starts',value:'Market'},amount:{on:true,min:'10',max:'100'},accounts:{on:true,value:'a'},categories:{on:true,value:'Food'}},actions:{updateCategory:{on:true,value:'Groceries'},assignVendor:{on:true,value:'old-vendor'},addTags:{on:true,value:'family'}},splits:[{cat:'Food',amount:10}]}
+ const criteria=criteriaForSavedRule(legacy)
+ assert.equal(criteria.length,4)
+ assert.equal(transactionMatchesRule({name:'Market',category:'Food',amount:10,accountId:'a'},rule(criteria)),true)
+ const proposal=normalizeActionProposal({operations:[{type:'transaction.rule.update',targetId:'legacy',payload:{title:'Renamed rule',criteria:[text('New Market')],category:'Household',vendorId:'',accountId:'',applyToExisting:false,createdDate:'2026-10-01'}}]},{member:'Larry',role:'admin'})
+ const before=[{id:'first'},legacy,{id:'last'}],result=applyRecordOperation(before,proposal.operations[0])
+ assert.deepEqual(result.after.map(r=>r.id),['first','legacy','last'])
+ const edited=result.after[1]
+ assert.equal(edited.name,'Renamed rule');assert.equal(edited.createdDate,'2026-10-01')
+ assert.deepEqual(edited.actions.addTags,legacy.actions.addTags);assert.deepEqual(edited.splits,legacy.splits)
+ assert.equal(edited.actions.assignVendor.on,false)
+ assert.equal(transactionMatchesRule({name:'Market',amount:20,date:'2026-11-01'},edited),false)
+ assert.equal(transactionMatchesRule({name:'New Market',amount:200,date:'2026-11-01'},edited),true)
+ assert.deepEqual(result.before,before)
+ assert.throws(()=>applyRecordOperation([],proposal.operations[0]),/no longer exists/)
+ assert.throws(()=>normalizeActionProposal({operations:[{type:'transaction.rule.update',payload:proposal.operations[0].payload}]},{member:'Larry',role:'admin'}),/exact.*id/)
+})
+test('legacy one-sided amount bounds preserve inclusive matching when edited',async()=>{
+ const {criteriaForSavedRule}=await import('./ruleCriteria.js')
+ for(const [min,max,pass,fail] of [['10','',10,9],['','100',100,101]]){
+  const criteria=criteriaForSavedRule({conditions:{amount:{on:true,min,max}}})
+  assert.equal(transactionMatchesRule({amount:pass},rule(criteria)),true)
+  assert.equal(transactionMatchesRule({amount:fail},rule(criteria)),false)
+ }
+})
+test('rule update validates vendor access and rejects stale versions',async()=>{
+ const saved={id:'existing',name:'Rule',actions:{},conditions:{}}
+ const proposal=normalizeActionProposal({operations:[{type:'transaction.rule.update',targetId:'existing',payload:{criteria:[text('payroll')],vendorId:'v1',category:'Salary',createdDate:'2026-11-14'}}]},{member:'Larry',role:'admin'})
+ const resource=resourceForOperation(proposal.operations[0]);proposal.expectedVersions={[resource]:2}
+ let version=2,vendors=[{id:'v1',name:'Payer',accessMembers:[]}]
+ const resources={read:async key=>key===VENDOR_RESOURCE?{version:1,value:{vendors}}:{version,value:[saved]}}
+ const args={proposal,session:{member:'Larry',role:'admin'},permissions:{finance:true},resources}
+ const prepared=await prepareRecordOperations(args)
+ assert.equal(prepared.prepared[0].after[0].actions.assignVendor.value,'v1')
+ vendors=[];await assert.rejects(()=>prepareRecordOperations(args),/available vendor/)
+ version=3;await assert.rejects(()=>prepareRecordOperations(args),/changed|version|refresh/i)
+})

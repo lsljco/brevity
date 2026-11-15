@@ -78,6 +78,7 @@ export const ACTION_TYPES = {
   'transaction.allocate': 'finance',
   'transaction.update': 'finance',
   'transaction.rule.create': 'finance',
+  'transaction.rule.update': 'finance',
   'transaction.rule.delete': 'finance',
   'meeting.action.create': 'planning',
   'meeting.action.update': 'planning',
@@ -159,6 +160,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'transaction.allocate': ['budgetLineId','category'],
   'transaction.update': ['name', 'category', 'notes', 'tags', 'goal', 'managementCategory'],
   'transaction.rule.create': ['criteria', 'vendorId', 'title', 'matchText', 'matchField', 'matchMode', 'category', 'accountId', 'applyToExisting', 'createdDate'],
+  'transaction.rule.update': ['criteria','vendorId','title','category','accountId','applyToExisting','createdDate'],
   'transaction.rule.delete': [],
   'meeting.action.create': ['text', 'owner', 'due', 'status', 'financialEffect', 'meetingDate', 'cadence', 'transactionId'],
   'meeting.action.update': ['text', 'owner', 'due', 'status', 'verifiedResult'],
@@ -231,7 +233,7 @@ const ACTION_ENUMS = {
   'household.schedule.invitation.update': { response:['accepted', 'declined'] },
   'household.maintenance.completion.update': { action:['start', 'submit', 'approve', 'return', 'reopen'] },
 }
-const STRONG_TYPES = new Set(['health.care.create','health.care.update',...GOVERNANCE_TYPES,'apple.sources.update','activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
+const STRONG_TYPES = new Set(['health.care.create','health.care.update',...GOVERNANCE_TYPES,'apple.sources.update','activity.remove','education.observation.record','improvement.transition','nutrition.meal.remove', 'debt.delete', 'project.delete', 'calendar.delete', 'recurring.delete', 'transaction.rule.delete', 'transaction.rule.update', 'plan.overview.update', 'sermon.activate', 'household.schedule.block.delete', 'household.schedule.routine.delete', 'household.maintenance.chore.delete', 'finance.account.link'])
 const MAX_OPERATIONS = 8
 
 const resourceGroupForOperation = operation => {
@@ -262,7 +264,7 @@ const resourceGroupForOperation = operation => {
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return 'shared:homehq_items_v1'
   if (operation.type === 'transaction.allocate' || operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return 'shared:brevity_transaction_overrides_v1'
-  if (operation.type === 'transaction.rule.create' || operation.type === 'transaction.rule.delete') return 'shared:lslj_tx_rules_v1'
+  if (['transaction.rule.create','transaction.rule.update','transaction.rule.delete'].includes(operation.type)) return 'shared:lslj_tx_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
   if (operation.type === 'forecast.update') return 'shared:brevity_finance_scenarios_v1'
   if (operation.type === 'finance.account.link' || ((operation.type.startsWith('finance.close.') || operation.type.startsWith('finance.forecast-close.')) || ['finance.spending.review','finance.statement.import','finance.reserve.set'].includes(operation.type))) return 'shared:lslj_finance_v9'
@@ -425,7 +427,7 @@ function normalizeActionPayload(type, input) {
     } else if (type === 'sermon.activate' && (field === 'draftId' || field === 'sourceHash')) {
       assertString(type, field, value)
       normalized[field] = clean(value, field === 'sourceHash' ? 64 : 160)
-    } else if (type === 'transaction.rule.create' && field === 'criteria') {
+    } else if (['transaction.rule.create','transaction.rule.update'].includes(type) && field === 'criteria') {
       normalized.criteria=normalizeRuleCriteria(value)
     } else if (field === 'vendorId' || field === 'accountId' || field === 'transferAccountId' || field === 'legacyAccountId') {
       assertString(type, field, value)
@@ -688,6 +690,7 @@ export function normalizeActionOperation(input = {}) {
     if(!hasSnapshot&&!hasCadenceNote)throw new Error('Choose a supported Finance Meeting guidance field to update.')
   }
   if (type === 'transaction.rule.create' && ((!payload.criteria && !payload.matchText) || !payload.category || !isDate(payload.createdDate))) throw new Error('A future categorization rule requires match text, a category, and a YYYY-MM-DD start date.')
+  if(type==='transaction.rule.update'&&(!operation.targetId||!payload.criteria||!payload.category||!isDate(payload.createdDate)))throw Error('Editing a rule requires its exact id, criteria, category and start date.')
   if (type === 'transaction.rule.delete' && !operation.targetId) throw new Error('Removing a categorization rule requires its exact id.')
   if (type === 'budget.update') {
     if (!Number.isInteger(payload.month) || payload.month < 0 || payload.month > 11 || (payload.value === undefined && payload.amount === undefined)) throw new Error('A budget update requires a month from 0 through 11 and a numeric value.')
@@ -770,7 +773,9 @@ export function normalizeActionProposal(input = {}, { member, role = 'member', n
   const requestedOperations=Array.isArray(input.operations)?input.operations:[]
   const categoryYear=requestedOperations.length>0&&requestedOperations.every(op=>op.type==='budget.update'&&op.payload?.categoryLimit===true&&op.payload.category===requestedOperations[0].payload.category&&op.payload.accountId===requestedOperations[0].payload.accountId)
   if(categoryYear&&requestedOperations.length>12)throw new Error('Review no more than twelve category budget months at a time.')
-  const operations = requestedOperations.slice(0, categoryYear?12:MAX_OPERATIONS).map(normalizeActionOperation)
+  const ruleBatch=requestedOperations.length>0&&requestedOperations.every(op=>['transaction.rule.create','transaction.rule.update'].includes(op.type))
+  if(ruleBatch&&requestedOperations.length>500)throw new Error('Review up to 500 categorization rules at a time.')
+  const operations = requestedOperations.slice(0, ruleBatch?500:categoryYear?12:MAX_OPERATIONS).map(normalizeActionOperation)
   if (!operations.length) throw new Error('The assistant did not identify a supported Brevity action.')
   if (operations.filter(operation => operation.domain === 'calendar').length > 1) throw new Error('For safety, each Family Calendar confirmation can change only one event.')
   const resourceGroups = new Set(operations.map(resourceGroupForOperation))

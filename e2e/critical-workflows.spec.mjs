@@ -737,7 +737,7 @@ test('changing a posted transaction category offers a prefilled rule with past-m
   await expect(dialog.getByLabel('Match text')).toHaveValue('Neighborhood Market')
   await expect(dialog.getByLabel('Apply category')).toHaveValue('Groceries')
   const pastMatches=dialog.getByRole('checkbox',{name:/Apply this rule to all past matching transactions/})
-  await expect(pastMatches).not.toBeChecked()
+  await expect(pastMatches).toBeChecked()
   await pastMatches.check()
   await dialog.getByRole('button',{name:'Review new rule'}).click()
   await expect(page.getByRole('dialog',{name:'Review proposed Brevity changes'})).toBeVisible()
@@ -4127,4 +4127,82 @@ test('categorization rules support five criteria and choosing or creating a vend
  expect(prepared.payload.vendorId).toBe('new-vendor');expect(prepared.payload.applyToExisting).toBe(true)
  await expect(review).toContainText('New Grocery Vendor')
  await review.getByRole('button',{name:'Cancel',exact:true}).click();expect(executions).toBe(1)
+})
+
+test('categorization rules edit in place with deletion only inside the editor',async({page},testInfo)=>{
+ test.setTimeout(60000)
+ let saved=[{id:'saved-rule',name:'Market rule',createdDate:'2026-10-01',applyToExisting:true,conditions:{originalStatement:{on:true,match:'contains',value:'Market'},accounts:{on:true,value:'a1'}},actions:{updateCategory:{on:true,value:'Groceries'},assignVendor:{on:true,value:'vendor-1'}}}],prepared,executions=0
+ const records=cashForecastRecords()
+ await page.route('**/.netlify/functions/household-state**',route=>route.fulfill({json:{records:{...records,lslj_tx_rules_v1:{key:'lslj_tx_rules_v1',value:JSON.stringify(saved),version:executions+1,updatedAt:new Date().toISOString()}},serverTime:new Date().toISOString()}}))
+ await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[{id:'vendor-1',name:'Market Vendor',accessMembers:[],documents:[]}],links:{}}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>{
+  const body=route.request().postDataJSON();prepared=body.operation
+  return route.fulfill({json:{proposal:{id:'edit-rule-proposal',summary:body.summary,risk:'strong-confirmation',operations:[{...prepared,id:'op',domain:'finance',risk:'strong-confirmation',allowedScopes:['this-item'],defaultScope:'this-item'}]}}})
+ })
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>{
+  executions++
+  if(prepared.type==='transaction.rule.update'){const p=prepared.payload;saved=saved.map(r=>r.id===prepared.targetId?{...r,name:p.title,criteria:p.criteria,createdDate:p.createdDate,applyToExisting:p.applyToExisting,conditions:{accounts:{on:!!p.accountId,value:p.accountId}},actions:{updateCategory:{on:true,value:p.category},assignVendor:{on:!!p.vendorId,value:p.vendorId}}}:r)}
+  if(prepared.type==='transaction.rule.delete')saved=saved.filter(r=>r.id!==prepared.targetId)
+  return route.fulfill({json:{audit:{id:'edited',summary:'Saved',taskLinks:[]}}})
+ })
+ async function openRules(){
+  await page.goto('/?view=today');await expect(page.locator('.app-shell')).toBeVisible()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click()
+  await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Transactions',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await page.getByRole('button',{name:'Show posted bank activity'}).click();await page.getByRole('button',{name:/Categorization rules/}).click()
+ }
+ await openRules()
+ let dialog=page.getByRole('dialog',{name:'Categorization rules'})
+ await expect(dialog.getByRole('button',{name:'Delete rule',exact:true})).toHaveCount(0)
+ await expect(dialog.getByRole('button',{name:'Review removal'})).toHaveCount(0)
+ await dialog.getByRole('button',{name:'Edit rule',exact:true}).click()
+ const editor=page.getByRole('dialog',{name:'Edit rule',exact:true})
+ await expect(editor.getByLabel('Rule name')).toHaveValue('Market rule');await expect(editor.getByLabel('Match text')).toHaveValue('Market')
+ await expect(editor.getByLabel('Rule start date')).toHaveValue('2026-10-01')
+ await expect(editor.getByLabel('Apply category')).toHaveValue('Groceries');await expect(editor.getByRole('combobox',{name:'Rule vendor or payer'})).toHaveValue('Market Vendor')
+ await editor.getByLabel('Match text').fill('Discard me');await editor.getByRole('button',{name:'Back to rules'}).click();expect(executions).toBe(0)
+ await dialog.getByRole('button',{name:'Edit rule',exact:true}).click();await expect(editor.getByLabel('Match text')).toHaveValue('Market')
+ await editor.getByLabel('Rule name').fill('Weekly groceries');await editor.getByLabel('Apply category').fill('Household groceries')
+ await editor.getByRole('button',{name:'+ Add criterion',exact:true}).click()
+ const amount=editor.getByRole('group',{name:'Criterion 2'});await amount.getByLabel('Match using').selectOption('amount');await amount.getByLabel('Amount',{exact:true}).fill('25')
+ for(const theme of ['dark','light']){await page.evaluate(t=>document.documentElement.setAttribute('data-theme',t),theme);await editor.getByRole('button',{name:'Delete rule',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath(`edit-rule-${theme}.png`),fullPage:true})}
+ await editor.getByRole('button',{name:'Review rule changes'}).click()
+ const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
+ await expect(review).toBeVisible();expect(prepared.type).toBe('transaction.rule.update');expect(prepared.targetId).toBe('saved-rule');expect(prepared.payload.criteria).toHaveLength(2);expect(prepared.payload.vendorId).toBe('vendor-1');expect(executions).toBe(0)
+ await review.getByRole('button',{name:'Apply approved changes'}).click();await expect(review).not.toBeVisible();expect(saved).toHaveLength(1)
+ await openRules();await dialog.getByRole('button',{name:'Edit rule',exact:true}).click()
+ await expect(editor.getByLabel('Rule name')).toHaveValue('Weekly groceries');await expect(editor.getByRole('group')).toHaveCount(2)
+ await editor.getByRole('button',{name:'Delete rule',exact:true}).click();await expect(review).toBeVisible();expect(prepared.type).toBe('transaction.rule.delete');expect(prepared.targetId).toBe('saved-rule')
+ await review.getByRole('button',{name:'Cancel',exact:true}).click();expect(executions).toBe(1);expect(saved).toHaveLength(1)
+})
+
+test('categorization rules continuously propose categories and vendors with bulk review and uncategorized queue',async({page},testInfo)=>{
+ const records=cashForecastRecords(),finance=JSON.parse(records.lslj_finance_v9.value)
+ finance.transactions=[{...finance.transactions[0],name:'Neighborhood Market',cat:'Groceries',vendorId:'vendor-1'}]
+ records.lslj_finance_v9.value=JSON.stringify(finance)
+ records.lslj_tx_rules_v1={key:'lslj_tx_rules_v1',value:'[]',version:1,updatedAt:new Date().toISOString()}
+ let prepared,executions=0
+ await page.route('**/.netlify/functions/household-state**',route=>route.fulfill({json:{records,serverTime:new Date().toISOString()}}))
+ await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[{id:'vendor-1',name:'Neighborhood Market',accessMembers:[],documents:[]}],links:{}}}))
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=prepare-direct',route=>{
+  const body=route.request().postDataJSON();prepared=body.operations
+  return route.fulfill({json:{proposal:{id:'suggestion-review',summary:body.summary,risk:'strong-confirmation',operations:prepared.map((op,i)=>({...op,id:`op-${i}`,domain:'finance',risk:'strong-confirmation',allowedScopes:['this-item'],defaultScope:'this-item'}))}}})
+ })
+ await page.route('**/.netlify/functions/brevity-assistant-actions?action=execute',route=>{executions++;return route.fulfill({json:{audit:{id:'approved',summary:'Saved',taskLinks:[]}}})})
+ await page.goto('/?view=today');await expect(page.locator('.app-shell')).toBeVisible()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click()
+ await openMenuIfMobile(page,testInfo);await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Transactions',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+ await page.getByRole('button',{name:'Show posted bank activity'}).click()
+ await page.getByText('Automatic category and vendor suggestions',{exact:true}).click()
+ const queue=page.getByRole('region',{name:'Suggested categorization changes'})
+ await expect(queue).toContainText('Create rule: Neighborhood Market categorization')
+ await expect(queue.getByRole('combobox',{name:'Vendor for Neighborhood Market categorization'})).toHaveValue('Neighborhood Market')
+ await queue.getByRole('button',{name:'Deny all',exact:true}).click();await expect(queue.getByRole('button',{name:'Approve all',exact:true})).toBeDisabled();expect(executions).toBe(0)
+ await queue.getByRole('button',{name:'Restore denied suggestions'}).click()
+ await queue.locator('summary').filter({hasText:/Uncategorized/}).click();await expect(queue).toContainText('Uncategorized · Needs review')
+ for(const theme of ['dark','light']){await page.evaluate(t=>document.documentElement.setAttribute('data-theme',t),theme);await queue.scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath(`rule-suggestions-${theme}.png`),fullPage:true})}
+ await queue.getByRole('button',{name:'Approve all',exact:true}).click()
+ const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'});await expect(review).toBeVisible()
+ expect(prepared).toHaveLength(1);expect(prepared[0].payload).toMatchObject({category:'Groceries',vendorId:'vendor-1',applyToExisting:true});expect(executions).toBe(0)
+ await review.getByRole('button',{name:'Cancel',exact:true}).click();expect(executions).toBe(0)
 })
