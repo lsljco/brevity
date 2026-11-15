@@ -1,3 +1,4 @@
+import './TransactionRuleModal.css'
 import RuleCriteriaEditor from './RuleCriteriaEditor.jsx'
 import VendorSelector from './VendorSelector.jsx'
 import {useVendorDirectory} from './vendorApi.js'
@@ -9,7 +10,7 @@ import { transactionMatchesRule } from './transactionRules.js'
 
 const fieldStyle = {
   width:'100%', boxSizing:'border-box', padding:'11px 12px', borderRadius:10,
-  border:'1px solid rgba(255,255,255,.14)', background:'rgba(255,255,255,.05)',
+  border:'1px solid var(--glass-border)', background:'var(--slate-2)',
   color:'var(--white)', font:'inherit', fontSize:13,
 }
 
@@ -71,7 +72,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
 
   return createPortal(
     <div role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }} style={{position:'fixed',inset:0,zIndex:9300,display:'flex',alignItems:'center',justifyContent:'center',padding:16,background:'rgba(0,0,0,.75)'}}>
-      <section role="dialog" aria-modal="true" aria-labelledby={titleId} style={{boxSizing:'border-box',minWidth:0,overflowWrap:'anywhere',width:'min(720px,100%)',maxHeight:'90vh',overflowY:'auto',padding:24,borderRadius:18,border:'1px solid rgba(197,164,109,.3)',background:'var(--card-bg,#181818)',boxShadow:'0 24px 80px rgba(0,0,0,.65)'}}>
+      <section className="transaction-rule-editor" role="dialog" aria-modal="true" aria-labelledby={titleId} style={{boxSizing:'border-box',minWidth:0,overflowWrap:'anywhere',width:'min(720px,100%)',maxHeight:'90vh',overflowY:'auto',padding:24,borderRadius:18,border:'1px solid rgba(197,164,109,.3)',background:'var(--slate)',color:'var(--white)',boxShadow:'0 24px 80px rgba(0,0,0,.65)'}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'flex-start'}}>
           <div>
             <p style={{margin:'0 0 5px',fontSize:10,textTransform:'uppercase',letterSpacing:'.14em',color:'var(--gold)'}}>Posted bank activity</p>
@@ -111,7 +112,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
         </div>
 
         {error ? <p role="alert" style={{margin:'12px 0 0',color:'var(--expense-color)',fontSize:12}}>{error}</p> : null}
-        <button type="button" onClick={reviewCreate} disabled={Boolean(preparing)} style={{width:'100%',marginTop:14,padding:12,border:0,borderRadius:11,background:'var(--gold)',color:'#17130d',font:'inherit',fontSize:13,fontWeight:700,cursor:preparing?'wait':'pointer'}}>{preparing === 'create' ? 'Preparing review…' : 'Review new rule'}</button>
+        <button type="button" onClick={reviewCreate} disabled={Boolean(preparing)} style={{width:'100%',marginTop:14,padding:12,border:0,borderRadius:11,background:'var(--gold)',color:'var(--black)',font:'inherit',fontSize:13,fontWeight:700,cursor:preparing?'wait':'pointer'}}>{preparing === 'create' ? 'Preparing review…' : 'Review new rule'}</button>
 
         <div style={{marginTop:24,paddingTop:18,borderTop:'1px solid rgba(255,255,255,.08)'}}>
           <p style={{margin:'0 0 10px',fontSize:10,textTransform:'uppercase',letterSpacing:'.12em',color:'var(--muted)'}}>Active rules · {rules.length}</p>
