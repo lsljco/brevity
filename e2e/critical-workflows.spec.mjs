@@ -1749,6 +1749,7 @@ test('weekly groceries add only selected quantities to the shared household list
  await expect(page.getByRole('heading',{name:'Grocery List',exact:true})).toBeVisible()
  expect(posts[0].items).toHaveLength(1);expect(posts[0].items[0].quantity).toBe('2 bags');expect(posts[0].items[0].name).toBe('oats')
  await expect(page.getByRole('heading',{name:'Grocery List',exact:true})).toBeVisible()
+ await page.getByText('Update individual items and quantities',{exact:true}).click()
  await expect(page.getByLabel('Quantity for oats',{exact:true})).toHaveValue('2 bags')
  await page.getByLabel('Quantity for oats',{exact:true}).fill('3 bags')
  await page.getByRole('button',{name:'Save quantity',exact:true}).click()
@@ -3644,7 +3645,7 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   expect(download.suggestedFilename()).toMatch(/\.csv$/)
   if(screen==='Reporting')for(const name of ['Overview','Profit & Loss','Cash Flow','Balance Sheet','Budget vs Actual','Vendor Spend']){
    await page.getByRole('tab',{name,exact:true}).click()
-   const statement=name==='Cash Flow'?page.locator('.finance-export[aria-label^="Export Cash Flow "]:visible'):page.locator('.finance-export[aria-label="Export financial report"]:visible');await statement.getByLabel('Export format').selectOption('csv')
+   const statement=name==='Cash Flow'?page.locator('.finance-export[aria-label^="Export Cash Flow "]:visible'):page.locator('.finance-export[aria-label="Export financial report"]:visible').last();await statement.getByLabel('Export format').selectOption('csv')
    const next=page.waitForEvent('download');await statement.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toMatch(/\.csv$/)
   }
   if(screen==='Budget'){

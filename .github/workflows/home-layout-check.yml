@@ -22,6 +22,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npx playwright test home-dashboard --workers=4
+      - name: Verify recording navigation, grocery handoff, and report exports
+        run: npx playwright test critical-workflows --grep 'recording survives Meal Plan|weekly groceries add only|financial workspaces expose working exports' --workers=4
       - uses: actions/upload-artifact@v4
         if: always()
         with:
