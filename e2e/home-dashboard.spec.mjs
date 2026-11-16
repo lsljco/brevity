@@ -77,6 +77,7 @@ test('History and approvals live in Settings rather than the page toolbar',async
  const expand=page.getByRole('button',{name:'Expand navigation',exact:true});if(await expand.isVisible())await expand.click()
  const menu=page.getByRole('button',{name:'Menu',exact:true});if(await menu.isVisible()&&await menu.getAttribute('aria-expanded')==='false')await menu.click()
  await page.getByRole('button',{name:'Open settings',exact:true}).click()
+ const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true});if(await collapse.isVisible())await collapse.click()
  await page.locator('.settings-history > summary').click()
  await expect(page.locator('.settings-history')).toContainText('Meeting History')
  await page.getByRole('button',{name:'Browse archive history',exact:true}).click()
