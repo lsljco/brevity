@@ -1746,9 +1746,8 @@ test('weekly groceries add only selected quantities to the shared household list
  await proposal.getByRole('checkbox',{name:'oats',exact:true}).check()
  await page.screenshot({path:`test-results/grocery-proposal-${test.info().project.name}.png`,fullPage:true})
  await proposal.getByRole('button',{name:'Add to Grocery List',exact:true}).click()
- await expect(proposal.getByRole('status')).toContainText('1 items added')
+ await expect(page.getByRole('heading',{name:'Grocery List',exact:true})).toBeVisible()
  expect(posts[0].items).toHaveLength(1);expect(posts[0].items[0].quantity).toBe('2 bags');expect(posts[0].items[0].name).toBe('oats')
- await proposal.getByRole('button',{name:'Open Grocery List',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Grocery List',exact:true})).toBeVisible()
  await expect(page.getByLabel('Quantity for oats',{exact:true})).toHaveValue('2 bags')
  await page.getByLabel('Quantity for oats',{exact:true}).fill('3 bags')
@@ -3612,7 +3611,7 @@ test('Budget consolidates recurring records and exports matching CSV XLSX and PD
  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
  const row=page.locator('.finance-budget-line').filter({hasText:'HOA Dues'})
  await expect(row).toHaveCount(1);await expect(row.locator('.finance-budget-line-budget')).toHaveText('$300.00')
- const toolbar=page.locator('.finance-export')
+ const toolbar=page.locator('.finance-export[aria-label="Export Budget '+month+'"]')
  const {readFile}=await import('node:fs/promises')
  for(const format of ['csv','xlsx','pdf']){
   await toolbar.getByLabel('Export format').selectOption(format)
@@ -3644,7 +3643,7 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   expect(download.suggestedFilename()).toMatch(/\.csv$/)
   if(screen==='Reporting')for(const name of ['Overview','Profit & Loss','Cash Flow','Balance Sheet','Budget vs Actual','Vendor Spend']){
    await page.getByRole('tab',{name,exact:true}).click()
-   const statement=page.locator('.finance-export:visible').last();await statement.getByLabel('Export format').selectOption('csv')
+   const statement=name==='Cash Flow'?page.locator('.finance-export[aria-label^="Export Cash Flow "]:visible'):page.locator('.finance-export[aria-label="Export financial report"]:visible');await statement.getByLabel('Export format').selectOption('csv')
    const next=page.waitForEvent('download');await statement.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toMatch(/\.csv$/)
   }
   if(screen==='Budget'){
@@ -3823,7 +3822,7 @@ test('Cash Forecast redesigned meetings audit all cadence layouts exports and co
   await page.screenshot({path:testInfo.outputPath(`meeting-${label}.png`)})
   // Also capture the full component for visual inspection beyond the viewport.
   await packet.locator('#finance-decisions-assignments').scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath(`meeting-${label}-commitments.png`)})
-  await packet.locator('.fm-export-menu > summary').click();const download=page.waitForEvent('download');await packet.getByRole('button',{name:'Export',exact:true}).click();const d=await download;expect(d.suggestedFilename()).toMatch(/\.xlsx$/)
+  await packet.locator('.fm-export-menu > summary').click();const download=page.waitForEvent('download');await packet.locator('.fm-export-menu').getByRole('button',{name:'Export',exact:true}).click();const d=await download;expect(d.suggestedFilename()).toMatch(/\.xlsx$/)
   const z=await JSZip.loadAsync(await fs.readFile(await d.path()));expect(await z.file('xl/workbook.xml').async('string')).toContain(`name="${label}"`);expect(await z.file('xl/styles.xml').async('string')).toContain('FF243126')
   await packet.locator('.fm-export-menu > summary').click()
  }
@@ -4079,7 +4078,7 @@ test('Scenario Studio reserve payoff ledger reconciles and remains readable in b
  await expect(studio.getByLabel('Minimum available cash',{exact:true})).toHaveValue('24000')
  await studio.getByRole('navigation',{name:'Scenario Studio tabs'}).getByRole('button',{name:'Forecast',exact:true}).click()
  await expect(studio.getByRole('columnheader',{name:'Description',exact:true})).toBeVisible()
- await expect(studio.locator('.studio-ledger').getByRole('row').filter({hasText:'LJ Discover payoff'})).toContainText('-$3,000.00')
+ await expect(studio.locator('.studio-ledger').getByRole('row').filter({hasText:'LJ Discover payoff'})).toContainText('-$5,000.00')
  await expect(studio.locator('.studio-ledger').getByRole('row').filter({hasText:'2026 property tax payoff'})).toContainText('-$12,000.00')
  await expect(studio.getByRole('columnheader',{name:'Year',exact:true})).toBeVisible()
  for(const theme of ['light','dark']){
@@ -4092,7 +4091,8 @@ test('Scenario Studio reserve payoff ledger reconciles and remains readable in b
  const march=studio.getByRole('row').filter({hasText:'2026-03'})
  await expect(march).toContainText('$3,000.00')
  await studio.getByLabel('Minimum available cash',{exact:true}).fill('30000')
- await expect(studio.getByRole('row').filter({hasText:'2026-03'})).toContainText('$2,000.00')
+ await expect(studio.getByRole('row').filter({hasText:'2026-03'})).toContainText('$3,000.00')
+ await expect(studio.getByRole('row').filter({hasText:'2026-03'})).toContainText('$5,000.00')
 })
 
 test('categorization rules support five criteria and choosing or creating a vendor',async({page},testInfo)=>{

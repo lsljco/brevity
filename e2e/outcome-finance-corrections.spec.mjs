@@ -112,7 +112,7 @@ test('Scenario adds dated payouts expenses and liabilities and edits payoff timi
  await studio.getByLabel('First payment / effective date',{exact:true}).fill('2026-02-15')
  await studio.getByRole('button',{name:'Add liability',exact:true}).first().click()
  await studio.getByLabel('Name',{exact:true}).fill('Additional loan')
- await studio.getByLabel('Balance',{exact:true}).fill('4000')
+ await studio.getByRole('spinbutton',{name:'Balance',exact:true}).fill('4000')
  await studio.getByLabel('Planned payoff date (optional)',{exact:true}).fill('2026-03-12')
  const forecast=()=>studio.getByRole('navigation',{name:'Scenario Studio tabs'}).getByRole('button',{name:'Forecast',exact:true}).click()
  await forecast()
