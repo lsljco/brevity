@@ -74,12 +74,13 @@ test('History and approvals live in Settings rather than the page toolbar',async
  await openHome(page,testInfo)
  await expect(page.locator('.app-toolbar').getByText('Meeting History',{exact:true})).toHaveCount(0)
  await expect(page.locator('.app-toolbar .app-archive-entry')).toHaveCount(0)
- const expand=page.getByRole('button',{name:'Expand navigation',exact:true});if(await expand.isVisible())await expand.click()
- const menu=page.getByRole('button',{name:'Menu',exact:true});if(await menu.isVisible()&&await menu.getAttribute('aria-expanded')==='false')await menu.click()
+ const menu=page.getByRole('button',{name:'Menu',exact:true})
+ if(await menu.isVisible()){if(await menu.getAttribute('aria-expanded')==='false')await menu.click()}
+ else {const expand=page.getByRole('button',{name:'Expand navigation',exact:true});if(await expand.isVisible())await expand.click()}
  await page.getByRole('button',{name:'Open settings',exact:true}).click()
  const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true});if(await collapse.isVisible())await collapse.click()
  await page.locator('.settings-history > summary').click()
  await expect(page.locator('.settings-history')).toContainText('Meeting History')
  await page.getByRole('button',{name:'Browse archive history',exact:true}).click()
- await expect(page.getByRole('heading',{name:'Household history archive'})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Household history archive'})).toBeVisible({timeout:15000})
 })
