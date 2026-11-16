@@ -14,3 +14,41 @@
 .home-financial{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(2,minmax(0,1fr)) 20px;gap:12px}.home-financial h2{font-size:21px}.home-financial strong{font-size:clamp(19px,2vw,28px);overflow-wrap:anywhere}.home-financial>button{grid-column:4;grid-row:1;margin:0;padding:0}.home-financial .home-next-bill{grid-column:1/-1;grid-row:2}.home-financial .home-eyebrow{font-size:9px}
 @media(max-width:760px){.home-financial{position:relative;grid-template-columns:1fr 1fr}.home-financial>div:first-child{grid-column:1/-1;padding-right:24px}.home-financial>button{position:absolute;right:18px;top:18px}.home-financial .home-next-bill{grid-row:3}.home-financial strong{font-size:26px}}
 .home-financial .home-balance-unavailable{font:15px/1.5 var(--font);overflow-wrap:normal}.home-financial strong{font-size:clamp(17px,1.6vw,25px)}
+
+/* A viewport dashboard on tablets and desktops; each card retains its full content. */
+@media (min-width:761px) and (min-height:600px) {
+ .app-main[data-life-view="home"] .home-dashboard{flex:1 1 0;min-height:0;width:100%;box-sizing:border-box;margin:0 auto;padding:8px 16px;display:flex;flex-direction:column;gap:10px}
+ .home-controls{flex:none;margin:0;gap:8px}
+ .home-banner{flex:none;grid-template-columns:minmax(0,3fr) minmax(190px,1fr);gap:12px;margin:0;height:clamp(110px,17vh,160px)}
+ .home-welcome{min-height:0;padding:18px 24px}
+ .home-welcome h1{font-size:clamp(30px,3.6vw,52px)}
+ .home-welcome p{font-size:11px}
+ .home-weather{padding:12px 16px;overflow:auto}
+ .home-weather>strong{font-size:38px;margin:3px 0}
+ .home-weather p{font-size:12px;margin:3px 0}
+ .home-columns{flex:1 1 0;min-height:0;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) minmax(0,1fr);gap:12px;align-items:stretch}
+ .home-column{min-height:0;gap:12px;grid-template-rows:repeat(2,minmax(0,1fr))}
+ .home-center{grid-template-rows:minmax(0,1fr) minmax(80px,auto)}
+ .home-right{grid-column:auto;grid-template-columns:minmax(0,1fr)}
+ .home-card{min-height:0;padding:12px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+ .home-card header{position:sticky;top:-12px;background:var(--slate);z-index:1;padding:4px 0}
+ .home-card h2{font-size:22px;margin-bottom:8px}
+ .home-rows button,.home-chores button{padding:8px 0}
+ .home-rows button{grid-template-columns:56px minmax(0,1fr);gap:6px}
+ .home-main-meals{gap:8px}
+ .home-meal img,.home-meal-placeholder{height:clamp(55px,9vh,95px)}
+ .home-meal>div:not(.home-meal-placeholder){padding:7px}
+ .home-meal h3{margin:4px 0 6px}
+ .home-snack-title{font-size:20px;margin:8px 0 6px}
+ .home-snacks .home-meal img,.home-snacks .home-meal-placeholder{min-height:70px}
+ .home-financial{min-height:0;overflow:auto;padding:10px 12px;gap:7px}
+ .home-financial h2{font-size:18px}
+ .home-pillars{flex:none;position:relative;margin:0;padding:6px 0}
+ .home-pillars summary{font-size:18px}
+ .home-pillars[open] nav{position:absolute;bottom:100%;left:0;right:0;z-index:5;margin:0;padding:14px;border:1px solid var(--glass-border);border-radius:12px;background:var(--slate);max-height:40vh;overflow:auto}
+ .home-footer{flex:none;font-size:11px;gap:8px}
+}
+@media (min-width:761px) and (max-width:1100px) and (min-height:600px) and (orientation:portrait) {
+ .home-columns{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);grid-template-rows:minmax(0,2fr) minmax(0,1fr)}
+ .home-right{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr)}
+}

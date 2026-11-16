@@ -54,3 +54,18 @@ test('Home is the default after reload and Today notification links still open T
  await expect(page.locator('.today-dashboard')).toBeVisible()
  await expect(page.getByRole('region',{name:'Daily briefing'})).toBeVisible()
 })
+
+test('Home overview fits the tablet and desktop viewport',async({page},testInfo)=>{
+ test.skip(testInfo.project.name==='iphone','Phone retains its scrolling layout')
+ await openHome(page,testInfo)
+ const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true});if(await collapse.isVisible())await collapse.click()
+ await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2)
+ for(const selector of ['.home-banner','.home-left','.home-center','.home-right','.home-financial','.home-footer']){
+  const box=await page.locator(selector).boundingBox()
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y+box.height).toBeLessThanOrEqual(page.viewportSize().height)
+ }
+ await page.locator('.home-outcomes').evaluate(el=>{for(let i=0;i<20;i++){const li=document.createElement('li');li.textContent='Additional household outcome '+i;el.append(li)}})
+ await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2)
+ await page.screenshot({path:testInfo.outputPath('home-one-screen.png')})
+})
