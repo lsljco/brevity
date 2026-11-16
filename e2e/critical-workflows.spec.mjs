@@ -2411,6 +2411,7 @@ test.describe('persistent meeting recording',()=>{
     await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
     await openSettingsSection(page)
+    await expect(hub.getByRole('button',{name:'Pause recording',exact:true})).toBeVisible()
     await expect.poll(()=>[...archive.values()].some(row=>row.status==='recording')).toBe(true)
     await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
