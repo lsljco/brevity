@@ -2,6 +2,7 @@ import {test,expect} from '@playwright/test'
 import {mockBackend} from './home-fixtures.mjs'
 async function openHome(page,testInfo,role='admin'){
  await mockBackend(page)
+ await page.route('**/.netlify/functions/household-archive?*',route=>route.fulfill({json:{rows:[]}}))
  await page.route('**/.netlify/functions/icloud-calendar*',route=>route.fulfill({json:{connected:true,syncedAt:new Date().toISOString(),events:[
  {id:'home-family',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',title:'Family planning together',date:new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date()),time:'11:00 AM',owner:'Family'},
  {id:'home-private',source:'icloud',appleCalendarId:'larry',appleCalendarOwner:'Larry',title:'Private work meeting',date:new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date()),time:'1:00 PM',owner:'Larry'}]}}))
@@ -83,4 +84,8 @@ test('History and approvals live in Settings rather than the page toolbar',async
  await expect(page.locator('.settings-history')).toContainText('Meeting History')
  await page.getByRole('button',{name:'Browse archive history',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Household history archive'})).toBeVisible({timeout:15000})
+ await page.route('**/.netlify/functions/household-archive?*',route=>route.fulfill({json:{}}))
+ await page.getByRole('button',{name:'Search history',exact:true}).click()
+ await expect(page.getByRole('alert')).toContainText('Archive history is temporarily unavailable')
+ await expect(page.getByRole('heading',{name:'Household history archive'})).toBeVisible()
 })
