@@ -650,7 +650,8 @@ test('blocked speech keeps its audio for a direct play tap and resumes follow-up
    const titles=await dialog.getByRole('option').allTextContents()
    expect(titles).toEqual([...titles].sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base',numeric:true})))
    await expect(dialog.getByRole('button',{name:'Review swap'})).toBeDisabled()
-   await dialog.getByRole('combobox').selectOption('snack-premier-chocolate')
+   const replacement=dialog.getByRole('combobox'),current=await replacement.inputValue()
+   await replacement.selectOption(SNACK_LIBRARY.find(meal=>meal.id!==current).id)
    await expect(dialog.getByRole('button',{name:'Review swap'})).toBeEnabled()
    await dialog.getByRole('button',{name:'Cancel'}).click()
  })
@@ -1316,18 +1317,14 @@ test('Direct outcomes editing reviews the exact date without opening Ask Brevity
 })
 
 
-test('Outcomes shows the first three saved priorities and expands the complete list',async({page})=>{
+test('Outcomes displays all saved priorities without hiding the fourth',async({page})=>{
  await page.route('**/.netlify/functions/household-data*',route=>{
   const p=plan();p.topPriorities=['First outcome','Second outcome','Third outcome','Fourth outcome'].map((title,index)=>({id:`outcome-${index}`,title,owner:'Family',status:'pending'}));p.household.priorities=p.topPriorities
   return route.fulfill({json:{householdId:'lslj-family',plan:p}})
  })
  await page.reload()
  const outcomes=page.getByRole('region',{name:'Today’s Outcomes',exact:true})
- await expect(outcomes.locator('.today-focus-bubbles li')).toHaveCount(3)
- await expect(outcomes).not.toContainText('Fourth outcome')
- await outcomes.getByRole('button',{name:'Show all 4 outcomes'}).click()
  await expect(outcomes.locator('.today-focus-bubbles li')).toHaveCount(4)
- await expect(outcomes).toContainText('Fourth outcome')
- await outcomes.getByRole('button',{name:'Show top three'}).click()
- await expect(outcomes.locator('.today-focus-bubbles li')).toHaveCount(3)
+ for(const title of ['First outcome','Second outcome','Third outcome','Fourth outcome'])await expect(outcomes).toContainText(title)
+ await expect(outcomes.getByRole('button',{name:'Show top three'})).toHaveCount(0)
 })

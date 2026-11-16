@@ -66,7 +66,7 @@ test('sidebar account controls are consolidated under one Settings destination',
   const footer = appSource.match(/<div className="sidebar-footer">([\s\S]*?)<\/div><\/aside>/)?.[1] || ''
   assert.match(footer, /aria-label="Open settings"/)
   assert.doesNotMatch(footer, /Light Mode|Dark Mode|Sign Out|sidebar-user/)
-  assert.match(appSource, /function SettingsPage\(\{ currentMember, role, theme, onThemeChange, onSignOut \}\)/)
+  assert.match(appSource, /function SettingsPage\(\{ currentMember, role, theme, onThemeChange, onSignOut, onOpenArchive \}\)/)
   assert.match(appSource, /Use Light Mode.*Use Dark Mode/)
   assert.match(appSource, /onClick=\{onSignOut\}/)
   assert.match(mobileShellSource, /\.settings-action-button\s*\{[^}]*min-height:\s*44px;/s)

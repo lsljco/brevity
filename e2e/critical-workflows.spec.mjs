@@ -1,3 +1,19 @@
+
+async function openSettingsSection(page, title='Archive & History') {
+ const menu=page.getByRole('button',{name:'Menu',exact:true})
+ const drawer=page.locator('#primary-navigation-drawer')
+ if(await menu.isVisible()&&!((await drawer.getAttribute('class'))||'').includes('is-expanded'))await menu.click()
+ await page.getByRole('button',{name:'Open settings',exact:true}).click()
+ const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
+ if(await collapse.isVisible())await collapse.click()
+ const section=page.locator('.settings-page details').filter({has:page.locator('summary').filter({hasText:new RegExp('^'+title.replace('&','&')+'$')})})
+ if(!(await section.getAttribute('open')!==null))await section.locator('summary').click()
+ return section
+}
+async function openSavedMeetings(page) {
+ const section=await openSettingsSection(page)
+ await section.getByRole('button',{name:'Meeting History',exact:true}).click()
+}
 async function openTodayDetails(page) {
   await expect(page.locator('.today-dashboard')).toBeVisible()
   const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true})
@@ -44,9 +60,7 @@ test('approved Cash Forecast layout keeps selected-day details alongside the cal
     await page.screenshot({path:testInfo.outputPath('cash-forecast-desktop-full.png')})
   }
   await expect(detail).toContainText('Scheduled expenses')
-  const workspaceBox=await page.locator('.finance-forecast-page').boundingBox()
-  const toolsBox=await page.locator('.app-support-tools').boundingBox()
-  expect(toolsBox.y+toolsBox.height).toBeLessThanOrEqual(workspaceBox.y)
+  await expect(page.locator('.app-support-tools')).toHaveCount(0)
   await detail.getByRole('button',{name:'Close day details'}).click()
   await expect(detail).toHaveCount(0)
   await toolbar.getByRole('button',{name:'Reconcile with bank',exact:true}).click()
@@ -1732,10 +1746,10 @@ test('weekly groceries add only selected quantities to the shared household list
  await proposal.getByRole('checkbox',{name:'oats',exact:true}).check()
  await page.screenshot({path:`test-results/grocery-proposal-${test.info().project.name}.png`,fullPage:true})
  await proposal.getByRole('button',{name:'Add to Grocery List',exact:true}).click()
- await expect(proposal.getByRole('status')).toContainText('1 items added')
- expect(posts[0].items).toHaveLength(1);expect(posts[0].items[0].quantity).toBe('2 bags');expect(posts[0].items[0].name).toBe('oats')
- await proposal.getByRole('button',{name:'Open Grocery List',exact:true}).click()
  await expect(page.getByRole('heading',{name:'Grocery List',exact:true})).toBeVisible()
+ expect(posts[0].items).toHaveLength(1);expect(posts[0].items[0].quantity).toBe('2 bags');expect(posts[0].items[0].name).toBe('oats')
+ await expect(page.getByRole('heading',{name:'Grocery List',exact:true})).toBeVisible()
+ await page.getByText('Update individual items and quantities',{exact:true}).click()
  await expect(page.getByLabel('Quantity for oats',{exact:true})).toHaveValue('2 bags')
  await page.getByLabel('Quantity for oats',{exact:true}).fill('3 bags')
  await page.getByRole('button',{name:'Save quantity',exact:true}).click()
@@ -2397,6 +2411,12 @@ test.describe('persistent meeting recording',()=>{
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
     await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
     await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
+    await openSettingsSection(page)
+    await expect(hub.getByRole('button',{name:'Pause recording',exact:true})).toBeVisible()
+    await expect(page.locator('.app-toolbar').getByRole('button',{name:'Meeting History',exact:true})).toHaveCount(0)
+    await expect.poll(()=>[...archive.values()].some(row=>row.status==='recording')).toBe(true)
+    await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+    await expect(hub).toContainText('Recording · Tomorrow’s Alignment')
     await expect.poll(()=>audio.size,{timeout:20000}).toBeGreaterThan(0)
     await hub.getByRole('button',{name:'Pause recording',exact:true}).click()
     await expect(hub).toContainText('Paused')
@@ -2411,7 +2431,7 @@ test.describe('persistent meeting recording',()=>{
     await hub.getByRole('button',{name:'Stop Meeting',exact:true}).click()
     await expect.poll(()=>[...archive.values()].some(row=>row.status==='stopped'&&row.transcript.includes('Recorded household')),{timeout:15000}).toBe(true)
     await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
-    await hub.getByRole('button',{name:'Meeting History',exact:true}).click()
+    await openSavedMeetings(page)
     const history=page.getByRole('dialog',{name:'Meeting History'})
     await history.getByRole('navigation',{name:'Saved meetings'}).getByRole('button',{name:'Tomorrow’s Alignment'}).click()
     await expect(history).toContainText('Recorded household meeting segment.')
@@ -2472,13 +2492,14 @@ test('device layout audit covers compact phones, rotation, tablets and wide desk
     await page.screenshot({path:`test-results/device-rhythm-${width}.png`})
     await expect.poll(()=>page.locator('.app-main').evaluate(e=>e.scrollWidth-e.clientWidth),`Today overflow at ${width}`).toBeLessThanOrEqual(1)
     await rhythm.locator('.personal-reminders > summary').click()
-    await page.getByRole('region',{name:'Meeting recorder'}).getByRole('button',{name:'Meeting History'}).click()
+    await openSavedMeetings(page)
     const history=page.getByRole('dialog',{name:'Meeting History'})
     await expect(history).toBeVisible()
     const box=await history.boundingBox()
     expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width)
     expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(height)
     await history.getByRole('button',{name:'Close Meeting History'}).click()
+    await page.goto('/?view=today');await openTodayDetails(page)
   }
 })
 
@@ -2687,7 +2708,7 @@ test('Enhancements captures a spoken idea and screenshot, then shares discussion
   await page.screenshot({path:`test-results/enhancements-${testInfo.project.name}.png`})
 })
 
-test('contextual archives open Finance and Meals history and preserve the underlying screen',async({page},testInfo)=>{
+test('Settings archives browse Finance and Meals history',async({page},testInfo)=>{
  const requests=[]
  await page.route('**/.netlify/functions/household-archive*',async route=>{
   const query=new URL(route.request().url()).searchParams;requests.push(Object.fromEntries(query))
@@ -2695,15 +2716,17 @@ test('contextual archives open Finance and Meals history and preserve the underl
   await route.fulfill({json:{cutoff:'2025-10-09',rows:[{id:'saved',date,kind,title:kind==='meals'?'Saved menu':'HOA dues',coverage:'Saved source record',details:kind==='meals'?{menu:{dinner:{name:'Original family roast',ingredients:['Carrots']}}}:{status:'Posted',amount:'$1,375.00'}}]}})
  })
  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Cash Forecast',exact:true}).click();await closeMenuIfMobile(page,testInfo)
- await page.getByRole('button',{name:'Archive',exact:true}).click()
- await expect(page.getByRole('heading',{name:'Cash Forecast archive'})).toBeVisible()
- await expect(page.getByLabel('Records',{exact:true})).toHaveValue('finance')
+ await openSettingsSection(page)
+ await page.getByRole('button',{name:'Browse archive history',exact:true}).click()
+ await expect(page.getByRole('heading',{name:'Household history archive'})).toBeVisible()
+ await page.getByLabel('Records',{exact:true}).selectOption('finance');await page.getByRole('button',{name:'Search history',exact:true}).click()
  await page.getByRole('button',{name:/2026-10-08.*HOA dues/}).click();await expect(page.getByRole('article')).toContainText('Posted')
- await page.getByRole('button',{name:'Return to Cash Forecast',exact:true}).click()
+ await page.getByRole('button',{name:'Return to Household history',exact:true}).click()
  await expect(page.getByRole('region',{name:'Household archive'})).toHaveCount(0)
  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Health & Nutrition',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Meal Plan',exact:true}).click();await closeMenuIfMobile(page,testInfo)
- await page.getByRole('button',{name:'Archive',exact:true}).click()
- await expect(page.getByLabel('Records',{exact:true})).toHaveValue('meals')
+ await openSettingsSection(page)
+ await page.getByRole('button',{name:'Browse archive history',exact:true}).click()
+ await page.getByLabel('Records',{exact:true}).selectOption('meals');await page.getByRole('button',{name:'Search history',exact:true}).click()
  await page.getByRole('button',{name:'This date last year',exact:true}).click()
  await expect(page.getByLabel('From',{exact:true})).toHaveValue('2025-10-09')
  await page.getByRole('button',{name:/2025-10-09.*Saved menu/}).click()
@@ -2900,6 +2923,7 @@ test('Completion inbox stages exact project sign-off without saving before confi
  await page.route('**/.netlify/functions/completion-signoffs',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[{id:'review-project',kind:'project',title:'Garden completion',submittedBy:'Javin',submittedAt:'2026-10-14T16:00:00Z',details:['Inspect completed gate'],version:7}],unavailable:[]})}))
  page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON());if(request.url().includes('action=execute'))writes.push(request)})
  await page.reload();await expect(page.locator('.app-shell')).toBeVisible();await closeMenuIfMobile(page,testInfo)
+ await openSettingsSection(page,'Pending approvals')
  const inbox=page.getByRole('region',{name:'Completion notifications'})
  await inbox.getByRole('button',{name:'Sign-off requests · 1',exact:true}).click()
  await expect(inbox).toContainText('Projects: your sign-off is required.')
@@ -3508,13 +3532,13 @@ test('Creating a payer saves and selects it without opening Ask Brevity',async({
   expect(writes).toBe(1)
 })
 
-test('Today utility toolbar keeps date, history, signoffs and archive compact',async({page},testInfo)=>{
+test('Today keeps date navigation compact and moves saved history to Settings',async({page},testInfo)=>{
  await page.route('**/.netlify/functions/household-archive*',route=>route.fulfill({json:{rows:[],cursor:null}}))
  const toolbar=page.locator('.app-toolbar.is-today')
  await expect(toolbar.getByRole('navigation',{name:'Daily plan navigation'})).toBeVisible()
- await expect(toolbar.getByRole('button',{name:'Meeting History',exact:true})).toBeVisible()
- await expect(toolbar.getByRole('button',{name:/Sign-off requests/})).toBeVisible()
- await expect(toolbar.getByRole('button',{name:'Archive',exact:true})).toBeVisible()
+ await expect(toolbar.getByRole('button',{name:'Meeting History',exact:true})).toHaveCount(0)
+ await expect(toolbar.getByRole('button',{name:/Sign-off requests/})).toHaveCount(0)
+ await expect(toolbar.getByRole('button',{name:'Archive',exact:true})).toHaveCount(0)
  await expect(toolbar).not.toContainText('Meeting recordings & transcripts')
  await toolbar.screenshot({path:testInfo.outputPath('today-compact-toolbar.png')})
  const box=await toolbar.boundingBox()
@@ -3527,10 +3551,10 @@ test('Today utility toolbar keeps date, history, signoffs and archive compact',a
  await expect(toolbar.getByLabel('Daily plan date')).toHaveValue(next.toISOString().slice(0,10))
  await toolbar.getByRole('button',{name:'Today',exact:true}).click()
  await expect(toolbar.getByLabel('Daily plan date')).toHaveValue(dateKey())
- await toolbar.getByRole('button',{name:'Meeting History',exact:true}).click()
+ await openSavedMeetings(page)
  await expect(page.getByRole('dialog',{name:'Meeting History',exact:true})).toBeVisible()
  await page.getByRole('button',{name:'Close Meeting History',exact:true}).click()
- await toolbar.getByRole('button',{name:'Archive',exact:true}).click()
+ await page.getByRole('button',{name:'Browse archive history',exact:true}).click()
  await expect(page.getByRole('region',{name:'Household archive',exact:true})).toBeVisible()
 })
 
@@ -3590,7 +3614,7 @@ test('Budget consolidates recurring records and exports matching CSV XLSX and PD
  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:'Budget',exact:true}).click();await closeMenuIfMobile(page,testInfo)
  const row=page.locator('.finance-budget-line').filter({hasText:'HOA Dues'})
  await expect(row).toHaveCount(1);await expect(row.locator('.finance-budget-line-budget')).toHaveText('$300.00')
- const toolbar=page.locator('.finance-export')
+ const toolbar=page.locator('.finance-export[aria-label="Export Budget '+month+'"]')
  const {readFile}=await import('node:fs/promises')
  for(const format of ['csv','xlsx','pdf']){
   await toolbar.getByLabel('Export format').selectOption(format)
@@ -3622,7 +3646,7 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   expect(download.suggestedFilename()).toMatch(/\.csv$/)
   if(screen==='Reporting')for(const name of ['Overview','Profit & Loss','Cash Flow','Balance Sheet','Budget vs Actual','Vendor Spend']){
    await page.getByRole('tab',{name,exact:true}).click()
-   const statement=page.locator('.finance-export:visible').last();await statement.getByLabel('Export format').selectOption('csv')
+   const statement=name==='Cash Flow'?page.locator('.finance-export[aria-label^="Export Cash Flow "]:visible'):page.locator('.finance-export[aria-label="Export financial report"]:visible').last();await statement.getByLabel('Export format').selectOption('csv')
    const next=page.waitForEvent('download');await statement.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toMatch(/\.csv$/)
   }
   if(screen==='Budget'){
@@ -3763,30 +3787,26 @@ test('At a glance matches all Family calendar entries and opens Today Agenda on 
  await page.screenshot({path:testInfo.outputPath('family-today-agenda.png'),fullPage:true})
 })
 
-test('Page utilities stay in one row on Spiritual Maturity and other screens',async({page},testInfo)=>{
+test('Page utilities omit saved history on Spiritual Maturity and other screens',async({page},testInfo)=>{
  for(const name of ['Spiritual Maturity','Physical Fitness','Education']){
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name,exact:true}).click()
   await closeMenuIfMobile(page,testInfo)
   await expect(page.locator('.app-main')).toHaveAttribute('data-life-pillar',name==='Spiritual Maturity'?'spiritual':name==='Physical Fitness'?'fitness':'education')
   const toolbar=page.locator('.app-toolbar')
-  await expect(toolbar.getByRole('button',{name:'Meeting History',exact:true})).toBeVisible()
-  await expect(toolbar.getByRole('button',{name:'Archive',exact:true})).toBeVisible()
+  await expect(toolbar.getByRole('button',{name:'Meeting History',exact:true})).toHaveCount(0)
+  await expect(toolbar.getByRole('button',{name:'Archive',exact:true})).toHaveCount(0)
   expect((await toolbar.boundingBox()).height).toBeLessThanOrEqual(80)
   expect(await page.locator('.app-main').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1)
-  if(name==='Spiritual Maturity'){
-   const read=toolbar.getByRole('button',{name:'Read Spiritual Maturity aloud',exact:true})
-   await read.scrollIntoViewIfNeeded();await expect(read).toBeVisible()
-   await toolbar.evaluate(el=>{el.scrollLeft=0})
-   await toolbar.getByRole('button',{name:/Sign-off requests/}).click()
-   await expect(page.getByRole('heading',{name:'Completion sign-off',exact:true})).toBeVisible()
-   await toolbar.getByRole('button',{name:/Sign-off requests/}).click()
-   await toolbar.getByRole('button',{name:'Meeting History',exact:true}).click()
-   await expect(page.getByRole('dialog',{name:'Meeting History',exact:true})).toBeVisible()
-   await page.getByRole('button',{name:'Close Meeting History',exact:true}).click()
-   await page.screenshot({path:testInfo.outputPath('spiritual-compact-toolbar.png'),fullPage:false})
-  }
+  if(name==='Spiritual Maturity')await expect(toolbar.getByRole('button',{name:'Read Spiritual Maturity aloud',exact:true})).toBeVisible()
  }
+ await openSettingsSection(page,'Pending approvals')
+ const inbox=page.getByRole('region',{name:'Completion notifications'})
+ await inbox.getByRole('button',{name:/Sign-off requests/}).click()
+ await expect(page.getByRole('heading',{name:'Completion sign-off',exact:true})).toBeVisible()
+ await openSavedMeetings(page)
+ await expect(page.getByRole('dialog',{name:'Meeting History',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Close Meeting History',exact:true}).click()
 })
 
 test('Cash Forecast redesigned meetings audit all cadence layouts exports and commitment review',async({page},testInfo)=>{
@@ -3805,7 +3825,7 @@ test('Cash Forecast redesigned meetings audit all cadence layouts exports and co
   await page.screenshot({path:testInfo.outputPath(`meeting-${label}.png`)})
   // Also capture the full component for visual inspection beyond the viewport.
   await packet.locator('#finance-decisions-assignments').scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath(`meeting-${label}-commitments.png`)})
-  await packet.locator('.fm-export-menu > summary').click();const download=page.waitForEvent('download');await packet.getByRole('button',{name:'Export',exact:true}).click();const d=await download;expect(d.suggestedFilename()).toMatch(/\.xlsx$/)
+  await packet.locator('.fm-export-menu > summary').click();const download=page.waitForEvent('download');await packet.locator('.fm-export-menu').getByRole('button',{name:'Export',exact:true}).click();const d=await download;expect(d.suggestedFilename()).toMatch(/\.xlsx$/)
   const z=await JSZip.loadAsync(await fs.readFile(await d.path()));expect(await z.file('xl/workbook.xml').async('string')).toContain(`name="${label}"`);expect(await z.file('xl/styles.xml').async('string')).toContain('FF243126')
   await packet.locator('.fm-export-menu > summary').click()
  }
@@ -4061,7 +4081,7 @@ test('Scenario Studio reserve payoff ledger reconciles and remains readable in b
  await expect(studio.getByLabel('Minimum available cash',{exact:true})).toHaveValue('24000')
  await studio.getByRole('navigation',{name:'Scenario Studio tabs'}).getByRole('button',{name:'Forecast',exact:true}).click()
  await expect(studio.getByRole('columnheader',{name:'Description',exact:true})).toBeVisible()
- await expect(studio.locator('.studio-ledger').getByRole('row').filter({hasText:'LJ Discover payoff'})).toContainText('-$3,000.00')
+ await expect(studio.locator('.studio-ledger').getByRole('row').filter({hasText:'LJ Discover payoff'})).toContainText('-$5,000.00')
  await expect(studio.locator('.studio-ledger').getByRole('row').filter({hasText:'2026 property tax payoff'})).toContainText('-$12,000.00')
  await expect(studio.getByRole('columnheader',{name:'Year',exact:true})).toBeVisible()
  for(const theme of ['light','dark']){
@@ -4074,7 +4094,8 @@ test('Scenario Studio reserve payoff ledger reconciles and remains readable in b
  const march=studio.getByRole('row').filter({hasText:'2026-03'})
  await expect(march).toContainText('$3,000.00')
  await studio.getByLabel('Minimum available cash',{exact:true}).fill('30000')
- await expect(studio.getByRole('row').filter({hasText:'2026-03'})).toContainText('$2,000.00')
+ await expect(studio.getByRole('row').filter({hasText:'2026-03'})).toContainText('$3,000.00')
+ await expect(studio.getByRole('row').filter({hasText:'2026-03'})).toContainText('$5,000.00')
 })
 
 test('categorization rules support five criteria and choosing or creating a vendor',async({page},testInfo)=>{
