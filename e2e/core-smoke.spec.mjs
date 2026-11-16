@@ -119,7 +119,7 @@ test('daily date browsing edits the selected plan and returns to today', async (
 test('Home and Household destinations remain usable without horizontal overflow', async ({ page },testInfo) => {
   const nav=page.locator(testInfo.project.name==='iphone'?'.mobile-app-nav':'.sidebar-nav')
   await nav.getByRole('button',{name:'Home',exact:true}).click()
-  await expect(page.getByRole('heading',{name:/Good (Morning|Afternoon|Evening) Family/})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Welcome home, Larry.'})).toBeVisible()
   await page.screenshot({path:testInfo.outputPath('home.png')})
   await page.getByRole('button',{name:'Our household',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Household',exact:true})).toBeVisible()
