@@ -1365,7 +1365,7 @@ test('Finance reconciliation recommends matches and opens approval without mutat
   const report=page.getByRole('region',{name:'Automatic reconciliation recommendations'})
   await expect(report).toContainText('1 suggested matches')
   await expect(report).toContainText('Difference: $6.00')
-  await expect(report).toContainText('Nothing changes until you approve')
+  await expect(report).toContainText('Review unclear matches before applying changes.')
   expect(writes).toBe(0)
   const choice=report.locator('.reconciliation-choice').first()
   const checkbox=await choice.getByRole('checkbox').boundingBox(),text=await choice.locator('span').first().boundingBox()
@@ -3617,7 +3617,7 @@ test('Budget consolidates recurring records and exports matching CSV XLSX and PD
  const toolbar=page.locator('.finance-export[aria-label="Export Budget '+month+'"]')
  const {readFile}=await import('node:fs/promises')
  for(const format of ['csv','xlsx','pdf']){
-  if(!(await toolbar.locator('details').getAttribute('open')!==null))await toolbar.locator('summary').click();await toolbar.getByLabel('Export format').selectOption(format)
+  if(await toolbar.locator('details').count() && !(await toolbar.locator('details').getAttribute('open')!==null))await toolbar.locator('summary').click();await toolbar.getByLabel('Export format').selectOption(format)
   const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
   expect(download.suggestedFilename()).toContain(`${month}.${format}`)
   const bytes=await readFile(await download.path())
@@ -3641,7 +3641,7 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
   }
   if(screen==='Meetings')await page.locator('.fm-export-menu > summary').click()
   if(screen==='Accounting')await page.getByRole('navigation',{name:'Accounting tabs'}).getByRole('button',{name:'Recurring Transactions',exact:true}).click();const toolbar=page.locator('.finance-export:visible').first();await expect(toolbar,screen).toBeVisible()
-  await toolbar.locator('summary').click();await toolbar.getByLabel('Export format').selectOption('csv')
+  if(await toolbar.locator('summary').count())await toolbar.locator('summary').click();await toolbar.getByLabel('Export format').selectOption('csv')
   const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
   expect(download.suggestedFilename()).toMatch(/\.csv$/)
   if(screen==='Reporting')for(const name of ['Overview','Profit & Loss','Cash Flow','Balance Sheet','Budget vs Actual','Vendor Spend']){
