@@ -591,7 +591,7 @@ test('Project review repairs stale local synchronization metadata before opening
   await expect(page.getByText('local changes that are not durably synchronized')).toHaveCount(0)
 })
 
-test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
+test('Finance primary workspaces open without a fatal error',async({page},testInfo)=>{await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Accounting','Reporting']){await openMenuIfMobile(page,testInfo);await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:label,exact:true}).click();await expect(page.locator('body')).not.toContainText('Something went wrong');await expect(page.locator('body')).not.toContainText('Application error')}})
 
 test('Cash Forecast FIN-001 packets populate all five meetings and export the selected report',async({page},testInfo)=>{
   await openMenuIfMobile(page,testInfo)
@@ -831,7 +831,7 @@ test('Finance workspaces fit phone and tablet viewports without overlapping filt
   test.skip(testInfo.project.name==='desktop-chromium','responsive contract')
   await openMenuIfMobile(page,testInfo)
   await page.getByRole('button',{name:'Finance',exact:true}).click()
-  for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Recurring','Reporting']){
+  for(const label of ['Dashboard','Meetings','Transactions','Cash Forecast','Accounts','Budget','Accounting','Reporting']){
     await openMenuIfMobile(page,testInfo)
     await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button',{name:label,exact:true}).click()
     await expect.poll(()=>page.locator('.app-main').evaluate(element=>element.scrollWidth-element.clientWidth),`${label} workspace should not overflow .app-main`).toBeLessThanOrEqual(1)
@@ -1365,7 +1365,7 @@ test('Finance reconciliation recommends matches and opens approval without mutat
   const report=page.getByRole('region',{name:'Automatic reconciliation recommendations'})
   await expect(report).toContainText('1 suggested matches')
   await expect(report).toContainText('Difference: $6.00')
-  await expect(report).toContainText('Nothing changes until you approve')
+  await expect(report).toContainText('Review unclear matches before applying changes.')
   expect(writes).toBe(0)
   const choice=report.locator('.reconciliation-choice').first()
   const checkbox=await choice.getByRole('checkbox').boundingBox(),text=await choice.locator('span').first().boundingBox()
@@ -1788,7 +1788,7 @@ test('Recurring discovery reviews six months and stages editable budget and Cash
   await page.route('**/.netlify/functions/plaid-transactions*',route=>route.fulfill({json:{connected:true,transactions:actuals,errors:[],syncedAt:new Date().toISOString()}}))
   page.on('request',request=>{if(request.url().includes('action=prepare-direct'))prepared.push(request.postDataJSON())})
   await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
-  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Recurring',exact:true}).click();await closeMenuIfMobile(page,testInfo)
+  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await page.getByRole('complementary', { name: 'Primary navigation' }).getByRole('button', { name:'Accounting',exact:true}).click();await closeMenuIfMobile(page,testInfo);await page.getByRole('navigation',{name:'Accounting tabs'}).getByRole('button',{name:'Recurring Transactions',exact:true}).click()
   const card=page.locator('article.recurring-suggestion').filter({has:page.getByRole('heading',{name:'Apple',exact:true})})
   await expect(card).toContainText('Seen in 6 of 6 completed months')
   await card.getByLabel('Monthly budget target').fill('210')
@@ -3617,7 +3617,7 @@ test('Budget consolidates recurring records and exports matching CSV XLSX and PD
  const toolbar=page.locator('.finance-export[aria-label="Export Budget '+month+'"]')
  const {readFile}=await import('node:fs/promises')
  for(const format of ['csv','xlsx','pdf']){
-  await toolbar.getByLabel('Export format').selectOption(format)
+  if(await toolbar.locator('details').count() && !(await toolbar.locator('details').getAttribute('open')!==null))await toolbar.locator('summary').click();await toolbar.getByLabel('Export format').selectOption(format)
   const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
   expect(download.suggestedFilename()).toContain(`${month}.${format}`)
   const bytes=await readFile(await download.path())
@@ -3634,24 +3634,24 @@ test('financial workspaces expose working exports without opening Ask Brevity',a
  test.setTimeout(90000)
  await mockBackend(page,{financeFixture:true});await page.route('**/.netlify/functions/finance-vendors**',route=>route.fulfill({json:{version:1,isAdmin:true,vendors:[],links:{}}}));await page.reload();await expect(page.locator('.app-shell')).toBeVisible()
  await openMenuIfMobile(page,testInfo);await page.getByRole('button',{name:'Finance',exact:true}).click();await closeMenuIfMobile(page,testInfo)
- for(const screen of ['Overview','Transactions','Cash Forecast','Spending Review','Accounts','Vendors','Debts','Budget','Recurring','Reporting','Scenario Modeling','Meetings']){
+ for(const screen of ['Overview','Transactions','Cash Forecast','Spending Review','Accounts','Vendors','Debts','Budget','Accounting','Reporting','Scenario Modeling','Meetings']){
   if(screen!=='Overview'){
    await openMenuIfMobile(page,testInfo)
    await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:screen,exact:true}).click();await closeMenuIfMobile(page,testInfo)
   }
   if(screen==='Meetings')await page.locator('.fm-export-menu > summary').click()
-  const toolbar=page.locator('.finance-export:visible').first();await expect(toolbar,screen).toBeVisible()
-  await toolbar.getByLabel('Export format').selectOption('csv')
+  if(screen==='Accounting')await page.getByRole('navigation',{name:'Accounting tabs'}).getByRole('button',{name:'Recurring Transactions',exact:true}).click();const toolbar=page.locator('.finance-export:visible').first();await expect(toolbar,screen).toBeVisible()
+  if(await toolbar.locator('summary').count())await toolbar.locator('summary').click();await toolbar.getByLabel('Export format').selectOption('csv')
   const waiting=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Export',exact:true}).click();const download=await waiting
   expect(download.suggestedFilename()).toMatch(/\.csv$/)
   if(screen==='Reporting')for(const name of ['Overview','Profit & Loss','Cash Flow','Balance Sheet','Budget vs Actual','Vendor Spend']){
    await page.getByRole('tab',{name,exact:true}).click()
-   const statement=name==='Cash Flow'?page.locator('.finance-export[aria-label^="Export Cash Flow "]:visible'):page.locator('.finance-export[aria-label="Export financial report"]:visible').last();await statement.getByLabel('Export format').selectOption('csv')
+   const statement=name==='Cash Flow'?page.locator('.finance-export[aria-label^="Export Cash Flow "]:visible'):page.locator('.finance-export[aria-label="Export financial report"]:visible').last();if(!(await statement.locator('details').getAttribute('open')!==null))await statement.locator('summary').click();await statement.getByLabel('Export format').selectOption('csv')
    const next=page.waitForEvent('download');await statement.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toMatch(/\.csv$/)
   }
   if(screen==='Budget'){
    await page.getByRole('button',{name:'Plan Grid →',exact:true}).click()
-   const grid=page.locator('.finance-export:visible').first();await grid.getByLabel('Export format').selectOption('csv')
+   const grid=page.locator('.finance-export:visible').first();await grid.locator('summary').click();await grid.getByLabel('Export format').selectOption('csv')
    const next=page.waitForEvent('download');await grid.getByRole('button',{name:'Export',exact:true}).click();expect((await next).suggestedFilename()).toContain('Budget-Plan')
   }
   await expect(page.getByRole('dialog',{name:'Ask Brevity',exact:true})).toHaveCount(0)
@@ -4217,12 +4217,15 @@ test('categorization rules continuously propose categories and vendors with bulk
  await page.getByText('Automatic category and vendor suggestions',{exact:true}).click()
  const queue=page.getByRole('region',{name:'Suggested categorization changes'})
  await expect(queue).toContainText('Create rule: Neighborhood Market categorization')
+ await queue.locator('article > details > summary').filter({hasText:'Neighborhood Market categorization'}).click()
  await expect(queue.getByRole('combobox',{name:'Vendor for Neighborhood Market categorization'})).toHaveValue('Neighborhood Market')
- await queue.getByRole('button',{name:'Deny all',exact:true}).click();await expect(queue.getByRole('button',{name:'Approve all',exact:true})).toBeDisabled();expect(executions).toBe(0)
+ await expect(queue).toContainText('Vendor assignment is optional.')
+ await queue.getByRole('button',{name:'Dismiss all',exact:true}).click();await expect(queue.getByRole('button',{name:'Review selected',exact:true})).toBeDisabled();expect(executions).toBe(0)
  await queue.getByRole('button',{name:'Restore denied suggestions'}).click()
  await queue.locator('summary').filter({hasText:/Uncategorized/}).click();await expect(queue).toContainText('Uncategorized · Needs review')
  for(const theme of ['dark','light']){await page.evaluate(t=>document.documentElement.setAttribute('data-theme',t),theme);await queue.scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath(`rule-suggestions-${theme}.png`),fullPage:true})}
- await queue.getByRole('button',{name:'Approve all',exact:true}).click()
+ await queue.getByRole('checkbox',{name:'Select all suggestions',exact:true}).check()
+ await queue.getByRole('button',{name:'Review selected',exact:true}).click()
  const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'});await expect(review).toBeVisible()
  expect(prepared).toHaveLength(1);expect(prepared[0].payload).toMatchObject({category:'Groceries',vendorId:'vendor-1',applyToExisting:true});expect(executions).toBe(0)
  await review.getByRole('button',{name:'Cancel',exact:true}).click();expect(executions).toBe(0)

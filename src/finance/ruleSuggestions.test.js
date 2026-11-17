@@ -24,10 +24,10 @@ test('new actuals continuously produce grouped proposals based on projected iden
 test('same amount, pending, different direction, and different bank account cannot create a false proposal',()=>{
  for(const changes of [{pending:true},{amount:-1800},{accountId:'other'},{name:'Some other payment',merchant_name:'Other'}])assert.equal(report({transactions:[{...tx,...changes}]}).suggestions.length,0)
 })
-test('conflicting projected categories stay unresolved and missing vendors need review',()=>{
+test('conflicting projected categories stay unresolved while vendor assignment stays optional',()=>{
  assert.equal(report({planned:[plan,{...plan,id:'two',cat:'Other'}]}).suggestions.length,0)
  const row=report({planned:[{...plan,vendorId:''}],directory:{vendors:[],links:{}}}).suggestions[0]
- assert.equal(row.vendorId,'');assert.throws(()=>suggestionOperation(row,'2026-11-15'),/Choose a vendor/)
+ assert.equal(row.vendorId,'');assert.equal(suggestionOperation(row,'2026-11-15').payload.category,'Insurance')
 })
 test('reuse established rules and propose past coverage instead of duplicates',()=>{
  const rule={id:'existing',name:'My insurance rule',createdDate:'2026-11-15',applyToExisting:false,conditions:{originalStatement:{on:true,match:'contains',value:'Travelers'}},actions:{updateCategory:{on:true,value:'Insurance'}}}

@@ -1,7 +1,8 @@
+import {labelTransactionCategory} from './categoryCatalog.js'
 import {budgetCategoryForTransaction,isTransferTransaction} from './reportingData.js'
 const clean=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
 // Inference is deliberately reversible. Reviewed overrides and saved rules win.
-export function categorizeExpense(transaction,{overrides={},scheduled=[],budget={}}={}) {
+function inferExpenseCategory(transaction,{overrides={},scheduled=[],budget={}}={}) {
  if(transaction.managementCategory==='Dividend Expense'&&Number(transaction.amount)>0)return {...transaction,category:'Dividend Expense',_categoryResolved:true,_categorySource:'reviewed',categoryReason:'Reviewed household distribution; personal account spending is outside this scope.'}
  if(Number(transaction.amount)<=0||isTransferTransaction(transaction))return transaction
  const manual=overrides[transaction.id]
@@ -29,3 +30,5 @@ export function categorizeExpenses(transactions,options={}) {
  const overrides=Object.fromEntries(Object.entries(options.overrides||{}).map(([id,override])=>[id,{...transactions.find(t=>t.id===id),...override}]))
  return transactions.map(transaction=>categorizeExpense(transaction,{...options,overrides}))
 }
+
+export function categorizeExpense(transaction,options){return labelTransactionCategory(inferExpenseCategory(transaction,options))}

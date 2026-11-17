@@ -1,3 +1,4 @@
+import {resolveCategory,storedCategoryCatalog} from './categoryCatalog.js'
 // Shared by rule preview, saved-rule matching and server validation.
 export const RULE_FIELDS = {originalStatement:'Original bank statement',merchantName:'Merchant name',amount:'Amount',direction:'Money direction',account:'Bank account',category:'Transaction category'}
 export const RULE_OPERATORS = {originalStatement:{contains:'Contains',exactly:'Exactly matches',starts:'Starts with'},merchantName:{contains:'Contains',exactly:'Exactly matches',starts:'Starts with'},amount:{equals:'Equals',greater:'Greater than',less:'Less than',atLeast:'At least',atMost:'At most',between:'Between'},direction:{equals:'Is'},account:{equals:'Is'},category:{exactly:'Exactly matches'}}
@@ -31,6 +32,7 @@ function matches(transaction,c,accounts){
   const n=Math.abs(Number(transaction.amount));if(!Number.isFinite(n))return false
   return c.operator==='equals'?n===c.value:c.operator==='greater'?n>c.value:c.operator==='less'?n<c.value:c.operator==='atLeast'?n>=c.value:c.operator==='atMost'?n<=c.value:n>=c.value&&n<=c.max
  }
+ if(c.field==='category'){const catalog=storedCategoryCatalog();return String(resolveCategory(transaction.category||transaction.cat||'',catalog)).trim().toLowerCase()===String(resolveCategory(c.value,catalog)).trim().toLowerCase()}
  const source=String(c.field==='category'?(transaction.category||transaction.cat||''):c.field==='merchantName'?(transaction.merchant_name||transaction.name||''):(transaction.originalStatement||transaction.original_description||transaction.name||'')).trim().toLowerCase(),value=c.value.toLowerCase()
  return c.operator==='exactly'?source===value:c.operator==='starts'?source.startsWith(value):source.includes(value)
 }

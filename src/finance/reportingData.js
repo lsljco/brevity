@@ -103,6 +103,7 @@ export function categoryGroup(category = '') {
   const value = String(category).toLowerCase()
   if (/income|paycheck|deposit|interest/.test(value)) return 'Income'
   if (/food|drink|grocer|restaurant|coffee/.test(value)) return 'Food & Dining'
+  if (/fuel|gasoline|gas station/.test(value)) return 'Auto & Transport'
   if (/home|mortgage|rent|utility|electric|water|gas/.test(value)) return 'Housing'
   if (/shop|merchandise|clothing|electronic/.test(value)) return 'Shopping'
   if (/health|medical|doctor|dental|pharmacy/.test(value)) return 'Health & Wellness'

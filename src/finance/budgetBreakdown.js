@@ -1,3 +1,4 @@
+import {resolveCategory,storedCategoryCatalog} from './categoryCatalog.js'
 import { calculateTransactionAmountForMonth } from './monthlyCashFlow.js'
 import { budgetCategoryForTransaction } from './reportingData.js'
 import { approvedReconciliationMatches } from './autoReconciliation.js'
@@ -36,7 +37,7 @@ function budgetLineFromTransaction(transaction) {
     vendorName: stringValue(transaction.vendorName)||'Unassigned',
     accountId: accountIdFor(transaction),
     name: stringValue(transaction.name) || 'Unnamed budget line',
-    category: direction === 'income' ? 'Income' : stringValue(transaction.cat) || 'Other',
+    category: direction === 'income' ? 'Income' : resolveCategory(stringValue(transaction.cat),storedCategoryCatalog()) || 'Other',
     direction,
     transactions: [transaction],
   }
@@ -55,7 +56,7 @@ function storedBudgetLines(budget = {}, accountIds = null) {
       accountId,
       name: stringValue(value.name) || 'Unnamed budget line',
       cashAllowance:Boolean(value.cashAllowance),
-      category: value.direction === 'income' ? 'Income' : stringValue(value.category) || 'Other',
+      category: value.direction === 'income' ? 'Income' : resolveCategory(stringValue(value.category),storedCategoryCatalog()) || 'Other',
       direction: value.direction,
       transactions: [],
     }]

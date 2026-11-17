@@ -1,3 +1,5 @@
+const AccountingWorkspace=lazy(()=>import('./AccountingWorkspace.jsx'))
+const BulkTransactionEditor=lazy(()=>import('./BulkTransactionEditor.jsx'))
 import {buildRuleSuggestions,suggestionOperation} from './ruleSuggestions.js'
 import {describeRuleCriteria} from './ruleCriteria.js'
 import {useFinancialListSort} from './FinancialListSort.jsx'
@@ -1541,7 +1543,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const unmappedActuals = actualAccountScope.unmapped
 
   const reviewedCategoryOverrides=useMemo(()=>{const sources=new Map(retainedActuals.map(t=>[t.id,t]));return Object.fromEntries(Object.entries(txOverrides).map(([id,o])=>[id,{...sources.get(id),...o}]))},[retainedActuals,txOverrides])
-  const establishedCategories=useMemo(()=>[...data.transactions.map(tx=>tx.cat||tx.category),...Object.values(dailyBudget.categoryLimits||{}).map(row=>row.category)].filter(Boolean),[data.transactions,dailyBudget])
+  const establishedCategories=useMemo(()=>[...(data.categoryCatalog||[]).map(row=>row.name),...data.transactions.map(tx=>tx.cat||tx.category),...Object.values(dailyBudget.categoryLimits||{}).map(row=>row.category)].filter(Boolean),[data.transactions,dailyBudget])
   const categoryReviewIds=useMemo(()=>{
     const report=buildRuleSuggestions({planned:data.transactions,transactions:retainedActuals,rules:txRules,overrides:txOverrides,establishedCategories,accounts:data.accounts,directory:vendorDirectory})
     return new Set([...report.unresolved.map(r=>r.transaction.id),...report.suggestions.flatMap(r=>r.transactions.map(t=>t.id))])
@@ -2056,7 +2058,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     await syncSharedState(localStorage)
     const current=loadData(),actuals=JSON.parse(localStorage.getItem(PLAID_ACTUALS_KEY)||'[]'),currentRules=JSON.parse(localStorage.getItem('lslj_tx_rules_v1')||'[]')
     const directory=await vendorRequest()
-    const fresh=buildRuleSuggestions({planned:current.transactions,transactions:actuals,rules:currentRules,overrides:JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')||'{}'),establishedCategories:[...current.transactions.map(tx=>tx.cat||tx.category),...Object.values(loadBudget().categoryLimits||{}).map(row=>row.category)].filter(Boolean),accounts:current.accounts,directory})
+    const fresh=buildRuleSuggestions({planned:current.transactions,transactions:actuals,rules:currentRules,overrides:JSON.parse(localStorage.getItem('lslj_tx_overrides_v1')||'{}'),establishedCategories:[...(current.categoryCatalog||[]).map(row=>row.name),...current.transactions.map(tx=>tx.cat||tx.category),...Object.values(loadBudget().categoryLimits||{}).map(row=>row.category)].filter(Boolean),accounts:current.accounts,directory})
     for(const row of selected){
       const found=fresh.suggestions.find(r=>r.id===row.id)
       if(!found||found.evidence!==row.evidence||JSON.stringify(found.transactions)!==JSON.stringify(row.transactions))throw Error('The projected plan, rules, or matching transactions changed. Reopen suggestions to review the latest information.')
@@ -2489,11 +2491,12 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
+      {view==='accounting'&&<AccountingWorkspace data={data} actuals={plaidActuals||[]} rules={txRules} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
       {!isForm&&['dashboard','accounts','transactions'].includes(view)&&<div style={{padding:'0 24px'}}><FinanceExport buildReport={()=>({title:`${view} ${financeRange.from} to ${financeRange.to}`,notes:[financeAccountScopeLabel,actualsFreshnessMessage,balanceDataMessage,transactionFilter?.label||'','Bank amounts: positive = outflow; negative = inflow. Scheduled amounts use the Direction column.'],sections:view==='transactions'?[transactionSection(showActuals?transactionViewActuals:scheduledViewTransactions,fd.accounts,{scheduled:!showActuals})]:[recordsSection('Account balances',fd.accounts,['name','type','balance','plaidCurrentBalance','plaidAvailableBalance']),transactionSection(timeframeActuals,fd.accounts),recordsSection('Cash forecast',[...proj].filter(([date])=>date>=financeRange.from&&date<=financeRange.to).map(([date,p])=>({date,endingBalance:p.bal,netChange:p.delta}))) ]})}/></div>}
 
-      {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar'].includes(view) && AccountFilterBar}
+      {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar','accounting'].includes(view) && AccountFilterBar}
       {!isForm&&['transactions','vendors','recurring','reporting'].includes(view)&&<section className="finance-vendor-controls" aria-label="Vendor views" style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'12px 24px'}}><label>Expense list order <select aria-label="Finance vendor sort" value={vendorOrder} onChange={e=>{setVendorOrder(e.target.value);setTransactionListOptions(options=>({...options,sortBy:e.target.value?'vendor':'amount',sortDirection:e.target.value||'desc'}))}}><option value="">Screen default</option><option value="asc">Vendor A–Z</option><option value="desc">Vendor Z–A</option></select></label><button onClick={()=>setView('vendors')}>Vendor directory</button><small>Sorting changes presentation, not bank balances.</small>{vendorDirectoryError&&<small role="status">Vendor labels unavailable: {vendorDirectoryError}</small>}</section>}
-      {!formView && view !== 'dashboard' && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
+      {!formView && view !== 'dashboard' && view !== 'overview' && view !== 'daily-alignment' && view !== 'scenario-modeling' && view !== 'calendar' && view !== 'budget' && view !== 'accounting' && <div style={{ padding: view === 'dashboard' ? '12px 28px 0' : '14px 28px 0' }}><FinanceTimeframe value={financeRange} onChange={setFinanceRange} compact /></div>}
       {!formView && view === 'transactions' && unmappedActuals.length > 0 && (
         <div role="status" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10, margin:'10px 28px 0', padding:'10px 13px', borderRadius:10, border:'1px solid rgba(232,150,122,.30)', background:'rgba(232,150,122,.08)', color:'var(--soft-white)', fontSize:11, lineHeight:1.45 }}>
           <span><strong>Account-linkage status:</strong> {unmappedActuals.length} bank transaction{unmappedActuals.length === 1 ? '' : 's'} across all available history {unmappedActuals.length === 1 ? 'is' : 'are'} not linked to a unique Brevity account. {unmappedActuals.length === 1 ? 'It is' : 'They are'} excluded from account balances, reconstruction, and Cash Forecast totals; use the all-bank-activity ledger to review {unmappedActuals.length === 1 ? 'it' : 'them'}.</span>
@@ -3172,47 +3175,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {showActuals ? (
-              // ── Actuals mode: Plaid posted/pending ──
-              transactionViewActuals.length === 0
-                ? <p style={{ fontSize: 14, color: 'var(--muted)', padding: '20px 0' }}>{plaidActuals ? 'No transactions found for selected accounts.' : 'No connected bank source is available for posted transactions. Connection changes are disabled in this release.'}</p>
-                : transactionViewActuals.map((tx, i) => {
-                    const activityKind = actualTransactionKind(tx)
-                    const cashIn = Number(tx.amount) < 0
-                    const activityLabel = tx.pending
-                      ? (isRecognizedIncomeTransaction(tx) ? 'Pending income · not realized' : cashIn ? 'Pending refund / other credit' : 'Pending expense')
-                      : activityKind === 'income' ? 'Realized income' : activityKind === 'other-inflow' ? 'Refund / other credit' : activityKind === 'transfer' ? 'Transfer' : 'Posted expense'
-                    const activityColor = activityKind === 'income' ? 'var(--income-color)' : activityKind === 'expense' ? 'var(--expense-color)' : 'var(--muted)'
-                    return (
-                      <div key={tx.id || i}
-                        onClick={() => !readOnly && openActualTxModal(tx)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                          background: tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)',
-                          border: tx.pending ? '1px solid rgba(197,164,109,0.18)' : '1px solid rgba(255,255,255,0.07)',
-                          borderRadius: 10, cursor: readOnly ? 'default' : 'pointer', transition: 'background .15s' }}
-                        onMouseEnter={e => { if (!readOnly) e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = tx.pending ? 'rgba(197,164,109,0.05)' : 'rgba(255,255,255,0.04)' }}>
-                        <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: activityKind === 'income' ? 'rgba(197,164,109,0.12)' : activityKind === 'expense' ? 'rgba(196,120,90,0.12)' : 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <i className={`ti ti-${activityKind === 'transfer' ? 'arrows-exchange' : cashIn ? 'arrow-down-left' : 'arrow-up-right'}`} style={{ fontSize: 14, color: activityColor }} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--white)' }}>{tx.name}</p><button type="button" onClick={event=>{event.stopPropagation();setVendorFocus(tx.vendorId||'');setView('vendors')}} style={{border:0,background:'transparent',color:'var(--gold)',padding:'4px 0'}}>Vendor: {tx.vendorName||'Unassigned'}</button>
-                          <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
-                            {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            {' · '}{tx.category}
-                            {' · '}{activityLabel}
-                            {tx.pending && <span style={{ marginLeft: 6, color: 'rgba(197,164,109,0.75)', fontWeight: 600 }}>Pending</span>}
-                          </p>
-                        </div>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, flexShrink: 0, color: activityColor }}>
-                          {cashIn ? '+' : '-'}{fmtMoney(Math.abs(tx.amount))}
-                        </p>
-                        {!readOnly && <i className="ti ti-chevron-right" style={{ fontSize: 14, color: 'var(--muted)', flexShrink: 0 }} />}
-                      </div>
-                    )
-                  })
-            ) : (
-              // ── Projected mode: scheduled transactions ──
+            {showActuals ? <BulkTransactionEditor rows={transactionViewActuals} categories={establishedCategories} readOnly={readOnly} onOpen={openActualTxModal} onReview={payload=>stageDirectFinanceReview({summary:`Update ${payload.transactionIds.length} selected transactions`,storageKey:'lslj_tx_overrides_v1',operation:{type:'transaction.bulk.update',description:`Update ${payload.transactionIds.length} exact selected records; amounts and dates stay unchanged.`,payload:{...payload,sourceVersion:getAcknowledgedSharedStateVersion(localStorage,PLAID_ACTUALS_KEY)}},surfaceError:true})}/> : (
               scheduledViewTransactions.map(tx => {
                   const freqLabel = tx.budgetLine ? `Budgeted for ${transactionFilter?.budgetPeriodLabel}` : FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
                   return (

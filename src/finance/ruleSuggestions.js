@@ -60,6 +60,6 @@ export function buildRuleSuggestions({planned=[],transactions=[],rules=[],accoun
  return {suggestions:[...suggestions.values()],unresolved:unresolved.map(row=>({...row,category:knownCategories.has(norm(row.transaction.category||row.transaction.cat))?(row.transaction.category||row.transaction.cat):'Uncategorized'})),postedCount:posted.length}
 }
 export function suggestionOperation(row,today){
- if(!row.vendorId)throw Error('Choose a vendor or payer before approving this suggestion.')
- return {type:row.ruleId?'transaction.rule.update':'transaction.rule.create',...(row.ruleId?{targetId:row.ruleId}:{}),description:`${row.reason} Apply ${row.category} and the selected vendor to all matching past and future posted transactions.`,payload:{title:row.title,criteria:row.criteria,category:row.category,vendorId:row.vendorId,accountId:row.accountId,applyToExisting:true,createdDate:row.createdDate||today}}
+
+ return {type:row.ruleId?'transaction.rule.update':'transaction.rule.create',...(row.ruleId?{targetId:row.ruleId}:{}),description:`${row.reason} Apply ${row.category} ${row.vendorId?'and the selected vendor ':''}to all matching past and future posted transactions.`,payload:{title:row.title,criteria:row.criteria,category:row.category,vendorId:row.vendorId,accountId:row.accountId,applyToExisting:true,createdDate:row.createdDate||today}}
 }

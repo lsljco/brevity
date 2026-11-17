@@ -92,6 +92,8 @@ export const ACTION_TYPES = {
   'forecast.update': 'finance',
   'finance.account.link': 'finance',
   'finance.reserve.set': 'finance',
+  'finance.category.save':'finance',
+  'transaction.bulk.update':'finance',
   'finance.statement.import': 'finance',
   'finance.spending.review': 'finance',
   'finance.forecast-close.set': 'finance',
@@ -173,6 +175,8 @@ const ACTION_PAYLOAD_FIELDS = {
   'forecast.update': ['studioJson', 'favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'finance.reserve.set': ['amount'],
+  'finance.category.save':['name','category','description','enabled'],
+  'transaction.bulk.update':['transactionIds','category','vendorId','sourceVersion'],
   'finance.statement.import': ['configJson'],
   'finance.spending.review': ['status','notes'],
   'finance.forecast-close.set': ['amount','notes'],
@@ -197,7 +201,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'nutrition.targets.update': ['calories', 'proteinGrams', 'carbohydrateGrams', 'fatGrams'],
 }
 const STRING_FIELDS = new Set(['displayName','calendarId','calendarName','budgetLineId', 'verifiedResult', 'creditor', 'accountName', 'debtType', 'paymentMatchText', 'interestMethod', 'transactionId', 'transactionName', 'title', 'type', 'room', 'roomCustom', 'description', 'status', 'category', 'frequency', 'priority', 'matchText', 'expenseMode', 'incomeAction', 'incomeId', 'employment', 'time', 'startTime', 'endTime', 'pillar', 'response', 'coveredBy', 'exception', 'action', 'location', 'url', 'recurrenceFrequency', 'unit', 'mealType', 'mealId', 'name', 'goal', 'needsReview', 'text', 'label', 'reason', 'source', 'scope', 'summary', 'transcript', 'transactionType', 'financialEffect', 'cadence', 'origin', 'startedAt', 'endedAt', 'monthStatus', 'expenseFocus', 'note', 'lineId', 'recordId', 'lineName', 'direction', 'cname', 'cphone', 'cemail', 'caddress'])
-const NUMBER_FIELDS = new Set(['forecastAllocation', 'originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
+const NUMBER_FIELDS = new Set(['sourceVersion','forecastAllocation', 'originalBalance', 'currentBalance', 'interestRate', 'paymentsPerYear', 'fixedInterestAmount', 'minimumPayment', 'dueDay', 'amount', 'nonPrincipalAmount', 'value', 'month', 'year', 'legacyYear', 'planningExpense', 'monthlyNet', 'annualGross', 'contribution', 'noteIndex', 'quantity', 'parLevel', 'unitCost', 'delta', 'recurrenceInterval', 'alert1Minutes', 'alert2Minutes'])
 const BOOLEAN_FIELDS = new Set(['categoryLimit', 'cashAllowance', 'allDay', 'pushToFamilyCalendar', 'remote', 'bizLicense', 'coi', 'workersComp', 'enabled', 'cancelled', 'applyToExisting', 'signoffRequired'])
 const DATE_FIELDS = new Set(['date', 'endDate', 'recurrenceEndDate', 'createdDate', 'meetingDate', 'expiresOn', 'transactionDate'])
 const ACTION_ENUMS = {
@@ -263,6 +267,8 @@ const resourceGroupForOperation = operation => {
   if (operation.type.startsWith('meeting.')) return 'shared:brevity_finance_meetings_v1'
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return 'shared:homehq_items_v1'
+  if(operation.type==='finance.category.save')return 'shared:lslj_finance_v9'
+  if(operation.type==='transaction.bulk.update')return 'shared:brevity_transaction_overrides_v1'
   if (operation.type === 'transaction.allocate' || operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return 'shared:brevity_transaction_overrides_v1'
   if (['transaction.rule.create','transaction.rule.update','transaction.rule.delete'].includes(operation.type)) return 'shared:lslj_tx_rules_v1'
   if (operation.type === 'budget.update') return 'shared:brevity_budget_monthly_v1'
@@ -429,6 +435,8 @@ function normalizeActionPayload(type, input) {
       normalized[field] = clean(value, field === 'sourceHash' ? 64 : 160)
     } else if (['transaction.rule.create','transaction.rule.update'].includes(type) && field === 'criteria') {
       normalized.criteria=normalizeRuleCriteria(value)
+    } else if(type==='transaction.bulk.update'&&field==='transactionIds'){
+      if(!Array.isArray(value)||!value.length||value.length>10000||value.some(id=>typeof id!=='string'||!id.trim()||id.length>512)||new Set(value).size!==value.length)throw Error('Select up to 10,000 distinct transactions.');normalized.transactionIds=value.slice()
     } else if (field === 'vendorId' || field === 'accountId' || field === 'transferAccountId' || field === 'legacyAccountId') {
       assertString(type, field, value)
       normalized[field] = cleanId(value)
@@ -585,10 +593,10 @@ export function normalizeActionOperation(input = {}) {
     payload,
     allowedScopes,
     defaultScope,
-    risk: actionRisk(type, defaultScope, type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
+    risk: actionRisk(type, defaultScope, type === 'transaction.bulk.update' ? payload.transactionIds.length : type === 'transaction.rule.create' && payload.applyToExisting ? 2 : 1),
   }
   if(type==='project.review'&&!operation.targetId)throw Error('Select the exact project for sign-off.')
-  if ((type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
+  if (type !== 'transaction.bulk.update' && (type.endsWith('.update') || type.endsWith('.delete') || type === 'transaction.categorize') && !operation.targetId) throw new Error(`The ${type} action requires an exact record id.`)
   if (((operation.domain === 'planning' && !type.startsWith('education.hub.') && type!=='apple.sources.update' && type!=='module.configuration.update' && type!=='member.preference.set' && !type.startsWith('improvement.') && type !== 'sermon.activate' && !type.startsWith('meal.recipe.') && !type.startsWith('meeting.')) || type.startsWith('recurring.')) && !operation.targetDate) throw new Error(`The ${type} action requires an exact occurrence date.`)
   if (!type.endsWith('.delete') && !Object.keys(payload).length) throw new Error(`The ${type} action requires at least one reviewed change.`)
   if(type.startsWith('education.hub.')&&!operation.targetId)throw Error('Learning changes require a stable item ID.')
@@ -701,6 +709,8 @@ export function normalizeActionOperation(input = {}) {
     if(payload.categoryLimit&&(payload.direction!=='expense'||!payload.category||Number(payload.value??payload.amount)<0||!Number.isFinite(payload.forecastAllocation)||payload.forecastAllocation<0))throw new Error('Category budgets require an expense category and non-negative budget and forecast amounts.')
   }
   if (type === 'forecast.update' && !operation.targetId) throw new Error('A forecast update requires the exact scenario id, or model for the shared planning expense.')
+  if(type==='finance.category.save'&&(!payload.name||payload.name.length>120))throw Error('Enter a category name up to 120 characters.')
+  if(type==='transaction.bulk.update'&&(!payload.transactionIds?.length||(!payload.category&&!payload.vendorId)||!Number.isInteger(payload.sourceVersion)||payload.sourceVersion<0))throw Error('Choose records and a category or vendor, then refresh the bank source.')
   if(type === 'finance.reserve.set' && (!Number.isFinite(payload.amount)||payload.amount<0))throw new Error('Enter a non-negative operating reserve minimum.')
   if (type === 'finance.spending.review' && (!operation.targetId || !['reviewed','reduce','unresolved'].includes(payload.status))) throw new Error('A spending review needs a transaction and a supported decision.')
   if ((type.startsWith('finance.close.') || type.startsWith('finance.forecast-close.')) && (!operation.targetId || !operation.targetDate || (type.endsWith('.set') && !Number.isFinite(payload.amount)))) throw new Error('An ending balance requires an exact account, date and numeric amount.')

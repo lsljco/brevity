@@ -19,11 +19,11 @@ export default function AutoReconciliationReport({ scheduled, actuals, accounts,
   const ambiguousCount=new Set(report.ambiguous.map(row=>row.actual.id)).size
   return <section className="dash-card" aria-label="Automatic reconciliation recommendations" style={{margin:'0 0 16px',padding:20}}>
 <FinanceExport report={financeReport('Bank reconciliation recommendations',report,[freshnessMessage,'Recommendations are not approved reconciliations.'])}/>
-    <BankBalanceReconciliation accounts={accounts.filter(account=>!accountIds || accountIds.has(account.id))}/>
-    <h2 style={{margin:'0 0 8px',fontSize:20}}>Reconciliation recommendations</h2>
-    <p style={{fontSize:12,color:'var(--muted)'}}>Brevity analyzes the last 30 days of posted income and expenses across your selected linked accounts against your plan. Nothing changes until you approve the recommended matches in Action Mode.</p>
+    <BankBalanceReconciliation compact accounts={accounts.filter(account=>!accountIds || accountIds.has(account.id))}/>
+    <h2 style={{margin:'18px 0 8px',fontSize:20}}>Review transactions</h2>
+    <p style={{fontSize:12,color:'var(--muted)'}}>Review unclear matches before applying changes.</p>
     <p style={{fontSize:12}}>{report.suggestions.length} suggested matches · {ambiguousCount} ambiguous transactions · {report.unresolved.length} other transactions without a confident match</p>
-    {freshnessMessage && <p style={{fontSize:11,color:'var(--muted)'}}>{freshnessMessage}</p>}
+    {freshnessMessage && <details><summary>Bank activity status</summary><p style={{fontSize:11,color:'var(--muted)'}}>{freshnessMessage}</p></details>}
     {!report.suggestions.length && <p>No unique matches are ready for approval. Pending transactions are excluded.</p>}
     <div style={{display:'grid',gap:10}}>{report.suggestions.map(row=><label key={row.id} className="reconciliation-choice">
       <input type="checkbox" aria-label={`Review match for ${row.plan.name} on ${row.occurrenceDate}`} checked={!excluded.has(row.id)} disabled={readOnly||busy} onChange={event=>setExcluded(previous=>{const next=new Set(previous);event.target.checked?next.delete(row.id):next.add(row.id);return next})}/>
@@ -36,9 +36,9 @@ export default function AutoReconciliationReport({ scheduled, actuals, accounts,
       </span>
     </label>)}</div>
     {ambiguousCount>0 && <details style={{marginTop:12}}><summary>Review ambiguous transactions</summary>{[...new Map(report.ambiguous.map(row=>[row.actual.id,row.actual])).values()].map(actual=><p key={actual.id} style={{fontSize:12}}>{actual.name} · {actual.date} · {fmtMoney(actual.amount)} — more than one possible match; no automatic recommendation.</p>)}</details>}
-    {!readOnly && <button type="button" disabled={!selected.length||busy} onClick={async()=>{setBusy(true);setMessage('');try{if(await onReview(selected))setMessage('Report prepared. Review the exact changes and approve in Action Mode.')}catch(error){setMessage(error.code==='VERSION_CONFLICT'||error.status===409?'Household records changed while this review was being prepared. Select Review again to load the latest recommendations and prepare a new review. Nothing was applied.':error.message||'Unable to prepare the report.')}finally{setBusy(false)}}} style={{marginTop:12}}>{busy?'Preparing report…':`Review ${selected.length} recommended matches`}</button>}
+    {!readOnly && selected.length>0 && <button type="button" disabled={!selected.length||busy} onClick={async()=>{setBusy(true);setMessage('');try{if(await onReview(selected))setMessage('Report prepared. Review the exact changes and approve in Action Mode.')}catch(error){setMessage(error.code==='VERSION_CONFLICT'||error.status===409?'Household records changed while this review was being prepared. Select Review again to load the latest recommendations and prepare a new review. Nothing was applied.':error.message||'Unable to prepare the report.')}finally{setBusy(false)}}} style={{marginTop:12}}>{busy?'Preparing report…':`Review ${selected.length} recommended matches`}</button>}
     {report.suggestions.length>RECONCILIATION_BATCH_LIMIT && <p style={{fontSize:11}}>Review up to {RECONCILIATION_BATCH_LIMIT} matches at a time. Remaining recommendations stay available.</p>}
     {message && <p role="status" className="reconciliation-message">{message}</p>}
-    <p style={{fontSize:11,color:'var(--muted)'}}>Matching window: 7 days either side of posting; amount difference up to 2%, capped at $25, with a $2 minimum tolerance. Recommendations are suggestions, not proof of payment. Approved links retain both source records and can be undone in Action Mode.</p>
+    <details><summary>Matching details</summary><p style={{fontSize:11,color:'var(--muted)'}}>Matching window: 7 days either side of posting; amount difference up to 2%, capped at $25, with a $2 minimum tolerance. Recommendations are suggestions, not proof of payment. Approved links retain both source records and can be undone in Action Mode.</p></details>
   </section>
 }
