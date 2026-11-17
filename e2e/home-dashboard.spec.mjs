@@ -89,7 +89,7 @@ test('Home gives the first viewport to primary cards and scrolls to pillars and 
 test('Home renders the full outcomes list and the last outcome can be reached by scrolling',async({page},testInfo)=>{
  await openHome(page,testInfo)
  const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date())
- const rows=Array.from({length:8},(_,index)=>({id:`outcome-${index}`,title:`Saved household outcome ${index+1}`,owner:'Family',status:index===2?'complete':'pending'}))
+ const rows=Array.from({length:8},(_,index)=>({id:`outcome-${index}`,title:`Saved household outcome ${index+1}`,owner:'Family',date:index===0?'2026-11-09':date,status:index===2?'complete':'pending'}))
  await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:{id:`daily-plan-${date}`,date,version:1,topPriorities:rows,household:{priorities:rows.slice(0,2)}}}}))
  await page.reload()
  const card=page.locator('.home-left .home-card').last()

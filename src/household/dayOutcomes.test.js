@@ -65,3 +65,16 @@ test('canonical scheduled dates win over stale mirrored dates and completed lega
  plan.household.keyFocus='Completed focus';plan.household.keyFocusCompleted=true
  assert.deepEqual(visibleDayOutcomes(plan,'Larry','household').map(r=>[r.title,r.status]),[['Completed focus','complete']])
 })
+
+test('past-dated saved outcomes remain visible while future scheduled outcomes wait for their day',()=>{
+ const plan=createEmptyDailyPlan('2026-11-17')
+ plan.topPriorities=[
+  {id:'finance',title:'Household Finance Meeting',owner:'Larry',date:'2026-11-09',status:'pending'},
+  {id:'done',title:'Completed saved outcome',owner:'Family',date:'2026-11-10',status:'complete'},
+  {id:'current',title:'Today outcome',owner:'Terica',date:plan.date,status:'pending'},
+  {id:'future',title:'Future outcome',owner:'Family',date:'2026-11-18',status:'pending'},
+ ]
+ assert.deepEqual(visibleDayOutcomes(plan,'Larry','household').map(row=>row.id),['finance','done','current'])
+ assert.deepEqual(visibleDayOutcomes(plan,'Larry','mine').map(row=>row.id),['finance','done'])
+ assert.equal(plan.topPriorities[0].date,'2026-11-09')
+})
