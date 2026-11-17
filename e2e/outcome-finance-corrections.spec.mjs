@@ -26,7 +26,7 @@ test('Home and Today expand to every saved outcome including the third and fifth
  await home.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('home-all-outcomes.png')})
  await home.locator('.home-outcomes li').last().scrollIntoViewIfNeeded()
  await expect(home.locator('.home-outcomes li').last()).toBeVisible()
- if(info.project.name!=='iphone')expect(await page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2)
+ if(info.project.name!=='iphone')expect(await page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeGreaterThan(30)
  await home.getByRole('button',{name:'Review outcomes',exact:true}).click()
  const scope=page.getByRole('region',{name:'Your day at a glance'}).getByRole('button',{name:'Household',exact:true});await scope.click()
  const outcomes=page.locator('#today-focus')
