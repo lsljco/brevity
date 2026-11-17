@@ -33,3 +33,27 @@ test('dated standing outcomes follow the viewed day without changing the source 
  const source=saved('2026-10-07',[{...priorities[1],date:'2026-10-07'},{...priorities[2],date:'2026-10-30'}]);const target=await outcomes.resolveDailyOutcomes(fake({'2026-10-07':source}),'h','2026-10-12',null)
  assert.equal(target.topPriorities[0].date,'2026-10-12');assert.equal(source.topPriorities[0].date,'2026-10-07');assert.equal(target.topPriorities[1].date,'2026-10-30')
 })
+
+test('server preserves outcomes split between canonical and household lists on today and inherited days',async()=>{
+ const source=saved('2026-11-17')
+ source.topPriorities=[{id:'larry',title:'Prepare interview',owner:'Larry',status:'complete',date:source.date}]
+ source.household.priorities=[{id:'terica',title:'Welcome Weekend Warrior',owner:'Terica',status:'pending'},{id:'lorenzo',title:'Content creation',owner:'Lorenzo',status:'pending'}]
+ const original=structuredClone(source)
+ for(const date of [source.date,'2026-11-18']){
+  const target=await outcomes.resolveDailyOutcomes(fake({[source.date]:source}),'h',date,date===source.date?source:null)
+  assert.deepEqual(target.topPriorities.map(row=>row.id),['larry','terica','lorenzo'])
+  assert.deepEqual(target.household.priorities,target.topPriorities)
+  assert.equal(target.topPriorities[0].status,'complete')
+  assert.equal(target.topPriorities[0].date,date)
+ }
+ assert.deepEqual(source,original)
+})
+test('server deduplicates mirrors without losing canonical rescheduling or extra household rows',async()=>{
+ const source=saved('2026-11-17')
+ source.topPriorities=[{id:'a',title:'Interview',owner:'Larry',date:'2026-11-20'},'Shared outcome']
+ source.household.priorities=[{id:'a',title:'Interview',owner:'Larry',date:source.date},{title:'Shared outcome',owner:'Family'},{id:'extra',title:'Another outcome',owner:'Lorenzo'}]
+ const target=await outcomes.resolveDailyOutcomes(fake({}),'h',source.date,source)
+ assert.equal(target.topPriorities.length,3)
+ assert.equal(target.topPriorities[0].date,'2026-11-20')
+ assert.equal(target.topPriorities[2].id,'extra')
+})
