@@ -106,3 +106,24 @@ test('daily-plan publication lineage reconnects by exact plan and item IDs after
   assert.equal(appointments.length,1)
   assert.equal(appointments[0].id,'visit')
 })
+
+test('raw Apple records retained in the daily plan do not duplicate the live calendar',()=>{
+ const event={id:'interview-uid',uid:'interview-uid',source:'icloud',appleCalendarId:'family',appleCalendarOwner:'Family',title:'NS- Interview w/ Ampact',date:plan.date,time:'2:00 PM'}
+ const saved={date:plan.date,household:{appointments:[{...event,startTime:event.time}]}}
+ assert.equal(calendarAppointmentsForPlan(saved,[event]).length,1)
+ assert.equal(saved.household.appointments.length,1)
+})
+
+test('recurring source links retain their occurrence identity when saved in a daily plan',()=>{
+ const event={id:'tutor::20260826T144500',sourceId:'tutor-source',source:'icloud',recurring:true,title:'Isaiah Daily Tutor',date:plan.date,time:'2:45 PM'}
+ const saved={date:plan.date,household:{appointments:[{id:'saved-tutor',calendarSource:'icloud',calendarSourceId:'tutor-source',recurring:true,title:event.title,date:plan.date,startTime:'14:45'}]}}
+ assert.equal(calendarAppointmentsForPlan(saved,[event]).length,1)
+})
+
+test('saved copies of the same Apple occurrence collapse while distinct calendar records remain',()=>{
+ const raw={id:'apple-visit',sourceId:'visit-source',source:'icloud',title:'Review Isaiah Lesson Plan',date:plan.date,time:'2:00 PM'}
+ const copy={id:'icloud-apple-visit',calendarEventId:raw.id,calendarSource:'icloud',title:raw.title,date:plan.date,startTime:raw.time}
+ const saved={date:plan.date,household:{appointments:[raw,copy,{...raw,id:'different-visit',sourceId:'different-source'}]}}
+ assert.equal(calendarAppointmentsForPlan(saved,[raw]).length,2)
+ assert.equal(saved.household.appointments.length,3)
+})
