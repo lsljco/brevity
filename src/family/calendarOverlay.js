@@ -26,12 +26,13 @@ export function compareCalendarEventsChronologically(left, right) {
 // distinguish instances of recurring series. Provider IDs never join sources.
 export function calendarRecordIdentity(event, fallbackDate = '') {
   const date = clean(event?.date || event?.start || fallbackDate)
-  const recurring = event?.recurring || event?.recurrenceId || event?.originalStart || clean(event?.id).includes('::')
+  const id = clean(event?.calendarEventId || event?.id || event?.uid || event?.href)
+  const sourceId = clean(event?.calendarSourceId || event?.sourceId)
+  const recurring = event?.recurring || event?.recurrenceId || event?.originalStart || id.includes('::')
   const occurrence = recurring ? clean(event?.recurrenceId || event?.originalStart || date) : ''
-  if (clean(event?.sourceId)) return JSON.stringify(['source', clean(event.sourceId), occurrence])
-  const id = clean(event?.id || event?.uid || event?.href)
+  if (sourceId) return JSON.stringify(['source', sourceId, occurrence])
   if (!id) return ''
-  const apple = event?.source === 'icloud' || event?.calendarSource === 'icloud'
+  const apple = event?.source === 'icloud' || event?.calendarSource === 'icloud' || Boolean(event?.appleCalendarId)
   return JSON.stringify([apple ? 'apple' : 'source', id, occurrence])
 }
 
@@ -86,19 +87,33 @@ export function calendarAppointmentFromEvent(event) {
 
 export function calendarAppointmentsForPlan(plan, events) {
   const date = clean(plan?.date)
+  const savedIdentities = new Set()
   const existing = arrayOrEmpty(plan?.household?.appointments)
     .filter(item => !item?.date || item.date === date)
+    .filter(item => {
+      const identities = [calendarRecordIdentity(item, date)]
+      // An imported record can retain its source lineage while an older saved
+      // copy retains only the provider link. Both identify the same occurrence.
+      if (item.calendarEventId || item.calendarSource === 'icloud' || item.source === 'icloud' || item.appleCalendarId) {
+        identities.push(calendarRecordIdentity({...item, sourceId:'', calendarSourceId:''}, date))
+      }
+      const linked = identities.filter(Boolean)
+      const duplicate = linked.some(identity => savedIdentities.has(identity))
+      linked.forEach(identity => savedIdentities.add(identity))
+      return !duplicate
+    })
   const identities = new Set(existing.flatMap(item => {
     const linkedId = clean(item.calendarSourceId)
     const providerId = clean(item.calendarEventId)
     return [
+      calendarRecordIdentity(item, date),
       calendarRecordIdentity({id:item.id, date:item.date || date}),
       ...(item.calendarSync && item.id ? [
         calendarRecordIdentity({sourceId:`daily-${date}-${item.id}`}),
         calendarRecordIdentity({sourceId:`assistant-daily-${date}-${item.id}`}),
       ] : []),
-      linkedId ? calendarRecordIdentity({sourceId:linkedId, date:item.date || date}) : '',
-      providerId ? calendarRecordIdentity({id:providerId, source:item.calendarSource || 'icloud', date:item.date || date}) : '',
+      linkedId ? calendarRecordIdentity({sourceId:linkedId, recurring:item.recurring, recurrenceId:item.recurrenceId, originalStart:item.originalStart, date:item.date || date}) : '',
+      providerId ? calendarRecordIdentity({id:providerId, source:item.calendarSource || 'icloud', recurring:item.recurring, recurrenceId:item.recurrenceId, originalStart:item.originalStart, date:item.date || date}) : '',
     ].filter(Boolean)
   }))
   const additions = []
