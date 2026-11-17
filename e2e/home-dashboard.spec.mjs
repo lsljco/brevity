@@ -56,19 +56,51 @@ test('Home is the default after reload and Today notification links still open T
  await expect(page.getByRole('region',{name:'Daily briefing'})).toBeVisible()
 })
 
-test('Home overview fits the tablet and desktop viewport',async({page},testInfo)=>{
+test('Home gives the first viewport to primary cards and scrolls to pillars and footer',async({page},testInfo)=>{
  test.skip(testInfo.project.name==='iphone','Phone retains its scrolling layout')
  await openHome(page,testInfo)
  const collapse=page.getByRole('button',{name:'Collapse navigation',exact:true});if(await collapse.isVisible())await collapse.click()
- await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2)
- for(const selector of ['.home-banner','.home-left','.home-center','.home-right','.home-financial','.home-footer']){
+ const primary=await page.locator('.home-primary').boundingBox()
+ for(const selector of ['.home-banner','.home-left','.home-center','.home-right','.home-financial']){
   const box=await page.locator(selector).boundingBox()
   expect(box.y).toBeGreaterThanOrEqual(0)
-  expect(box.y+box.height).toBeLessThanOrEqual(page.viewportSize().height)
+  expect(box.y+box.height).toBeLessThanOrEqual(primary.y+primary.height+1)
  }
+ const mainBottom=await page.locator('.app-main').evaluate(el=>el.getBoundingClientRect().bottom-parseFloat(getComputedStyle(el).paddingBottom))
+ expect(Math.abs(primary.y+primary.height-mainBottom)).toBeLessThanOrEqual(12)
+ const pillars=await page.locator('.home-pillars').boundingBox()
+ expect(pillars.y).toBeGreaterThan(primary.y+primary.height)
+ await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeGreaterThan(30)
  await page.locator('.home-outcomes').evaluate(el=>{for(let i=0;i<20;i++){const li=document.createElement('li');li.textContent='Additional household outcome '+i;el.append(li)}})
- await expect.poll(()=>page.locator('.app-main').evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2)
+ expect((await page.locator('.home-primary').boundingBox()).height).toBe(primary.height)
  await page.screenshot({path:testInfo.outputPath('home-one-screen.png')})
+ await page.locator('.home-pillars > summary').click()
+ await expect(page.getByRole('navigation',{name:'Seven pillars',exact:true})).toBeVisible()
+ await page.locator('.home-footer').scrollIntoViewIfNeeded()
+ await expect(page.getByRole('button',{name:'History & records',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Preferences & connections',exact:true}).click()
+ await page.getByRole('button',{name:'Home',exact:true}).click()
+ await expect(page.locator('.home-primary')).toBeVisible()
+ const returned=await page.locator('.home-primary').boundingBox()
+ const returnedBottom=await page.locator('.app-main').evaluate(el=>el.getBoundingClientRect().bottom-parseFloat(getComputedStyle(el).paddingBottom))
+ expect(Math.abs(returned.y+returned.height-returnedBottom)).toBeLessThanOrEqual(12)
+})
+
+test('Home renders the full outcomes list and the last outcome can be reached by scrolling',async({page},testInfo)=>{
+ await openHome(page,testInfo)
+ const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date())
+ const rows=Array.from({length:8},(_,index)=>({id:`outcome-${index}`,title:`Saved household outcome ${index+1}`,owner:'Family',status:index===2?'complete':'pending'}))
+ await page.route('**/.netlify/functions/household-data*',route=>route.fulfill({json:{plan:{id:`daily-plan-${date}`,date,version:1,topPriorities:rows,household:{priorities:rows.slice(0,2)}}}}))
+ await page.reload()
+ const card=page.locator('.home-left .home-card').last()
+ await expect(card.locator('.home-outcomes > li')).toHaveCount(8)
+ await card.getByText(rows.at(-1).title,{exact:true}).scrollIntoViewIfNeeded()
+ await expect(card.getByText(rows.at(-1).title,{exact:true})).toBeVisible()
+ if(testInfo.project.name!=='iphone'){
+  const last=await card.locator('.home-outcomes > li').last().boundingBox(),box=await card.boundingBox()
+  expect(last.y+last.height).toBeLessThanOrEqual(box.y+box.height)
+  expect(await card.evaluate(el=>el.scrollTop)).toBeGreaterThan(0)
+ }
 })
 
 test('History and approvals live in Settings rather than the page toolbar',async({page},testInfo)=>{
