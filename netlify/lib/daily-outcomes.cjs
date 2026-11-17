@@ -1,7 +1,20 @@
 // Outcomes are standing direction: the latest explicit dated list applies until
 // another alignment replaces it. Read resolution never creates daily records.
-const items = plan => Array.isArray(plan?.household?.priorities) && plan.household.priorities.length
-  ? plan.household.priorities : Array.isArray(plan?.topPriorities) ? plan.topPriorities : []
+const items = plan => {
+  const rows = Array.isArray(plan?.topPriorities) ? [...plan.topPriorities] : []
+  const same = (left, right) => {
+    const a = typeof left === 'string' ? {title:left, owner:'Family'} : left
+    const b = typeof right === 'string' ? {title:right, owner:'Family'} : right
+    return a.id && b.id && a.id === b.id || String(a.title || '').trim() === String(b.title || '').trim()
+      && (a.owner || 'Family') === (b.owner || 'Family') && (a.date || plan.date) === (b.date || plan.date)
+  }
+  // Older writers can leave a shorter household mirror. Resolve the complete
+  // saved list before returning it or carrying it to another day.
+  for (const row of Array.isArray(plan?.household?.priorities) ? plan.household.priorities : []) {
+    if (!rows.some(existing => same(existing, row))) rows.push(row)
+  }
+  return rows
+}
 const explicit = plan => Boolean(plan?.outcomesReviewed || (!plan?.outcomesInheritedFrom && items(plan).length))
 async function resolveDailyOutcomes(store, householdId, date, current) {
   const apply = (source, sourceDate) => {

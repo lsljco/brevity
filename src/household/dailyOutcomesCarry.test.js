@@ -33,3 +33,24 @@ test('dated standing outcomes follow the viewed day without changing the source 
  const source=saved('2026-10-07',[{...priorities[1],date:'2026-10-07'},{...priorities[2],date:'2026-10-30'}]);const target=await outcomes.resolveDailyOutcomes(fake({'2026-10-07':source}),'h','2026-10-12',null)
  assert.equal(target.topPriorities[0].date,'2026-10-12');assert.equal(source.topPriorities[0].date,'2026-10-07');assert.equal(target.topPriorities[1].date,'2026-10-30')
 })
+
+test('a two-item household mirror cannot truncate the complete saved outcomes list',async()=>{
+ const source=saved('2026-11-16')
+ source.household.priorities=priorities.slice(0,2)
+ const before=structuredClone(source)
+ const current=await outcomes.resolveDailyOutcomes(fake({}),'h',source.date,source)
+ assert.deepEqual(current.topPriorities,priorities)
+ assert.deepEqual(current.household.priorities,priorities)
+ assert.equal(buildTodayReadModel({plan:current}).outcomes.length,6)
+ const carried=await outcomes.resolveDailyOutcomes(fake({[source.date]:source}),'h','2026-11-17',null)
+ assert.deepEqual(carried.topPriorities,priorities)
+ assert.deepEqual(source,before)
+})
+
+test('outcome resolution retains distinct household rows and canonical dates without duplicate mirrors',async()=>{
+ const source=saved('2026-11-16',[{id:'a',title:'Moved outcome',owner:'Family',date:'2026-11-18'}])
+ source.household.priorities=[{id:'a',title:'Moved outcome',owner:'Family',date:source.date},{id:'b',title:'Another outcome',owner:'Larry'}]
+ const current=await outcomes.resolveDailyOutcomes(fake({}),'h',source.date,source)
+ assert.deepEqual(current.topPriorities.map(row=>row.id),['a','b'])
+ assert.equal(current.topPriorities[0].date,'2026-11-18')
+})

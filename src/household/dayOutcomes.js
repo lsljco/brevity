@@ -11,7 +11,7 @@ export function savedDayOutcomes(plan){
  return outcomes
 }
 export function visibleDayOutcomes(plan,member,scope='mine'){
- return savedDayOutcomes(plan).filter(row=>(!row.date||row.date===plan.date)&&belongsToViewer(row,member,scope))
+ return savedDayOutcomes(plan).filter(row=>(!row.date||row.date<=plan.date)&&belongsToViewer(row,member,scope))
 }
 export function outcomesOperation(plan,rows){
  return {type:'plan.pillar.update',targetDate:plan.date,targetId:'household',description:`Update outcomes for ${plan.date}`,payload:{pillar:'household',patch:{priorities:rows.map(row=>cleanPlanItem({...row,title:row.title.trim()})).filter(row=>row.title),keyFocus:''}}}
