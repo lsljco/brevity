@@ -1,3 +1,4 @@
+import {resolveCategory,storedCategoryCatalog} from './categoryCatalog.js'
 import {isCategoryAllowancePlan} from './categoryAllowancePlans.js'
 import {getHouseholdDateKey} from './financeTime.js'
 import {txOccursOnDate} from './projection.js'
@@ -8,6 +9,7 @@ import {buildUniquePlaidAccountMap} from './calendarSemantics.js'
 import {buildAutoReconciliationReport,approvedReconciliationMatches} from './autoReconciliation.js'
 export const categoryBudgetKey=(accountId,month,category)=>`${accountId}|${month}|${category.trim().toLowerCase()}`
 export function categoryBudgetOperation({accountId,month,category,displayName,amount,forecastAllocation=0}) {
+ const entry=storedCategoryCatalog().find(row=>row.name===category);if(entry?.aliases?.length){displayName=displayName||entry.name;category=entry.aliases[0]}
  let hash=2166136261;for(const character of categoryBudgetKey(accountId,month,category)){hash^=character.codePointAt(0);hash=Math.imul(hash,16777619)}
  const lineId=`category-budget:${(hash>>>0).toString(36)}`
  return {type:'budget.update',targetId:lineId,description:`Set ${displayName||category} budget to $${amount} and total forecast allocation to $${forecastAllocation} for ${month}.`,payload:{lineId,accountId,category,...(displayName?{displayName}:{}),categoryLimit:true,direction:'expense',lineName:category,year:Number(month.slice(0,4)),month:Number(month.slice(5,7))-1,value:Number(amount),forecastAllocation:Number(forecastAllocation)}}
@@ -16,9 +18,9 @@ export function buildCategoryBudgetSummary({accounts=[],scheduled=[],actuals=[],
  const date=new Date(`${month}-01T12:00:00Z`),links=buildUniquePlaidAccountMap(accounts),ids=new Set(accounts.map(a=>String(a.id)))
  const lines=buildBudgetLines(scheduled,budget,{accountIds:ids}),owners=buildLegacyBudgetOwners(lines),groups=new Map()
  const allowanceGroups=new Set(lines.filter(l=>l.cashAllowance).map(l=>`${l.accountId}|${l.category}`))
- const get=(accountId,category)=>{const key=categoryBudgetKey(accountId,month,category);if(!groups.has(key))groups.set(key,{key,accountId,category,budget:0,scheduled:0,actual:0,settled:0,matchedActual:0,pooled:0,futureScheduled:0,forecastAllocation:0});return groups.get(key)}
+ const get=(accountId,category)=>{category=resolveCategory(category,storedCategoryCatalog());const key=categoryBudgetKey(accountId,month,category);if(!groups.has(key))groups.set(key,{key,accountId,category,budget:0,scheduled:0,actual:0,settled:0,matchedActual:0,pooled:0,futureScheduled:0,forecastAllocation:0});return groups.get(key)}
  for(const line of lines.filter(l=>l.direction==='expense')){const g=get(line.accountId,line.category);const planned=line.transactions.reduce((s,t)=>s+calculateTransactionAmountForMonth(t,date),0);g.scheduled+=planned;for(const t of line.transactions){if(isCategoryAllowancePlan(t))g.pooled+=calculateTransactionAmountForMonth(t,date);else for(let day=1;day<=new Date(date.getUTCFullYear(),date.getUTCMonth()+1,0).getDate();day++){const d=new Date(date.getUTCFullYear(),date.getUTCMonth(),day);if(`${month}-${String(day).padStart(2,'0')}`>=today&&txOccursOnDate(t,d))g.futureScheduled+=Number(t.amount)}}const target=budgetTargetForLine({budget,line,year:date.getUTCFullYear(),month:date.getUTCMonth(),legacyYear,legacyAccountId,legacyOwners:owners});g.budget+=target??planned;if(allowanceGroups.has(`${line.accountId}|${line.category}`))g.forecastAllocation+=target||0}
- for(const entry of Object.values(budget.categoryLimits||{})){if(entry.month!==month||!ids.has(entry.accountId))continue;const g=get(entry.accountId,entry.category);g.budget=entry.amount;g.forecastAllocation=entry.forecastAllocation||0;g.explicit=true;g.displayName=entry.displayName||entry.category}
+ for(const entry of Object.values(budget.categoryLimits||{})){if(entry.month!==month||!ids.has(entry.accountId))continue;const g=get(entry.accountId,entry.category);g.budget=entry.amount;g.forecastAllocation=entry.forecastAllocation||0;g.explicit=true;g.displayName=resolveCategory(entry.displayName||entry.category,storedCategoryCatalog())}
  const posted=[...new Map(actuals.filter(t=>t.id&&!t.pending&&!t._deleted&&String(t.date).startsWith(month)&&!isTransferTransaction(t)&&Number(t.amount)>0).map(t=>[t.id,t])).values()]
  const end=`${month}-${new Date(date.getUTCFullYear(),date.getUTCMonth()+1,0).getDate()}`
  const report=buildAutoReconciliationReport({accounts,scheduled,actuals:posted,today:end,lookbackDays:32,allowAmountVariance:true})

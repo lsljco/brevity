@@ -1,3 +1,4 @@
+import {resolveCategory,storedCategoryCatalog} from './categoryCatalog.js'
 export const CUSTOM_CATEGORY_STORAGE_KEY = 'brevity_finance_categories_v1'
 
 export const DEFAULT_TRANSACTION_CATEGORIES = [
@@ -24,7 +25,9 @@ export function mergeCategoryOptions(...groups) {
   const seen = new Set()
 
   groups.flat(Infinity).forEach(value => {
-    const category = typeof value === 'string' ? value.trim() : ''
+    const catalog=storedCategoryCatalog()
+    const category = typeof value === 'string' ? resolveCategory(value.trim(),catalog) : ''
+    if(catalog.some(row=>row.name===category&&row.enabled===false))return
     const key = category.toLocaleLowerCase()
     if (!category || seen.has(key)) return
     seen.add(key)
@@ -59,6 +62,7 @@ export function loadStoredCategoryOptions(storage) {
   const actualOverrides = readJson(storage, 'lslj_tx_overrides_v1', {})
 
   return mergeCategoryOptions(
+    (financeData.categoryCatalog||[]).filter(row=>row.enabled!==false).map(row=>row.name),
     readJson(storage, CUSTOM_CATEGORY_STORAGE_KEY, []),
     Object.values(readJson(storage, 'lslj_budget_v1', {}).categoryLimits || {}).map(entry=>entry.category),
     categoriesFromTransactions(financeData.transactions || []),

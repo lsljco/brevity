@@ -29,7 +29,7 @@ export const PILLARS = [
     { id:'vendors', label:'Vendors', icon:'ti-building-store' },
     { id:'debts', label:'Debts', icon:'ti-receipt-2' },
     { id:'budget', label:'Budget', icon:'ti-chart-bar' },
-    { id:'recurring', label:'Recurring', icon:'ti-repeat' },
+    { id:'accounting', label:'Accounting', icon:'ti-books' },
     { id:'reporting', label:'Reporting', icon:'ti-report-analytics' },
   ]},
   { id:'ministry', label:'Ministry & Fellowship', icon:'ti-users', layer:5, description:'Impartation of the prior six pillars and discipleship of others.', items:[

@@ -1,3 +1,4 @@
+import {resolveCategory,storedCategoryCatalog} from './categoryCatalog.js'
 import './TransactionRuleModal.css'
 import RuleSuggestions from './RuleSuggestions.jsx'
 import RuleCriteriaEditor from './RuleCriteriaEditor.jsx'
@@ -17,7 +18,7 @@ const fieldStyle = {
 
 function ruleDescription(rule, accounts, vendors) {
   const text = rule.criteria ? describeRuleCriteria(rule.criteria,accounts) : rule?.conditions?.originalStatement?.value || rule?.conditions?.merchantName?.value || 'matching text'
-  const category = rule?.actions?.updateCategory?.value || 'Uncategorized'
+  const category = resolveCategory(rule?.actions?.updateCategory?.value || 'Uncategorized',storedCategoryCatalog())
   const accountId = rule?.conditions?.accounts?.on ? rule.conditions.accounts.value : ''
   const account = accounts.find(item => String(item.id) === String(accountId))
   const vendor=vendors.find(v=>v.id===rule.actions?.assignVendor?.value)?.name||''
@@ -53,7 +54,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
       const loaded=criteriaForSavedRule(rule)
       setCriteria(loaded);setEditingRule(rule);setRuleTitle(rule.name||'');setStartDate(rule.createdDate||today)
       setVendorId(rule.actions?.assignVendor?.on?rule.actions.assignVendor.value:'')
-      setCategory(rule.actions?.updateCategory?.value||'');setAccountId(rule.conditions?.accounts?.on?rule.conditions.accounts.value:'')
+      setCategory(resolveCategory(rule.actions?.updateCategory?.value||'',storedCategoryCatalog()));setAccountId(rule.conditions?.accounts?.on?rule.conditions.accounts.value:'')
       setApplyToExisting(Boolean(rule.applyToExisting||!rule.createdDate));setError('')
       editorRef.current?.scrollTo({top:0})
     }catch(cause){setError(cause.message)}

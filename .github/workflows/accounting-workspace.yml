@@ -1,0 +1,34 @@
+name: Accounting workspace verification
+on:
+  pull_request:
+    paths:
+      - 'src/finance/**'
+      - 'src/modules/catalog.js'
+      - 'src/App.jsx'
+      - 'netlify/lib/assistant-action-*.mjs'
+      - 'e2e/accounting-workspace.spec.mjs'
+      - '.github/workflows/accounting-workspace.yml'
+permissions:
+  contents: read
+jobs:
+  accounting:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test src/finance/*.test.js src/assistant/*.test.js
+      - run: npm run build
+      - run: node scripts/check-source-budget.mjs && node scripts/check-bundle-budget.mjs
+      - run: npm install --no-save @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test accounting-workspace --workers=4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accounting-workspace-evidence
+          path: test-results/

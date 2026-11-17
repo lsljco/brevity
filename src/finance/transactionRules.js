@@ -1,3 +1,4 @@
+import {resolveCategory,storedCategoryCatalog,labelTransactionCategory} from './categoryCatalog.js'
 import {matchesRuleCriteria,ruleAccountMatches} from './ruleCriteria.js'
 function normalized(value) {
   return String(value ?? '').trim().toLowerCase()
@@ -35,7 +36,7 @@ export function transactionMatchesRule(transaction, rule, accounts = []) {
     if (conditions.amount.min !== '' && amount < Number(conditions.amount.min)) return false
     if (conditions.amount.max !== '' && amount > Number(conditions.amount.max)) return false
   }
-  if (active(conditions.categories) && normalized(transaction.category || transaction.cat) !== normalized(conditions.categories.value)) return false
+  if (active(conditions.categories) && normalized(resolveCategory(transaction.category || transaction.cat,storedCategoryCatalog())) !== normalized(resolveCategory(conditions.categories.value,storedCategoryCatalog()))) return false
   if (active(conditions.accounts)) {
     const selected = String(conditions.accounts.value || '')
     const local = accounts.find(account => String(account.id) === selected)
@@ -66,5 +67,5 @@ export function applyTransactionRule(transaction, rule, accounts = []) {
 }
 
 export function applyTransactionRules(transaction, rules = [], accounts = []) {
-  return rules.reduce((current, rule) => applyTransactionRule(current, rule, accounts), transaction)
+  return labelTransactionCategory(rules.reduce((current, rule) => applyTransactionRule(current, rule, accounts), transaction))
 }

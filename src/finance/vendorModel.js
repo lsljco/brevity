@@ -49,6 +49,7 @@ export function applyVendorOperation(input,operation,createId){
  return value
 }
 export function vendorForExpense(workspace,kind,expense){
+ if(kind==='posted'&&expense._reviewedVendorId)return (workspace?.vendors||[]).some(v=>v.id===expense._reviewedVendorId&&!v.archived)?expense._reviewedVendorId:''
  if(kind==='planned')return expense.vendorId||''
  const links=workspace?.links||{},direct=links[`${kind}:${expense.id}`]
  if(direct)return direct

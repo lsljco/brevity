@@ -1,3 +1,4 @@
+import {saveCategory} from '../../src/finance/categoryCatalog.js'
 import {validateStudio} from '../../src/finance/scenarioStudioModel.js'
 import {validateScenarioImport} from '../../src/finance/scenarioWorkbookImport.js'
 import {buildUniquePlaidAccountMap} from '../../src/finance/calendarSemantics.js'
@@ -85,6 +86,8 @@ export function resourceForOperation(operation) {
   if (operation.domain === 'planning') return `plan:${operation.targetDate}`
   if (operation.domain === 'projects') return `shared:${SHARED_KEYS.projects}`
   if (operation.type.startsWith('calendar.')) return 'calendar:apple-family'
+  if(operation.type==='finance.category.save')return `shared:${SHARED_KEYS.finance}`
+  if(operation.type==='transaction.bulk.update')return `shared:${SHARED_KEYS.overrides}`
   if (operation.type === 'transaction.allocate' || operation.type === 'transaction.categorize' || operation.type === 'transaction.update') return `shared:${SHARED_KEYS.overrides}`
   if (['transaction.rule.create','transaction.rule.update','transaction.rule.delete'].includes(operation.type)) return `shared:${SHARED_KEYS.rules}`
   if (operation.type === 'budget.update') return `shared:${SHARED_KEYS.budget}`
@@ -140,6 +143,8 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
   if(operation.type==='education.observation.record')return {before,after:applyLearningObservation(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
   if(operation.type==='member.preference.set')return {before,after:applyMemberPreference(value,operation)}
   if(operation.type.startsWith('improvement.'))return {before,after:applyImprovement(value,operation,{actor:context.actor,now:context.now||(()=>new Date()),createId})}
+  if(operation.type==='finance.category.save')return {before,after:saveCategory(value,operation)}
+  if(operation.type==='transaction.bulk.update'){const after=clone(value||{});for(const id of operation.payload.transactionIds){after[id]={...(after[id]||{}),id,...(operation.payload.category?{category:operation.payload.category,budgetLineId:null}:{}),...(operation.payload.vendorId?{_reviewedVendorId:operation.payload.vendorId}:{})}}return {before,after}}
   const payload = operation.payload || {}
   if(operation.type==='nutrition.meal.update' || operation.type==='nutrition.meal.remove'){
     const entries=value?.entries||[],index=entries.findIndex(entry=>entry.id===payload.entryId&&entry.member===operation.targetId&&entry.date===operation.targetDate)
@@ -777,6 +782,9 @@ export async function prepareRecordOperations({ proposal, selections = {}, sessi
       }
       const governanceContext=GOVERNANCE_TYPES.includes(operation.type)?await validateGovernance({operation,resources,session,proposal,value,now:now(),model:operation.type==='orchestration.coordination.update'?await loadOrchestration({resources,session,date:operation.targetDate}):null}):null
       let budgetAssignment=null
+      if(operation.type==='transaction.bulk.update'){
+        const bank=await resources.read('shared:plaid_actuals_cache');if(bank.version!==operation.payload.sourceVersion)throw Object.assign(Error('Bank activity changed. Refresh and select the records again.'),{code:'VERSION_CONFLICT'});const rows=new Map((bank.value||[]).map(row=>[row.id,row]));if(operation.payload.transactionIds.some(id=>!rows.has(id)||rows.get(id).pending||isTransferTransaction(rows.get(id))))throw Error('Select existing posted non-transfer transactions.');if(operation.payload.vendorId){const directory=await resources.read(VENDOR_RESOURCE);if(!directory.value?.vendors?.some(v=>v.id===operation.payload.vendorId&&!v.archived&&vendorVisible(v,session)))throw Error('Choose an available vendor.')}
+      }
       if(operation.type==='transaction.allocate'){
         const bank=await resources.read('shared:plaid_actuals_cache'),finance=await resources.read('shared:lslj_finance_v9'),budget=await resources.read('shared:lslj_budget_v1')
         const transaction=bank.value?.find(row=>row.id===operation.targetId)
