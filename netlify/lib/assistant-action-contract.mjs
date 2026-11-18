@@ -781,7 +781,7 @@ export function normalizeActionOperation(input = {}) {
 
 export function normalizeActionProposal(input = {}, { member, role = 'member', now = new Date(), id = randomUUID() } = {}) {
   const requestedOperations=Array.isArray(input.operations)?input.operations:[]
-  const categoryYear=requestedOperations.length>0&&requestedOperations.every(op=>op.type==='budget.update'&&op.payload?.categoryLimit===true&&op.payload.category===requestedOperations[0].payload.category&&op.payload.accountId===requestedOperations[0].payload.accountId)
+  const categoryYear=requestedOperations.length>0&&requestedOperations.every(op=>op.type==='budget.update'&&op.payload&&op.payload.accountId===requestedOperations[0].payload?.accountId&&op.payload.year===requestedOperations[0].payload.year&&(op.payload.categoryLimit===true&&op.payload.category===requestedOperations[0].payload.category||!op.payload.categoryLimit&&op.payload.lineId===requestedOperations[0].payload.lineId))
   if(categoryYear&&requestedOperations.length>12)throw new Error('Review no more than twelve category budget months at a time.')
   const ruleBatch=requestedOperations.length>0&&requestedOperations.every(op=>['transaction.rule.create','transaction.rule.update'].includes(op.type))
   if(ruleBatch&&requestedOperations.length>500)throw new Error('Review up to 500 categorization rules at a time.')
