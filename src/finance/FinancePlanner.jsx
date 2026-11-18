@@ -59,7 +59,8 @@ import { actualToScheduledTransaction } from './actualToScheduled.js'
 import { buildScheduledTransactionRows, DEFAULT_TRANSACTION_LIST_OPTIONS, sortAndFilterTransactions, transactionDescription } from './transactionList.js'
 import { findPossibleRecurringDuplicates, summarizeActualActivity } from './financialTruth.js'
 import FinanceReconciliation from './FinanceReconciliation.jsx'
-import { reconcileFinanceDay, reconciliationStateLabel } from './reconciliation.js'
+import { reconcileFinanceDay } from './reconciliation.js'
+import ForecastMatchingNote from './ForecastMatchingNote.jsx'
 import { getAcknowledgedSharedStateVersion, persistSharedSourceImport, SHARED_STATE_EVENT, syncSharedState } from '../household/sharedState.js'
 import { prepareDirectAction } from '../assistant/assistantApi.js'
 import { requestActionReview } from '../assistant/actionEvents.js'
@@ -4416,6 +4417,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                           : `${tx.cat || 'Uncategorized'} · ${FREQ_OPTS.find(f => f.v === tx.freq)?.l || 'Scheduled'}`}
                         <span className="finance-forecast-projected">{forecastPlanPresentation(tx,selPt).matched ? 'Matched' : 'Projected'}</span>{forecastPlanPresentation(tx,selPt).pooled && <span> · Remaining category allowance {fmtMoney(forecastPlanPresentation(tx,selPt).amount)}</span>}{!readOnly && <span style={{ color: 'rgba(197,164,109,0.6)', marginLeft: 6 }}>Edit ›</span>}
                       </p>
+                      {showActuals&&<ForecastMatchingNote rows={reconciliationByDate.get(selDay)?.rows} transaction={tx} kind="expected"/>}
                     </div>
                     <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
                       color: tx.type === 'income' ? 'var(--gold)' : tx.type === 'transfer' ? (acctIdSet.has(tx.acct) ? 'var(--expense-color)' : '#7DCBA4') : 'var(--expense-color)' }}>
@@ -4427,17 +4429,6 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
               </div>
             </div>
           )}
-
-          {showActuals && reconciliationByDate.has(selDay) && <section aria-label="Matched budget and bank transactions" style={{ marginTop:14, padding:12, border:'1px solid var(--glass-border)', borderRadius:10 }}>
-            <strong>Budget to bank matching</strong>
-            <p style={{ fontSize:12, color:'var(--muted)' }}>{reconciliationByDate.get(selDay).matched} matched · {reconciliationByDate.get(selDay).needsReview.length} reconciling items</p>
-            {reconciliationByDate.get(selDay).rows.map((row, index) => <div key={row.expected?.id || row.actual?.id || index} style={{ padding:'8px 0', borderTop:'1px solid var(--glass-border)', fontSize:12 }}>
-              <strong>{row.expected?.name || transactionDescription(row.actual || row.candidates?.[0])}</strong>
-              <span style={{ marginLeft:8, color:row.state === 'matched' ? '#7DCBA4' : '#E8967A' }}>{row.approved ? '✓ Approved reconciliation' : row.state === 'matched' ? '✓ Budget matched' : reconciliationStateLabel(row.state)}</span>
-              {row.expected && row.actual && <p style={{ margin:'4px 0', color:'var(--muted)' }}>Budget {fmtMoney(row.expected.expectedAmount)} · Bank {fmtMoney(Math.abs(Number(row.actual.amount)))} · Difference {fmtMoney(row.amountVariance)}</p>}
-            </div>)}
-            <p style={{ fontSize:11, color:'var(--muted)' }}>Move a planned item to its posting date to match. Matches require the same linked account and a unique merchant match. Both records remain available; the bank charge counts once. Edit the planned occurrence to undo a move.</p>
-          </section>}
 
           {/* Bank activity and reconciliation follow the explicit overlay toggle. */}
           {showActuals && selDay <= todayStr && (() => {
@@ -4482,6 +4473,7 @@ function CalendarView({ accountFilter, scopeLabel, reconciliationReport, vendorO
                                 {tx.category ? ` · ${tx.category}` : ''}
                                 {!readOnly && <span style={{ color: 'rgba(144,170,222,0.7)', marginLeft: 6 }}>Edit ›</span>}
                               </p>
+                              <ForecastMatchingNote rows={reconciliationByDate.get(selDay)?.rows} transaction={tx}/>
                             </div>
                             <p style={{ margin: '0 0 0 12px', fontSize: 13, fontWeight: 600, flexShrink: 0,
                               color: isIncome ? '#7DCBA4' : '#90AADE' }}>
