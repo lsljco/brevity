@@ -16,8 +16,12 @@ export function dashboardMonthOutlook({accounts=[],scheduled=[],actuals=[],month
  for(const totals of [remaining,original]){totals.income=round(totals.income);totals.expense=round(totals.expense);totals.net=round(totals.income-totals.expense)}
  const outlook={income:round(actual.income+remaining.income),expense:round(actual.expense+remaining.expense),net:round(actual.net+remaining.net)}
  const current=accounts.reduce((n,a)=>n+Number(a.plaidAvailableBalance??a.plaidCurrentBalance??a.balance??0),0)
- const endBalance=month===today.slice(0,7)&&!overdue.length?(projection||forecast).get(end)?.bal:null
- return {from,end,cutoff,actual,remaining,original,outlook,posted,expected,overdue,current:round(current),endBalance}
+ // Keep the canonical balance: historical unmatched plans are not new cash activity.
+ const projectedEnd=(projection||forecast).get(end)?.bal
+ const endBalance=month===today.slice(0,7)&&accounts.length&&Number.isFinite(projectedEnd)?projectedEnd:null
+ const overdueNet=round(overdue.reduce((sum,row)=>sum+row.delta,0))
+ const endBalanceProvisional=Number.isFinite(endBalance)&&overdue.length>0
+ return {from,end,cutoff,actual,remaining,original,outlook,posted,expected,overdue,overdueNet,current:round(current),endBalance,endBalanceProvisional}
 }
 export function outlookSeries(model,today){
  const points=[],start=new Date(model.from+'T12:00:00Z'),finish=new Date(model.end+'T12:00:00Z');let actual=0,expected=0
