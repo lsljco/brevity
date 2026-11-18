@@ -3818,7 +3818,7 @@ test('Cash Forecast redesigned meetings audit all cadence layouts exports and co
  const {default:JSZip}=await import('jszip');const fs=await import('node:fs/promises')
  for(const [label,heading]of [['Daily','Protect today’s cash.'],['Weekly','Stay ahead of next week.'],['Monthly','Close the month. Set the next.'],['Quarterly','Check direction. Adjust the plan.'],['Annual','Review the year. Agree the future.']]){
   await page.locator('.fm-tabs').getByRole('button',{name:label,exact:true}).click();await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible()
-  await expect(packet.locator('.fm-packet-summary > div')).toHaveCount(4)
+  await expect(packet.locator('.fm-packet-summary > button')).toHaveCount(4)
   await expect(packet.locator('.fm-brief-agenda > div')).toHaveCount(3)
   await expect(packet.locator('.fm-brief-columns')).toBeVisible()
   await expect(packet.locator('#finance-decisions-assignments')).toBeVisible()

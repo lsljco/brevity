@@ -1,3 +1,5 @@
+import MetricDrilldown from './MetricDrilldown.jsx'
+import {meetingMetricDetails} from './meetingMetricDetails.js'
 import SortableFinancialTable from './SortableFinancialTable.jsx'
 import MeetingBudgetActual from './MeetingBudgetActual.jsx'
 import HouseholdCashControls from './HouseholdCashControls.jsx'
@@ -14,7 +16,7 @@ function Table({caption,headers,rows,empty='No records available for this select
   return <div className="fm-packet-table"><SortableFinancialTable><caption>{caption}</caption><thead><tr>{headers.map(h=><th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((row,i)=><tr key={i}>{row.map((v,j)=><td key={j}>{v}</td>)}</tr>):<tr><td colSpan={headers.length}>{empty}</td></tr>}</tbody></SortableFinancialTable></div>
 }
 export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={},onEdit,onProposeAction,onArchive,readOnly=false,editReadOnly=readOnly,recording=false,commitments=null}){
-  const [mode,setMode]=useState('previous'),[now,setNow]=useState(()=>new Date()),[busy,setBusy]=useState(false),[error,setError]=useState('')
+  const [mode,setMode]=useState('previous'),[now,setNow]=useState(()=>new Date()),[busy,setBusy]=useState(false),[error,setError]=useState(''),[detail,setDetail]=useState(null)
   useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),60000);return()=>clearInterval(timer)},[])
   const source=useMemo(()=>{
     let pairedBalanceHistory=[]
@@ -23,6 +25,8 @@ export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={
   },[data,cadence,mode,now,actions])
   const {packet,analysisNotice}=usePacketIntelligence(source,edits)
   const brief=meetingBrief(packet)
+  useEffect(()=>setDetail(null),[cadence,mode])
+  const selectedMetric=brief.metrics.find(([label])=>label===detail)
   const reveal=label=>{const node=[...document.querySelectorAll('.fm-packet details')].find(x=>x.querySelector('summary')?.textContent===label);if(node){node.open=true;node.scrollIntoView({behavior:'smooth',block:'start'})}}
   const archive=async()=>{setBusy(true);setError('');try{await onArchive(packet)}catch(e){setError(e.message||'Could not prepare the packet for review.')}finally{setBusy(false)}}
   const download=()=>{
@@ -32,7 +36,8 @@ export default function FinanceMeetingPacket({cadence,data={},actions=[],edits={
   return <section className="fm-packet fm-packet--brief" aria-label="Prepared FIN-001 meeting packet">
     <div className="fm-brief-toolbar"><h2>{packet.label} meeting packet</h2><label>Report period<select aria-label="Report period" value={mode} onChange={e=>setMode(e.target.value)} disabled={busy||recording}><option value="previous">Last completed period</option><option value="current">Current period to date</option></select></label><details className="fm-export-menu"><summary>Export</summary><FinanceExport embedded report={meetingBriefReport(packet)}/><button type="button" onClick={download}>Download packet</button>{!readOnly&&<button type="button" onClick={archive} disabled={busy||recording}>{busy?'Preparing review…':'Review & archive packet'}</button>}</details></div>
     <div className="fm-brief-period">{packet.period.from} — {packet.period.to} · {packet.duration} · Draft</div>
-    <div className="fm-packet-summary">{brief.metrics.map(([label,value,note,type])=><div key={label}><span>{label}</span><strong className={value==null?'fm-metric-unavailable':undefined}>{type==='count'?value:briefMoney(value)}</strong><small>{note}</small></div>)}</div>
+    <div className="fm-packet-summary">{brief.metrics.map(([label,value,note,type])=><button type="button" className="fm-summary-metric" key={label} aria-label={`View ${label} records`} onClick={()=>setDetail(label)}><span>{label}</span><strong className={value==null?'fm-metric-unavailable':undefined}>{type==='count'?value:briefMoney(value)}</strong><small>{note}</small></button>)}</div>
+    <MetricDrilldown node={selectedMetric?meetingMetricDetails(packet,...selectedMetric.slice(0,2),selectedMetric[3]):null} onClose={()=>setDetail(null)}/>
     <MeetingBudgetActual data={data} asOf={packet.asOf} readOnly={editReadOnly||recording}/>
     <div className="fm-brief-agenda" aria-label="Meeting agenda">{brief.agenda.map(([title,minutes],i)=><div key={title}><b>0{i+1}</b><span>{title}</span><small>{minutes} min</small></div>)}</div>
     <div className="fm-brief-columns"><section className="fm-brief-panel"><header><h2>{brief.table.title}</h2><button type="button" onClick={()=>reveal(brief.table.detail)}>View detail</button></header><Table caption={brief.table.title} headers={brief.table.headers} rows={brief.table.rows}/><p className="fm-brief-focus">{brief.focus}</p></section><section className="fm-brief-panel"><h2>{cadence==='daily'?'Things to resolve':cadence==='yearly'?'Decisions for the coming year':'Decisions for this meeting'}</h2>{brief.decisions.length?brief.decisions.map((a,i)=><article className="fm-brief-decision" key={a.id||i}><b>0{i+1}</b><div><p>{a.text}</p><small>{a.owner||'Owner needed'} · {a.due||'Set deadline'}</small>{!readOnly&&<button type="button" disabled={busy||recording||packet.openActions.some(x=>x.text===a.text)} onClick={async()=>{setBusy(true);setError('');try{await onProposeAction(a)}catch(e){setError(e.message)}finally{setBusy(false)}}}>{packet.openActions.some(x=>x.text===a.text)?'In commitments':'Review commitment'}</button>}</div></article>):<p>No suggested decisions. Add a commitment below when the family agrees an action.</p>}<small>Suggestions remain proposals until reviewed.</small></section></div>
