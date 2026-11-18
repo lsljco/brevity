@@ -8,7 +8,7 @@ async function setup(page){
  if(process.env.PREVIEW_BASE_URL)await page.route('**/.netlify/scripts/cdp',r=>r.abort())
  await page.route('**/.netlify/functions/household-data*',route=>{
   const day=new URL(route.request().url()).searchParams.get('date')||today(),plan=createEmptyDailyPlan(day)
-  const rows=Array.from({length:5},(_,i)=>({id:`o${i}`,title:`Saved outcome ${i+1}`,owner:['Terica','Lorenzo','Larry','Nyla','Family'][i],status:i===2?'complete':'pending',date:day}))
+  const rows=Array.from({length:10},(_,i)=>({id:`o${i}`,title:`Saved outcome ${i+1}`,owner:['Terica','Lorenzo','Larry','Nyla','Family'][i%5],status:i===2?'complete':'pending',date:day}))
   plan.topPriorities=rows.slice(0,2);plan.household.priorities=rows
   return route.fulfill({json:{householdId:'lslj-family',plan}})
  })
@@ -19,9 +19,9 @@ async function finance(page,testInfo,view){
  await page.getByRole('complementary',{name:'Primary navigation'}).getByRole('button',{name:view,exact:true}).click()
  if(testInfo.project.name==='iphone'&&(await page.locator('#primary-navigation-drawer').getAttribute('class')||'').includes('is-expanded'))await page.getByRole('button',{name:'Collapse navigation',exact:true}).click()
 }
-test('Home and Today expand to every saved outcome including the third and fifth',async({page},info)=>{
+test('Home and Today show all ten outcomes including those beyond the eight-operation limit',async({page},info)=>{
  await setup(page);await page.goto('/')
- await expect(page.locator('.home-outcomes li')).toHaveCount(5)
+ await expect(page.locator('.home-outcomes li')).toHaveCount(10)
  const home=page.locator('.home-card').filter({has:page.getByRole('heading',{name:'Today’s Outcomes',exact:true})})
  await home.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('home-all-outcomes.png')})
  await home.locator('.home-outcomes li').last().scrollIntoViewIfNeeded()
@@ -30,10 +30,30 @@ test('Home and Today expand to every saved outcome including the third and fifth
  await home.getByRole('button',{name:'Review outcomes',exact:true}).click()
  const scope=page.getByRole('region',{name:'Your day at a glance'}).getByRole('button',{name:'Household',exact:true});await scope.click()
  const outcomes=page.locator('#today-focus')
- await expect(outcomes.locator('ol li')).toHaveCount(5)
+ await expect(outcomes.locator('ol li')).toHaveCount(10)
+ await expect(outcomes).toContainText('Saved outcome 10')
  await expect(outcomes).toContainText('Saved outcome 3');await expect(outcomes).toContainText('Completed')
  expect(await outcomes.evaluate(el=>el.scrollHeight<=el.clientHeight+2)).toBe(true)
  await outcomes.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('today-all-outcomes.png')})
+})
+
+test('Cash Forecast shows matching status on each bank card without a duplicate transaction list',async({page},info)=>{
+ await setup(page)
+ const date=today(),data={calendarDataVersion:6,accounts:[{id:'a1',name:'Operating',type:'checking',balance:1000,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking',plaidCurrentBalance:1000}],transactions:[{id:'plan',name:'Power bill',type:'expense',cat:'Utilities',amount:80,acct:'a1',freq:'once',start:date}]}
+ const values={lslj_finance_v9:data,plaid_actuals_cache:[{id:'extra',name:'Extra merchant',accountId:'bank',category:'Food',amount:23.45,date,pending:true},{id:'power',name:'Power bill',accountId:'bank',category:'Utilities',amount:80,date,pending:false}]}
+ await page.route('**/.netlify/functions/household-state*',route=>route.fulfill({json:{records:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{key,value:JSON.stringify(value),version:1,updatedAt:new Date().toISOString()}])),serverTime:new Date().toISOString()}}))
+ await page.goto('/');await finance(page,info,'Cash Forecast')
+ await page.getByRole('button',{name:/Show bank activity for/}).click()
+ if(info.project.name==='iphone')await page.locator('.finance-calendar-mobile-agenda > [role="button"]').first().click()
+ else await page.locator('.cal-cell.is-today').press('Enter')
+ const detail=page.getByRole('complementary',{name:'Selected day details'})
+ await expect(detail.getByText('Extra merchant',{exact:true})).toHaveCount(1)
+ const card=detail.locator('div').filter({has:page.getByText('Extra merchant',{exact:true})}).filter({has:page.getByText('Outside plan',{exact:true})}).filter({hasText:'$23.45'}).last()
+ await expect(card).toContainText('$23.45');await expect(card).toContainText('Pending');await expect(card).toContainText('Uncategorized')
+ await expect(detail.getByText('Budget to bank matching',{exact:true})).toHaveCount(0)
+ await expect(detail.getByText('Unplanned bank activity',{exact:true})).toHaveCount(0)
+ await expect(detail).toContainText('Matched')
+ await detail.screenshot({path:info.outputPath('consolidated-day-activity.png')})
 })
 test('Groceries stays a 300 scheduled expense despite recorded category purchases',async({page},info)=>{
  await setup(page)

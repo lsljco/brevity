@@ -10,6 +10,7 @@ import { getStore } from './scoped-store.mjs'
 import { productionMealPlanRepository } from './meal-plan-store.mjs'
 import { canonicalizeCalendarReadEvent } from '../../src/family/calendarNames.js'
 import { budgetLineId } from '../../src/finance/budgetBreakdown.js'
+import dailyOutcomes from './daily-outcomes.cjs'
 
 const HOUSEHOLD_ID = process.env.BREVITY_HOUSEHOLD_ID || 'lslj-family'
 const HOUSEHOLD_STORE = 'brevity-household'
@@ -28,6 +29,10 @@ export async function readOptionalAuthoritativeRecord(dataStore, key) {
     if (missingBlob(error)) return null
     throw error
   }
+}
+
+export async function readAuthoritativeDailyPlan(store, householdId, date) {
+  return dailyOutcomes.resolveDailyOutcomes(store,householdId,date,await readOptionalAuthoritativeRecord(store,`${householdId}/daily-plans/${date}`))
 }
 
 export function householdDate(now = new Date(), timeZone = process.env.BREVITY_TIME_ZONE || 'America/New_York') {
@@ -208,7 +213,7 @@ export async function loadProductionAuthoritativeAssistantContext({ member, role
     member,
     date,
     now,
-    loadDailyPlan: targetDate => readOptionalAuthoritativeRecord(dataStore,`${HOUSEHOLD_ID}/daily-plans/${targetDate}`),
+    loadDailyPlan: targetDate => readAuthoritativeDailyPlan(dataStore,HOUSEHOLD_ID,targetDate),
     loadMealWindow: startDate => meals.getWindowReadOnly({ startDate, count: 7 }),
     loadActiveSermon: () => readOptionalAuthoritativeRecord(dataStore, ACTIVE_SERMON_KEY),
     loadSharedRecords: async()=>Object.fromEntries(await Promise.all(ACTION_SHARED_KEYS.map(async key=>[key,await readOptionalAuthoritativeRecord(sharedStore,`${HOUSEHOLD_ID}/records/${key}`)]))),
