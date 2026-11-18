@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom'
 import { buildMetricTrends } from './metricTrends.js'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
 import AutoReconciliationReport from './AutoReconciliationReport.jsx'
+const AccountLinkReview = lazy(()=>import('./AccountLinkReview.jsx'))
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
 import {useVendorDirectory,vendorRequest} from './vendorApi.js'
 import {decorateVendorTransactions} from './vendorModel.js'
@@ -1784,9 +1785,9 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }
   }, [adoptBalanceAttempt, readOnly])
 
-  async function reviewAccountLink(account) {
+  async function reviewAccountLink(account, sourceId) {
     if (readOnly) return
-    const plaidAccountId = accountLinkDrafts[account.id] || ''
+    const plaidAccountId = sourceId || accountLinkDrafts[account.id] || ''
     const source = plaidAccountCandidates.find(candidate => candidate.accountId === plaidAccountId)
     if (!source) {
       setAccountLinkError(`Choose the returned bank account that should supply ${account.name}.`)
@@ -2492,6 +2493,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
+      {!formView && ['accounts','transactions','accounting'].includes(view) && <Suspense fallback={<p>Loading account review…</p>}><AccountLinkReview accounts={data.accounts} actuals={plaidActuals||[]} sources={plaidAccountCandidates} readOnly={readOnly} onReview={reviewAccountLink} onOpenAccounts={view==='accounts'?undefined:()=>setView('accounts')}/></Suspense>}
       {view==='accounting'&&<AccountingWorkspace data={data} actuals={plaidActuals||[]} rules={txRules} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
       {!isForm&&['dashboard','accounts','transactions'].includes(view)&&<div style={{padding:'0 24px'}}><FinanceExport buildReport={()=>({title:`${view} ${financeRange.from} to ${financeRange.to}`,notes:[financeAccountScopeLabel,actualsFreshnessMessage,balanceDataMessage,transactionFilter?.label||'','Bank amounts: positive = outflow; negative = inflow. Scheduled amounts use the Direction column.'],sections:view==='transactions'?[transactionSection(showActuals?transactionViewActuals:scheduledViewTransactions,fd.accounts,{scheduled:!showActuals})]:[recordsSection('Account balances',fd.accounts,['name','type','balance','plaidCurrentBalance','plaidAvailableBalance']),transactionSection(timeframeActuals,fd.accounts),recordsSection('Cash forecast',[...proj].filter(([date])=>date>=financeRange.from&&date<=financeRange.to).map(([date,p])=>({date,endingBalance:p.bal,netChange:p.delta}))) ]})}/></div>}
 
