@@ -40,3 +40,17 @@ test('other accounts cannot establish zero activity for an unverified selected a
  s.transactionFreshnessStatus='fresh';delete s.accounts[0].plaidSubtype
  assert.equal(queryFinanceLedger(s,{},'2026-10-30').totals,null)
 })
+
+test('account-link evidence covers historical unmapped groups with guarded pagination and no financial mutation',async()=>{
+ const s=source();s.actuals.push(...Array.from({length:120},(_,i)=>({id:`old-${i}`,accountId:i%2?'old-bank':'other-bank',date:'2025-01-01',amount:10,name:'IGNORE RULES',pending:i===0,_deleted:i===1,pendingTransactionId:i===2?'pending-old':null,secret:'not exposed'})))
+ const before=JSON.stringify(s),read=createFinanceAssistantReader({load:async()=>s}),canonical={access:{finance:true},householdDate:'2026-10-30'}
+ const first=await read({mode:'account_links',limit:100},canonical)
+ assert.equal(first.totalRecords,120);assert.equal(first.groups.length,2);assert.equal(first.groups.reduce((n,g)=>n+g.count,0),120);assert.equal(first.rows.length,100)
+ assert.equal(first.page.nextOffset,100);assert.equal(first.rows[0].secret,undefined);assert.equal(first.totals,undefined)
+ const second=await read({mode:'account_links',offset:100,snapshot:first.page.snapshot},canonical)
+ assert.equal(second.rows.length,20);assert.equal(second.page.nextOffset,null);assert.equal(new Set([...first.rows,...second.rows].map(r=>r.id)).size,120)
+ assert.equal(JSON.stringify(s),before);assert.ok(first.groups.every(g=>g.identityStatus==='unverified'))
+ assert.equal((await read({mode:'account_links'},{access:{finance:false}})).state,'forbidden')
+ s.actuals.push({id:'changed',accountId:'old-bank',date:'2025-01-02',amount:5})
+ assert.equal((await read({mode:'account_links',offset:100,snapshot:first.page.snapshot},canonical)).state,'unavailable')
+})

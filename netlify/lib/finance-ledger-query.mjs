@@ -1,3 +1,4 @@
+import {accountLinkGroups} from '../../src/finance/accountLinkReview.js'
 import {productionVendorRepository} from './vendor-store.mjs'
 import {householdCashControls} from '../../src/finance/householdCashControls.js'
 import {categorizeExpenses} from '../../src/finance/expenseCategorization.js'
@@ -56,6 +57,17 @@ export function queryFinanceLedger(source,input={},today){
  return {state:available?'available':'unavailable',scope:{accounts:accounts.filter(a=>selected.has(a.id)).map(a=>({id:a.id,name:a.name})),from,to,status,category:input.category||null,search:terms||null,direction:input.direction||'all'},freshness:{status:source.transactionFreshnessStatus,checkedAt:source.transactionCheckedAt||null},coverage:{unmappedCount:unmapped.length,unmappedIds:unmapped.slice(0,100),invalidCount:invalid.length,invalidIds:invalid.slice(0,100),notice:'Unmapped records are excluded. Imported history may be incomplete; source freshness is not a bank statement reconciliation.'},totals:available?{transactionCount:rows.length,cashInflows:money(inflows),cashOutflows:money(outflows),netCashMovement:money(inflows-outflows),reportedExpenses:money(expenses),transferOutflows:money(transfersOut),transferInflows:money(transfersIn),categories:Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,money(v)]))}:null,rows:rows.slice(offset,offset+limit),page:{offset,limit,snapshot:version,nextOffset:offset+limit<rows.length?offset+limit:null},notice:'Totals include every matching record, not only this page. Positive amounts are bank debits. Transfers affect cash movement but are excluded from reported expenses. Pending is separate from posted. No records or payments were changed.'}
 }
 
+export function queryAccountLinkEvidence(source,input={}){
+ const accounts=source.accounts||[],actuals=source.actuals||[],groups=accountLinkGroups(accounts,actuals)
+ const sourceIds=new Set(groups.map(g=>g.sourceId))
+ const rows=actuals.filter(t=>sourceIds.has(t.accountId||'')).map(t=>({id:t.id||null,sourceAccountId:t.accountId||null,date:t.date||null,name:String(t.name||'').slice(0,500),merchant:String(t.merchant_name||t.merchantName||'').slice(0,200),amount:t.amount==null||t.amount===''||!Number.isFinite(Number(t.amount))?null:Number(t.amount),pending:Boolean(t.pending),deleted:Boolean(t._deleted),pendingTransactionId:t.pendingTransactionId||null})).sort((a,b)=>String(a.sourceAccountId).localeCompare(String(b.sourceAccountId))||String(b.date).localeCompare(String(a.date))||String(a.id).localeCompare(String(b.id)))
+ const offset=input.offset??0,limit=input.limit??50
+ if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>100)throw Error('Invalid evidence page.')
+ const snapshot=digest({accounts:accounts.map(a=>[a.id,a.plaidAccountId,a.plaidType,a.plaidSubtype]),rows})
+ if(input.snapshot&&input.snapshot!==snapshot)throw Error('Account-link evidence changed. Restart at offset zero.')
+ return {state:'available',scope:'All retained unmapped source records, all dates and accounts; not the current-month ledger.',totalRecords:rows.length,groups:groups.map(g=>({sourceAccountId:g.sourceId||null,count:g.count,pending:g.pending,identityStatus:'unverified',reason:g.reason})),rows:rows.slice(offset,offset+limit),page:{offset,limit,snapshot,nextOffset:offset+limit<rows.length?offset+limit:null},notice:'Read-only evidence. Source IDs do not establish account ownership. Do not infer identity from merchant descriptions. Pending, deleted, missing-ID and duplicate records are not confirmed payments. Historical bank identity must be verified separately before linking. No balance or financial records changed.'}
+}
+
 export function createFinanceAssistantReader({load=loadFinancePacketSources,loadVendors=async()=>productionVendorRepository().read()}={}){
  return async(input,canonical)=>{
   if(canonical.access?.finance!==true)return {state:'forbidden',notice:'Financial reporting access is required.'}
@@ -66,6 +78,7 @@ export function createFinanceAssistantReader({load=loadFinancePacketSources,load
     return {state:'available',version:record.version,records:vendors.map(v=>({id:v.id,name:v.name,statementDate:v.statementDate||null,paymentDueDate:v.paymentDueDate||null,minimumDue:v.minimumDue??null,statementBalance:v.statementBalance??null,autopay:v.autopay||'unknown',hasProtectedLogin:Boolean(v.loginBlobId),supportingDocumentCount:(v.documents||[]).length})),notice:'Saved billing-cycle evidence, not live creditor balances. Missing fields are unknown. Verify statement date before relying on amounts. Login secrets are never returned to the assistant. No payments were scheduled.'}
    }
    const source=await load()
+   if(input.mode==='account_links')return queryAccountLinkEvidence(source,input)
    if(input.mode==='controls')return {state:'available',controls:householdCashControls(source,{from:input.from||canonical.householdDate.slice(0,7)+'-01',to:input.to||canonical.householdDate})}
    source.actuals=categorizeExpenses(source.actuals||[],{overrides:source.overrides,scheduled:source.scheduled,budget:source.budget})
    if(input.mode==='accounts')return {state:'available',accounts:(source.accounts||[]).map(a=>({id:a.id,name:a.name,type:a.type,balance:a.balance??null})),balanceStatus:source.balanceDataStatus,checkedAt:source.balanceCheckedAt||null,defaultAccountId:source.budgetLegacyAccountId||null,notice:'Stored account balances are not guaranteed currently available cash. Personal account ownership must be confirmed.'}
