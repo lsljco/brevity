@@ -25,3 +25,13 @@
   overflow-wrap: anywhere;
 }
 .reconciliation-message { padding: 12px; border: 1px solid var(--gold); border-radius: 10px; }
+.finance-root .match-account-review { margin: 16px 28px; padding: 20px; min-width: 0; }
+.match-account-review h2 { font-size: 20px; margin: 0 0 8px; }
+.match-account-review p { font-size: 12px; line-height: 1.6; }
+.match-account-groups { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,260px),1fr)); gap: 12px; margin-top: 12px; }
+.match-account-groups article { border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px; min-width: 0; overflow-wrap: anywhere; }
+.match-account-groups h3 { font-size: 15px; margin: 0; }
+.match-review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.match-review-note { color: var(--muted); }
+.finance-root .match-account-review button, .match-review-actions button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--gold); border-radius: 9px; background: rgba(197,164,109,.08); color: var(--gold); font: inherit; cursor: pointer; }
+@media(max-width:600px) { .finance-root .match-account-review { margin: 12px; padding: 16px; } }

@@ -1374,6 +1374,7 @@ test('Finance reconciliation recommends matches and opens approval without mutat
   // A bank balance update on another device changes the version, not the
   // selected match. Preparation must fetch it without applying any change.
   records.lslj_finance_v9={...records.lslj_finance_v9,version:7,updatedAt:new Date().toISOString()}
+  await report.getByRole('checkbox').first().check()
   await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
   const review=page.getByRole('dialog',{name:'Review proposed Brevity changes'})
   await expect(review).toContainText('Sawnee')
@@ -1499,6 +1500,7 @@ test('Finance reconciliation refresh rejects changed match evidence before prepa
   const report=page.getByRole('region',{name:'Automatic reconciliation recommendations'})
   await expect(report).toContainText('Difference: $6.00')
   records.plaid_actuals_cache={...records.plaid_actuals_cache,value:JSON.stringify([{...actual,amount:1211}]),version:8,updatedAt:new Date().toISOString()}
+  await report.getByRole('checkbox').first().check()
   await report.getByRole('button',{name:'Review 1 recommended matches'}).click()
   await expect(report.locator('.reconciliation-message')).toContainText('report changed')
   await expect(report).toContainText('Difference: $7.00')
