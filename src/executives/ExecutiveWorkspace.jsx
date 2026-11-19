@@ -19,7 +19,7 @@ export default function ExecutiveWorkspace({currentMember,readOnly=false}){
  const field=(name,value)=>{requestId.current=null;setDraft({...draft,[name]:value})}
  return <details className="executive-workspace"><summary>My Agent Corporation</summary>
   <p>{EXECUTIVE_NOTICE}</p><p>Shared access and a handoff register are available here. Background executive execution is not enabled by this workspace.</p>
-  <label>Operating role<select value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{EXECUTIVE_ROLES.filter(item=>item.active).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+  <label>Operating role<select aria-label="Operating role" value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{EXECUTIVE_ROLES.filter(item=>item.active).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
   <p>{EXECUTIVE_ROLES.find(item=>item.id===role)?.owns}</p><p>Proposed cadence: {EXECUTIVE_ROLES.find(item=>item.id===role)?.cadence}. This is not a configured schedule.</p>
   <button disabled={busy} onClick={readContext}>Read this role’s saved information</button><button disabled={busy} onClick={()=>setRevision(n=>n+1)}>Refresh handoffs</button>
   {context&&<details open><summary>Saved information · {context.householdDate}</summary><p>{context.notice}</p><ul>{context.sources?.map(source=><li key={source.id}>{source.label}: {source.state} · Source updated: {source.asOf||'unknown'}</li>)}</ul><div style={{maxHeight:360,overflow:'auto'}}><SavedInformation value={context.data}/></div></details>}
