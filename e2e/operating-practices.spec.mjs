@@ -227,7 +227,7 @@ test('Executive coordination records a decision without executing source changes
  await workspace.getByRole('button',{name:'Start one coordination cycle',exact:true}).click()
  await expect(workspace.getByText(/awaiting-decision/)).toBeVisible()
  await expect(workspace.getByRole('heading',{name:'Strategic executive briefing',exact:true})).toBeVisible()
- await expect(workspace.getByText('Larry, proposed',{exact:true})).toBeVisible()
+ await expect(workspace.getByText('Proposed owner: Larry, proposed',{exact:true})).toBeVisible()
  await workspace.getByRole('button',{name:'View supporting records',exact:true}).click()
  await expect(workspace.getByRole('cell',{name:'Synthetic excluded record',exact:true})).toBeVisible()
  const download=page.waitForEvent('download');await workspace.getByRole('button',{name:'Download excluded records CSV',exact:true}).click()
