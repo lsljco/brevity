@@ -8,6 +8,7 @@ export function createExecutiveCyclesHandler({authenticate=auth.readSession,repo
  try{
   const session=await authenticate(event).catch(()=>null);requireExecutiveAdmin(session)
   const repo=repository()
+  if(event.httpMethod==='GET'&&event.queryStringParameters?.evidence)return json(200,await repo.evidence(event.queryStringParameters.evidence))
   if(event.httpMethod==='GET')return json(200,{...(await repo.list()),config:await repo.config(),runtime:readiness()})
   if(event.httpMethod!=='POST')return json(405,{error:'Method not allowed.'})
   const h=Object.fromEntries(Object.entries(event.headers||{}).map(([k,v])=>[k.toLowerCase(),v]))

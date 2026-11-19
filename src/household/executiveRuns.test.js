@@ -47,16 +47,28 @@ test('configuration revocation during inference prevents committing the result',
  await assert.rejects(executeExecutiveCycle('revoked',setup(repo,now,async()=>{await repo.configure({enabled:false,version:0},'Larry');return {result,model:'fixture'}})))
  assert.equal((await repo.get('revoked')).stages.length,0);assert.equal((await repo.get('revoked')).status,'failed')
 })
-test('duplicate creation, concurrency, daily cap and expired leases fail safely',async()=>{
+test('on-demand reviews exceed three completed runs while admission and leases prevent overlap',async()=>{
  const {repo,advance}=fixture();await repo.create({id:'one',member:'Larry'})
  assert.equal((await repo.create({id:'one',member:'Larry'})).replayed,true)
  await assert.rejects(repo.create({id:'one',goal:'different',member:'Larry'}),{status:409})
- await repo.create({id:'two',member:'Larry'});await repo.create({id:'three',member:'Larry'})
- await assert.rejects(repo.create({id:'four',member:'Larry'}),{status:429})
+ await assert.rejects(repo.create({id:'two',member:'Larry'}),{status:409})
  const lease=await repo.claim('one');assert.equal(await repo.claim('one'),null)
- await assert.rejects(repo.claim('two'),{status:409})
  advance(15*60000);await assert.rejects(repo.append('one',lease,{role:'cfo',result}),{status:409})
- const next=await repo.claim('two');assert.ok(next);await repo.release(lease);await repo.assertLease(next)
+ await repo.cancel('one','Larry')
+ for(const id of ['two','three','four','five']){await repo.create({id,member:'Larry'});const next=await repo.claim(id);await repo.finish(id,next,'awaiting-decision','Ready');await repo.release(next)}
+ assert.equal((await repo.list()).usage.manualRuns,5)
+ await repo.configure({enabled:true,version:0,manualDailyLimit:4},'Larry')
+ await assert.rejects(repo.create({id:'six',member:'Larry'}),{status:429})
+ await repo.create({id:'daily-2026-11-19',member:'Larry',scheduled:true})
+})
+test('simultaneous create requests admit only one and optional allowance excludes failed runs',async()=>{
+ const {repo}=fixture();await repo.configure({enabled:false,version:0,manualDailyLimit:1},'Larry')
+ const results=await Promise.allSettled(['a','b'].map(id=>repo.create({id,member:'Larry'})))
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1)
+ const id=results.find(r=>r.status==='fulfilled').value.run.id,lease=await repo.claim(id)
+ await repo.finish(id,lease,'failed','No result');await repo.release(lease)
+ await repo.create({id:'replacement',member:'Larry'})
+ assert.equal((await repo.list()).usage.failedRuns,1)
 })
 test('cancellation during inference cannot be overwritten by a late result',async()=>{
  const {repo,now}=fixture();await repo.create({id:'cancel',member:'Larry'})
@@ -100,4 +112,18 @@ test('large finance planning fields do not discard source freshness and smaller 
  assert.deepEqual(bounded.sources,sources);assert.equal(bounded.data.finance.omitted,true)
  assert.deepEqual(bounded.data.versions,{budget:4});assert.equal(bounded.data.dailyFinance.notice,'Current plan')
  assert.ok(JSON.stringify(bounded).length<50000)
+})
+
+test('record-level evidence is retained immutably and read through the administrator API',async()=>{
+ const {repo,now}=fixture();await repo.create({id:'evidence',member:'Larry'})
+ const saved={capturedAt:now().toISOString(),unmapped:{state:'available',count:1,rows:[{id:'u1',ownership:'unknown'}]},ledger:{},accounts:{},planning:{},savedScenarios:{}}
+ await executeExecutiveCycle('evidence',{...setup(repo,now),financeReader:null,loadEvidence:async()=>saved})
+ assert.deepEqual(await repo.evidence('evidence'),saved)
+ assert.equal((await repo.get('evidence')).evidenceSummary.unmappedCount,1)
+ const base={repository:()=>repo,readiness:()=>({ready:true})}
+ const event={httpMethod:'GET',queryStringParameters:{evidence:'evidence'}}
+ assert.equal((await createExecutiveCyclesHandler({...base,authenticate:async()=>null})(event)).statusCode,401)
+ const response=await createExecutiveCyclesHandler({...base,authenticate:async()=>({role:'admin',member:'Larry'})})(event)
+ assert.deepEqual(JSON.parse(response.body),saved)
+ await repo.create({id:'legacy',member:'Larry'});assert.equal((await repo.evidence('legacy')).state,'unavailable')
 })
