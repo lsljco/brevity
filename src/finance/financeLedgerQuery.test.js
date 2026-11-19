@@ -54,3 +54,12 @@ test('account-link evidence covers historical unmapped groups with guarded pagin
  s.actuals.push({id:'changed',accountId:'old-bank',date:'2025-01-02',amount:5})
  assert.equal((await read({mode:'account_links',offset:100,snapshot:first.page.snapshot},canonical)).state,'unavailable')
 })
+
+test('unmapped coverage preserves unknown account ownership and pre-status scope',()=>{
+ const s=source();const r=queryFinanceLedger({...s,actuals:[...s.actuals,{id:'unknown-pending',accountId:'unconfirmed-source',date:'2026-09-15',amount:10,pending:true}]},{status:'posted'},'2026-09-24')
+ assert.ok(r.coverage.unmappedIds.includes('unknown-pending'))
+ assert.match(r.coverage.unmappedScope.accounts,/unknown source-account ownership/)
+ assert.match(r.coverage.unmappedScope.status,/before posted/)
+ assert.match(r.coverage.unmappedScope.meaning,/not a missing spending category/)
+ assert.match(r.coverage.unmappedScope.meaning,/zero count is not required/)
+})
