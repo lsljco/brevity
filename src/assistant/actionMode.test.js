@@ -151,13 +151,15 @@ test('member permissions block finance and records owned solely by someone else'
   assert.equal(normalizePermissionMatrix({Larry:{finance:false}}).Larry.finance,true)
 })
 
-test('assigned chore owners and verifiers can use the responsibility lifecycle without broad planning administration',()=>{
+test('assigned chore owners, sibling helpers and verifiers can use the narrow responsibility lifecycle',()=>{
   const permissions={planning:false,calendar:false,projects:false,finance:false}
   const currentRecord={owners:['Javin'],coveredBy:'',verifiers:['Larry','Terica']}
   const submit={domain:'planning',type:'household.maintenance.completion.update',payload:{action:'submit',completedItems:[0]}}
   const approve={...submit,payload:{action:'approve'}}
   assert.equal(permissionForOperation({operation:submit,member:'Javin',role:'member',permissions,currentRecord}).allowed,true)
-  assert.equal(permissionForOperation({operation:submit,member:'Isaiah',role:'member',permissions,currentRecord}).allowed,false)
+  assert.equal(permissionForOperation({operation:submit,member:'Isaiah',role:'member',permissions,currentRecord}).allowed,true)
+  assert.equal(permissionForOperation({operation:approve,member:'Isaiah',role:'member',permissions,currentRecord}).allowed,false)
+  assert.equal(permissionForOperation({operation:submit,member:'Isaiah',role:'member',permissions,currentRecord:{...currentRecord,owners:['Larry']}}).allowed,false)
   assert.equal(permissionForOperation({operation:approve,member:'Terica',role:'member',permissions,currentRecord}).allowed,true)
 })
 
