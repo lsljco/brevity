@@ -205,13 +205,16 @@ test('Executive coordination records a decision without executing source changes
  const model=await loadOrchestration({resources:{read:async()=>({value:{},version:1})},session:{member:'Larry',role:'admin'},date})
  await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:model}))
  await page.route('**/.netlify/functions/executive-workspace*',route=>route.fulfill({json:{rows:[],workerEnabled:false}}))
- const state={config:{enabled:false,version:0},runtime:{ready:true,model:'fixture'},runs:[],hasMore:false}
+ const brief={assessment:'Protect household liquidity',changes:'No comparable prior briefing',priorities:[{decision:'Choose a reserve policy',whyNow:'Upcoming commitments',recommendation:'Preserve cash',alternative:'Commit funds now',tradeoff:'Flexibility versus progress',impact:'Unquantified pending evidence',owner:'Larry, proposed',milestone:'Agree a policy at the next meeting',evidenceRefs:['E3']}],outlook:['30 days','60 days','90 days'].map(horizon=>({horizon,pressure:'Timing uncertainty',opportunity:'Review commitments',trigger:'Updated bank evidence',evidenceRefs:['E3']})),wealthAndProtection:'Assess readiness after confirming cash needs',discussionQuestions:['Which commitments can wait?'],limitations:['Saved records only']}
+ const evidence={capturedAt:date,unmapped:{count:1,from:date,to:date,scope:'Unknown account ownership',rows:[{id:'excluded-1',date,description:'Synthetic excluded record',amount:20,sourceAccountId:'unverified-source',status:'pending',ownership:'unknown',exclusionReason:'No unique account link'}]}}
+ await page.route('**/.netlify/functions/executive-cycles?evidence=*',route=>route.fulfill({json:evidence}))
+ const state={config:{enabled:false,version:0,manualDailyLimit:null},runtime:{ready:true,model:'fixture'},runs:[],hasMore:false}
  const actions=[]
  await page.route('**/.netlify/functions/executive-cycles',async route=>{
   if(route.request().method()==='POST'){
    const body=route.request().postDataJSON();actions.push(body.action)
    expect(body.member).toBe('Larry');expect(route.request().headers()['x-brevity-executive']).toBe('1')
-   if(body.action==='start')state.runs=[{id:body.id,goal:body.goal,createdBy:'Larry',createdAt:date,status:'awaiting-decision',version:6,stages:['cfo','reviewer','coo','bruce'].map(role=>({role,identity:'executive:'+role,completedAt:date,model:'fixture',result:{status:'ready',summary:'Prepare a statement review',recommendation:'Request current evidence',proposedOwner:'Larry (proposed)',nextStep:'Review the recommendation',evidence:['Saved snapshot'],gaps:['Statement unavailable']}}))}]
+   if(body.action==='start')state.runs=[{id:body.id,goal:body.goal,briefingVersion:2,createdBy:'Larry',createdAt:date,status:'awaiting-decision',version:6,stages:['cfo','reviewer','coo','bruce'].map(role=>({role,identity:'executive:'+role,completedAt:date,model:'fixture',result:{strategicBrief:role==='bruce'?brief:null,status:'ready',summary:'Prepare a statement review',recommendation:'Request current evidence',proposedOwner:'Larry (proposed)',nextStep:'Review the recommendation',evidence:['Saved snapshot'],gaps:['Statement unavailable']}}))}]
    if(body.action==='decide')state.runs[0].decision={choice:body.choice,note:body.note,by:'Larry',at:date,notice:'No source changes or financial actions were executed.'}
    if(body.action==='configure')state.config={enabled:body.enabled,version:state.config.version+1}
   }
@@ -223,6 +226,12 @@ test('Executive coordination records a decision without executing source changes
  await workspace.getByText('Executive coordination cycles',{exact:true}).click()
  await workspace.getByRole('button',{name:'Start one coordination cycle',exact:true}).click()
  await expect(workspace.getByText(/awaiting-decision/)).toBeVisible()
+ await expect(workspace.getByRole('heading',{name:'Strategic executive briefing',exact:true})).toBeVisible()
+ await expect(workspace.getByText('Larry, proposed',{exact:true})).toBeVisible()
+ await workspace.getByRole('button',{name:'View supporting records',exact:true}).click()
+ await expect(workspace.getByRole('cell',{name:'Synthetic excluded record',exact:true})).toBeVisible()
+ const download=page.waitForEvent('download');await workspace.getByRole('button',{name:'Download excluded records CSV',exact:true}).click()
+ expect((await download).suggestedFilename()).toMatch(/Excluded-Records-.*csv/)
  await workspace.getByLabel('Decision note',{exact:true}).fill('Prepare the missing-evidence request for review')
  await workspace.getByRole('button',{name:'accepted for planning',exact:true}).click()
  await expect(workspace.getByText(/Decision: accepted-for-planning/)).toBeVisible()
