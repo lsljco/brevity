@@ -7,6 +7,7 @@ import {
 } from './householdScheduleData.js'
 import {
   HOUSEHOLD_CHORE_VERIFIERS,
+  canSubmitHouseholdChore,
   HOUSEHOLD_MAINTENANCE_STORAGE_KEY,
   buildHouseholdMaintenanceWeek,
   householdOccurrence,
@@ -295,7 +296,7 @@ export function householdPermissionForOperation({ operation, member, role, curre
     const verifier=(currentRecord?.verifiers || HOUSEHOLD_CHORE_VERIFIERS).includes(member)
     if (operation.type==='household.maintenance.completion.update') {
       if (['approve','return','reopen'].includes(operation.payload?.action)) return verifier?{allowed:true}:{allowed:false,reason:'Only an assigned household verifier may review this completion.'}
-      return responsible?{allowed:true}:{allowed:false,reason:'Only the responsible member or confirmed coverage member may submit this responsibility.'}
+      return ['start','submit'].includes(operation.payload?.action)&&canSubmitHouseholdChore(currentRecord,member,currentRecord)?{allowed:true}:{allowed:false,reason:'Only the responsible member, confirmed coverage member, or a sibling helping with a shared chore may submit this responsibility.'}
     }
     if (operation.type==='household.maintenance.coverage.update') {
       const coveredBy=operation.payload?.coveredBy || ''

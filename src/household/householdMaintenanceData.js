@@ -4,6 +4,17 @@ import { getHouseholdCalendarDate } from '../finance/financeTime.js'
 export const HOUSEHOLD_MAINTENANCE_STORAGE_KEY = 'brevity_household_maintenance_v1'
 export const HOUSEHOLD_OPERATIONS_SOURCE = 'household-operations'
 export const HOUSEHOLD_CHORE_VERIFIERS = ['Larry','Terica']
+export const HOUSEHOLD_CHORE_HELPERS = ['Nyla','Javin','Isaiah']
+export function canSubmitHouseholdChore(task,member,occurrence={},isAdmin=false){
+  if(!task?.owners?.length||!HOUSEHOLD_MEMBERS.includes(member))return false
+  return isAdmin||task.owners.includes(member)||task.owners.includes('Everyone')||occurrence.coveredBy===member||HOUSEHOLD_CHORE_HELPERS.includes(member)&&task.owners.some(owner=>HOUSEHOLD_CHORE_HELPERS.includes(owner))
+}
+export function choreCompletionCredit(task,occurrence={}){
+  const by=occurrence.completedBy||occurrence.submittedBy
+  if(!by||!occurrence.completedAt||occurrence.returnedAt)return ''
+  const forOwner=task.owners?.length&&!task.owners.includes(by)&&!task.owners.includes('Everyone')?` for ${task.owners.join(' & ')}`:''
+  return `Completed by ${by}${forOwner}`
+}
 export const HOUSEHOLD_OPERATING_PRINCIPLE = 'Make controlled progress every day so the house never requires an emergency cleaning operation.'
 export const HOUSEHOLD_OPERATING_STANDARDS = [
   { title:'Personal responsibility', detail:'Bedroom, clothes, belongings, food/drink, spills, and personal messes belong to the person who created them.' },
@@ -98,7 +109,7 @@ export function normalizeHouseholdMaintenanceState(value={}){const legacy=value.
 export function householdOccurrence(state,task){return state.occurrences?.[task.occurrenceId]||state.completions?.[task.occurrenceId]||{}}
 export function occurrenceStatus(task,occurrence={}){if(occurrence.returnedAt)return'Returned';if(occurrence.approvedAt)return'Approved';if(occurrence.submittedAt)return'Awaiting sign-off';if(occurrence.startedAt)return'In progress';if(occurrence.exception)return'Exception';if(occurrence.complete&&!task.signoffRequired)return'Complete';return'Scheduled'}
 export function summarizeHouseholdMaintenance(days,state,today=maintenanceToday()){const todayKey=maintenanceDateKey(today),tasks=days.flatMap(day=>day.tasks),approved=tasks.filter(task=>{const occ=householdOccurrence(state,task);return task.signoffRequired?Boolean(occ.approvedAt):Boolean(occ.complete)}).length,awaitingSignoff=tasks.filter(task=>{const occ=householdOccurrence(state,task);return Boolean(occ.submittedAt&&!occ.approvedAt&&!occ.returnedAt)}).length,exceptions=tasks.filter(task=>householdOccurrence(state,task).exception).length,covered=tasks.filter(task=>householdOccurrence(state,task).coveredBy).length,overdue=tasks.filter(task=>{const taskDate=task.scheduledDate||task.occurrenceId.slice(0,10),occ=householdOccurrence(state,task),closed=task.signoffRequired?Boolean(occ.approvedAt):Boolean(occ.complete);return taskDate>=state.trackingStartedOn&&taskDate<todayKey&&!closed}).length,dueToday=tasks.filter(task=>(task.scheduledDate||task.occurrenceId.slice(0,10))===todayKey).length;return{scheduled:tasks.length,completed:approved,approved,awaitingSignoff,overdue,dueToday,exceptions,covered}}
-export function householdOperationCalendarEvent(task,occurrence={}){const members=occurrence.coveredBy?[occurrence.coveredBy]:task.owners.includes('Everyone')?[...HOUSEHOLD_MEMBERS]:task.owners,date=task.scheduledDate||task.occurrenceId.slice(0,10);return{id:`household-operation-${task.occurrenceId}`,sourceId:`household-operation-${task.occurrenceId}`,source:HOUSEHOLD_OPERATIONS_SOURCE,title:task.title,date,start:date,allDay:true,members,participants:members,owner:members.length===1?members[0]:'Family',calendarName:'Family',calendarSyncEnabled:true,status:occurrenceStatus(task,occurrence),notes:[task.zone,task.timing,task.standard,task.signoffRequired?`Sign-off: ${(task.verifiers||HOUSEHOLD_CHORE_VERIFIERS).join(' or ')}`:'',occurrence.exception?`Exception: ${occurrence.exception}`:'',occurrence.returnReason?`Returned: ${occurrence.returnReason}`:''].filter(Boolean).join(' · '),updatedAt:occurrence.updatedAt||new Date().toISOString()}}
+export function householdOperationCalendarEvent(task,occurrence={}){const members=occurrence.coveredBy?[occurrence.coveredBy]:task.owners.includes('Everyone')?[...HOUSEHOLD_MEMBERS]:task.owners,date=task.scheduledDate||task.occurrenceId.slice(0,10);return{id:`household-operation-${task.occurrenceId}`,sourceId:`household-operation-${task.occurrenceId}`,source:HOUSEHOLD_OPERATIONS_SOURCE,title:task.title,date,start:date,allDay:true,members,participants:members,owner:members.length===1?members[0]:'Family',calendarName:'Family',calendarSyncEnabled:true,status:occurrenceStatus(task,occurrence),notes:[task.zone,task.timing,task.standard,choreCompletionCredit(task,occurrence),task.signoffRequired?`Sign-off: ${(task.verifiers||HOUSEHOLD_CHORE_VERIFIERS).join(' or ')}`:'',occurrence.exception?`Exception: ${occurrence.exception}`:'',occurrence.returnReason?`Returned: ${occurrence.returnReason}`:''].filter(Boolean).join(' · '),updatedAt:occurrence.updatedAt||new Date().toISOString()}}
 export const isHouseholdOperationCalendarCopy=event=>event?.source===HOUSEHOLD_OPERATIONS_SOURCE
 // Family Calendar derives these events at read time from the versioned
 // maintenance record; no maintenance action rewrites Calendar as a side effect.
