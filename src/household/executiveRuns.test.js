@@ -128,6 +128,23 @@ test('record-level evidence is retained immutably and read through the administr
  await repo.create({id:'legacy',member:'Larry'});assert.equal((await repo.evidence('legacy')).state,'unavailable')
 })
 
+test('provider diagnostics distinguish billing limits from transient rate limits without leaking upstream details',async()=>{
+ const {generateExecutiveStage,safeExecutiveFailure,executiveProviderFailure}=await import('../../netlify/lib/executive-runs.mjs')
+ const original=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test-only-key'
+ try{
+  for(const code of ['credit_balance_exhausted','organization_usage_limit_exceeded','organization_spend_limit_exceeded','project_spend_limit_exceeded','rate_limit_exceeded','slow_down']){
+   await assert.rejects(generateExecutiveStage({role:'cfo',input:{},fetcher:async()=>new Response(JSON.stringify({error:{code,type:'insufficient_quota',message:'private account details'}}),{status:429})}),error=>{
+    assert.equal(safeExecutiveFailure(error),`Model provider HTTP 429 (${code})`);return true
+   })
+  }
+  assert.equal(executiveProviderFailure(429,{error:{code:null,type:'insufficient_quota'}}),'Model provider HTTP 429 (insufficient_quota)')
+  assert.equal(executiveProviderFailure(429,{error:{code:'unrecognized private text',type:'rate_limit_error'}}),'Model provider HTTP 429 (rate_limit_exceeded)')
+  assert.equal(executiveProviderFailure(429,{error:{code:'unrecognized private text',message:'private account details'}}),'Model provider HTTP 429 (provider_error)')
+  await assert.rejects(generateExecutiveStage({role:'cfo',input:{},fetcher:async()=>new Response('non-JSON private response',{status:429})}),error=>{
+   assert.equal(safeExecutiveFailure(error),'Model provider HTTP 429 (provider_error)');return true
+  })
+ }finally{if(original===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=original}
+})
 test('failure diagnostics expose only safe provider categories, never raw error contents',async()=>{
  const {safeExecutiveFailure}=await import('../../netlify/lib/executive-runs.mjs')
  assert.equal(safeExecutiveFailure({executiveFailure:'Model provider HTTP 429 (insufficient_quota)'}),'Model provider HTTP 429 (insufficient_quota)')
