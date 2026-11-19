@@ -24,12 +24,13 @@ test('strategic output requires decisions and all three horizons; meeting export
 })
 
 test('material later-horizon obligations remain in model evidence beyond the chronological detail cap',()=>{
- const payables=Array.from({length:25},(_,i)=>({title:i===24?'Large annual obligation':'Small recurring bill',amount:i===24?30000:10,date:'2027-01-01'}))
+ const payables=Array.from({length:25},(_,i)=>({title:i===24?'Large annual obligation':i===0?'__proto__':'Small recurring bill',amount:i===24?30000:10,date:'2027-01-01'}))
  const evidence={planning:{payables,projectedInflows:[]},savedScenarios:{},ledger:{},accounts:{},unmapped:{rows:[]}}
  const model=executiveFinancialModelContext(evidence)
  assert.equal(model.E3.payables.length,20)
  assert.equal(model.E3.largestPayables[0].title,'Large annual obligation')
  assert.deepEqual(model.E3.obligationGroups[0],{title:'Large annual obligation',scheduledAmount:30000,occurrences:1})
- assert.equal(model.E3.obligationGroups[1].scheduledAmount,240)
+ assert.equal(model.E3.obligationGroups[1].scheduledAmount,230)
+ assert.equal(model.E3.obligationGroups.find(x=>x.title==='__proto__').scheduledAmount,10)
  assert.equal(payables[0].amount,10)
 })
