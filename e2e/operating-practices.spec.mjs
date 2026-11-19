@@ -195,6 +195,39 @@ test('Executive workspace reads sources and preserves shared handoffs across rol
  await expect(workspace.getByRole('heading',{name:'Resolve schedule conflict'})).toBeVisible()
  await workspace.getByLabel('Operating role',{exact:true}).selectOption('coo')
  await expect(workspace.getByRole('heading',{name:'Resolve schedule conflict'})).toBeVisible()
- await expect(workspace.getByText(/Background executive execution is not enabled/)).toBeVisible()
+ await expect(workspace.getByText(/The manual handoff register does not execute work/)).toBeVisible()
+ await fits(page)
+})
+
+test('Executive coordination records a decision without executing source changes',async({page})=>{
+ const {date}=await backend(page)
+ const {loadOrchestration}=await import('../netlify/lib/household-orchestration.mjs')
+ const model=await loadOrchestration({resources:{read:async()=>({value:{},version:1})},session:{member:'Larry',role:'admin'},date})
+ await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:model}))
+ await page.route('**/.netlify/functions/executive-workspace*',route=>route.fulfill({json:{rows:[],workerEnabled:false}}))
+ const state={config:{enabled:false,version:0},runtime:{ready:true,model:'fixture'},runs:[],hasMore:false}
+ const actions=[]
+ await page.route('**/.netlify/functions/executive-cycles',async route=>{
+  if(route.request().method()==='POST'){
+   const body=route.request().postDataJSON();actions.push(body.action)
+   expect(body.member).toBe('Larry');expect(route.request().headers()['x-brevity-executive']).toBe('1')
+   if(body.action==='start')state.runs=[{id:body.id,goal:body.goal,createdBy:'Larry',createdAt:date,status:'awaiting-decision',version:6,stages:['cfo','reviewer','coo','bruce'].map(role=>({role,identity:'executive:'+role,completedAt:date,model:'fixture',result:{status:'ready',summary:'Prepare a statement review',recommendation:'Request current evidence',proposedOwner:'Larry (proposed)',nextStep:'Review the recommendation',evidence:['Saved snapshot'],gaps:['Statement unavailable']}}))}]
+   if(body.action==='decide')state.runs[0].decision={choice:body.choice,note:body.note,by:'Larry',at:date,notice:'No source changes or financial actions were executed.'}
+   if(body.action==='configure')state.config={enabled:body.enabled,version:state.config.version+1}
+  }
+  return route.fulfill({json:state})
+ })
+ await page.goto('/?view=today');await openTodayDetails(page)
+ const workspace=page.locator('.today-dashboard .executive-workspace').last()
+ await workspace.locator('summary').first().click()
+ await workspace.getByText('Executive coordination cycles',{exact:true}).click()
+ await workspace.getByRole('button',{name:'Start one coordination cycle',exact:true}).click()
+ await expect(workspace.getByText(/awaiting-decision/)).toBeVisible()
+ await workspace.getByLabel('Decision note',{exact:true}).fill('Prepare the missing-evidence request for review')
+ await workspace.getByRole('button',{name:'accepted for planning',exact:true}).click()
+ await expect(workspace.getByText(/Decision: accepted-for-planning/)).toBeVisible()
+ await workspace.getByRole('button',{name:'Enable daily coordination',exact:true}).click()
+ await expect(workspace.getByRole('button',{name:'Pause daily coordination and revoke active workers'})).toBeVisible()
+ expect(actions).toEqual(['start','decide','configure'])
  await fits(page)
 })

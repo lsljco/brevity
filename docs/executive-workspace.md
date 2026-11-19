@@ -1,4 +1,6 @@
-# Executive workspace: first release
+# Executive workspace and hosted coordination
+
+The first sections describe the manually operated workspace introduced in PR 441. The Hosted coordination release section below supersedes its pending internal-worker status; external agent credential connections and source-action execution remain pending.
 
 ## Available behavior
 
@@ -43,3 +45,19 @@ Suggested dependency order remains Analyst -> Reviewer -> CFO -> COO -> Bruce, w
 ## Validation
 
 Automated tests cover administrator access, role projection, secret-key filtering, handoff ownership, retry deduplication, stale versions, storage races, required completion evidence, closed history, cross-site form protection, API create/read and assistant-tool availability. Production deployment and authenticated live persistence must be verified separately; local tests do not establish either.
+
+## Hosted coordination release
+
+The separate `executive-cycles` endpoint adds bounded Brevity-hosted workers. This is not a credential connection to external ChatGPT threads. The manually operated handoff register remains unchanged and never automatically dispatches arbitrary rows.
+
+An authenticated administrator can start a cycle with a goal or enable daily coordination at 03:15 America/New_York. Scheduled execution is disabled in previews and off by default. The existing CFO and CTO ChatGPT tasks are not rescheduled or replaced. The hosted cycle does not ingest those external reports automatically.
+
+The host reads the saved canonical context and calculated posted ledger summary. It issues each worker a four-minute HS256 credential derived from a server-only master secret, scoped to one role, household, cycle and revocation epoch. Credentials are never returned to the UI/model, persisted, or logged. The worker verifies identity before execution and again before committing its result. Pausing or changing runtime settings increments the epoch and revokes existing credentials. This is a single trusted Brevity deployment with scoped runtime identities, not independently deployed security domains or user-held API credentials.
+
+CFO receives saved finance planning and calculated ledger evidence. A separate AI reviewer checks the CFO output against that same snapshot. COO receives operational context plus preceding outputs. Bruce receives executive context plus preceding outputs. The model has no source-write or external action tools. A blocked stage stops progression; a successful four-stage cycle ends at `awaiting-decision`. AI review is explicitly not independent financial certification. User decisions are recorded with version protection and never execute a payment, message, assignment, deployment or source mutation.
+
+A household-wide conditional lease prevents concurrent workers. Only queued runs can be claimed; duplicate dispatch cannot replay completed stages. The lease lasts fourteen minutes and late writes fail closed. Stalled runs are not silently restarted; the UI identifies missing receipts and permits cancellation and a new cycle. There are at most three reserved cycles per household day, including failures, four model calls each, 2,400 maximum output tokens per call, a 150-second timeout per call and no automatic model retries. This bounds calls, not a fixed dollar budget. The configured model is `BREVITY_EXECUTIVE_MODEL`, otherwise `BREVITY_AI_MODEL`, otherwise the existing application default. It does not enforce the external Sol/Astra preferences.
+
+Private cycle records retain initiating administrator, release commit, per-stage worker identity, input hash, source coverage, output, model, usage and response receipt. They use a separate preview-isolated store. No household data belongs in repository documentation or CI output. Runtime readiness requires the existing OpenAI key and an automation signing secret of at least 32 characters. No new secret is generated or exposed by this release.
+
+Tests exercise invalid/expired/revoked/wrong-role credentials, context separation, review blocking, duplicate creation and dispatch, concurrent leases, late writes, cancellation, day caps, DST scheduling, preview exclusion, administrator authorization and stale decisions. The browser fixture checks start, result rendering, decision capture and daily enable controls. Live model execution, persisted receipts and daily enablement require separate deployed verification.

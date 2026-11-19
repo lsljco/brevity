@@ -1,0 +1,86 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {createExecutiveRunRepository,executeExecutiveCycle,automationAuthorized,validateExecutiveResult} from '../../netlify/lib/executive-runs.mjs'
+import {issueExecutiveIdentity,verifyExecutiveIdentity} from '../../netlify/lib/executive-identities.mjs'
+import {createExecutiveCyclesHandler} from '../../netlify/functions/executive-cycles.mjs'
+import {runScheduledExecutiveCycle} from '../../netlify/functions/executive-cycle-scheduled.mjs'
+const secret='a-long-test-only-signing-secret-123456789'
+const result={status:'ready',summary:'Prepare source-dated options',evidence:['Saved records'],gaps:['No current bank statement'],recommendation:'Request the missing statement',proposedOwner:'Larry (proposed)',nextStep:'Larry reviews the proposal'}
+function fixture(){
+ const entries=new Map();let n=0,clock=new Date('2026-11-19T08:15:00Z')
+ const now=()=>clock
+ const store={async get(key){return structuredClone(entries.get(key)?.data||null)},async getWithMetadata(key){return structuredClone(entries.get(key)||null)},async list({prefix}){return {blobs:[...entries.keys()].filter(k=>k.startsWith(prefix)).map(key=>({key}))}},async setJSON(key,data,options={}){const old=entries.get(key);if(options.onlyIfNew&&old||options.onlyIfMatch&&old?.etag!==options.onlyIfMatch)return {modified:false};entries.set(key,{data:structuredClone(data),etag:String(++n)});return {modified:true}}}
+ return {repo:createExecutiveRunRepository({store,now}),entries,now,advance:ms=>{clock=new Date(+clock+ms)}}
+}
+const canonical={householdDate:'2026-11-19',access:{finance:true},sources:[{id:'shared-action-records',state:'available',asOf:'unknown'}],dailyPlan:{topPriorities:['Review plan']},actionRecords:{finance:{budgets:{privateFinance:100}},projects:[]}}
+const setup=(repo,now,generate)=>({repository:repo,now,secret,household:'family',loadContext:async()=>canonical,financeReader:async()=>({state:'available',totals:{netCashMovement:50},rows:[{privateRow:1}]}),generate:generate|| (async()=>({result,model:'fixture',responseId:'fixture-response'}))})
+test('worker credentials reject forged, expired, wrong-role, wrong-household, wrong-run and revoked identities',async()=>{
+ const claims={secret,role:'cfo',epoch:1,runId:'r1',household:'family',now:new Date('2026-11-19T08:00:00Z')}
+ const token=await issueExecutiveIdentity(claims)
+ assert.equal((await verifyExecutiveIdentity(token,claims)).id,'executive:cfo')
+ for(const overrides of [{role:'coo'},{household:'other'},{runId:'r2'},{epoch:2},{now:new Date('2026-11-19T08:05:00Z')}])await assert.rejects(verifyExecutiveIdentity(token,{...claims,...overrides}),{status:403})
+ await assert.rejects(verifyExecutiveIdentity(token+'forged',claims),{status:403})
+ assert.equal(automationAuthorized('abc','abcd'),false);assert.equal(automationAuthorized(secret,secret),true)
+})
+test('four-stage cycle saves attributed receipts with scoped context and no source write capabilities',async()=>{
+ const {repo,now}=fixture();await repo.create({id:'run1',member:'Larry'})
+ const inputs=[]
+ const generate=async args=>{inputs.push(args);return {result,model:'fixture'}}
+ assert.equal((await executeExecutiveCycle('run1',setup(repo,now,generate))).status,'awaiting-decision')
+ const run=await repo.get('run1');assert.deepEqual(run.stages.map(s=>s.identity),['executive:cfo','executive:reviewer','executive:coo','executive:bruce'])
+ assert.equal(run.decision,null);assert.equal(inputs[0].input.context.ledger.rows,undefined)
+ assert.equal(JSON.stringify(inputs[2].input.context).includes('privateFinance'),false)
+ assert.equal(JSON.stringify(inputs[3].input.context).includes('privateFinance'),false)
+ assert.equal(inputs[1].input.priorResults[0].role,'cfo')
+ assert.equal((await executeExecutiveCycle('run1',setup(repo,now))).duplicate,true)
+ const decided=await repo.decide('run1',{version:run.version,choice:'accepted-for-planning',note:'Prepare a statement request draft'},'Larry')
+ assert.match(decided.decision.notice,/No source changes/)
+ await assert.rejects(repo.decide('run1',{version:run.version,choice:'rejected',note:'stale'},'Larry'),{status:409})
+})
+test('reviewer blocks unsafe progression and preserves earlier evidence',async()=>{
+ const {repo,now}=fixture();await repo.create({id:'blocked',member:'Larry'})
+ const roles=[];await executeExecutiveCycle('blocked',setup(repo,now,async({role})=>{roles.push(role);return {result:{...result,status:role==='reviewer'?'blocked':'ready'},model:'fixture'}}))
+ assert.deepEqual(roles,['cfo','reviewer']);assert.equal((await repo.get('blocked')).status,'blocked')
+})
+test('configuration revocation during inference prevents committing the result',async()=>{
+ const {repo,now}=fixture();await repo.create({id:'revoked',member:'Larry'})
+ await assert.rejects(executeExecutiveCycle('revoked',setup(repo,now,async()=>{await repo.configure({enabled:false,version:0},'Larry');return {result,model:'fixture'}})))
+ assert.equal((await repo.get('revoked')).stages.length,0);assert.equal((await repo.get('revoked')).status,'failed')
+})
+test('duplicate creation, concurrency, daily cap and expired leases fail safely',async()=>{
+ const {repo,advance}=fixture();await repo.create({id:'one',member:'Larry'})
+ assert.equal((await repo.create({id:'one',member:'Larry'})).replayed,true)
+ await assert.rejects(repo.create({id:'one',goal:'different',member:'Larry'}),{status:409})
+ await repo.create({id:'two',member:'Larry'});await repo.create({id:'three',member:'Larry'})
+ await assert.rejects(repo.create({id:'four',member:'Larry'}),{status:429})
+ const lease=await repo.claim('one');assert.equal(await repo.claim('one'),null)
+ await assert.rejects(repo.claim('two'),{status:409})
+ advance(15*60000);await assert.rejects(repo.append('one',lease,{role:'cfo',result}),{status:409})
+ const next=await repo.claim('two');assert.ok(next);await repo.release(lease);await repo.assertLease(next)
+})
+test('cancellation during inference cannot be overwritten by a late result',async()=>{
+ const {repo,now}=fixture();await repo.create({id:'cancel',member:'Larry'})
+ await assert.rejects(executeExecutiveCycle('cancel',setup(repo,now,async()=>{await repo.cancel('cancel','Larry');return {result,model:'fixture'}})))
+ const run=await repo.get('cancel');assert.equal(run.status,'cancelled');assert.equal(run.stages.length,0)
+})
+test('scheduled cycle runs only once per Eastern day and never in previews',async()=>{
+ const {repo}=fixture();await repo.configure({enabled:true,version:0},'Larry');let dispatched=0
+ const args={repository:repo,isPreview:false,ready:true,dispatch:async id=>{dispatched++;const lease=await repo.claim(id);await repo.finish(id,lease,'blocked','Fixture');await repo.release(lease)}}
+ assert.deepEqual(await runScheduledExecutiveCycle({...args,now:new Date('2026-11-19T07:15:00Z')}),{skipped:true})
+ await runScheduledExecutiveCycle({...args,now:new Date('2026-11-19T08:15:00Z')})
+ await runScheduledExecutiveCycle({...args,now:new Date('2026-11-19T08:15:00Z')})
+ assert.equal(dispatched,1)
+ assert.deepEqual(await runScheduledExecutiveCycle({...args,isPreview:true,now:new Date('2026-11-19T08:15:00Z')}),{skipped:true})
+})
+test('cycle API enforces administrator, member, custom header and readiness',async()=>{
+ const {repo}=fixture();let dispatches=0
+ const base={repository:()=>repo,readiness:()=>({ready:true}),dispatch:async()=>{dispatches++;return {accepted:true}}}
+ for(const session of [null,{member:'Nyla',role:'member'}])assert.equal((await createExecutiveCyclesHandler({...base,authenticate:async()=>session})({httpMethod:'GET'})).statusCode,session?403:401)
+ const handler=createExecutiveCyclesHandler({...base,authenticate:async()=>({member:'Larry',role:'admin'})})
+ const event={httpMethod:'POST',headers:{'content-type':'application/json','x-brevity-executive':'1'},body:JSON.stringify({action:'start',id:'api',member:'Larry',goal:'Prepare options'})}
+ assert.equal((await handler({...event,headers:{}})).statusCode,403)
+ assert.equal((await handler({...event,body:JSON.stringify({action:'start',id:'api',member:'Nyla'})})).statusCode,409)
+ assert.equal((await handler(event)).statusCode,202);assert.equal(dispatches,1)
+ assert.equal((await handler({httpMethod:'GET'})).statusCode,200)
+ assert.throws(()=>validateExecutiveResult({...result,summary:''}))
+})

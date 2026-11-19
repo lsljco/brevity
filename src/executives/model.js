@@ -10,5 +10,5 @@ export const EXECUTIVE_ROLES = Object.freeze([
   {id:'creative',name:'Chief Creative Officer',active:false,owns:'Creative direction and production',cadence:'During creative planning and production'},
 ])
 export const HANDOFF_STATES=['queued','in-progress','blocked','reported-complete','cancelled']
-export const EXECUTIVE_NOTICE='Roles use your administrator session. They are not separately authenticated agents. A queued handoff does not start a worker or send a message. Existing external schedules are not managed here.'
+export const EXECUTIVE_NOTICE='Operating views use your administrator session. Hosted coordination workers have separate role-bound runtime identities. A manual handoff does not start a worker or send a message. Existing external schedules are not managed here.'
 export function activeExecutive(role){return EXECUTIVE_ROLES.some(item=>item.id===role&&item.active)}

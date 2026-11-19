@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from 'react'
+import ExecutiveCycles from './ExecutiveCycles.jsx'
 import {EXECUTIVE_ROLES,HANDOFF_STATES,EXECUTIVE_NOTICE} from './model.js'
 const endpoint='/.netlify/functions/executive-workspace'
 async function request(query='',body){const response=await fetch(endpoint+query,{credentials:'include',cache:'no-store',...(body?{method:'POST',headers:{'content-type':'application/json','x-brevity-executive':'1'},body:JSON.stringify(body)}:{})});const data=await response.json();if(!response.ok)throw Error(data.error||'Executive workspace unavailable.');return data}
@@ -18,7 +19,8 @@ export default function ExecutiveWorkspace({currentMember,readOnly=false}){
  async function save(body){const ticket=generation.current;setBusy(true);setError('');try{await request('',{...body,member:currentMember,role});if(ticket===generation.current){if(body.action==='create'){setDraft({...draft,title:'',note:'',sourceRef:''});requestId.current=null}setRevision(n=>n+1)}}catch(failure){if(ticket===generation.current)setError(failure.message)}finally{setBusy(false)}}
  const field=(name,value)=>{requestId.current=null;setDraft({...draft,[name]:value})}
  return <details className="executive-workspace"><summary>My Agent Corporation</summary>
-  <p>{EXECUTIVE_NOTICE}</p><p>Shared access and a handoff register are available here. Background executive execution is not enabled by this workspace.</p>
+  <p>{EXECUTIVE_NOTICE}</p><p>The manual handoff register does not execute work. Use Executive coordination cycles for the bounded CFO-to-Bruce workflow.</p>
+  <ExecutiveCycles currentMember={currentMember} readOnly={readOnly}/>
   <label>Operating role<select aria-label="Operating role" value={role} disabled={busy} onChange={e=>setRole(e.target.value)}>{EXECUTIVE_ROLES.filter(item=>item.active).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
   <p>{EXECUTIVE_ROLES.find(item=>item.id===role)?.owns}</p><p>Proposed cadence: {EXECUTIVE_ROLES.find(item=>item.id===role)?.cadence}. This is not a configured schedule.</p>
   <button disabled={busy} onClick={readContext}>Read this role’s saved information</button><button disabled={busy} onClick={()=>setRevision(n=>n+1)}>Refresh handoffs</button>
@@ -42,6 +44,6 @@ export default function ExecutiveWorkspace({currentMember,readOnly=false}){
    <details><summary>Recorded history</summary><ol>{row.history.map((event,i)=><li key={i}>{event.at} · {event.actor} acting as {event.role} · {event.status}: {event.note}</li>)}</ol></details>
    {!['reported-complete','cancelled'].includes(row.status)&&<><label>Progress note or completion evidence<textarea maxLength={2000} value={notes[row.id]||''} onChange={e=>setNotes({...notes,[row.id]:e.target.value})}/></label>{HANDOFF_STATES.filter(status=>status!=='queued'&&(role===row.to||status==='cancelled'&&(role===row.from||role==='bruce'))).map(status=><button key={status} disabled={busy||readOnly||!notes[row.id]?.trim()} onClick={()=>save({action:'progress',id:row.id,version:row.version,status,note:notes[row.id]})}>{status==='reported-complete'?'Record reported completion':status}</button>)}</>}
   </article>)}
-  <p>Analyst, Reviewer, Career and Creative role access is reserved for a later phase. No independent verification is inferred from reported completion.</p></>}
+  <p>Analyst, Career and Creative views are reserved for a later phase. The coordination cycle’s AI reviewer is a separate review pass, not independent financial certification.</p></>}
  </details>
 }
