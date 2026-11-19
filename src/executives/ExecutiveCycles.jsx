@@ -1,0 +1,30 @@
+import {useEffect,useRef,useState} from 'react'
+const endpoint='/.netlify/functions/executive-cycles'
+async function request(body){const response=await fetch(endpoint,{credentials:'include',cache:'no-store',...(body?{method:'POST',headers:{'content-type':'application/json','x-brevity-executive':'1'},body:JSON.stringify(body)}:{})});const data=await response.json();if(!response.ok)throw Error(data.error||'Executive cycles unavailable.');if(!body&&(!data?.runtime||!data?.config||!Array.isArray(data.runs)))throw Error('Executive cycle data is unavailable. Refresh after the deployment finishes.');return data}
+export default function ExecutiveCycles({currentMember,readOnly}){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[goal,setGoal]=useState('Identify one consequential financial priority, review the evidence, prepare an achievable household execution plan, and present the decision Larry needs to make.'),[notes,setNotes]=useState({}),[revision,setRevision]=useState(0)
+ const generation=useRef(0),requestId=useRef(null)
+ useEffect(()=>{let alive=true;generation.current++;setData(null);requestId.current=null;setNotes({});request().then(value=>{if(alive)setData(value)}).catch(e=>{if(alive)setError(e.message)});return()=>{alive=false;generation.current++}},[currentMember,revision])
+ async function act(body){const ticket=generation.current;setBusy(true);setError('');try{await request({...body,member:currentMember});if(ticket===generation.current){requestId.current=null;setRevision(x=>x+1)}}catch(e){if(ticket===generation.current)setError(e.message)}finally{setBusy(false)}}
+ return <details><summary>Executive coordination cycles</summary>
+  <p>Brevity-hosted CFO → AI reviewer → COO → Bruce. Each stage has a short-lived role-bound identity. These workers prepare decisions; they cannot spend money, send messages, change household records or deploy software. External ChatGPT tasks remain separate.</p>
+  <p>Up to three cycles per day, four model calls per cycle, with no automatic model retries. Scheduled coordination runs at 3:15 AM Eastern when enabled. AI review is not financial certification.</p>
+  {error&&<p role="alert">{error}</p>}
+  <button disabled={busy} onClick={()=>setRevision(x=>x+1)}>Refresh cycles</button>
+  {data&&<><p>Runtime: {data.runtime.ready?'configured':'unavailable'} · Model: {data.runtime.model} · Daily coordination: {data.config.enabled?'enabled':'paused'}</p>
+   <button disabled={busy||readOnly||!data.runtime.ready&&!data.config.enabled} onClick={()=>act({action:'configure',enabled:!data.config.enabled,version:data.config.version})}>{data.config.enabled?'Pause daily coordination and revoke active workers':'Enable daily coordination'}</button>
+   <p>Changing this setting revokes active worker credentials. Queued cycles created under an older setting must be cancelled and replaced. It does not change your CFO or CTO ChatGPT schedules.</p>
+   <label>Executive cycle goal<textarea maxLength={1500} value={goal} onChange={e=>{setGoal(e.target.value);requestId.current=null}}/></label>
+   <button disabled={busy||readOnly||!data.runtime.ready||!goal.trim()} onClick={()=>{requestId.current ||= crypto.randomUUID();act({action:'start',id:requestId.current,goal})}}>Start one coordination cycle</button>
+   {data.hasMore&&<p role="alert">Only the first storage page of cycles is shown.</p>}
+   {data.runs.map(run=><article key={run.id}><h4>{run.goal}</h4><p>Cycle {run.id} · {run.status} · Started by {run.createdBy} · {run.createdAt}</p><p>{run.note}</p>
+    {run.status==='running'&&Date.now()-Date.parse(run.updatedAt)>16*60000&&<p role="alert">No recent receipt. This cycle may have been interrupted. Cancel it before starting a replacement; completion has not been confirmed.</p>}
+    {run.stages.map(stage=><details key={stage.role}><summary>{stage.role} · {stage.result.status} · {stage.completedAt}</summary><p>{stage.result.summary}</p><p>{stage.result.recommendation}</p><p>Proposed owner: {stage.result.proposedOwner}</p><p>Next step: {stage.result.nextStep}</p><h5>Evidence</h5><ul>{stage.result.evidence.map((x,i)=><li key={i}>{x}</li>)}</ul><h5>Gaps</h5><ul>{stage.result.gaps.map((x,i)=><li key={i}>{x}</li>)}</ul><p>Worker {stage.identity} · Model {stage.model} · Receipt {stage.responseId||'not available'}</p></details>)}
+    {run.status==='queued'&&<button disabled={busy||readOnly} onClick={()=>act({action:'dispatch',id:run.id})}>Retry saved cycle dispatch</button>}
+    {['queued','running'].includes(run.status)&&<button disabled={busy||readOnly} onClick={()=>act({action:'cancel',id:run.id})}>Cancel cycle</button>}
+    {run.status==='awaiting-decision'&&!run.decision&&<><label>Decision note<textarea maxLength={1500} value={notes[run.id]||''} onChange={e=>setNotes({...notes,[run.id]:e.target.value})}/></label>{['accepted-for-planning','deferred','rejected'].map(choice=><button key={choice} disabled={busy||readOnly||!notes[run.id]?.trim()} onClick={()=>act({action:'decide',id:run.id,version:run.version,choice,note:notes[run.id]})}>{choice.replaceAll('-',' ')}</button>)}<p>Records your decision only. Any source changes still require their existing Action Mode workflow.</p></>}
+    {run.decision&&<p>Decision: {run.decision.choice} · {run.decision.by} · {run.decision.at} · {run.decision.note}. {run.decision.notice}</p>}
+   </article>)}
+  </>}
+ </details>
+}
