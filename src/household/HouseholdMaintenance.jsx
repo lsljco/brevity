@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   HOUSEHOLD_CHORE_VERIFIERS,
+  HOUSEHOLD_CHORE_HELPERS,
+  canSubmitHouseholdChore,
+  choreCompletionCredit,
   HOUSEHOLD_MAINTENANCE_STORAGE_KEY,
   HOUSEHOLD_OPERATING_PRINCIPLE,
   HOUSEHOLD_OPERATING_STANDARDS,
@@ -83,7 +86,7 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
   const days = useMemo(() => buildHouseholdMaintenanceWeek(weekStart,state), [weekStart,state])
   const summary = useMemo(() => summarizeHouseholdMaintenance(days, state), [days, state])
   const zones = useMemo(() => householdOperationZones(days), [days])
-  const owners = ['Mine', 'All', ...HOUSEHOLD_MEMBERS, 'Everyone']
+  const owners = ['Mine', ...(HOUSEHOLD_CHORE_HELPERS.includes(currentMember)?['Help a sibling']:[]), 'All', ...HOUSEHOLD_MEMBERS, 'Everyone']
   const isVerifier = HOUSEHOLD_CHORE_VERIFIERS.includes(currentMember)
   const awaitingApproval = useMemo(() => days.flatMap(day => day.tasks.map(task => ({ day, task, occurrence: householdOccurrence(state,task) }))).filter(item => item.occurrence.submittedAt && !item.occurrence.approvedAt && !item.occurrence.returnedAt), [days,state])
 
@@ -122,6 +125,7 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
   const ownerMatches = task => {
     const occurrence = householdOccurrence(state, task)
     if (ownerFilter === 'All') return true
+    if (ownerFilter === 'Help a sibling') return !task.owners.includes(currentMember)&&canSubmitHouseholdChore(task,currentMember,occurrence)
     if (ownerFilter === 'Mine') return task.owners.includes('Everyone') || task.owners.includes(currentMember) || occurrence.coveredBy === currentMember
     if (ownerFilter === 'Everyone') return task.owners.includes('Everyone')
     return task.owners.includes(ownerFilter) || occurrence.coveredBy === ownerFilter
@@ -203,7 +207,8 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
               const isInProgress = status === 'In progress'
               const isOverdue = day.date >= state.trackingStartedOn && day.date < todayKey && !isApproved
               const effectiveOwner = occurrence.coveredBy || (task.owners.includes('Everyone') ? 'Everyone' : task.owners.join(' + '))
-              const canSubmit = task.owners.includes(currentMember) || task.owners.includes('Everyone') || occurrence.coveredBy === currentMember || isAdmin
+              const responsible = task.owners.includes(currentMember) || task.owners.includes('Everyone') || occurrence.coveredBy === currentMember || isAdmin
+              const canSubmit = canSubmitHouseholdChore(task,currentMember,occurrence,isAdmin)
               const checklistItems=(task.details||[]).map((detail,index)=>({detail:String(detail||'').trim(),index})).filter(item=>item.detail)
               const checkedItems=checklistFor(task)
               const allChecked=checklistItems.every(item=>checkedItems.includes(item.index))
@@ -217,17 +222,18 @@ export default function HouseholdMaintenance({ currentMember, canEdit=true, isAd
                   <div className="maintenance-owners"><span><i className="ti ti-user" /> {effectiveOwner}</span><span><i className="ti ti-shield-check" /> Sign-off: {(task.verifiers || HOUSEHOLD_CHORE_VERIFIERS).join(' or ')}</span></div>
                   <div className={`operations-status operations-status--${status.toLowerCase().replace(/\s+/g,'-')}`}><strong>{status}</strong>{isAwaiting&&<span>Submitted by {occurrence.submittedBy || occurrence.completedBy}. Waiting for verification.</span>}{isApproved&&<span>Approved by {occurrence.approvedBy || 'Verifier'}.</span>}{isReturned&&<span>Returned by {occurrence.returnedBy}: {occurrence.returnReason}</span>}</div>
                   {(canSubmit||isVerifier)&&<div className="operations-actions">
-                    {canEdit&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>setEditingTask(task)}><i className="ti ti-edit"/> Edit details</button>}
-                    {canEdit&&<label><span>Coverage</span><select value={occurrence.coveredBy||'Original owner'} disabled={Boolean(reviewBusy)} onChange={event=>updateCoverage(task,event.target.value)}><option>Original owner</option>{coverageOptions.map(member=><option key={member}>{member}</option>)}</select></label>}
+                    {canEdit&&(responsible||isVerifier)&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>setEditingTask(task)}><i className="ti ti-edit"/> Edit details</button>}
+                    {canEdit&&(responsible||isVerifier)&&<label><span>Coverage</span><select value={occurrence.coveredBy||'Original owner'} disabled={Boolean(reviewBusy)} onChange={event=>updateCoverage(task,event.target.value)}><option>Original owner</option>{coverageOptions.map(member=><option key={member}>{member}</option>)}</select></label>}
                     {canSubmit&&!isInProgress&&!isAwaiting&&!isApproved&&!isReturned&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>startTask(task)}><i className="ti ti-player-play"/> Start task</button>}
                     {isVerifier&&isAwaiting&&<><button className="is-approve" type="button" disabled={Boolean(reviewBusy)} onClick={()=>approveTask(task)}><i className="ti ti-check"/> Review approval</button><button type="button" disabled={Boolean(reviewBusy)} onClick={()=>returnTask(task)}><i className="ti ti-arrow-back-up"/> Review return</button></>}
                     {isVerifier&&isApproved&&<button type="button" disabled={Boolean(reviewBusy)} onClick={()=>reopenTask(task)}><i className="ti ti-lock-open"/> Review reopen</button>}
-                    {(canSubmit||isVerifier)&&<button type="button" disabled={Boolean(reviewBusy)} className={occurrence.exception?'is-active':''} onClick={()=>reportException(task)}><i className="ti ti-alert-triangle"/> {occurrence.exception?'Review exception edit':'Review exception'}</button>}
+                    {(responsible||isVerifier)&&<button type="button" disabled={Boolean(reviewBusy)} className={occurrence.exception?'is-active':''} onClick={()=>reportException(task)}><i className="ti ti-alert-triangle"/> {occurrence.exception?'Review exception edit':'Review exception'}</button>}
                   </div>}
                   {occurrence.exception && <div className="operations-exception"><strong>Exception</strong><span>{occurrence.exception}</span><small>Reported by {occurrence.exceptionReportedBy || occurrence.updatedBy || 'Household'}</small></div>}
+                  {canSubmit&&!responsible&&!isAwaiting&&!isApproved&&<p className="maintenance-help-credit">Helping {task.owners.join(' & ')}. Completion will be recorded under {currentMember}.</p>}
                   <fieldset className="maintenance-checklist"><legend>Completion standard & checklist</legend>{checklistItems.length?checklistItems.map(item=><label key={`${item.index}-${item.detail}`}><input type="checkbox" checked={checkedItems.includes(item.index)} disabled={!checklistEditable} onChange={event=>toggleChecklist(item.index,event.target.checked)}/><span>{item.detail}</span></label>):<p>No checklist items are required for this responsibility.</p>}</fieldset>
                   {canSubmit&&!isAwaiting&&!isApproved&&<div className={`maintenance-confirm${allChecked?' is-ready':''}`} role="status"><span>{allChecked?'All checklist items are checked. Confirm completion to send this chore to Larry or Terica for review.':`Complete all ${checklistItems.length} checklist item${checklistItems.length===1?'':'s'} to unlock confirmation.`}</span><button type="button" disabled={!allChecked||Boolean(reviewBusy)} onClick={()=>submitTask(task)}><i className="ti ti-send"/> {isReturned?'Confirm resubmission':'Confirm complete'}</button></div>}
-                  {occurrence.completedAt && <small className="maintenance-completed-by">Submitted by {occurrence.completedBy || 'Household'} at {new Date(occurrence.completedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}{occurrence.approvedAt?` · signed off by ${occurrence.approvedBy}`:''}</small>}
+                  {choreCompletionCredit(task,occurrence)&&<small className="maintenance-completed-by">{choreCompletionCredit(task,occurrence)} at {new Date(occurrence.completedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}{occurrence.approvedAt?` · signed off by ${occurrence.approvedBy}`:''}</small>}
                   {isOverdue && <small className="maintenance-overdue-label">Overdue — complete it, assign coverage, report an exception, or finish sign-off.</small>}
                 </div>
               </article>
