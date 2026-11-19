@@ -1,3 +1,4 @@
+import ExecutiveWorkspace from '../executives/ExecutiveWorkspace.jsx'
 import GovernanceControls,{CoordinationControls} from './GovernanceControls.jsx'
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {prepareDirectAction} from '../assistant/assistantApi.js'
@@ -45,6 +46,7 @@ export default function OrchestrationPanel({date,currentMember,readOnly=false,on
       {!model.caseStoreAvailable&&<p role="alert">Assistance history could not be verified. Recording changes is unavailable.</p>}
       {model.paused&&<p role="status">Household assistance is paused. Existing responsibilities continue; previews remain available.</p>}
       {model.isAdmin&&<button disabled={!editable} onClick={()=>review(!model.paused)}>{model.paused?'Review resume assistance':'Review pause assistance'}</button>}
+      {model.isAdmin&&<ExecutiveWorkspace currentMember={currentMember} readOnly={readOnly}/>}
       <GovernanceControls key={`${model.version}-${model.preferenceVersion}`} model={model} member={currentMember} date={date} review={review} disabled={!editable} />
       <details><summary>My in-app follow-up inbox ({model.inbox?.messages?.length||0})</summary>{model.inbox?.coverage&&<p>Most recent bounded run: {model.inbox.coverage.processed} of {model.inbox.coverage.available} visible cases, prioritizing evidenced consequence and blocked work.</p>}{model.inbox?.error&&<p>{model.inbox.error}</p>}{model.inbox?.messages?.map(message=><article key={message.id}><h4>{message.title}</h4><button onClick={()=>setSelected(message.caseId)}>Review this responsibility</button><p>Owner: {message.owner} · {message.updatedAt}</p>{message.exception?<><p>{message.exception.risk}</p><p>{message.exception.recommendation}</p><p>{message.exception.decision} · {message.exception.deadline}</p></>:<ul>{message.preparation?.checklist?.map((text,i)=><li key={i}>{text}</li>)}</ul>}</article>)}</details>
       <label className="orchestration-select">Responsibility<select value={selected} onChange={e=>{setSelected(e.target.value);setNote('');setError('');setMessage('')}}><option value="">Choose a responsibility</option>{[...model.cases,...(model.closedCases||[])].map(row=><option key={row.id} value={row.id}>{row.title} — {row.resolved?'assistance resolved':row.state}{row.date!==date?` · ${row.date}`:""}</option>)}</select></label>

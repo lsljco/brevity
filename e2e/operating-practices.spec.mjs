@@ -164,3 +164,37 @@ test('daily dates, weekly review, and native Schedule and Inventory destinations
   await page.getByRole('button', { name: 'Check supplies & inventory' }).click()
   await expect(page.locator('.household-operations-tabs').getByRole('button', { name: 'Supplies & Inventory' })).toHaveClass(/active/)
 })
+
+test('Executive workspace reads sources and preserves shared handoffs across role changes',async({page})=>{
+ const {date}=await backend(page)
+ const {loadOrchestration}=await import('../netlify/lib/household-orchestration.mjs')
+ const model=await loadOrchestration({resources:{read:async()=>({value:{},version:1})},session:{member:'Larry',role:'admin'},date})
+ await page.route('**/.netlify/functions/household-orchestration?*',route=>route.fulfill({json:model}))
+ const rows=[]
+ await page.route('**/.netlify/functions/executive-workspace*',async route=>{
+  const request=route.request(),url=new URL(request.url())
+  if(request.method()==='POST'){
+   const body=request.postDataJSON()
+   expect(request.headers()['x-brevity-executive']).toBe('1')
+   expect(body.member).toBe('Larry')
+   rows.push({...body,from:body.role,status:'queued',version:1,history:[]})
+   return route.fulfill({json:{row:rows.at(-1)}})
+  }
+  if(url.searchParams.get('view')==='context')return route.fulfill({json:{householdDate:date,notice:'Unknown freshness remains unknown.',sources:[{id:'daily-plan',label:'Daily plan',state:'available',asOf:''}],data:{outcomes:['Prepare the household plan']}}})
+  return route.fulfill({json:{rows,workerEnabled:false}})
+ })
+ await page.goto('/?view=today');await openTodayDetails(page)
+ const workspace=page.locator('.today-dashboard .executive-workspace').last()
+ await workspace.locator('summary').first().click()
+ await workspace.getByRole('button',{name:'Read this role’s saved information'}).click()
+ await expect(workspace.getByText('Prepare the household plan',{exact:true})).toBeVisible()
+ await workspace.getByLabel('Required outcome').fill('Resolve schedule conflict')
+ await workspace.getByLabel('Source record or evidence reference').fill('plan:'+date)
+ await workspace.getByLabel('Requested work',{exact:true}).fill('Prepare options for the household')
+ await workspace.getByRole('button',{name:'Save handoff',exact:true}).click()
+ await expect(workspace.getByRole('heading',{name:'Resolve schedule conflict'})).toBeVisible()
+ await workspace.getByLabel('Operating role',{exact:true}).selectOption('coo')
+ await expect(workspace.getByRole('heading',{name:'Resolve schedule conflict'})).toBeVisible()
+ await expect(workspace.getByText(/Background executive execution is not enabled/)).toBeVisible()
+ await fits(page)
+})
