@@ -127,3 +127,10 @@ test('record-level evidence is retained immutably and read through the administr
  assert.deepEqual(JSON.parse(response.body),saved)
  await repo.create({id:'legacy',member:'Larry'});assert.equal((await repo.evidence('legacy')).state,'unavailable')
 })
+
+test('failure diagnostics expose only safe provider categories, never raw error contents',async()=>{
+ const {safeExecutiveFailure}=await import('../../netlify/lib/executive-runs.mjs')
+ assert.equal(safeExecutiveFailure({executiveFailure:'Model provider HTTP 429 (insufficient_quota)'}),'Model provider HTTP 429 (insufficient_quota)')
+ assert.equal(safeExecutiveFailure({message:'secret-bearing upstream response',executiveFailure:'secret-bearing upstream response'}),'Runtime or source error; review saved receipts and access settings')
+ assert.equal(safeExecutiveFailure({message:'Invalid stage response.'}),'Generated output did not satisfy the briefing contract')
+})
