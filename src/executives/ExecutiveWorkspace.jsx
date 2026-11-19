@@ -44,6 +44,6 @@ export default function ExecutiveWorkspace({currentMember,readOnly=false}){
    <details><summary>Recorded history</summary><ol>{row.history.map((event,i)=><li key={i}>{event.at} · {event.actor} acting as {event.role} · {event.status}: {event.note}</li>)}</ol></details>
    {!['reported-complete','cancelled'].includes(row.status)&&<><label>Progress note or completion evidence<textarea maxLength={2000} value={notes[row.id]||''} onChange={e=>setNotes({...notes,[row.id]:e.target.value})}/></label>{HANDOFF_STATES.filter(status=>status!=='queued'&&(role===row.to||status==='cancelled'&&(role===row.from||role==='bruce'))).map(status=><button key={status} disabled={busy||readOnly||!notes[row.id]?.trim()} onClick={()=>save({action:'progress',id:row.id,version:row.version,status,note:notes[row.id]})}>{status==='reported-complete'?'Record reported completion':status}</button>)}</>}
   </article>)}
-  <p>Analyst, Reviewer, Career and Creative role access is reserved for a later phase. No independent verification is inferred from reported completion.</p></>}
+  <p>Analyst, Career and Creative views are reserved for a later phase. The coordination cycle’s AI reviewer is a separate review pass, not independent financial certification.</p></>}
  </details>
 }
