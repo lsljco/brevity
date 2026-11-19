@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {createExecutiveRunRepository,executeExecutiveCycle,automationAuthorized,validateExecutiveResult} from '../../netlify/lib/executive-runs.mjs'
+import {createExecutiveRunRepository,executeExecutiveCycle,automationAuthorized,validateExecutiveResult,loadExecutiveContext,boundedExecutiveContext} from '../../netlify/lib/executive-runs.mjs'
 import {issueExecutiveIdentity,verifyExecutiveIdentity} from '../../netlify/lib/executive-identities.mjs'
 import {createExecutiveCyclesHandler} from '../../netlify/functions/executive-cycles.mjs'
 import {runScheduledExecutiveCycle} from '../../netlify/functions/executive-cycle-scheduled.mjs'
@@ -83,4 +83,21 @@ test('cycle API enforces administrator, member, custom header and readiness',asy
  assert.equal((await handler(event)).statusCode,202);assert.equal(dispatches,1)
  assert.equal((await handler({httpMethod:'GET'})).statusCode,200)
  assert.throws(()=>validateExecutiveResult({...result,summary:''}))
+})
+
+test('production context applies existing admin finance authority and rejects a removed administrator',async()=>{
+ let reads=0
+ const load=async()=>{reads++;return {householdDate:'2026-11-19',sources:[]}}
+ const context=await loadExecutiveContext({member:'Larry'},{load,readPrincipal:async member=>({member,role:'admin'})})
+ assert.equal(context.access.finance,true);assert.equal(context.access.vendorAdmin,false)
+ assert.equal(context.signedInMember,'Larry')
+ for(const principal of [null,{member:'Larry',role:'member'}])await assert.rejects(loadExecutiveContext({member:'Larry'},{load,readPrincipal:async()=>principal}),{status:403})
+ assert.equal(reads,1)
+})
+test('large finance planning fields do not discard source freshness and smaller evidence',()=>{
+ const sources=[{id:'shared-action-records',state:'available',asOf:'2026-11-19'}]
+ const bounded=boundedExecutiveContext({role:'cfo',householdDate:'2026-11-19',sources,data:{finance:{rows:Array.from({length:100},()=>({description:'saved record '.repeat(100)}))},dailyFinance:{notice:'Current plan'},versions:{budget:4}}})
+ assert.deepEqual(bounded.sources,sources);assert.equal(bounded.data.finance.omitted,true)
+ assert.deepEqual(bounded.data.versions,{budget:4});assert.equal(bounded.data.dailyFinance.notice,'Current plan')
+ assert.ok(JSON.stringify(bounded).length<50000)
 })

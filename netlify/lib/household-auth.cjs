@@ -95,6 +95,12 @@ async function readSession(event) {
 // Keep this function side-effect free: callers decide whether a member or an
 // administrator is required for the requested operation.
 exports.readSession = readSession
+// Server workers need current authority without receiving credential fields.
+exports.readMemberPrincipal = async member => {
+  if (!MEMBERS.includes(member)) return null
+  const user = await store().get(userKey(member), {type:'json'})
+  return user ? {member,role:user.role || 'member'} : null
+}
 
 function passwordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(String(password), salt, 64).toString('hex')

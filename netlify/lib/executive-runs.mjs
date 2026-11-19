@@ -5,6 +5,7 @@ import {householdDate,loadProductionAuthoritativeAssistantContext,sanitizeAuthor
 import {executiveContext} from './executive-workspace.mjs'
 import {createFinanceAssistantReader} from './finance-ledger-query.mjs'
 import {EXECUTIVE_STAGES,issueExecutiveIdentity,verifyExecutiveIdentity} from './executive-identities.mjs'
+import auth from './household-auth.cjs'
 
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status})}
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -102,8 +103,23 @@ export async function generateExecutiveStage({role,input,model=executiveReadines
  const output=(result.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('')
  return {result:validateExecutiveResult(JSON.parse(output)),model:result.model||model,usage:result.usage?{inputTokens:result.usage.input_tokens,outputTokens:result.usage.output_tokens}:null,responseId:result.id}
 }
-function bounded(value){const clean=sanitizeAuthoritativeContext(value);return JSON.stringify(clean).length<=50000?clean:{omitted:true,notice:'Saved planning context exceeded the bounded input size. Do not infer omitted values.'}}
-export async function executeExecutiveCycle(id,{repository=productionExecutiveRuns(),secret=process.env.BREVITY_AUTOMATION_KEY,household=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',loadContext=loadProductionAuthoritativeAssistantContext,financeReader=createFinanceAssistantReader(),generate=generateExecutiveStage,now=()=>new Date()}={}){
+export function boundedExecutiveContext(value){
+ const clean=sanitizeAuthoritativeContext(value)
+ if(JSON.stringify(clean).length<=50000)return clean
+ const limit=item=>JSON.stringify(item??null).length<=6000?item:{omitted:true,notice:'This field exceeded the input limit. Do not infer omitted values.'}
+ const compact=Object.fromEntries(Object.entries(clean).map(([key,item])=>[key,key==='data'&&item&&typeof item==='object'?Object.fromEntries(Object.entries(item).map(([field,content])=>[field,limit(content)])):limit(item)]))
+ return JSON.stringify(compact).length<=50000?compact:{role:clean.role,householdDate:clean.householdDate,sources:limit(clean.sources),omitted:true,notice:'Saved planning context exceeded the bounded input size. Do not infer omitted values.'}
+}
+const bounded=boundedExecutiveContext
+export async function loadExecutiveContext({member},{readPrincipal=auth.readMemberPrincipal,load=loadProductionAuthoritativeAssistantContext}={}){
+ const principal=await readPrincipal(member)
+ if(principal?.role!=='admin')fail('The initiating administrator is no longer authorized.',403)
+ const canonical=await load({member:principal.member,role:principal.role})
+ // Match existing administrator finance policy without loading unrelated
+ // health and education sources from the supplemental-context loader.
+ return {...canonical,signedInMember:principal.member,access:{finance:true,vendorAdmin:false}}
+}
+export async function executeExecutiveCycle(id,{repository=productionExecutiveRuns(),secret=process.env.BREVITY_AUTOMATION_KEY,household=process.env.BREVITY_HOUSEHOLD_ID||'lslj-family',loadContext=loadExecutiveContext,financeReader=createFinanceAssistantReader(),generate=generateExecutiveStage,now=()=>new Date()}={}){
  let lease
  try{
   lease=await repository.claim(id);if(!lease)return {duplicate:true}
