@@ -10,15 +10,15 @@ export function accountLinkGroups(accounts=[],actuals=[],sources=[]) {
   for(const row of actuals){
     if(linked[row.accountId])continue
     const key=row.accountId||''
-    if(!groups.has(key))groups.set(key,{sourceId:key,count:0,pending:0})
-    const group=groups.get(key);group.count++;if(row.pending)group.pending++
+    if(!groups.has(key))groups.set(key,{sourceId:key,count:0,pending:0,transactions:[]})
+    const group=groups.get(key);group.count++;if(row.pending)group.pending++;group.transactions.push(row)
   }
   return [...groups.values()].map(group=>{
     const matches=sources.filter(source=>source.accountId===group.sourceId)
     const source=matches.length===1?matches[0]:null
     const candidates=source?accounts.filter(account=>!account.plaidAccountId&&compatiblePlaidAccountType(account,source)&&normalized(account.institution)&&normalized(account.institution)===normalized(source.institution)&&/^\d{4}$/.test(String(account.mask||''))&&String(account.mask)===String(source.mask)):[]
     const suggestion=candidates.length===1&&!accounts.some(account=>account.plaidAccountId===group.sourceId)?candidates[0]:null
-    return {...group,source,suggestion,reason:suggestion?'Institution, account type and last four digits agree.':!source?'Current bank identity is unavailable. Review source history before linking.':'No unique unlinked household account has matching identity. Review account details.'}
+    return {...group,transactions:[...group.transactions].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(a.id||'').localeCompare(String(b.id||''))),source,suggestion,reason:suggestion?'Institution, account type and last four digits agree.':!source?'Load bank details to check this source account. Transaction descriptions alone cannot verify ownership.':'Choose a compatible household account after reviewing the bank details.'}
   }).sort((a,b)=>b.count-a.count||a.sourceId.localeCompare(b.sourceId))
 }
 
