@@ -60,3 +60,7 @@
 .match-dismissed-toggle { display:flex; align-items:center; gap:8px; font-size:12px; }
 .match-dismissed-toggle input { width:20px!important; height:20px; }
 .match-batch-accept { min-height:44px; margin:12px 0; }
+.match-group-detail .bulk-transactions input[type=checkbox]{appearance:auto!important;width:20px!important;min-width:20px!important;height:20px!important;min-height:20px!important;padding:0!important;flex:0 0 20px;accent-color:var(--gold)}
+.transaction-row-actions{display:flex;gap:8px;flex-wrap:wrap;min-width:120px}
+.match-group-detail .accounting-table{margin-top:12px}
+.match-group-detail .bulk-selection label{display:flex;flex:0 0 auto;gap:8px;align-items:center}

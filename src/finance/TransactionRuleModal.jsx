@@ -125,7 +125,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           </label>
           <label style={{fontSize:11,color:'var(--muted)'}}>Account scope
             <select value={accountId} onChange={event => setAccountId(event.target.value)} style={{...fieldStyle,marginTop:6}}>
-              <option value="">All linked accounts</option>
+              <option value="">All bank accounts</option>
               {accounts.map(account => <option key={account.id} value={account.id}>{account.name}{account.mask ? ` ••••${account.mask}` : ''}</option>)}
             </select>
           </label>
@@ -153,7 +153,7 @@ export default function TransactionRuleModal({ accounts = [], transactions = [],
           {rules.length === 0 ? <p style={{margin:0,fontSize:12,color:'var(--muted)'}}>No automatic categorization rules are active.</p> : rules.map(rule => {
             const description = ruleDescription(rule, accounts, directory?.vendors||[])
             return <div key={rule.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,padding:'10px 0',borderTop:'1px solid rgba(255,255,255,.06)'}}>
-              <div style={{minWidth:0}}><strong style={{display:'block',fontSize:13,color:'var(--soft-white)'}}>{rule.name||description.text}</strong><span style={{display:'block',fontSize:12,color:'var(--soft-white)'}}>{description.text} → {description.category}{description.vendor ? ` · ${description.vendor}` : ''}</span><span style={{fontSize:11,color:'var(--muted)'}}>{description.account || 'All linked accounts'} · {description.applyToExisting ? 'includes past posted matches' : `posts on or after ${rule.createdDate || 'rule creation'}`}</span></div>
+              <div style={{minWidth:0}}><strong style={{display:'block',fontSize:13,color:'var(--soft-white)'}}>{rule.name||description.text}</strong><span style={{display:'block',fontSize:12,color:'var(--soft-white)'}}>{description.text} → {description.category}{description.vendor ? ` · ${description.vendor}` : ''}</span><span style={{fontSize:11,color:'var(--muted)'}}>{description.account || 'All bank accounts'} · {description.applyToExisting ? 'includes past posted matches' : `posts on or after ${rule.createdDate || 'rule creation'}`}</span></div>
               <button type="button" onClick={() => editRule(rule)} disabled={Boolean(preparing)} style={{flexShrink:0,padding:'7px 10px',borderRadius:8,border:'1px solid rgba(232,150,122,.3)',background:'transparent',color:'var(--gold)',font:'inherit',fontSize:11,cursor:preparing?'wait':'pointer'}}>Edit rule</button>
             </div>
           })}

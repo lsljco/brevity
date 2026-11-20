@@ -19,6 +19,7 @@ import { toggleFinanceAccountSelection } from './accountSelection.js'
 const LazyReconciliationReport = lazy(()=>import('./AutoReconciliationReport.jsx'))
 const AutoReconciliationReport = props => <Suspense fallback={<p>Loading transaction review…</p>}><LazyReconciliationReport {...props}/></Suspense>
 const AccountLinkReview = lazy(()=>import('./AccountLinkReview.jsx'))
+import {reviewedTransactionMetadata} from './accountLinkReview.js'
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
 import {useVendorDirectory,vendorRequest} from './vendorApi.js'
 import {decorateVendorTransactions} from './vendorModel.js'
@@ -1564,6 +1565,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       .map(tx => txOverrides[tx.id] ? { ...tx, ...txOverrides[tx.id] } : tx)
       .filter(tx => !tx._deleted).map(categorizeReviewedActual),vendorDirectory,'posted',vendorOrder)
   }, [categoryReviewIds,actualAccountScope, data.accounts, data.transactions,dailyBudget,reviewedCategoryOverrides, txOverrides, txRules,vendorDirectory,vendorOrder])
+  const groupReviewActuals = useMemo(()=>decorateVendorTransactions(retainedActuals.map(tx=>labelTransactionCategory(reviewedTransactionMetadata(applyTransactionRules(tx,txRules,data.accounts),txOverrides[tx.id]),data.categoryCatalog||[])).filter(tx=>!tx._deleted),vendorDirectory,'posted',vendorOrder),[retainedActuals,txRules,txOverrides,data.accounts,data.categoryCatalog,vendorDirectory,vendorOrder])
   const balanceActuals = useMemo(
     () => mappedTransactionsForBalanceReconstruction(actualAccountScope.included, plaidIdToLocal).filter(transaction => !transaction.pending),
     [actualAccountScope.included, plaidIdToLocal],
@@ -1889,6 +1891,12 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }
   }
 
+  const reviewBulkTransactions = payload=>stageDirectFinanceReview({summary:`Update ${payload.transactionIds.length} selected transactions`,storageKey:'lslj_tx_overrides_v1',operation:{type:'transaction.bulk.update',description:`Update ${payload.transactionIds.length} exact selected records; amounts and dates stay unchanged.`,payload:{...payload,sourceVersion:getAcknowledgedSharedStateVersion(localStorage,PLAID_ACTUALS_KEY)}},surfaceError:true})
+  const openRuleFromTransaction = tx => {
+    setSelActualTx(null)
+    setTransactionRuleInitial({matchText:tx.merchant_name||tx.originalStatement||tx.original_description||tx.name||'',matchField:tx.merchant_name?'merchantName':'originalStatement',matchMode:tx.merchant_name?'exactly':'contains',category:tx.category==='Uncategorized'?'':tx.category||'',accountId:plaidIdToLocal[tx.accountId]||''})
+    setShowTransactionRules(true)
+  }
   const reviewReconciliationReport = async selected => {
     // Another device or a balance refresh may have advanced the shared version.
     // Read authoritative records before creating a proposal, then compare the
@@ -2065,7 +2073,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     operation:{
       type:ruleId?'transaction.rule.update':'transaction.rule.create',
       ...(ruleId?{targetId:ruleId}:{}),
-      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across linked accounts'}${applyToExisting ? ', including past posted matches' : ` for records on or after ${createdDate}`}`,
+      description:`${describeRuleCriteria(criteria,data.accounts)}. Apply ${category}${vendorName?` and vendor/payer ${vendorName}`:''}${accountId ? ' on the selected account' : ' across bank activity'}${applyToExisting ? ', including past posted matches' : ` for records on or after ${createdDate}`}`,
       payload:{ title:title||`Categorize matching transactions as ${category}`, criteria, vendorId, category, accountId, applyToExisting, createdDate },
     },
     storageKey:'lslj_tx_rules_v1',
@@ -2508,7 +2516,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
-      {!formView && ['accounts','transactions','accounting'].includes(view) && <Suspense fallback={<p>Loading account review…</p>}><AccountLinkReview accounts={data.accounts} actuals={plaidActuals||[]} sources={plaidAccountCandidates} scheduled={data.transactions} onLoadSources={loadAccountReviewSources} onReviewMatches={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} readOnly={readOnly} onReview={reviewAccountLink} onOpenAccounts={view==='accounts'?undefined:()=>setView('accounts')}/></Suspense>}
+      {!formView && ['accounts','transactions','accounting'].includes(view) && <Suspense fallback={<p>Loading account review…</p>}><AccountLinkReview accounts={data.accounts} actuals={groupReviewActuals} categories={establishedCategories} onOpenTransaction={openActualTxModal} onReviewBulk={reviewBulkTransactions} onCreateRule={openRuleFromTransaction} sources={plaidAccountCandidates} scheduled={data.transactions} onLoadSources={loadAccountReviewSources} onReviewMatches={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} readOnly={readOnly} onReview={reviewAccountLink} onOpenAccounts={view==='accounts'?undefined:()=>setView('accounts')}/></Suspense>}
       {view==='accounting'&&<AccountingWorkspace data={data} actuals={retainedActuals} rules={txRules} budget={dailyBudget} overrides={txOverrides} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
       {!isForm&&['dashboard','accounts','transactions'].includes(view)&&<div style={{padding:'0 24px'}}><FinanceExport buildReport={()=>({title:`${view} ${financeRange.from} to ${financeRange.to}`,notes:[financeAccountScopeLabel,actualsFreshnessMessage,balanceDataMessage,transactionFilter?.label||'','Bank amounts: positive = outflow; negative = inflow. Scheduled amounts use the Direction column.'],sections:view==='transactions'?[transactionSection(showActuals?transactionViewActuals:scheduledViewTransactions,fd.accounts,{scheduled:!showActuals})]:[recordsSection('Account balances',fd.accounts,['name','type','balance','plaidCurrentBalance','plaidAvailableBalance']),transactionSection(timeframeActuals,fd.accounts),recordsSection('Cash forecast',[...proj].filter(([date])=>date>=financeRange.from&&date<=financeRange.to).map(([date,p])=>({date,endingBalance:p.bal,netChange:p.delta}))) ]})}/></div>}
 
@@ -3193,7 +3201,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {showActuals ? <BulkTransactionEditor rows={transactionViewActuals} categories={establishedCategories} readOnly={readOnly} onOpen={openActualTxModal} onReview={payload=>stageDirectFinanceReview({summary:`Update ${payload.transactionIds.length} selected transactions`,storageKey:'lslj_tx_overrides_v1',operation:{type:'transaction.bulk.update',description:`Update ${payload.transactionIds.length} exact selected records; amounts and dates stay unchanged.`,payload:{...payload,sourceVersion:getAcknowledgedSharedStateVersion(localStorage,PLAID_ACTUALS_KEY)}},surfaceError:true})}/> : (
+            {showActuals ? <BulkTransactionEditor rows={transactionViewActuals} categories={establishedCategories} readOnly={readOnly} onOpen={openActualTxModal} onReview={reviewBulkTransactions}/> : (
               scheduledViewTransactions.map(tx => {
                   const freqLabel = tx.budgetLine ? `Budgeted for ${transactionFilter?.budgetPeriodLabel}` : FREQ_OPTS.find(f => f.v === tx.freq)?.l || tx.freq
                   return (
@@ -3371,7 +3379,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
           goals={goals}
           debts={debts}
           onSave={handleSaveActualTx}
-          onCreateRule={initial => { setTransactionRuleInitial(initial); setShowTransactionRules(true) }}
+          onCreateRule={initial => { setSelActualTx(null); setTransactionRuleInitial(initial); setShowTransactionRules(true) }}
           onMakeRecurring={(!isTransferTransaction(selActualTx) && (Number(selActualTx.amount) >= 0 || isRecognizedIncomeTransaction(selActualTx))) ? (form) => {
             const signedActual = {
               ...selActualTx,
