@@ -29,3 +29,29 @@ test('incomplete source status is actionable without inventing spending recommen
   assert.equal(model.monthEnd,null)
   assert.deepEqual(model.attention.map(item=>item.id),['bank','unmapped'])
 })
+
+test('current and available snapshots explain Home/Finance variance without double-counting holds',async()=>{
+  const {buildOutstandingCashForecast}=await import('./outstandingCashForecast.js')
+  const {dailyFinancialBrief}=await import('./dailyFinancialBrief.js')
+  // Synthetic values: no household financial records in regression fixtures.
+  const accounts=[{id:'a1',name:'Operating',type:'checking',balance:875,plaidAccountId:'bank',plaidType:'depository',plaidSubtype:'checking',plaidCurrentBalance:1000,plaidAvailableBalance:875}]
+  const actuals=[{id:'hold',accountId:'bank',date:'2026-11-19',amount:125,pending:true}]
+  const projection=buildOutstandingCashForecast(accounts,[],actuals,{today:'2026-11-19',days:40,pastDays:1,reconcile:true})
+  const home=dailyFinancialBrief({date:'2026-11-19',finance:{accounts,transactions:[]},actuals})
+  const overview=financeOverviewModel({accounts,projection,today:'2026-11-19'})
+  assert.equal(home.operatingBalance,overview.bankCurrent)
+  assert.equal(overview.cash,875)
+  assert.equal(overview.cashLabel,'Bank available balance')
+  assert.equal(overview.availabilityDifference,-125)
+  assert.equal(overview.bankCurrent+overview.availabilityDifference,overview.cash)
+  assert.equal(projection.get('2026-11-19').pendingDelta,0)
+  assert.equal(projection.get('2026-11-19').bal,875)
+})
+test('mixed and missing evidence never claims a bank available balance or invents a bridge',()=>{
+  for(const anchorKind of ['mixed','current',undefined]) {
+    const m=financeOverviewModel({accounts:[{type:'checking',balance:0,plaidCurrentBalance:0}],today:'2026-11-19',projection:new Map([['2026-11-19',{anchorBalance:0,anchorKind}]])})
+    assert.notEqual(m.cashLabel,'Bank available balance');assert.equal(m.availabilityDifference,null)
+  }
+  const m=financeOverviewModel({accounts:[{type:'checking',balance:0,plaidCurrentBalance:null}],today:'2026-11-19',projection:new Map([['2026-11-19',{anchorBalance:0,anchorKind:'available'}]])})
+  assert.equal(m.bankCurrent,null);assert.equal(m.availabilityDifference,null)
+})
