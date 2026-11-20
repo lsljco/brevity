@@ -1,0 +1,1 @@
+.scenario-delete-saved{min-height:44px;padding:8px 12px;border:1px solid rgba(201,126,91,.35);border-radius:8px;background:rgba(201,126,91,.05);color:var(--expense-color,#c98668);font:inherit;cursor:pointer}.scenario-delete-saved:focus-visible{outline:2px solid var(--gold);outline-offset:3px}.scenario-delete-saved:disabled{opacity:.5;cursor:default}

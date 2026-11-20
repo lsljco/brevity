@@ -4,13 +4,14 @@ import {Line} from 'react-chartjs-2'
 import {WORK_SCENARIOS,createWorkScenario,summarizeWorkScenario} from './workScenarios.js'
 import {OPPORTUNITY_SCENARIOS} from './opportunityIncome.js'
 const money=n=>n===null?'Awaiting compensation':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n)
-export default function WorkScenarioComparison({plans,selected,draft,onSelect}) {
+export default function WorkScenarioComparison({plans,selected,draft,onSelect,deleted=[]}) {
   const opportunities=OPPORTUNITY_SCENARIOS.some(s=>s.id===selected)
-  const comparisons=(opportunities?OPPORTUNITY_SCENARIOS:WORK_SCENARIOS).map(config=>{
+  const comparisons=(opportunities?OPPORTUNITY_SCENARIOS:WORK_SCENARIOS).filter(config=>!deleted.includes('recovery:'+config.id)||plans.some(p=>p.id===config.id)).map(config=>{
     const assumptions=selected===config.id?draft:(plans.find(p=>p.id===config.id)?.assumptions||createWorkScenario(config.id))
     try{return {...config,...summarizeWorkScenario(assumptions),saved:plans.some(p=>p.id===config.id)}}catch{return {...config,error:true}}
   })
   const months=[...new Set(comparisons.flatMap(s=>s.monthly?[...s.monthly.keys()]:[]))].sort()
+  if(!comparisons.length)return null
   return <section aria-label="Return-to-work scenario comparison"><FinanceExport report={financeReport('Return to work comparison',{scenarios:comparisons.map(row=>({...row,monthly:row.monthly?[...row.monthly].map(([month,value])=>({month,balance:value})):[]}))},['Hypothetical income scenarios.'])}/>
     <h3>{opportunities?'October 15 opportunity models':'Your return-to-work scenarios'}</h3>
     <div className="recovery-actions"><button aria-pressed={!opportunities} onClick={()=>onSelect(WORK_SCENARIOS[0].id)}>Household scenarios</button><button aria-pressed={opportunities} onClick={()=>onSelect(OPPORTUNITY_SCENARIOS[0].id)}>October 15 opportunities</button></div>
