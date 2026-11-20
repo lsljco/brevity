@@ -20,4 +20,22 @@ export function saveCategory(value,operation) {
 }
 let cachedSource,cachedCatalog=[]
 export function storedCategoryCatalog(storage=globalThis.localStorage) {try{const source=storage?.getItem('lslj_finance_v9')||'{}';if(source!==cachedSource){cachedCatalog=JSON.parse(source).categoryCatalog||[];cachedSource=source}return cachedCatalog}catch{return []}}
-export function labelTransactionCategory(tx,catalog=storedCategoryCatalog()) { const category=resolveCategory(tx.category||tx.cat,catalog);return category===undefined?tx:{...tx,...(tx.category?{category}:{}),...(tx.cat?{cat:category}:{})} }
+// Resolve at the boundary so stored aliases remain valid across rename and undo.
+export function labelTransactionCategory(tx,catalog=storedCategoryCatalog()) {
+ if(!tx.category&&!tx.cat&&!Array.isArray(tx.splits))return tx
+ return {...tx,...(tx.category?{category:resolveCategory(tx.category,catalog)}:{}),...(tx.cat?{cat:resolveCategory(tx.cat,catalog)}:{}),...(Array.isArray(tx.splits)?{splits:tx.splits.map(split=>labelTransactionCategory(split,catalog))}:{})}
+}
+export function labelRuleCategories(rule,catalog=storedCategoryCatalog()) {
+ return {...rule,
+  ...(rule.conditions?{conditions:{...rule.conditions,...(rule.conditions.categories?{categories:{...rule.conditions.categories,value:resolveCategory(rule.conditions.categories.value,catalog)}}:{})}}:{}),
+  ...(rule.actions?{actions:{...rule.actions,...(rule.actions.updateCategory?{updateCategory:{...rule.actions.updateCategory,value:resolveCategory(rule.actions.updateCategory.value,catalog)}}:{})}}:{}),
+  ...(rule.criteria?{criteria:rule.criteria.map(c=>c.field==='category'?{...c,value:resolveCategory(c.value,catalog)}:c)}:{}),
+  ...(rule.splits?{splits:rule.splits.map(s=>labelTransactionCategory(s,catalog))}:{})}
+}
+export function categoryRenameImpact(name,{catalog=[],scheduled=[],actuals=[],rules=[],budget={}}={}) {
+ const same=value=>Boolean(value)&&key(resolveCategory(value,catalog))===key(resolveCategory(name,catalog))
+ const linked=t=>same(t.cat)||same(t.category)||(t.splits||[]).some(linked)
+ return {scheduled:scheduled.filter(linked).length,actuals:new Set(actuals.filter(linked).map(t=>t.id)).size,
+ rules:rules.filter(r=>same(r.actions?.updateCategory?.value)||same(r.conditions?.categories?.value)||(r.criteria||[]).some(c=>c.field==='category'&&same(c.value))||(r.splits||[]).some(linked)).length,
+ budgets:Object.values(budget.categoryLimits||{}).filter(t=>same(t.category)).length}
+}

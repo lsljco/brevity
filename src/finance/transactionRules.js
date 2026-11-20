@@ -8,13 +8,13 @@ function active(condition) {
   return Boolean(condition?.on)
 }
 
-export function transactionMatchesRule(transaction, rule, accounts = []) {
+export function transactionMatchesRule(transaction, rule, accounts = [], catalog = storedCategoryCatalog()) {
   if (!rule?.conditions && !rule?.criteria) return false
   if (transaction?.pending) return false
   if (!rule.applyToExisting && rule.createdDate && String(transaction.date || '') < rule.createdDate) return false
 
   const conditions = rule.conditions || {}
-  if (rule.criteria) return matchesRuleCriteria(transaction,rule.criteria,accounts) && (!active(conditions.accounts) || ruleAccountMatches(transaction,conditions.accounts.value,accounts))
+  if (rule.criteria) return matchesRuleCriteria(transaction,rule.criteria,accounts,catalog) && (!active(conditions.accounts) || ruleAccountMatches(transaction,conditions.accounts.value,accounts))
   if (active(conditions.originalStatement)) {
     const source = normalized(transaction.originalStatement || transaction.original_description || transaction.name)
     const value = normalized(conditions.originalStatement.value)
@@ -36,7 +36,7 @@ export function transactionMatchesRule(transaction, rule, accounts = []) {
     if (conditions.amount.min !== '' && amount < Number(conditions.amount.min)) return false
     if (conditions.amount.max !== '' && amount > Number(conditions.amount.max)) return false
   }
-  if (active(conditions.categories) && normalized(resolveCategory(transaction.category || transaction.cat,storedCategoryCatalog())) !== normalized(resolveCategory(conditions.categories.value,storedCategoryCatalog()))) return false
+  if (active(conditions.categories) && normalized(resolveCategory(transaction.category || transaction.cat,catalog)) !== normalized(resolveCategory(conditions.categories.value,catalog))) return false
   if (active(conditions.accounts)) {
     const selected = String(conditions.accounts.value || '')
     const local = accounts.find(account => String(account.id) === selected)
@@ -46,13 +46,13 @@ export function transactionMatchesRule(transaction, rule, accounts = []) {
   return true
 }
 
-export function applyTransactionRule(transaction, rule, accounts = []) {
-  if (!transactionMatchesRule(transaction, rule, accounts)) return transaction
+export function applyTransactionRule(transaction, rule, accounts = [], catalog = storedCategoryCatalog()) {
+  if (!transactionMatchesRule(transaction, rule, accounts,catalog)) return transaction
   const actions = rule.actions || {}
   const next = { ...transaction }
   if(active(actions.assignVendor) && actions.assignVendor.value) next._ruleVendorId = actions.assignVendor.value
   if (active(actions.renameMerchant) && actions.renameMerchant.value) next.name = actions.renameMerchant.value.trim()
-  if (active(actions.updateCategory) && actions.updateCategory.value) { next.category = actions.updateCategory.value.trim(); next._categoryResolved = true }
+  if (active(actions.updateCategory) && actions.updateCategory.value) { next.category = resolveCategory(actions.updateCategory.value.trim(),catalog); next._categoryResolved = true }
   if (active(actions.addTags) && actions.addTags.value) {
     const tags = Array.isArray(next.tags) ? next.tags : String(next.tags || '').split(',')
     next.tags = [...new Set([...tags, ...String(actions.addTags.value).split(',')].map(tag => tag.trim()).filter(Boolean))]
@@ -63,9 +63,9 @@ export function applyTransactionRule(transaction, rule, accounts = []) {
   if (Array.isArray(rule.splits) && rule.splits.length) {
     next.splits = rule.splits.map(split => ({ ...split, cat: String(split.cat || '').trim(), amount: Number(split.amount) || 0 }))
   }
-  return next
+  return labelTransactionCategory(next,catalog)
 }
 
-export function applyTransactionRules(transaction, rules = [], accounts = []) {
-  return labelTransactionCategory(rules.reduce((current, rule) => applyTransactionRule(current, rule, accounts), transaction))
+export function applyTransactionRules(transaction, rules = [], accounts = [], catalog = storedCategoryCatalog()) {
+  return labelTransactionCategory(rules.reduce((current, rule) => applyTransactionRule(current, rule, accounts,catalog), transaction),catalog)
 }
