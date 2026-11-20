@@ -35,3 +35,28 @@
 .match-review-note { color: var(--muted); }
 .finance-root .match-account-review button, .match-review-actions button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--gold); border-radius: 9px; background: rgba(197,164,109,.08); color: var(--gold); font: inherit; cursor: pointer; }
 @media(max-width:600px) { .finance-root .match-account-review { margin: 12px; padding: 16px; } }
+.match-group-button { display:grid; gap:8px; text-align:left; width:100%; }
+.finance-root .match-account-review .match-group-button { border-color:var(--glass-border); color:var(--white); padding:16px; background:rgba(255,255,255,.025); }
+.finance-root .match-account-review .match-group-button[aria-expanded="true"] { border-color:var(--gold); }
+.match-group-button strong { font-size:15px; }
+.match-group-button span { font-size:12px; }
+.match-group-button span:last-child { color:var(--gold); }
+.match-group-detail { margin-top:16px; padding:16px; border:1px solid var(--glass-border); border-radius:12px; scroll-margin-top:20px; min-width:0; }
+.match-group-detail h3,.match-group-detail h4 { margin:0; }
+.match-group-filters { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; }
+.match-group-filters label,.match-group-detail label { display:grid; gap:6px; min-width:0; flex:1 1 180px; }
+.match-group-detail input,.match-group-detail select { width:100%; min-width:0; min-height:44px; padding:8px; font:inherit; color:var(--white); background:#171512; border:1px solid var(--glass-border); border-radius:8px; }
+.match-group-ledger article { display:flex; justify-content:space-between; gap:16px; padding:14px 0; border-bottom:1px solid var(--glass-border); }
+.match-group-ledger article>div { min-width:0; overflow-wrap:anywhere; }
+.match-group-ledger article>strong { white-space:nowrap; }
+.match-group-ledger span { display:block; color:var(--muted); margin:6px 0; font-size:12px; }
+.match-group-ledger details { font-size:12px; }
+.match-exception-decisions { margin-top:20px; border-top:1px solid var(--glass-border); padding-top:16px; }
+.match-proposals { display:grid; gap:12px; margin:12px 0; }
+.reconciliation-choice>div { min-width:0; overflow-wrap:anywhere; font-size:13px; line-height:1.6; }
+.match-evidence { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 16px; }
+.match-evidence dt { color:var(--muted); }
+.match-evidence dd { margin:0; }
+.match-dismissed-toggle { display:flex; align-items:center; gap:8px; font-size:12px; }
+.match-dismissed-toggle input { width:20px!important; height:20px; }
+.match-batch-accept { min-height:44px; margin:12px 0; }

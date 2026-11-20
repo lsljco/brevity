@@ -16,7 +16,8 @@ import { prepareFinanceReview } from './prepareFinanceReview.js'
 import { createPortal } from 'react-dom'
 import { buildMetricTrends } from './metricTrends.js'
 import { toggleFinanceAccountSelection } from './accountSelection.js'
-import AutoReconciliationReport from './AutoReconciliationReport.jsx'
+const LazyReconciliationReport = lazy(()=>import('./AutoReconciliationReport.jsx'))
+const AutoReconciliationReport = props => <Suspense fallback={<p>Loading transaction review…</p>}><LazyReconciliationReport {...props}/></Suspense>
 const AccountLinkReview = lazy(()=>import('./AccountLinkReview.jsx'))
 import { buildAutoReconciliationReport, reconciliationOperation, RECONCILIATION_BATCH_LIMIT } from './autoReconciliation.js'
 import {useVendorDirectory,vendorRequest} from './vendorApi.js'
@@ -1788,6 +1789,16 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     }
   }, [adoptBalanceAttempt, readOnly])
 
+  async function loadAccountReviewSources() {
+    const response = await fetch('/.netlify/functions/plaid-accounts', {credentials:'include',signal:AbortSignal.timeout(30000)})
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error || 'Unable to load bank account details.')
+    const sources = Array.isArray(result.accounts) ? result.accounts : []
+    setPlaidAccountCandidates(sources)
+    if (!sources.length && result.errors?.length) throw new Error(result.errors.map(e=>e.message||'Bank account details unavailable.').join(' '))
+    return sources
+  }
+
   async function reviewAccountLink(account, sourceId) {
     if (readOnly) return
     const plaidAccountId = sourceId || accountLinkDrafts[account.id] || ''
@@ -1822,6 +1833,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       })
       if (!result?.proposal?.id) throw new Error('Action Mode did not return a reviewable account link.')
       requestActionReview(result.proposal)
+      return true
     } catch (error) {
       setAccountLinkError(error.message || 'The account link could not be prepared for review.')
     } finally {
@@ -1977,7 +1989,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   }
 
   const updateTx = async (tx) => {
-    const reviewed = await reviewScheduledTransaction(tx)
+    const reviewed = await reviewScheduledTransaction(tx, tx?._occurrenceDate ? {occurrenceDate:tx._occurrenceDate,occurrence:true,requestedScope:'one'} : {})
     if (!reviewed) return false
     setView('transactions')
     setEditTx(null)
@@ -2496,8 +2508,8 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   return (
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
-      {!formView && ['accounts','transactions','accounting'].includes(view) && <Suspense fallback={<p>Loading account review…</p>}><AccountLinkReview accounts={data.accounts} actuals={plaidActuals||[]} sources={plaidAccountCandidates} readOnly={readOnly} onReview={reviewAccountLink} onOpenAccounts={view==='accounts'?undefined:()=>setView('accounts')}/></Suspense>}
-      {view==='accounting'&&<AccountingWorkspace data={data} actuals={retainedActuals} rules={txRules} budget={dailyBudget} overrides={txOverrides} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
+      {!formView && ['accounts','transactions','accounting'].includes(view) && <Suspense fallback={<p>Loading account review…</p>}><AccountLinkReview accounts={data.accounts} actuals={plaidActuals||[]} sources={plaidAccountCandidates} scheduled={data.transactions} onLoadSources={loadAccountReviewSources} onReviewMatches={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} readOnly={readOnly} onReview={reviewAccountLink} onOpenAccounts={view==='accounts'?undefined:()=>setView('accounts')}/></Suspense>}
+      {view==='accounting'&&<AccountingWorkspace data={data} actuals={retainedActuals} rules={txRules} budget={dailyBudget} overrides={txOverrides} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
       {!isForm&&['dashboard','accounts','transactions'].includes(view)&&<div style={{padding:'0 24px'}}><FinanceExport buildReport={()=>({title:`${view} ${financeRange.from} to ${financeRange.to}`,notes:[financeAccountScopeLabel,actualsFreshnessMessage,balanceDataMessage,transactionFilter?.label||'','Bank amounts: positive = outflow; negative = inflow. Scheduled amounts use the Direction column.'],sections:view==='transactions'?[transactionSection(showActuals?transactionViewActuals:scheduledViewTransactions,fd.accounts,{scheduled:!showActuals})]:[recordsSection('Account balances',fd.accounts,['name','type','balance','plaidCurrentBalance','plaidAvailableBalance']),transactionSection(timeframeActuals,fd.accounts),recordsSection('Cash forecast',[...proj].filter(([date])=>date>=financeRange.from&&date<=financeRange.to).map(([date,p])=>({date,endingBalance:p.bal,netChange:p.delta}))) ]})}/></div>}
 
       {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar','accounting'].includes(view) && AccountFilterBar}
@@ -2568,7 +2580,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
             <span style={{ color: 'var(--gold)', fontSize: 11, whiteSpace: 'nowrap' }}>Open alignment <i className="ti ti-arrow-right" /></span>
           </button>
 
-          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />
+          <AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} freshnessMessage={actualsFreshnessMessage} />
           <FinanceReconciliation
             scheduled={fd.transactions}
             accountMap={plaidIdToLocal}
@@ -3088,7 +3100,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       {view === 'calendar' && (
         <div className="finance-inner finance-forecast-page">
           <CalendarView accountFilter={AccountFilterBar} scopeLabel={financeAccountScopeLabel}
-            reconciliationReport={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage} />} vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
+            reconciliationReport={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals || []} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} onOpenPlanned={(tx,date)=>{setEditTx({...tx,start:date,_occurrenceDate:date});setView('tx-form')}} freshnessMessage={actualsFreshnessMessage} />} vendorOrder={vendorOrder} proj={cashForecastProjection} calYear={calYear} calMonth={calMonth}
             readOnly={readOnly}
             setCalYear={setCalYear} setCalMonth={setCalMonth}
             selDay={selDay} setSelDay={setSelDay}
