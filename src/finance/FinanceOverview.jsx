@@ -32,11 +32,16 @@ export default function FinanceOverview({ accounts, projection, today, live, tra
     <div className="finance-overview-scope"><span>{scopeLabel} · Checking &amp; savings</span><button type="button" onClick={() => onNavigate('accounts')}>{live ? 'Bank balances verified' : 'Saved balances · freshness unverified'}</button></div>
     <section className="finance-overview-position" aria-label="Financial position">
       {[
-        ['Cash balance', model.cash, live ? 'Verified bank snapshot' : 'Saved values', () => onNavigate('accounts')],
+        [model.cashLabel, model.cash, live ? 'Verified bank snapshot' : 'Saved values', () => onNavigate('accounts')],
         ['Projected month end', model.monthEnd, model.monthEndDate, () => onOpenForecast(model.monthEndDate)],
         ['Lowest forecast · next 30 days', model.floor?.balance, model.floor?.date || 'No forecast available', () => onOpenForecast(model.floor?.date)],
       ].map(([label, value, detail, open]) => <button type="button" key={label} onClick={open}><span>{label}</span><strong>{money(value)}</strong><small>{detail}</small></button>)}
     </section>
+    <details className="finance-card"><summary>Current and available cash explained</summary>
+      <p>{scopeLabel}. These values use the same saved account snapshot; freshness is shown above.</p>
+      <dl><dt>Bank current balance</dt><dd>{money(model.bankCurrent)}</dd><dt>{model.cashLabel}</dt><dd>{money(model.cash)}</dd><dt>Available minus current</dt><dd>{money(model.availabilityDifference)}</dd></dl>
+      <p>Current is the bank’s recorded balance. Available reflects bank availability adjustments, including holds. The difference is not an itemized transaction reconciliation. Remaining scheduled activity is applied separately in the forecast; holds already included in available cash are not deducted again. Missing or mixed balance evidence is not treated as a verified available balance.</p>
+    </details>
     <section className="finance-overview-position" aria-label="Spending and reserve accountability">
       <button type="button" onClick={()=>onNavigate('accounts')}><span>Savings reserve</span><strong>{money(reserveAccounts.length && reserveAccounts.every(a=>Number.isFinite(Number(a.balance))) ? reserveAccounts.reduce((sum,a)=>sum+Number(a.balance),0) : null)}</strong><small>Separate from operating cash; a transfer is required before spending</small></button>
       <button type="button" onClick={()=>onNavigate('spending-review')}><span>Unbudgeted this month</span><strong>{money(spending?.totals.unbudgeted)}</strong><small>Operating only · posted charges</small></button>
