@@ -2560,7 +2560,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
               <span><strong style={{ display: 'block', fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 500 }}>Daily Financial Alignment</strong><small style={{ color: 'var(--muted)', fontSize: 10 }}>Today’s truth, actions, decisions, and covenant</small></span>
             </span>
             {[
-              ['Operating available cash', fmtMoney(todayAlignment.availableOperatingCash)],
+              ['Cash starting balance', fmtMoney(todayAlignment.availableOperatingCash)],
               ['Expected', fmtMoney(todayAlignment.expectedInflows)],
               ['Due next', fmtMoney(todayAlignment.dueTodayTomorrow)],
               ['Daily limit', fmtMoney(todayAlignment.approvedDiscretionary)],
