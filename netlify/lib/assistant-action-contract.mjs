@@ -172,7 +172,7 @@ const ACTION_PAYLOAD_FIELDS = {
   'meeting.workspace.update': ['monthStatus', 'expenseFocus', 'cadence', 'noteIndex', 'note'],
   'meeting.history.update': ['summary', 'notes', 'transcript'],
   'budget.update': ['month', 'year', 'lineId', 'recordId', 'lineName', 'category', 'direction', 'accountId', 'legacyYear', 'legacyAccountId', 'value', 'amount', 'cashAllowance', 'categoryLimit', 'forecastAllocation', 'displayName'],
-  'forecast.update': ['studioJson', 'favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
+  'forecast.update': ['scenarioAction', 'scenarioKind', 'studioJson', 'favorite', 'scenarioImportJson', 'recoveryJson', 'title', 'description', 'notes', 'planningExpense', 'expenseMode', 'incomeAction', 'incomeId', 'monthlyNet', 'annualGross', 'contribution', 'remote', 'employment'],
   'finance.account.link': ['plaidAccountId'],
   'finance.reserve.set': ['amount'],
   'finance.category.save':['name','category','description','enabled'],
@@ -213,7 +213,7 @@ const ACTION_ENUMS = {
   'project.update': { type:['Renovation', 'Maintenance', 'Repair'], status:['To Do', 'In Progress', 'Done'], priority:['High', 'Medium', 'Low'] },
   'calendar.create': { priority:['high', 'normal'] },
   'calendar.update': { priority:['high', 'normal'] },
-  'forecast.update': { expenseMode:['scenario', 'operating'], incomeAction:['create', 'delete'] },
+  'forecast.update': { scenarioAction:['delete'], scenarioKind:['studio','income','recovery'], expenseMode:['scenario', 'operating'], incomeAction:['create', 'delete'] },
   'transaction.rule.create': { matchField:['originalStatement', 'merchantName'], matchMode:['contains', 'exactly', 'starts'] },
   'recurring.create': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
   'recurring.update': { frequency:['once', 'daily', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'yearly'], transactionType:['income', 'expense', 'transfer'] },
@@ -371,7 +371,10 @@ function normalizeActionPayload(type, input) {
   if (unsupported) throw new Error(`The ${type} action contains an unsupported field: ${unsupported}.`)
   const normalized = {}
   for (const [field, value] of Object.entries(payload)) {
-    if(type==='forecast.update'&&field==='favorite'){
+    if(type==='forecast.update'&&['scenarioAction','scenarioKind'].includes(field)){
+      if(!(field==='scenarioAction'?['delete']:['studio','income','recovery']).includes(value))throw Error('Invalid scenario deletion selection.')
+      normalized[field]=value
+    }else if(type==='forecast.update'&&field==='favorite'){
       if(typeof value!=='boolean')throw Error('Favorite must be true or false.');normalized.favorite=value
     }else if(type==='meeting.packet.edit'&&field==='commandJson'){
       if(typeof value!=='string'||value.length>20000)throw Error('The report adjustment is too large.')
@@ -752,6 +755,10 @@ export function normalizeActionOperation(input = {}) {
   }
   if(type==='nutrition.targets.update' && !HOUSEHOLD_MEMBERS.includes(operation.targetId)) throw new Error('Choose a household member for nutrition targets.')
   if (type === 'forecast.update') {
+    if(payload.scenarioAction||payload.scenarioKind){
+      if(payload.scenarioAction!=='delete'||!['studio','income','recovery'].includes(payload.scenarioKind)||operation.targetId==='model'||Object.keys(payload).some(k=>!['scenarioAction','scenarioKind'].includes(k)))throw Error('Deleting a scenario requires only its exact ID and scenario kind.')
+      return operation
+    }
     if (payload.planningExpense !== undefined && (!Number.isFinite(payload.planningExpense) || payload.planningExpense < 0)) throw new Error('Monthly planning expense must be a non-negative amount.')
     const modelFields = ['planningExpense', 'expenseMode']
     const scenarioFields = ['title', 'description', 'favorite', 'planningExpense']

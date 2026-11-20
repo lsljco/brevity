@@ -1,3 +1,4 @@
+import DeleteScenarioButton from './DeleteScenarioButton.jsx'
 import SortableFinancialTable from './SortableFinancialTable.jsx'
 import {readScenarioWorkbook} from './scenarioWorkbookImport.js'
 import { calculatePayoffProjection } from './scenarioProjection.js'
@@ -25,7 +26,7 @@ const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency:
 function loadModel(storage = localStorage) {
   try {
     const parsed = JSON.parse(storage.getItem(SCENARIO_STORAGE_KEY) || 'null')
-    if (parsed?.scenarios?.length) return parsed
+    if (Array.isArray(parsed?.scenarios)) return parsed
   } catch {}
   return cloneDefaultScenarioModel()
 }
@@ -248,7 +249,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
     })
   }
 
-  return <section className="scenario-page" aria-labelledby="scenario-title"><Suspense fallback={<p>Loading Scenario Studio…</p>}><ScenarioStudio financeData={financeData} freshness={freshness} scenarios={model.scenarios} planningExpense={expense} debts={debts||[]} readOnly={readOnly}/></Suspense><details className="scenario-legacy"><summary>Existing workbook scenarios, imports and recovery plans</summary><FinanceExport report={financeReport(`Scenario ${active.name||active.title||active.id}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
+  return <section className="scenario-page" aria-labelledby="scenario-title"><Suspense fallback={<p>Loading Scenario Studio…</p>}><ScenarioStudio financeData={financeData} freshness={freshness} scenarios={model.scenarios} planningExpense={expense} debts={debts||[]} readOnly={readOnly}/></Suspense><details className="scenario-legacy"><summary>Existing workbook scenarios, imports and recovery plans</summary><FinanceExport report={financeReport(`Scenario ${active?.name||active?.title||active?.id||'No saved scenarios'}`,{assumptions:activeDraft,operatingExpense:expense,result,calculatedPayoff:payoff,draft:!same(active,activeDraft)},['Calculated scenario preview; unsaved assumptions require approval. Does not change bank balances.'])}/>
     <header className="scenario-header">
       <div>
         <p className="scenario-eyebrow">Finance · Forward planning</p>
@@ -277,7 +278,7 @@ export default function ScenarioModeling({ liveOperatingExpense = 0, readOnly = 
         return <div className="scenario-choice" key={scenario.id} role="presentation"><button type="button" role="tab" aria-selected={selected} className={selected ? 'is-active' : ''} onClick={() => setActiveId(scenario.id)}>
           <span>{scenario.title}</span>
           <strong className={summary.monthlyCashFlow >= 0 ? 'positive' : 'negative'}>{money.format(summary.monthlyCashFlow)} / month</strong>
-        </button><button type="button" className="scenario-star" aria-label={`${scenario.favorite?'Remove':'Add'} ${scenario.title} ${scenario.favorite?'from':'to'} favorites`} aria-pressed={scenario.favorite===true} disabled={readOnly||reviewBusy} onClick={()=>openReview({summary:`${scenario.favorite?'Remove':'Add'} ${quote(scenario.title)} ${scenario.favorite?'from':'to'} favorites`,operation:{type:'forecast.update',targetId:scenario.id,payload:{favorite:!scenario.favorite},description:'Update the shared scenario favorite. Financial assumptions and payoff schedules stay unchanged.'}})}>{scenario.favorite?'★':'☆'}</button></div>
+        </button><button type="button" className="scenario-star" aria-label={`${scenario.favorite?'Remove':'Add'} ${scenario.title} ${scenario.favorite?'from':'to'} favorites`} aria-pressed={scenario.favorite===true} disabled={readOnly||reviewBusy} onClick={()=>openReview({summary:`${scenario.favorite?'Remove':'Add'} ${quote(scenario.title)} ${scenario.favorite?'from':'to'} favorites`,operation:{type:'forecast.update',targetId:scenario.id,payload:{favorite:!scenario.favorite},description:'Update the shared scenario favorite. Financial assumptions and payoff schedules stay unchanged.'}})}>{scenario.favorite?'★':'☆'}</button>{!readOnly&&<DeleteScenarioButton id={scenario.id} kind="income" title={scenario.title} disabled={reviewBusy}/>}</div>
       })}
     </div>
 

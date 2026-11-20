@@ -1,4 +1,17 @@
 import {categoryBudgetOperation} from '../finance/categoryBudgets.js'
+test('reviewed scenario deletion is versioned, audited and restored exactly by Undo',async()=>{
+ const store=versionedBlobStore(),actions=versionedBlobStore(),session={member:'Larry',role:'admin'}
+ const original={studioPlans:[{id:'studio-delete',assumptions:{title:'Remove me'}}],scenarios:[],studioDefaultFloor:24000,other:'retain'}
+ await store.setJSON('lslj-family/records/brevity_finance_scenarios_v1',{value:JSON.stringify(original),version:1})
+ const resources=createProductionActionResources({sharedStore:store,planStore:store,mealStore:store}),repository=createAssistantActionRepository({store:actions})
+ const proposal=await captureExpectedVersions(normalizeActionProposal({operations:[{type:'forecast.update',targetId:'studio-delete',payload:{scenarioAction:'delete',scenarioKind:'studio'}}]},session),resources)
+ await repository.saveProposal(proposal)
+ const result=await executeActionWithJournal({repository,proposal,operations:proposal.operations,session,permissions:defaultActionPermissions('admin'),resources,event:{}})
+ assert.equal((await resources.read('shared:brevity_finance_scenarios_v1')).value.studioPlans.length,0)
+ assert.equal(result.audit.undoAvailable,true)
+ await undoActionWithJournal({repository,auditId:result.audit.id,session,resources,event:{},leaseMs:0})
+ assert.deepEqual((await resources.read('shared:brevity_finance_scenarios_v1')).value,original)
+})
 import {voiceReviewText,assertVoiceApproval} from './voiceActionReview.js'
 import {resolvedRecipes,searchMealRecords,bindRecipeOperation} from '../../netlify/lib/recipe-library-actions.mjs'
 import assert from 'node:assert/strict'

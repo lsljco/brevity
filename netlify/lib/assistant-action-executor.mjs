@@ -1,3 +1,4 @@
+import {deleteScenario} from '../../src/finance/scenarioDeletion.js'
 import {saveCategory} from '../../src/finance/categoryCatalog.js'
 import {validateStudio} from '../../src/finance/scenarioStudioModel.js'
 import {validateScenarioImport} from '../../src/finance/scenarioWorkbookImport.js'
@@ -354,6 +355,7 @@ export function applyRecordOperation(value, operation, createId = randomUUID, co
     return { before, after:applyBudgetTarget(value, payload, {changedAt:nowIso(context.now||(()=>new Date())),actor:context.actor}) }
   }
   if (operation.type === 'forecast.update') {
+    if(payload.scenarioAction==='delete')return {before,after:deleteScenario(value,operation.targetId,payload.scenarioKind)}
     if (payload.studioJson !== undefined) {
       const x=JSON.parse(payload.studioJson),assumptions=validateStudio(x.assumptions),baseline=validateStudio(x.baseline);
       const plans=value?.studioPlans||[],previous=plans.find(p=>p.id===operation.targetId);
