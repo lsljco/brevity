@@ -67,7 +67,7 @@ test('invalid dates, negative amounts, unsupported debt methods and duplicates r
  assert.throws(()=>validateStudio({...a,start:'2026-02-30'}),/valid/)
  assert.throws(()=>validateStudio({...a,cashFloor:-1}),/cashFloor/)
  assert.throws(()=>validateStudio({...a,incomes:[a.incomes[0],a.incomes[0]]}),/Duplicate/)
- assert.throws(()=>validateStudio({...a,months:100}),/Horizon/)
+ assert.throws(()=>validateStudio({...a,months:121}),/Horizon/)
 })
 test('Studio shared save preserves legacy and recovery plans and normalizes server-side',()=>{
  const a=base(),value={scenarios:[{id:'old'}],recoveryPlans:[{id:'recovery'}]}

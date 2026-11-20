@@ -210,3 +210,31 @@ test('manual payoff dates cannot bypass property-tax priority',()=>{
  assert.deepEqual(r.payoffs.slice(0,2).map(p=>p.id),['property','income'])
  assert.equal(r.payoffs[0].date,'2026-03-15');assert.equal(r.months[2].taxes,2000)
 })
+
+test('opt-in property tax exception preserves the floor for income tax and debt',()=>{
+ const a=plan();a.cashFloor=9000;a.openingCash=10000;a.protectedReserve=2000
+ a.liabilities=[debt({id:'property',taxKind:'property-tax',balance:10000}),debt({id:'income',taxKind:'income-tax',balance:1000}),debt({balance:1000})]
+ const original=projectStudio(a)
+ const r=projectStudio({...a,propertyTaxFloorException:true})
+ assert.equal(r.payoffs[0].date,'2026-01-31');assert.equal(r.months[0].endingCash,3000)
+ assert.equal(r.months[0].extra,0);assert.equal(r.months[0].taxes,10000)
+ assert.equal(r.payoffs[1].date,'2026-04-30');assert.equal(r.payoffs[2].date,'2026-05-31')
+ for(const row of r.ledger.filter(x=>x.type==='payoff'&&x.item.id!=='property'))assert.ok(row.cashBalance>=11000)
+ assert.notEqual(original.payoffs[0].date,r.payoffs[0].date)
+ assert.equal(a.propertyTaxFloorException,undefined)
+})
+test('property tax exception cannot spend additional protected reserves or overdraw cash',()=>{
+ const a=plan();a.months=1;a.openingCash=1000;a.cashFloor=9000;a.protectedReserve=2000
+ a.liabilities=[debt({taxKind:'property-tax',balance:3000})]
+ assert.equal(projectStudio({...a,propertyTaxFloorException:true}).payoffs.length,0)
+ a.protectedReserve=0;a.liabilities[0].balance=5000
+ assert.equal(projectStudio({...a,propertyTaxFloorException:true}).payoffs.length,0)
+})
+test('extended horizon supports month 61 and validates exception settings',()=>{
+ const a=plan();a.months=61;a.liabilities=[debt({balance:183000})]
+ assert.equal(projectStudio(a).debtFree,'2031-01-31')
+ assert.equal(projectStudio(a).months.length,61)
+ assert.throws(()=>validateStudio({...a,months:121}),/Horizon/)
+ assert.throws(()=>validateStudio({...a,propertyTaxFloorException:'yes'}),/exception/)
+ assert.throws(()=>validateStudio({...a,propertyTaxFloorException:true,projectionMode:'dated'}),/monthly/)
+})

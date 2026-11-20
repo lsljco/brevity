@@ -102,9 +102,10 @@ export function projectMonthlyStudio(a){
    if(d.plannedPayoffDate&&d.plannedPayoffDate.slice(0,7)>r.month)continue
    if(debts.some(other=>outstanding(other)>0&&payoffPriority(other)<payoffPriority(d))){deferred++;continue}
    if(cash===null)continue
-   if(cash-settlement<a.cashFloor+a.protectedReserve){deferred++;continue}
+   const payoffFloor=a.propertyTaxFloorException===true&&taxKind(d)==='property-tax'?0:a.cashFloor
+   if(round(cash-settlement)<payoffFloor+a.protectedReserve){deferred++;continue}
    const need=fundingNeed(inputs,index,debts,d.id,payoffPriority(d))
-   if(round(cash-settlement-a.cashFloor-a.protectedReserve)<need){deferred++;continue}
+   if(round(cash-settlement-payoffFloor-a.protectedReserve)<need){deferred++;continue}
    cash=round(cash-settlement);d.remaining=0;d.interest=0
    const isTax=Boolean(taxKind(d));if(isTax)taxes=round(taxes+settlement);else extra=round(extra+settlement)
    const payoffDate=d.plannedPayoffDate?.slice(0,7)===r.month?d.plannedPayoffDate:r.date
