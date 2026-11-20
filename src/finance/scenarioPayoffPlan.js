@@ -102,9 +102,10 @@ export function projectMonthlyStudio(a){
    if(d.plannedPayoffDate&&d.plannedPayoffDate.slice(0,7)>r.month)continue
    if(debts.some(other=>outstanding(other)>0&&payoffPriority(other)<payoffPriority(d))){deferred++;continue}
    if(cash===null)continue
-   if(cash-settlement<a.cashFloor+a.protectedReserve){deferred++;continue}
+   const payoffFloor=a.propertyTaxFloorException===true&&taxKind(d)==='property-tax'?0:a.cashFloor
+   if(round(cash-settlement)<payoffFloor+a.protectedReserve){deferred++;continue}
    const need=fundingNeed(inputs,index,debts,d.id,payoffPriority(d))
-   if(round(cash-settlement-a.cashFloor-a.protectedReserve)<need){deferred++;continue}
+   if(round(cash-settlement-payoffFloor-a.protectedReserve)<need){deferred++;continue}
    cash=round(cash-settlement);d.remaining=0;d.interest=0
    const isTax=Boolean(taxKind(d));if(isTax)taxes=round(taxes+settlement);else extra=round(extra+settlement)
    const payoffDate=d.plannedPayoffDate?.slice(0,7)===r.month?d.plannedPayoffDate:r.date
@@ -125,8 +126,8 @@ export function projectMonthlyStudio(a){
   months.push(m);append(r.date,`${monthName(r.date)} ending savings / cash`,0,m.unpaid,m.reason)
  }
  const end=inputs[a.months-1].date
- for(const d of debts.filter(d=>d.original&&d.balance>0&&taxKind(d)))taxDeadlines.push({id:d.id,name:d.name,amount:d.balance,dueDate:d.dueDate||a.start,paidDate:payoffs.find(p=>p.id===d.id)?.date||null})
- const lateTaxes=taxDeadlines.filter(t=>t.dueDate<=end&&(!t.paidDate||t.paidDate.slice(0,7)>t.dueDate.slice(0,7)))
+ for(const d of debts.filter(d=>d.original&&d.balance>0&&taxKind(d)))taxDeadlines.push({id:d.id,name:d.name,amount:d.balance,dueDate:d.dueDate||'',paidDate:payoffs.find(p=>p.id===d.id)?.date||null})
+ const lateTaxes=taxDeadlines.filter(t=>t.dueDate&&t.dueDate<=end&&(!t.paidDate||t.paidDate.slice(0,7)>t.dueDate.slice(0,7)))
  const knownKinds=new Set(a.expenses.filter(x=>x.enabled&&x.frequency==='annual').map(taxKind))
  return {months,daily:[],payoffs,ledger,taxDeadlines,lowest,firstShortfall,endingCash:cash,unpaid:total(debts),debtFree,nonTaxDebtFree,lateTaxes,
   warnings:[...(cash===null?['Enter opening cash or use a saved cash snapshot. The reserve target is not your opening balance.']:[]),...(lateTaxes.length?[`${lateTaxes.length} tax obligation(s) cannot be paid in the due month while preserving the reserve. Review the tax funding table.`]:[]),...(['property-tax','income-tax'].filter(k=>!knownKinds.has(k)).map(k=>`No ${k==='property-tax'?'property':'income'} tax assumption is recorded. Add the annual balance due, or explicitly record zero if none is owed.`)),

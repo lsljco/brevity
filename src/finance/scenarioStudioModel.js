@@ -27,8 +27,10 @@ export function validateStudio(raw) {
  const text=(s,label)=>{if(typeof s!=='string'||!s.trim()||s.length>250)throw Error(`${label} is required (250 characters maximum).`)}
  if(a.projectionMode!==undefined&&!['monthly','dated'].includes(a.projectionMode))throw Error('Choose a valid projection mode.');
  text(a.title,'Scenario name');if(!validDate(a.start))throw Error('Choose a valid planning start.')
- num(a.months,'Horizon',1,60);if(!Number.isInteger(a.months))throw Error('Horizon must be whole months.')
+ num(a.months,'Horizon',1,120);if(!Number.isInteger(a.months))throw Error('Horizon must be whole months.')
  for(const k of ['cashFloor','protectedReserve'])num(a[k],k)
+ if(a.propertyTaxFloorException!==undefined&&typeof a.propertyTaxFloorException!=='boolean')throw Error('Invalid property-tax floor exception.')
+ if(a.propertyTaxFloorException&&a.projectionMode!=='monthly')throw Error('Property-tax floor exception requires monthly planning.')
  if(a.openingCash!==null)num(a.openingCash,'Opening cash',-1e9)
  if(!['priority','highest-apr','lowest-balance'].includes(a.strategy))throw Error('Choose a payoff strategy.')
  if(typeof a.favorite!=='boolean'||typeof a.timingConfirmed!=='boolean')throw Error('Invalid scenario settings.')
