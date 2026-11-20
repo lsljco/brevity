@@ -238,3 +238,8 @@ test('extended horizon supports month 61 and validates exception settings',()=>{
  assert.throws(()=>validateStudio({...a,propertyTaxFloorException:'yes'}),/exception/)
  assert.throws(()=>validateStudio({...a,propertyTaxFloorException:true,projectionMode:'dated'}),/monthly/)
 })
+test('unknown tax due dates remain unknown and are not classified as late',()=>{
+ const a=plan();a.months=1;a.liabilities=[debt({taxKind:'property-tax',balance:10000})]
+ const r=projectStudio(a);assert.equal(r.taxDeadlines[0].dueDate,'');assert.equal(r.lateTaxes.length,0)
+ a.liabilities[0].dueDate='2026-01-15';assert.equal(projectStudio(a).lateTaxes.length,1)
+})
