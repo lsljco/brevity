@@ -281,3 +281,47 @@ test('creditor memo matching rejects generic categories, conflicting vendors and
   assert.equal(forecast([plan],[{...bank,name:'Unrelated creditor'}]).get(today).remainingDelta,-620)
   assert.equal(forecast([{...plan,name:'Groceries'}],[{...bank,name:'Memo debit groceries'}]).get(today).realization[0].statuses[0].actualId,undefined)
 })
+
+
+test('rounded payroll realizes before same-employer variances without adding income already available',()=>{
+ const plans=[
+  {...hoa,id:'ls',name:'LS Income',type:'income',amount:8487.85},
+  {...hoa,id:'lj',name:'LJ Genesco AP Payroll',type:'income',amount:721.90,freq:'weekly'},
+  {...hoa,id:'js',name:'JS Old Castle Iincome',type:'income',amount:882.39,vendorId:'old-castle'},
+  {...hoa,id:'groceries',name:'Groceries',amount:300},
+  {...hoa,id:'fuel',name:'Gasoline / Fuel',amount:150},
+  {...hoa,id:'tomorrow',start:date(1),amount:11736.88},
+ ]
+ const credits=[
+  {...actual,id:'ls-bank',name:'Credit Genie',merchant_name:'Credit Genie',originalStatement:'Pending: Memo Credit GENESCO INC PAYROLL ACH Entry Memo Posted Today',amount:-8487.84},
+  {...actual,id:'lj-bank',name:'Telephone/OLB Transfer Credit LJ Genesco Income',amount:-684.03},
+  {...actual,id:'js-bank',name:'Telephone/OLB Transfer Credit JS Old Castle Income',amount:-885.27,vendorId:'old-castle'},
+  {...actual,id:'personal-payroll',accountId:'personal',name:'GENESCO INC PAYROLL',amount:-721.89},
+ ]
+ const cash={...account,plaidCurrentBalance:3765.47,plaidAvailableBalance:13476.87}
+ for(const pending of [true,false]){
+  const result=forecast(plans,credits.map(row=>({...row,pending})),[cash])
+  const point=result.get(today)
+  assert.equal(point.bal,13026.87)
+  assert.equal(point.remainingDelta,-450)
+  assert.equal(result.get(date(1)).bal,1289.99)
+  const ls=point.realization.find(r=>r.id==='ls'),lj=point.realization.find(r=>r.id==='lj')
+  assert.equal(ls.statuses[0].actualId,'ls-bank')
+  assert.equal(ls.statuses[0].variance,-.01)
+  assert.equal(lj.statuses[0].actualId,'lj-bank')
+  assert.equal(result.get(date(7)).remainingDelta,721.9)
+ }
+ // A posted replacement consumes its pending predecessor only once.
+ const pending=credits.map(row=>({...row,pending:true}))
+ const posted={...credits[0],id:'ls-posted',pending:false,pendingTransactionId:'ls-bank'}
+ assert.equal(forecast(plans,[...pending,posted,posted],[cash]).get(today).bal,13026.87)
+})
+
+test('generic payroll penny tolerance stays same-day, unique and bounded',()=>{
+ const plan={...hoa,name:'LS Income',type:'income',amount:8487.85}
+ const credit={...actual,name:'GENESCO INC PAYROLL',amount:-8487.84}
+ assert.equal(forecast([plan],[credit]).get(today).remainingDelta,0)
+ for(const row of [{...credit,amount:-8487.83},{...credit,date:date(-1)},{...credit,accountId:'other'},{...credit,name:'Transfer GENESCO PAYROLL'},{...credit,name:'Payroll reversal'}])assert.equal(forecast([plan],[row]).get(today).remainingDelta,8487.85)
+ assert.equal(forecast([plan,{...plan,id:'duplicate'}],[credit]).get(today).remainingDelta,16975.7)
+ assert.equal(forecast([plan],[credit,{...credit,id:'duplicate'}]).get(today).remainingDelta,8487.85)
+})

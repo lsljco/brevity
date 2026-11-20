@@ -8,7 +8,8 @@ import { approvedReconciliationMatches } from './autoReconciliation.js'
 const cents = value => Math.round(Number(value || 0) * 100)
 const dayNumber = date => Date.parse(`${date}T12:00:00Z`) / 86400000
 const genericIncomeWords = new Set(['income','payroll','severance','salary','deposit','transfer','payment','credit','debit','funds','direct','bank','checking','savings','account','pending','telephone','online','monthly','weekly','family','household','larry','lorenzo','terica','nyla','javin','isaiah'])
-// Generic household labels can lack an employer name. Only an exact same-day
+// Generic household labels can lack an employer name. Only a same-day
+// payroll credit within one cent is eligible (bank rounding versus the plan);
 // payroll credit is eligible; the one-to-one edge check below rejects ambiguity.
 function genericPayrollMatch(plan, actual) {
   const words = normalizeMerchantName(plan).split(' ').filter(word => word.length >= 4 && !genericIncomeWords.has(word))
@@ -63,16 +64,18 @@ export function buildOutstandingCashForecast(accounts, transactions, actuals = [
     const payrollIdentity=incomeSourceMatches(candidate.plan,actual)&&withinCashMatchTolerance(candidate.plan,actual)
     if (!exactDate && candidate.leg.amount !== cents(actual.amount) && !payrollIdentity) return false
     if (candidate.plan.vendorId && actual.vendorId) return candidate.plan.vendorId === actual.vendorId
-    if (exactDate && candidate.leg.amount === cents(actual.amount) && genericPayrollMatch(candidate.plan, actual)) return true
+    if (exactDate && Math.abs(candidate.leg.amount-cents(actual.amount)) <= 1 && genericPayrollMatch(candidate.plan, actual)) return true
     const name = normalizeMerchantName(candidate.plan)
     const expenseIdentity=expenseSourceMatches(candidate.plan,actual)&&withinCashMatchTolerance(candidate.plan,actual)
     return Boolean(name && (name === normalizeMerchantName(actual) || expenseIdentity || payrollIdentity || (exactDate&&incomeSourceMatches(candidate.plan,actual,{allowContributor:false}))))
   }
   for (const exactDate of [true, false]) {
-   // Prefer a unique exact-amount identity match before considering variances.
+   // Prefer exact amounts, then penny rounding, before wider source variances.
+   // Otherwise a small paycheck with the same employer can compete with a
+   // rounded large paycheck and prevent either occurrence from realizing.
    // A corrected payroll credit must not compete with the original credit.
-   for (const exactAmount of [true,false]) {
-    const edges = candidates.filter(candidate => !assigned.has(candidate.key)).flatMap(candidate => bank.filter(actual => !used.has(actual.id) && (!exactAmount || candidate.leg.amount===cents(actual.amount)) && matches(candidate, actual, exactDate)).map(actual => ({ candidate, actual })))
+   for (const amountPass of ['exact','rounding','variance']) {
+    const edges = candidates.filter(candidate => !assigned.has(candidate.key)).flatMap(candidate => bank.filter(actual => !used.has(actual.id) && (amountPass==='variance' || Math.abs(candidate.leg.amount-cents(actual.amount)) <= (amountPass==='rounding'?1:0)) && matches(candidate, actual, exactDate)).map(actual => ({ candidate, actual })))
     const perPlan = new Map(), perBank = new Map()
     for (const edge of edges) {
       perPlan.set(edge.candidate.key, (perPlan.get(edge.candidate.key) || 0) + 1)
