@@ -24,7 +24,7 @@ export function ruleAccountMatches(transaction,selected,accounts=[]){
  const account=accounts.find(a=>String(a.id)===String(selected))
  return [String(selected),String(account?.plaidAccountId||'')].filter(Boolean).includes(String(transaction.accountId||transaction.acct||''))
 }
-function matches(transaction,c,accounts){
+function matches(transaction,c,accounts,catalog){
  if(c.field==='account')return ruleAccountMatches(transaction,c.value,accounts)
  if(c.field==='direction'){const n=Number(transaction.amount);return Number.isFinite(n)&&(c.value==='income'?n<0:n>0)}
  if(c.field==='amount'){
@@ -32,14 +32,14 @@ function matches(transaction,c,accounts){
   const n=Math.abs(Number(transaction.amount));if(!Number.isFinite(n))return false
   return c.operator==='equals'?n===c.value:c.operator==='greater'?n>c.value:c.operator==='less'?n<c.value:c.operator==='atLeast'?n>=c.value:c.operator==='atMost'?n<=c.value:n>=c.value&&n<=c.max
  }
- if(c.field==='category'){const catalog=storedCategoryCatalog();return String(resolveCategory(transaction.category||transaction.cat||'',catalog)).trim().toLowerCase()===String(resolveCategory(c.value,catalog)).trim().toLowerCase()}
+ if(c.field==='category'){return String(resolveCategory(transaction.category||transaction.cat||'',catalog)).trim().toLowerCase()===String(resolveCategory(c.value,catalog)).trim().toLowerCase()}
  const source=String(c.field==='category'?(transaction.category||transaction.cat||''):c.field==='merchantName'?(transaction.merchant_name||transaction.name||''):(transaction.originalStatement||transaction.original_description||transaction.name||'')).trim().toLowerCase(),value=c.value.toLowerCase()
  return c.operator==='exactly'?source===value:c.operator==='starts'?source.startsWith(value):source.includes(value)
 }
-export function matchesRuleCriteria(transaction,criteria,accounts=[]){
+export function matchesRuleCriteria(transaction,criteria,accounts=[],catalog=storedCategoryCatalog()){
  let normalized;try{normalized=normalizeRuleCriteria(criteria)}catch{return false}
  let group=true,any=false
- for(const c of normalized){if(c.join==='or'){any=any||group;group=true}group=matches(transaction,c,accounts)&&group}
+ for(const c of normalized){if(c.join==='or'){any=any||group;group=true}group=matches(transaction,c,accounts,catalog)&&group}
  return any||group
 }
 export function describeRuleCriteria(criteria,accounts=[]){

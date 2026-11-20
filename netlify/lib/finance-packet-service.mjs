@@ -1,3 +1,4 @@
+import {labelTransactionCategory,resolveCategory} from '../../src/finance/categoryCatalog.js'
 import {categorizeExpenses} from '../../src/finance/expenseCategorization.js'
 import {mergeStatementHistory} from '../../src/finance/statementHistory.js'
 import {createHash} from 'node:crypto'
@@ -19,9 +20,11 @@ export async function loadFinancePacketSources(){
   const entries=await Promise.all(Object.entries(keys).map(async([name,key])=>[name,await shared.get(`${root()}records/${key}`,{type:'json'})]))
   const records=Object.fromEntries(entries),values=Object.fromEntries(entries.map(([key,r])=>[key,parse(r)]))
   const finance=values.finance||{},actuals=Array.isArray(values.actuals)?values.actuals:[]
+  const catalog=finance.categoryCatalog||[]
+  const budget={...(values.budget||{}),categoryLimits:Object.fromEntries(Object.entries(values.budget?.categoryLimits||{}).map(([key,entry])=>[key,{...entry,category:resolveCategory(entry.category,catalog),...(entry.displayName?{displayName:resolveCategory(entry.displayName,catalog)}:{})}]))}
   const receipt=records.finance?.plaidAccountReceipt
   const accounts=Array.isArray(finance.accounts)?finance.accounts:[]
-  return {overrides:values.overrides||{},spendingReviews:finance.spendingReviews||{},accounts,scheduled:Array.isArray(finance.transactions)?finance.transactions:[],actuals:categorizeExpenses(mergeStatementHistory(actuals,finance.statementTransactions||[],accounts).map(t=>({...applyTransactionRules(t,values.rules||[],accounts),...(values.overrides?.[t.id]||{})})).filter(t=>!t._deleted),{overrides:values.overrides||{},scheduled:finance.transactions||[],budget:values.budget||{}}),budget:values.budget||{},actions:values.meetings?.openActions||[],edits:values.meetings?.packetEdits||{},balanceHistory:records.finance?.plaidBalanceHistory||[],pairedBalanceHistory:records.actuals?.plaidBalanceHistory||[],budgetLegacyYear:Number(values.budget?.legacy?.year)||getHouseholdCalendarDate().getFullYear(),budgetLegacyAccountId:accounts.find(a=>/operating/i.test(a.name||''))?.id||accounts.find(a=>a.id==='a1')?.id,
+  return {overrides:values.overrides||{},spendingReviews:finance.spendingReviews||{},accounts,scheduled:Array.isArray(finance.transactions)?finance.transactions:[],actuals:categorizeExpenses(mergeStatementHistory(actuals,finance.statementTransactions||[],accounts).map(t=>({...applyTransactionRules(t,values.rules||[],accounts,finance.categoryCatalog||[]),...(values.overrides?.[t.id]||{})})).filter(t=>!t._deleted),{overrides:values.overrides||{},scheduled:finance.transactions||[],budget}).map(t=>labelTransactionCategory(t,finance.categoryCatalog||[])),budget,actions:values.meetings?.openActions||[],edits:values.meetings?.packetEdits||{},balanceHistory:records.finance?.plaidBalanceHistory||[],pairedBalanceHistory:records.actuals?.plaidBalanceHistory||[],budgetLegacyYear:Number(values.budget?.legacy?.year)||getHouseholdCalendarDate().getFullYear(),budgetLegacyAccountId:accounts.find(a=>/operating/i.test(a.name||''))?.id||accounts.find(a=>a.id==='a1')?.id,
     balanceDataStatus:receipt?.balanceMode==='live'?'fresh':receipt?'cached':'unknown',balanceCheckedAt:receipt?.sourceUpdatedAt?new Date(receipt.sourceUpdatedAt).toISOString():'',
     // Import time alone does not prove that every institution refreshed.
     transactionFreshnessStatus:actuals.length?'cached':'unknown',transactionCheckedAt:records.actuals?.updatedAt||''}

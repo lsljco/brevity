@@ -1,3 +1,4 @@
+import {labelTransactionCategory,labelRuleCategories} from './categoryCatalog.js'
 const AccountingWorkspace=lazy(()=>import('./AccountingWorkspace.jsx'))
 const BulkTransactionEditor=lazy(()=>import('./BulkTransactionEditor.jsx'))
 import {buildRuleSuggestions,suggestionOperation} from './ruleSuggestions.js'
@@ -1317,8 +1318,10 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   }, [])
 
   // ── Actual transaction overrides (edits/deletes on Plaid transactions) ────────
-  const [txOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
-  const [txRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
+  const [storedTxOverrides, setTxOverrides] = useState(() => loadSavedValue('lslj_tx_overrides_v1', {}))
+  const [storedTxRules, setTxRules] = useState(() => loadSavedValue('lslj_tx_rules_v1', []))
+  const txOverrides=useMemo(()=>Object.fromEntries(Object.entries(storedTxOverrides).map(([id,t])=>[id,labelTransactionCategory(t,data.categoryCatalog||[])])),[storedTxOverrides,data.categoryCatalog])
+  const txRules=useMemo(()=>storedTxRules.map(r=>labelRuleCategories(r,data.categoryCatalog||[])),[storedTxRules,data.categoryCatalog])
   const [goals, setGoals] = useState(() => loadSavedValue('fp_goals', []))
   const [debts, setDebts] = useState(() => normalizeDebts(loadSavedValue(DEBT_STORAGE_KEY, [])))
   const [selActualTx, setSelActualTx] = useState(null)  // actual tx open in edit modal
@@ -1535,7 +1538,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
       ? 'a mix of last stored linked-account values and unlinked household values'
       : 'stored household values that are not currently linked to a unique bank source'
 
-  const retainedActuals = useMemo(() => mergeStatementHistory(plaidActuals || [],data.statementTransactions || [],data.accounts),[plaidActuals,data.statementTransactions,data.accounts])
+  const retainedActuals = useMemo(() => mergeStatementHistory(plaidActuals || [],data.statementTransactions || [],data.accounts).map(t=>labelTransactionCategory(t,data.categoryCatalog||[])),[plaidActuals,data.statementTransactions,data.accounts,data.categoryCatalog])
   const actualAccountScope = useMemo(
     () => scopePlaidTransactionsByAccount(retainedActuals, plaidIdToLocal, activeAcctIds, {
       includeUnmapped:!selectedAccts || selectedAccts.size === data.accounts.length,
@@ -1545,7 +1548,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
   const unmappedActuals = actualAccountScope.unmapped
 
   const reviewedCategoryOverrides=useMemo(()=>{const sources=new Map(retainedActuals.map(t=>[t.id,t]));return Object.fromEntries(Object.entries(txOverrides).map(([id,o])=>[id,{...sources.get(id),...o}]))},[retainedActuals,txOverrides])
-  const establishedCategories=useMemo(()=>[...(data.categoryCatalog||[]).map(row=>row.name),...data.transactions.map(tx=>tx.cat||tx.category),...Object.values(dailyBudget.categoryLimits||{}).map(row=>row.category)].filter(Boolean),[data.transactions,dailyBudget])
+  const establishedCategories=useMemo(()=>[...(data.categoryCatalog||[]).map(row=>row.name),...data.transactions.map(tx=>tx.cat||tx.category),...Object.values(dailyBudget.categoryLimits||{}).map(row=>row.category)].filter(Boolean),[data.transactions,data.categoryCatalog,dailyBudget])
   const categoryReviewIds=useMemo(()=>{
     const report=buildRuleSuggestions({planned:data.transactions,transactions:retainedActuals,rules:txRules,overrides:txOverrides,establishedCategories,accounts:data.accounts,directory:vendorDirectory})
     return new Set([...report.unresolved.map(r=>r.transaction.id),...report.suggestions.flatMap(r=>r.transactions.map(t=>t.id))])
@@ -2494,7 +2497,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
     <div className={`finance-root fade-in${view === 'dashboard' ? '' : ' finance-scroll'}`}>
       <LuxuryStyles />
       {!formView && ['accounts','transactions','accounting'].includes(view) && <Suspense fallback={<p>Loading account review…</p>}><AccountLinkReview accounts={data.accounts} actuals={plaidActuals||[]} sources={plaidAccountCandidates} readOnly={readOnly} onReview={reviewAccountLink} onOpenAccounts={view==='accounts'?undefined:()=>setView('accounts')}/></Suspense>}
-      {view==='accounting'&&<AccountingWorkspace data={data} actuals={plaidActuals||[]} rules={txRules} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
+      {view==='accounting'&&<AccountingWorkspace data={data} actuals={retainedActuals} rules={txRules} budget={dailyBudget} overrides={txOverrides} readOnly={readOnly} onRules={()=>{setTransactionRuleInitial(null);setShowTransactionRules(true)}} onReviewCategory={draft=>stageDirectFinanceReview({summary:`${draft.id?'Update':'Add'} category: ${draft.name}`,storageKey:LS_KEY,operation:{type:'finance.category.save',targetId:draft.id,description:'Update this household category and retain linked history.',payload:{name:draft.name,description:draft.description,enabled:draft.enabled,...(draft.originalName?{category:draft.originalName}:{})}},surfaceError:true})} reconcile={<AutoReconciliationReport scheduled={data.transactions} actuals={plaidActuals||[]} accounts={data.accounts} accountIds={activeAcctIds} readOnly={readOnly} onReview={reviewReconciliationReport} freshnessMessage={actualsFreshnessMessage}/>} recurring={<RecurringFinance vendorOrder={vendorOrder} scheduled={fd.transactions} actuals={filteredActuals} accounts={fd.accounts} accountMap={plaidIdToLocal} onReviewDiscovery={reviewDiscoveredRecurring} readOnly={readOnly} range={financeRange} onOpenScheduled={openScheduledTransactions}/>}/>}
       {!isForm&&['dashboard','accounts','transactions'].includes(view)&&<div style={{padding:'0 24px'}}><FinanceExport buildReport={()=>({title:`${view} ${financeRange.from} to ${financeRange.to}`,notes:[financeAccountScopeLabel,actualsFreshnessMessage,balanceDataMessage,transactionFilter?.label||'','Bank amounts: positive = outflow; negative = inflow. Scheduled amounts use the Direction column.'],sections:view==='transactions'?[transactionSection(showActuals?transactionViewActuals:scheduledViewTransactions,fd.accounts,{scheduled:!showActuals})]:[recordsSection('Account balances',fd.accounts,['name','type','balance','plaidCurrentBalance','plaidAvailableBalance']),transactionSection(timeframeActuals,fd.accounts),recordsSection('Cash forecast',[...proj].filter(([date])=>date>=financeRange.from&&date<=financeRange.to).map(([date,p])=>({date,endingBalance:p.bal,netChange:p.delta}))) ]})}/></div>}
 
       {view==='daily-alignment'?<details className="fm-account-picker"><summary>Accounts · {financeAccountScopeLabel}</summary>{AccountFilterBar}</details>:!['scenario-modeling','calendar','accounting'].includes(view) && AccountFilterBar}

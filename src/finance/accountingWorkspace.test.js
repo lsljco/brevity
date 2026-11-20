@@ -37,3 +37,36 @@ test('bulk preparation rejects changed bank snapshots, pending rows, missing row
  await assert.rejects(()=>run([valid],8),/changed/)
  for(const rows of [[],[{...valid,pending:true}],[{...valid,category:'TRANSFER_OUT'}]])await assert.rejects(()=>run(rows),/posted non-transfer/)
 })
+
+test('Travelers rename follows rules, overrides and splits without changing merchant conditions',async()=>{
+ const {labelRuleCategories,labelTransactionCategory,categoryRenameImpact}=await import('./categoryCatalog.js')
+ const {applyTransactionRules}=await import('./transactionRules.js')
+ const old='Travelers Homeowners Insurance',name='Homeowners Insurance'
+ const before={transactions:[{id:'plan',cat:old,amount:250}],categoryCatalog:[]}
+ const renamed=saveCategory(before,{targetId:categoryId(old),payload:{category:old,name}}),catalog=renamed.categoryCatalog
+ const rule={id:'rule',applyToExisting:true,conditions:{originalStatement:{on:true,match:'contains',value:'Travelers'}},actions:{updateCategory:{on:true,value:old}},splits:[{cat:old,amount:250}]}
+ const actual={id:'bank',name:'Travelers Insurance',originalStatement:'Travelers payment',category:old,amount:250,date:'2026-11-20',splits:[{cat:old,amount:250}]}
+ const linkedRule=labelRuleCategories(rule,catalog),linkedActual=labelTransactionCategory(actual,catalog)
+ assert.equal(linkedRule.actions.updateCategory.value,name)
+ assert.deepEqual(linkedRule.conditions,rule.conditions)
+ assert.equal(linkedActual.category,name);assert.equal(linkedActual.splits[0].cat,name)
+ assert.equal(linkedActual.name,actual.name);assert.equal(linkedActual.amount,actual.amount)
+ assert.equal(applyTransactionRules(actual,[rule],[],catalog).category,name)
+ assert.equal(applyTransactionRules(actual,[rule],[],catalog).splits[0].cat,name)
+ const chain={applyToExisting:true,criteria:[{field:'category',operator:'exactly',value:old,join:'and'}],actions:{addTags:{on:true,value:'insured'}}}
+ assert.deepEqual(applyTransactionRules(linkedActual,[chain],[],catalog).tags,['insured'])
+ assert.equal(labelRuleCategories(chain,catalog).criteria[0].value,name)
+ assert.deepEqual(categoryRenameImpact(old,{catalog,scheduled:before.transactions,actuals:[actual,actual],rules:[rule,chain],budget:{categoryLimits:{one:{category:old,amount:300}}}}),{scheduled:1,actuals:1,rules:2,budgets:1})
+ assert.equal(rule.actions.updateCategory.value,old);assert.equal(actual.category,old)
+ // Undo uses the original catalog, with no destructive rewrite of saved rules/overrides.
+ assert.equal(labelRuleCategories(rule,[]).actions.updateCategory.value,old)
+})
+
+test('creating a separate category preserves prior history and categorization rules',()=>{
+ const old='Travelers Homeowners Insurance'
+ const before={transactions:[{id:'plan',cat:old,amount:250}]}
+ const after=saveCategory(before,{payload:{name:'Homeowners Insurance'}})
+ assert.equal(after.transactions[0].cat,old)
+ assert.equal(resolveCategory(old,after.categoryCatalog),old)
+ assert.equal(after.categoryCatalog.length,2)
+})
