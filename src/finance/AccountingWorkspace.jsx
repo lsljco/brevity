@@ -1,3 +1,4 @@
+import {applyTransactionRules} from './transactionRules.js'
 import {createPortal} from 'react-dom'
 import {useFinanceDialog} from './useFinanceDialog.js'
 import {useState} from 'react'
@@ -9,7 +10,7 @@ export default function AccountingWorkspace({data,actuals,rules,budget={},overri
  const [tab,setTab]=useState('Chart of Accounts'),[search,setSearch]=useState(''),[draft,setDraft]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false)
  const dialog=useFinanceDialog(Boolean(draft),()=>setDraft(null))
  const rows=categoryRows([...DEFAULT_TRANSACTION_CATEGORIES,...data.transactions.map(t=>t.cat||t.category),...actuals.map(t=>t.category||t.cat),...rules.map(r=>r.actions?.updateCategory?.value)],data.categoryCatalog||[])
- const impact=draft?.originalName?categoryRenameImpact(draft.originalName,{catalog:data.categoryCatalog||[],scheduled:data.transactions,actuals:actuals.map(t=>({...t,...(overrides[t.id]||{})})),rules,budget}):null
+ const impact=draft?.originalName?categoryRenameImpact(draft.originalName,{catalog:data.categoryCatalog||[],scheduled:data.transactions,actuals:actuals.map(t=>({...applyTransactionRules(t,rules,data.accounts,data.categoryCatalog||[]),...(overrides[t.id]||{})})),rules,budget}):null
  const save=async()=>{setBusy(true);setError('');try{if(await onReviewCategory(draft)!==false)setDraft(null)}catch(e){setError(e.message)}finally{setBusy(false)}}
  return <section className="accounting-workspace"><header><div><h1>Accounting</h1><p>Organize your categories, rules, and scheduled activity.</p></div>{['Chart of Accounts','Rules'].includes(tab)&&<FinanceExport report={{title:tab,sections:[{title:tab,columns:['Name','Description','Status'].map(label=>({label})),rows:tab==='Chart of Accounts'?rows.map(row=>[row.name,row.description||'',row.enabled===false?'Inactive':'Active']):rules.map(row=>[row.name,resolveCategory(row.actions?.updateCategory?.value||'',data.categoryCatalog||[]),row.applyToExisting?'Past and future':'Future'])}]}}/>}</header>
  <nav className="accounting-tabs" aria-label="Accounting tabs">{['Chart of Accounts','Rules','Reconcile','Recurring Transactions'].map(name=><button key={name} aria-current={tab===name?'page':undefined} onClick={()=>setTab(name)}>{name}</button>)}</nav>
