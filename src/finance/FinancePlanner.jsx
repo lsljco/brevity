@@ -2560,7 +2560,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
               <span><strong style={{ display: 'block', fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 500 }}>Daily Financial Alignment</strong><small style={{ color: 'var(--muted)', fontSize: 10 }}>Today’s truth, actions, decisions, and covenant</small></span>
             </span>
             {[
-              ['Operating cash', fmtMoney(todayAlignment.availableOperatingCash)],
+              ['Operating available cash', fmtMoney(todayAlignment.availableOperatingCash)],
               ['Expected', fmtMoney(todayAlignment.expectedInflows)],
               ['Due next', fmtMoney(todayAlignment.dueTodayTomorrow)],
               ['Daily limit', fmtMoney(todayAlignment.approvedDiscretionary)],
@@ -3253,7 +3253,7 @@ export default function FinancePlanner({ initialVendorId='', view: extView, setV
                     <button type="button" disabled={!selectedSource || linkUnchanged || preparingAccountLink === acct.id} onClick={()=>reviewAccountLink(acct)} style={{alignSelf:'end',minHeight:38,padding:'7px 11px',borderRadius:8,border:'1px solid rgba(197,164,109,.35)',background:'rgba(197,164,109,.12)',color:'#C5A46D',fontFamily:'inherit',fontSize:11,fontWeight:600,cursor:!selectedSource||linkUnchanged?'not-allowed':'pointer',opacity:(!selectedSource||linkUnchanged)?0.6:1}}>{preparingAccountLink === acct.id ? 'Preparing…' : linkUnchanged ? 'Linked' : 'Review link'}</button>
                   </div>}
                 </div>
-                <p title={acct.plaidAccountId ? 'Latest available bank balance' : 'Stored modeled balance; link this account to refresh it from the bank'} style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{fmtMoney(parseFloat(acct.balance || 0))}</p>
+                <p title={acct.plaidAccountId ? 'Stored cash starting balance; bank freshness must be verified' : 'Stored modeled balance; link this account to refresh it from the bank'} style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{fmtMoney(parseFloat(acct.balance || 0))}<small style={{display:'block',fontWeight:400,fontSize:12}}>{Number.isFinite(acct.plaidAvailableBalance)&&Number(acct.balance)===acct.plaidAvailableBalance?'Bank available balance':Number.isFinite(acct.plaidCurrentBalance)&&Number(acct.balance)===acct.plaidCurrentBalance?'Bank current balance':'Stored balance'}</small></p>
               </div>
             })}
           </div>
